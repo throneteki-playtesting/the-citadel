@@ -7,16 +7,10 @@ import CardGrid from "../../components/cardGrid";
 import { CardPreview } from "@agot/card-preview";
 
 const LatestCards = ({ className, style, filter }: LatestCardsProps) => {
-    const { data: cards, isLoading, error } = useGetCardsQuery({ filter, latest: true });
-
-    if (error) {
-        return <div className="w-full h-16 bg-default-50 text-center">
-            An error has occured.
-        </div>;
-    }
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { ...filter, latest: true } });
 
     return (
-        <CardGrid cards={cards ?? []} className={className} style={style} isLoading={isLoading}>
+        <CardGrid cards={cardsData?.items} className={className} style={style} isLoading={isLoading}>
             {(card) => (
                 <CardPreview
                     key={card.code}

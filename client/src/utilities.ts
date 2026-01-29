@@ -18,3 +18,11 @@ export function download(url: string, filename: string) {
     link.remove();
     URL.revokeObjectURL(url);
 }
+
+export function parseParamNumber(param?: string) {
+    if (!param) {
+        return undefined;
+    }
+    const parsed = parseInt(param);
+    return isNaN(parsed) ? undefined : parsed;
+}

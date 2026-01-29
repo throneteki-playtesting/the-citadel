@@ -3,38 +3,49 @@ import { celebrate, Segments } from "celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
-import { DeepPartial, SingleOrArray } from "common/types";
 import { Permission, Role } from "common/models/user";
 import { validateRequest } from "@/middleware/permissions";
 import { hasPermission } from "common/utils";
+import { StatusCodes } from "http-status-codes";
+import { orderBy, paging } from "@/schemas";
+import { IGetRequest, IGetResponse } from "@/types";
+import { generateGetResponse } from "@/utils";
 
 const router = express.Router();
-
-type RoleParam = { discordId: string };
-type FilterQuery = { filter?: SingleOrArray<DeepPartial<Role>> }
 
 const handleGetRoles = [
     validateRequest((user) => hasPermission(user, Permission.READ_ROLES)),
     celebrate({
         [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.Role.Partial)
+            filter: Schemas.SingleOrArray(Schemas.Role.Partial),
+            ...paging(),
+            ...orderBy<Role>(Schemas.Role.Full, { name: "asc" })
         }
     }),
-    asyncHandler<unknown, unknown, unknown, FilterQuery>(async (req, res, next) => {
-        const { filter } = req.query;
-        const result = await dataService.roles.read(filter);
+    asyncHandler<unknown, unknown, unknown, IGetRequest<Role>>(async (req, res, next) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const result = await dataService.users.read(filter, orderBy, page, perPage);
+        const count = await dataService.users.count(filter);
 
-        req.body = result;
+        req["response"] = generateGetResponse(result, count);
         next();
     })
 ];
 
-router.get("/", ...handleGetRoles, (req, res) => res.json(req.body));
+// Read roles
+router.get("/",
+    ...handleGetRoles,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<Role>;
+        res.status(StatusCodes.OK).json(response);
+    }
+);
 
+// Update role
 router.put("/:discordId",
     celebrate({
         [Segments.BODY]: Schemas.Role.Full
-    }), asyncHandler<RoleParam, unknown, Role, unknown>(async (req, res) => {
+    }), asyncHandler<{ discordId: string }, unknown, Role, unknown>(async (req, res) => {
         const { discordId } = req.params;
         const role = req.body;
         // Prevent discordId from being changed
@@ -42,9 +53,7 @@ router.put("/:discordId",
 
         const result = await dataService.roles.update(role);
 
-        res.send({
-            updated: result
-        });
+        res.status(StatusCodes.OK).json(result);
     })
 );
 

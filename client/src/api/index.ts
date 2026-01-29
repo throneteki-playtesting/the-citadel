@@ -1,31 +1,29 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
 import { IProject } from "common/models/projects";
 import { Role, User } from "common/models/user";
-import { DeepPartial, SingleOrArray } from "common/types";
-import { buildUrl, SemanticVersion } from "common/utils";
+import { asArray, buildUrl, SemanticVersion } from "common/utils";
 import { clearUser } from "./authSlice";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
-import type { BatchRenderJob, IGetEndpoint, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
+import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
 import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
-import { IReviewCollection } from "common/collections/reviewCollection";
 import { IPlaytestReview } from "common/models/reviews";
 
 export const baseUrl = import.meta.env.VITE_SERVER_HOST || "";
-const tag = {
-    Me: "Me",
-    User: "User",
-    Role: "Role",
-    Card: "Card",
-    Suggestion: "Suggestion",
-    Tag: "Tag",
-    Project: "Project"
-};
+const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "review"] as const;
+type ApiTag = typeof tagTypes[number];
 
 const baseQuery = fetchBaseQuery({
     baseUrl: `${baseUrl}/api/v1`,
     credentials: "include"
 });
+
+function mapTags<T>(results: T | T[] | undefined, tag: ApiTag, idFunc: (result: T) => string | number | undefined, includeList: boolean = true) {
+    return [
+        ...(results ? asArray(results).map((result) => ({ type: tag, id: idFunc(result) })) : []),
+        ...(includeList ? [{ type: tag, id: "LIST" }] : [])
+    ];
+}
 
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>
     = async (args, api, extraOptions) =>
@@ -53,7 +51,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
 const api = createApi({
     reducerPath: "api",
     baseQuery: baseQueryWithReauth,
-    tagTypes: Object.values(tag),
+    tagTypes,
     endpoints: (builder) => ({
         // Login API
         login: builder.mutation<void, void>({
@@ -69,7 +67,7 @@ const api = createApi({
                 credentials: "include",
                 responseHandler: (response) => response.text()
             }),
-            invalidatesTags: [{ type: tag.Me }]
+            invalidatesTags: [{ type: "me" }]
         }),
         // Users API
         authenticate: builder.query<User | undefined, void>({
@@ -82,83 +80,58 @@ const api = createApi({
                     validateStatus: (response) => [StatusCodes.OK, StatusCodes.UNAUTHORIZED].includes(response.status) };
             },
             transformResponse: (response: User, meta: FetchBaseQueryMeta) => (meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response),
-            providesTags: (result) => {
-                return result ? [
-                    { type: tag.Me, id: result.discordId },
-                    ...result.roles.map((role) => ({ type: tag.Role, id: role.discordId }))
-                ] : [];
-            }
+            providesTags: (result) => [
+                ...mapTags(result, "me", (user) => user.discordId, false),
+                ...mapTags(result?.roles, "role", (role) => role.discordId, false)
+            ]
         }),
-        getUsers: builder.query<User[], { filter?: SingleOrArray<DeepPartial<User>> } | void>({
+        getUsers: builder.query<IGetResponse<User>, IGetRequest<User> | void>({
             query: (options) => {
-                const url = buildUrl("users", { filter: options?.filter });
+                const url = buildUrl("users", options);
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.User, id: "LIST" }]
+            providesTags: (results) => mapTags(results?.items, "user", (user) => user.discordId)
         }),
-        getUser: builder.query<User, { discordId: string & DeepPartial<Omit<User, "discordId">> }>({
+        getUser: builder.query<User, { discordId: string }>({
             query: (options) => {
-                const { discordId, ...filter } = options;
-                const url = buildUrl(`users/${discordId}`, { filter });
+                const { discordId } = options;
+                const url = buildUrl(`users/${discordId}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => {
-                return result ? [
-                    { type: tag.User, id: result.discordId }
-                ] : [];
-            }
+            providesTags: (result) => mapTags(result, "user", (user) => user.discordId, false)
         }),
         updateUser: builder.mutation<User, User>({
             query: (user) => {
                 const url = buildUrl(`users/${user.discordId}`);
                 return { url, method: "PUT", body: user };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Me, id: arg.discordId },
-                    { type: tag.User, id: arg.discordId },
-                    { type: tag.User, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => [
+                ...mapTags(result, "me", (user) => user.discordId, false),
+                ...mapTags(result, "user", (user) => user.discordId)
+            ]
         }),
         // Roles API
-        getRoles: builder.query<Role[], { filter?: SingleOrArray<DeepPartial<Role>> } | void>({
+        getRoles: builder.query<IGetResponse<Role>, IGetRequest<Role> | void>({
             query: (options) => {
-                const url = buildUrl("roles", { filter: options?.filter });
+                const url = buildUrl("roles", options);
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.Role, id: "LIST" }]
+            providesTags: (results) => mapTags(results?.items, "role", (role) => role.discordId)
         }),
-        updateRole: builder.mutation<void, Role>({
+        updateRole: builder.mutation<Role, Role>({
             query: (role) => {
                 const url = buildUrl(`roles/${role.discordId}`);
                 return { url, method: "PUT", body: role };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Role, id: arg.discordId },
-                    { type: tag.Role, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => mapTags(result, "role", (role) => role.discordId)
         }),
         // Cards API
-        getCards: builder.query<IPlaytestCard[], { filter?: SingleOrArray<DeepPartial<IPlaytestCard>>, latest?: boolean } | void>({
+        getCards: builder.query<IGetResponse<IPlaytestCard>, IGetRequest<IPlaytestCard> | void>({
             query: (options) => {
-                const url = buildUrl("cards", { filter: options?.filter, latest: options?.latest });
+                const url = buildUrl("cards", options);
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.Card, id: "LIST" }]
-        }),
-        getCard: builder.query<IPlaytestCard[], { project: number, number: number, latest?: boolean }>({
-            query: (options) => {
-                const url = buildUrl(`cards/${options.project}/${options.number}`, { latest: options.latest });
-                return { url, method: "GET" };
-            },
-            providesTags: (result) => {
-                return result && result.length > 0 ? [
-                    { type: tag.Card, id: result[0].code }
-                ] : [];
-            }
+            providesTags: (response) => mapTags(response?.items, "card", (card) => `${card.project}|${card.number}|${card.version}`)
         }),
         putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
@@ -166,91 +139,68 @@ const api = createApi({
                 const body = card;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Card, id: arg.code },
-                    { type: tag.Card, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
         }),
-        deleteDraft: builder.mutation<number, IPlaytestCard>({
+        deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Card, id: arg.code },
-                    { type: tag.Card, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
         }),
         // Suggestions API
-        getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetEndpoint<ICardSuggestion> | void>({
+        getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetRequest<ICardSuggestion> | void>({
             query: (options) => {
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.Suggestion, id: "LIST" }]
+            providesTags: (response) => mapTags(response?.items, "suggestion", (suggestion) => suggestion.id)
         }),
-        getSuggestionsBy: builder.query<IGetResponse<ICardSuggestion>, { discordId: string, filter?: SingleOrArray<DeepPartial<ICardSuggestion>> }>({
+        getSuggestionsBy: builder.query<IGetResponse<ICardSuggestion>, { discordId: string }>({
             query: (options) => {
-                const url = buildUrl(`suggestions/${options.discordId}`, { filter: options?.filter });
+                const url = buildUrl(`suggestions/${options.discordId}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => {
-                return result && result.data.length > 0 ? [
-                    { type: tag.Suggestion, id: result.data[0].user.discordId }
-                ] : [];
-            }
+            providesTags: (result) => mapTags(result?.items, "suggestion", (suggestion) => suggestion.id)
         }),
-        submitSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
-            query: (card) => {
+        createSuggestion: builder.mutation<ICardSuggestion, Omit<ICardSuggestion, "created" | "updated">>({
+            query: (suggestion) => {
                 const url = buildUrl("suggestions");
-                const body = card;
+                const body = suggestion;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Suggestion, id: arg.user.discordId },
-                    { type: tag.Suggestion, id: "LIST" },
-                    { type: tag.Tag, id: "LIST" }
-                ];
-            }
+            invalidatesTags: [
+                { type: "suggestion", id: "LIST" },
+                { type: "tag", id: "LIST" }
+            ]
         }),
         updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
-            query: (card) => {
-                const { id, ...body } = card;
-                const url = buildUrl(`suggestions/${id}`);
+            query: (suggestion) => {
+                const url = buildUrl(`suggestions/${suggestion.id}`);
+                const body = suggestion;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Suggestion, id: arg.user.discordId },
-                    { type: tag.Suggestion, id: "LIST" },
-                    { type: tag.Tag, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => [
+                ...mapTags(result, "suggestion", (suggestion) => suggestion.id),
+                ...(result ? [{ type: "tag" as ApiTag, id: "LIST" }] : [])
+            ]
         }),
-        deleteSuggestion: builder.mutation<number, ICardSuggestion>({
-            query: (card) => {
-                const url = buildUrl(`suggestions/${card.id}`);
+        deleteSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Suggestion, id: arg.user.discordId },
-                    { type: tag.Suggestion, id: "LIST" },
-                    { type: tag.Tag, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => [
+                ...mapTags(result, "suggestion", (suggestion) => suggestion.id),
+                ...(result ? [{ type: "tag" as ApiTag, id: "LIST" }] : [])
+            ]
         }),
         getTags: builder.query<string[], void>({
             query: () => {
                 const url = buildUrl("suggestions/tags");
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.Tag, id: "LIST" }]
+            providesTags: (results) => mapTags(results, "tag", (tag) => tag)
         }),
         // Render API
         renderImage: builder.mutation<string, IRenderCard>({
@@ -273,28 +223,24 @@ const api = createApi({
         }),
         getRenderJob: builder.query<SingleRenderJob|BatchRenderJob, { id: UUID }>({
             query: (options) => {
-                const url = buildUrl("render/job", { id: options.id });
+                const url = buildUrl("render/job", options);
                 return { url, method: "GET" };
             }
         }),
         // Projects API
-        getProjects: builder.query<IProject[], { filter?: SingleOrArray<DeepPartial<IProject>> } | void>({
+        getProjects: builder.query<IGetResponse<IProject>, IGetRequest<IProject> | void>({
             query: (options) => {
-                const url = buildUrl("projects", { filter: options?.filter });
+                const url = buildUrl("projects", options);
                 return { url, method: "GET" };
             },
-            providesTags: [{ type: tag.Project, id: "LIST" }]
+            providesTags: (results) => mapTags(results?.items, "project", (project) => project.number)
         }),
         getProject: builder.query<IProject, { number: number }>({
             query: (options) => {
                 const url = buildUrl(`projects/${options.number}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => {
-                return result ? [
-                    { type: tag.Project, id: result.number }
-                ] : [];
-            }
+            providesTags: (result) => mapTags(result, "project", (project) => project.number, false)
         }),
         createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
             query: (project) => {
@@ -302,65 +248,63 @@ const api = createApi({
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Project, id: arg.number },
-                    { type: tag.Project, id: "LIST" }
-                ];
-            }
+            invalidatesTags: [{ type: "project", id: "LIST" }]
+        }),
+        initialiseProject: builder.mutation<{ project: IProject, cards: IPlaytestCard[] }, { number: number }>({
+            query: (options) => {
+                const url = buildUrl(`projects/${options.number}/initialise`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => [
+                ...mapTags(result?.project, "project", (project) => project.number),
+                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            ]
         }),
         updateProject: builder.mutation<IProject, IProject>({
             query: (project) => {
-                const url = buildUrl("projects");
+                const url = buildUrl(`projects/${project.number}`);
                 const body = project;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Project, id: arg.number },
-                    { type: tag.Project, id: "LIST" },
-                    { type: tag.Card, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
         }),
-        deleteProject: builder.mutation<number, IProject>({
-            query: (project) => {
-                const url = buildUrl(`projects/${project.number}`);
+        deleteProject: builder.mutation<IProject, { number: number }>({
+            query: (options) => {
+                const url = buildUrl(`projects/${options.number}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Project, id: arg.number },
-                    { type: tag.Project, id: "LIST" },
-                    { type: tag.Card, id: "LIST" }
-                ];
-            }
-        }),
-        initialiseProject: builder.mutation<IProject, IProject>({
-            query: (project) => {
-                const url = buildUrl(`projects/${project.number}/initialise`);
-                return { url, method: "POST" };
-            },
-            invalidatesTags: (_result, _error, arg) => {
-                return [
-                    { type: tag.Project, id: arg.number },
-                    { type: tag.Project, id: "LIST" },
-                    { type: tag.Card, id: "LIST" }
-                ];
-            }
+            invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
         }),
         // Reviews API
-        getCardReviews: builder.query<IReviewCollection<IPlaytestReview>, { project: number, number: number }>({
+        getReviews: builder.query<IGetResponse<IPlaytestReview>, IGetRequest<IPlaytestReview>>({
             query: (options) => {
-                const url = buildUrl(`reviews/${options.project}/${options.number}`);
+                const url = buildUrl("reviews", options);
                 return { url, method: "GET" };
-            }
+            },
+            providesTags: (results) => mapTags(results?.items, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
         }),
-        getCardVersionReviews: builder.query<IPlaytestReview[], { project: number, number: number, version: SemanticVersion }>({
+        createReview: builder.mutation<IPlaytestReview, Omit<IPlaytestReview, "created" | "updated">>({
+            query: (review) => {
+                const url = buildUrl("reviews");
+                const body = review;
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: [{ type: "review", id: "LIST" }]
+        }),
+        updateReview: builder.mutation<IPlaytestReview, IPlaytestReview>({
+            query: (review) => {
+                const url = buildUrl(`reviews/${review.project}/${review.number}/${review.version}/${review.reviewer}`);
+                const body = review;
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+        }),
+        deleteReview: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
-                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}`);
-                return { url, method: "GET" };
-            }
+                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
         })
     })
 });
@@ -377,14 +321,12 @@ export const {
     useUpdateRoleMutation,
 
     useGetCardsQuery,
-    useGetCardQuery,
     usePutDraftCardMutation,
     useDeleteDraftMutation,
-    // usePushCardsMutation,
 
     useGetSuggestionsQuery,
     useGetSuggestionsByQuery,
-    useSubmitSuggestionMutation,
+    useCreateSuggestionMutation,
     useUpdateSuggestionMutation,
     useDeleteSuggestionMutation,
     useGetTagsQuery,
@@ -395,12 +337,14 @@ export const {
     useGetProjectsQuery,
     useGetProjectQuery,
     useCreateProjectMutation,
+    useInitialiseProjectMutation,
     useUpdateProjectMutation,
     useDeleteProjectMutation,
-    useInitialiseProjectMutation,
 
-    useGetCardReviewsQuery,
-    useGetCardVersionReviewsQuery
+    useGetReviewsQuery,
+    useCreateReviewMutation,
+    useUpdateReviewMutation,
+    useDeleteReviewMutation
 } = api;
 
 export default api;

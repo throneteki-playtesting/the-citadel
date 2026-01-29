@@ -1,10 +1,9 @@
-import express, { Request } from "express";
+import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IProject } from "common/models/projects";
-import { DeepPartial, SingleOrArray } from "common/types";
 import { validateRequest } from "@/middleware/permissions";
 import { hasPermission } from "common/utils";
 import { Permission } from "common/models/user";
@@ -12,35 +11,47 @@ import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, isEqual } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
+import { IGetRequest, IGetResponse } from "@/types";
+import { orderBy, paging } from "@/schemas";
+import { generateGetResponse } from "@/utils";
 
 const router = express.Router();
-
-type ProjectParam = { number: number };
-type FilterQuery = { filter?: SingleOrArray<DeepPartial<IProject>> }
-type ProjectBody = SingleOrArray<IProject>;
 
 const handleGetProjects = [
     celebrate({
         [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.Project.Partial)
+            filter: Schemas.SingleOrArray(Schemas.Project.Partial),
+            ...paging(),
+            ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
         }
     }),
-    asyncHandler<unknown, unknown, unknown, FilterQuery>(async (req, res, next) => {
-        const { filter } = req.query;
-        const projects = await dataService.projects.read(filter);
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, res, next) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const result = await dataService.projects.read(filter, orderBy, page, perPage);
+        const count = await dataService.projects.count(filter);
 
-        req.body = projects;
+        req["response"] = generateGetResponse(result, count);
         next();
     })
 ];
-router.get("/", ...handleGetProjects, (req, res) => res.json(req.body));
 
+// Read projects
+router.get("/",
+    ...handleGetProjects,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IProject>;
+        res.status(StatusCodes.OK).json(response);
+    }
+);
+
+// Read project by number
 router.get("/:number",
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
         }
-    }), (req: Request<ProjectParam, unknown, unknown, FilterQuery>, res: unknown, next: (arg?: unknown) => void) => {
+    }),
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res, next) => {
         const { number } = req.params;
         let { filter } = req.query;
         try {
@@ -55,8 +66,38 @@ router.get("/:number",
         } catch (err) {
             next(err);
         }
-    }, ...handleGetProjects, (req, res) => res.json(req.body[0] ?? {}));
+    }),
+    ...handleGetProjects,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IProject>;
+        const [project] = response.items;
+        res.status(StatusCodes.OK).json(project);
+    }
+);
 
+// Create project
+router.post("/",
+    validateRequest((user) => hasPermission(user, Permission.CREATE_PROJECTS)),
+    celebrate({
+        [Segments.BODY]: Schemas.Project.Draft
+    }),
+    asyncHandler(async (req, res, next) => {
+        const { number, name, code } = req.body;
+        const [existing] = await dataService.projects.read([{ number }, { name }, { code }]);
+        if (existing) {
+            throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", "Project with that number, name or code already exists");
+        }
+        next();
+    }),
+    asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
+        const body = req.body;
+        body.created = body.updated = new Date();
+        const project = await dataService.projects.create(body);
+        res.status(StatusCodes.OK).json(project);
+    })
+);
+
+// Initialise drafted project
 router.post("/:number/initialise",
     validateRequest((user) => hasPermission(user, Permission.INITIALISE_PROJECTS)),
     celebrate({
@@ -69,6 +110,9 @@ router.post("/:number/initialise",
         const [project] = await dataService.projects.read({ number });
         if (!project) {
             throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
+        }
+        if (!project.draft) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Only draft projects can be initialised");
         }
         const cards = await dataService.cards.read({ project: number });
         const totalSlots = Object.values(project.cardCount).reduce((acc, num) => acc + num, 0);
@@ -88,7 +132,7 @@ router.post("/:number/initialise",
 
         project.draft = false;
         for (const card of cards) {
-            const newCard = { ...cloneDeep(card), version: "1.0.0" } as IPlaytestCard;
+            const newCard = { ...cloneDeep(card), version: "1.0.0", draft: false } as IPlaytestCard;
             if (newCard.suggestionId) {
                 suggestionNumbers[newCard.suggestionId] = newCard.number;
             }
@@ -117,38 +161,21 @@ router.post("/:number/initialise",
     })
 );
 
-router.post("/",
-    validateRequest((user) => hasPermission(user, Permission.CREATE_PROJECTS)),
-    celebrate({
-        [Segments.BODY]: Schemas.Project.Draft
-    }),
-    asyncHandler(async (req, res, next) => {
-        const { number, name, code } = req.body;
-        const [existing] = await dataService.projects.read([{ number }, { name }, { code }]);
-        if (existing) {
-            throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", "Project with that number, name or code already exists");
-        }
-        next();
-    }),
-    asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
-        const body = req.body;
-        body.created = body.updated = new Date();
-        const project = await dataService.projects.create(body);
-        res.status(StatusCodes.OK).json(project);
-    })
-);
-
-router.put("/",
+// Update project
+router.put("/:number",
     validateRequest((user) => hasPermission(user, Permission.EDIT_PROJECTS)),
     celebrate({
-        [Segments.BODY]: Schemas.SingleOrArray(Schemas.Project.Full)
+        [Segments.PARAMS]: {
+            number: Joi.string().required()
+        },
+        [Segments.BODY]: Schemas.Project.Full
     }),
-    asyncHandler<unknown, unknown, ProjectBody, unknown>(async (req, res) => {
-        const body = req.body;
-        let project = {
-            ...body,
-            updated: new Date()
-        } as IProject;
+    asyncHandler<{ number: number }, unknown, IProject, unknown>(async (req, res) => {
+        const { number } = req.params;
+        let project = req.body;
+
+        project.number = number;
+        project.updated = new Date();
 
         const [previous] = await dataService.projects.read({ number: project.number });
         project = await dataService.projects.update(project);
@@ -198,6 +225,7 @@ router.put("/",
     })
 );
 
+// Delete project
 router.delete("/:number",
     validateRequest((user) => hasPermission(user, Permission.DELETE_PROJECTS)),
     celebrate({
@@ -207,12 +235,13 @@ router.delete("/:number",
     }),
     asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
         const { number } = req.params;
-        const result = await dataService.projects.destroy({ number });
+        const [deleted] = await dataService.projects.destroy({ number });
+        if (!deleted) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);
+        }
         await dataService.cards.destroy({ project: number });
 
-        res.send({
-            deleted: result
-        });
+        res.status(StatusCodes.OK).json(deleted);
     })
 );
 

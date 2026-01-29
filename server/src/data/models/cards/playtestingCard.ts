@@ -1,5 +1,5 @@
 import * as Ver from "semver";
-import { GithubDetails, ImplementationStatus, IPlaytestCard, NoteDetails, ReleaseDetails } from "common/models/cards";
+import { GithubDetails, IPlaytestCard, NoteDetails, ReleaseDetails } from "common/models/cards";
 import { parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import BaseCard from "./baseCard";
 import RenderedCard from "./renderedCard";
@@ -9,6 +9,8 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
     public project: number;
     public number: number;
     public version: SemanticVersion;
+    public latest: boolean;
+    public draft: boolean;
     public note?: NoteDetails;
     public playtesting?: SemanticVersion;
     public github?: GithubDetails;
@@ -20,6 +22,8 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
         this.version = data.version;
         this.project = data.project;
         this.number = data.number;
+        this.latest = data.latest;
+        this.draft = data.draft;
         this.note = data.note;
         this.playtesting = data.playtesting;
         this.github = data.github;
@@ -69,6 +73,8 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
             project: this.project,
             number: this.number,
             version: this.version,
+            latest: this.latest,
+            draft: this.draft,
             note: this.note ? {
                 type: this.note.type,
                 text: this.note.text
@@ -162,7 +168,7 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
     /**
      * @returns The current implementation status of the card, based on its github status
      */
-    get implementStatus(): ImplementationStatus {
+    get implementStatus() {
         // If issue is missing or "open"
         if ((this.github?.status || "open") === "open") {
             return "not implemented";

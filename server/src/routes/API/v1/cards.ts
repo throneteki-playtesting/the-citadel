@@ -1,10 +1,10 @@
-import express, { Request } from "express";
+import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { eq, inc } from "semver";
-import { dataService, logger, renderService } from "@/services";
-import { hasPermission, parseCardCode, SemanticVersion } from "common/utils";
+import { dataService, logger } from "@/services";
+import { asArray, hasPermission, parseCardCode, SemanticVersion } from "common/utils";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import * as Schemas from "common/models/schemas";
 import { DeepPartial, SingleOrArray } from "common/types";
@@ -12,263 +12,107 @@ import { Permission } from "common/models/user";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
-import { NoteVersion } from "@/utils";
+import { generateGetResponse, NoteVersion } from "@/utils";
 import { ICardVersionCollection } from "common/collections/cardCollection";
-
-export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
+import { orderBy, paging } from "@/schemas";
+import { IGetRequest, IGetResponse } from "@/types";
 
 const router = express.Router();
-
-type ProjectParam = { project: number };
-type CardParam = { number: number };
-type FilterQuery = { filter?: SingleOrArray<DeepPartial<IPlaytestCard>>, hard?: boolean, latest?: boolean }
-type RenderQuery = { copies?: number, perPage?: number };
-type FormatQuery = { format?: ResourceFormat }
-type CardBody = SingleOrArray<IPlaytestCard>;
 
 const handleGetCards = [
     validateRequest((user) => hasPermission(user, Permission.READ_CARDS)),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
-            latest: Joi.boolean().default(true),
-            format: Joi.string().insensitive().valid("JSON", "PNG", "PDF").default("JSON"),
-            copies: Joi.number().default(3),
-            perPage: Joi.number().default(9)
+            ...paging(),
+            ...orderBy(Schemas.PlaytestingCard.Full)
         }
     }),
-    asyncHandler<unknown, unknown, unknown, RenderQuery & FilterQuery & FormatQuery>(async (req, res) => {
-        const { format, filter, latest, copies, perPage } = req.query;
-        const result = await dataService.cards.collection(filter);
-        const cards = latest ? result.latest : result.all;
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res, next) => {
+        const { filter, orderBy, page, perPage } = req.query;
 
-        switch (format) {
-            case "JSON":
-                const json = cards.map((card) => card.toJSON());
-                res.status(StatusCodes.OK).json(json);
-                break;
-            case "PNG":
-                if (cards.length > 1) {
-                    throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Arguments", `Cannot render PNG for multiple cards: found ${cards.length} cards. Refine filter, use PDF, or set latest=true`);
-                }
-                const png = await renderService.asPNG(cards[0].toRenderedCard());
-                res.type("png");
-                res.status(StatusCodes.OK).send(png);
-                break;
-            case "PDF":
-                const pdf = await renderService.asPDF(cards.map((card) => card.toRenderedCard()), { copies, perPage });
-                res.contentType("application/pdf");
-                res.status(StatusCodes.OK).send(pdf);
-                break;
-        }
+        const result = await dataService.cards.read(filter, orderBy, page, perPage);
+        const count = await dataService.cards.count(filter);
+        req["response"] = generateGetResponse(result, count);
+        next();
     })
 ];
 
-router.get("/", ...handleGetCards);
-
-/**
- * @openapi
- * /cards/{projectNo}:
- *   get:
- *     tags:
- *       - cards
- *     summary: Finds cards within project
- *     description: Returns one or many cards within a project
- *     operationId: getCardsInProject
- *     parameters:
- *       - name: projectNo
- *         in: path
- *         description: Number of the project to find cards in
- *         required: true
- *         schema:
- *           type: integer
- *       - name: filter
- *         in: query
- *         description: Filter cards by data
- *         required: false
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/playtestingCard/query'
- *             example: ''
- *         allowReserved: true
- *       - name: latest
- *         in: query
- *         description: Whether to only get the latest versions of cards
- *         required: false
- *         schema:
- *           type: boolean
- *           default: true
- *       - name: hard
- *         in: query
- *         description: Whether to hard refresh data before finding
- *         required: false
- *         schema:
- *           type: boolean
- *           default: false
- *       - name: format
- *         in: query
- *         description: Format to present cards in
- *         required: false
- *         schema:
- *           type: string
- *           enum:
- *             - json
- *             - html
- *             - pdf
- *           default: json
- *     responses:
- *       200:
- *         description: OK
- *         content:
- *           application/json:
- *             schema:
- *               type: array
- *               items:
- *                 $ref: '#/components/schemas/playtestingCard/body'
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
- *           text/html:
- *               type: string
- *       404:
- *         description: No cards or project found
- *       400:
- *         description: Invalid parameters provided
- *
- */
-router.get("/:project", celebrate({
-    [Segments.PARAMS]: {
-        project: Joi.number().required()
+// Read cards
+router.get("/",
+    ...handleGetCards,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IPlaytestCard>;
+        res.status(StatusCodes.OK).json(response);
     }
-}), (req: Request<ProjectParam, unknown, unknown, FilterQuery>, res: unknown, next: (arg?: unknown) => void) => {
-    const { project } = req.params;
-    let { filter } = req.query;
-    try {
-        filter = filter || {};
-        if (Array.isArray(filter)) {
-            filter.forEach((f) => f.project = project);
-        } else {
-            filter.project = project;
+);
+
+// Read cards for project
+router.get("/:project",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required()
         }
-        req.query.filter = filter;
-        next();
-    } catch (err) {
-        next(err);
-    }
-}, ...handleGetCards);
-
-/**
- * @openapi
- * /cards/{projectNo}/{cardNo}:
- *   get:
- *     tags:
- *       - cards
- *     summary: Find card versions within project
- *     description: Returns versions of a card within a project
- *     operationId: getCardInProject
- *     parameters:
- *       - name: projectNo
- *         in: path
- *         description: Number of the project to find card in
- *         required: true
- *         schema:
- *           type: integer
- *       - name: cardNo
- *         in: path
- *         description: Number of the card (within project)
- *         required: true
- *         schema:
- *           type: integer
- *       - name: filter
- *         in: query
- *         description: Filter card versions by data
- *         required: false
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/playtestingCard/query'
- *             example: ''
- *         allowReserved: true
- *       - name: latest
- *         in: query
- *         description: Whether to only get the latest version of the card. This will return a single response object, rather than an array
- *         required: false
- *         schema:
- *           type: boolean
- *           default: true
- *       - name: hard
- *         in: query
- *         description: Whether to hard refresh data before finding
- *         required: false
- *         schema:
- *           type: boolean
- *           default: false
- *       - name: format
- *         in: query
- *         description: Format to present the card
- *         required: false
- *         schema:
- *           type: string
- *           enum:
- *             - json
- *             - html
- *             - png
- *             - pdf
- *           default: json
- *     responses:
- *       200:
- *         description: OK
- *         content:
- *           application/json:
- *             schema:
- *               oneOf:
- *                 - $ref: '#/components/schemas/playtestingCard/body'
- *                 - type: array
- *                   items:
- *                     $ref: '#/components/schemas/playtestingCard/body'
- *           application/pdf:
- *             schema:
- *               type: string
- *               format: binary
- *           image/png:
- *             schema:
- *               type: string
- *               format: binary
- *           text/html:
- *               type: string
- *       404:
- *         description: No card or project found
- *       400:
- *         description: Invalid parameters provided
- */
-router.get("/:project/:number", celebrate({
-    [Segments.PARAMS]: {
-        project: Joi.number().required(),
-        number: Joi.number().required()
-    }
-}), (req: Request<ProjectParam & CardParam, unknown, unknown, FilterQuery>, res: unknown, next: (arg?: unknown) => void) => {
-    const { project, number } = req.params;
-    let { filter } = req.query;
-    try {
-        filter = filter || {};
-        if (Array.isArray(filter)) {
-            filter.forEach((f) => {
-                f.project = project;
-                f.number = number;
-            });
-        } else {
-            filter.project = project;
-            filter.number = number;
+    }),
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>((req, res, next) => {
+        const { project } = req.params;
+        let { filter } = req.query;
+        try {
+            filter = filter || {};
+            if (Array.isArray(filter)) {
+                filter.forEach((f) => f.project = project);
+            } else {
+                filter.project = project;
+            }
+            req.query.filter = filter;
+            next();
+        } catch (err) {
+            next(err);
         }
-        req.query.filter = filter;
-        next();
-    } catch (err) {
-        next(err);
+    }),
+    ...handleGetCards,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IPlaytestCard>;
+        res.status(StatusCodes.OK).json(response);
     }
-}, ...handleGetCards);
+);
 
+// Read all versions of card in project
+router.get("/:project/:number",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required(),
+            number: Joi.number().required()
+        }
+    }),
+    asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>((req, res, next) => {
+        const { project, number } = req.params;
+        let { filter } = req.query;
+        try {
+            filter = filter || {};
+            if (Array.isArray(filter)) {
+                filter.forEach((f) => {
+                    f.project = project;
+                    f.number = number;
+                });
+            } else {
+                filter.project = project;
+                filter.number = number;
+            }
+            req.query.filter = filter;
+            next();
+        } catch (err) {
+            next(err);
+        }
+    }),
+    ...handleGetCards,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IPlaytestCard>;
+        res.status(StatusCodes.OK).json(response);
+    }
+);
+
+// Update draft card
 router.put("/:project/:number/draft",
     celebrate({
         [Segments.PARAMS]: {
@@ -295,7 +139,7 @@ router.put("/:project/:number/draft",
         req.params.existing = existing;
         return hasPermission(user, (existing?.draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
     }),
-    asyncHandler<ProjectParam & CardParam & { existing?: ICardVersionCollection<PlaytestingCard> }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
+    asyncHandler<{ project: number, number: number, existing?: ICardVersionCollection<PlaytestingCard> }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
         const { project, number, existing } = req.params;
         const body = req.body;
         const code = parseCardCode(false, project, number);
@@ -316,13 +160,14 @@ router.put("/:project/:number/draft",
             }
         }
 
-        let card = { ...body, code, version } as IPlaytestCard;
+        let card = { ...body, code, version, draft: true } as IPlaytestCard;
         card = await dataService.cards.update(card, true);
 
         res.status(StatusCodes.OK).json(card);
     })
 );
 
+// Delete draft card
 router.delete("/:project/:number/draft",
     validateRequest((user) => hasPermission(user, Permission.DELETE_CARDS)),
     celebrate({
@@ -331,51 +176,27 @@ router.delete("/:project/:number/draft",
             number: Joi.number().required()
         }
     }),
-    asyncHandler<ProjectParam & CardParam, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number } = req.params;
-
-        const existing = (await dataService.cards.collection({ project, number }))[number];
-
-        let result = 0;
-        if (existing) {
-            const { project, number, version } = existing.draft;
-            result = await dataService.cards.destroy({ project, number, version });
+        const [deleted] = await dataService.cards.destroy({ project, number, draft: true });
+        if (!deleted) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Draft card for #${number} in project #${project} does not exist`);
         }
-        res.send({
-            deleted: result
-        });
+        res.status(StatusCodes.OK).json(deleted);
     })
 );
 
-/**
- * @openapi
- * /cards:
- *   post:
- *     tags:
- *       - cards
- *     summary: Adds one or more cards
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             oneOf:
- *               - $ref: '#/components/schemas/playtestingCard/body'
- *               - type: array
- *                 items:
- *                   $ref: '#/components/schemas/playtestingCard/body'
- *     responses:
- *       200:
- *         description: Success
- */
+// TODO: Consider adding update + delete any card (with separate permission)
+
+// Legacy (GAS script updates)
 router.post("/",
     validateRequest((user) => hasPermission(user, Permission.CREATE_CARDS)),
     celebrate({
         [Segments.BODY]: Schemas.SingleOrArray(Schemas.PlaytestingCard.Full)
     }),
-    asyncHandler<unknown, unknown, CardBody, unknown>(async (req, res) => {
+    asyncHandler<unknown, unknown, SingleOrArray<IPlaytestCard>, unknown>(async (req, res) => {
         const body = req.body;
-        const cards = Array.isArray(body) ? body.map((b) => new PlaytestingCard(b)) as [] : [new PlaytestingCard(body)];
+        const cards = asArray(body).map((card) => new PlaytestingCard(card));
 
         const incType = (type: NoteType) => {
             switch (type) {
@@ -428,6 +249,7 @@ router.post("/",
             updated: upsert.length + latest.length,
             deleted: destroy.length
         });
-    }));
+    })
+);
 
 export default router;

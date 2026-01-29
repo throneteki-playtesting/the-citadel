@@ -1,26 +1,47 @@
 import { Avatar, Select, SelectItem, SharedSelection } from "@heroui/react";
 import { User } from "common/models/user";
 import { useGetUsersQuery } from "../../api";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BaseElementProps } from "../../types";
 
 const UserFilter = ({ className, style, label = "Users", setUsers, users = [] }: UserFilterProps) => {
-    const { data, isLoading } = useGetUsersQuery();
+    const [page, setPage] = useState(1);
+    const [items, setItems] = useState<User[]>([]);
+    const { data, isLoading, isFetching } = useGetUsersQuery({ page, perPage: 20 });
+
+    useEffect(() => {
+        if (data?.items) {
+            setItems((prev) => [...prev, ...data.items]);
+        }
+    }, [data]);
+
+    const handleLoadMore = () => {
+        const hasMore = items.length < (data?.total ?? 0);
+        if (hasMore && !isFetching) {
+            setPage((prev) => prev + 1);
+        }
+    };
 
     const handleSelectionChange = useCallback((keys: SharedSelection) => {
-        setUsers(
-            keys === "all"
-                ? data!
-                : Array.from(keys).map((discordId) => data!.find(user => user.discordId === discordId)!).filter(Boolean)
-        );
-    }, [data, setUsers]);
+        if (keys === "all") {
+            setUsers(items);
+        } else {
+            setUsers(
+                items.filter((user) =>
+                    Array.from(keys).includes(user.discordId)
+                )
+            );
+        }
+    }, [items, setUsers]);
 
     return <Select
-        isLoading={isLoading}
         label={label}
         selectionMode={"multiple"}
         isMultiline
-        items={data ?? []}
+        items={items}
+        isVirtualized
+        onLoadMore={handleLoadMore}
+        isLoading={isLoading || isFetching}
         selectedKeys={users.map((user) => user.discordId)}
         renderValue={(items) => <div className="flex gap-1">
             {items.map((item) => (

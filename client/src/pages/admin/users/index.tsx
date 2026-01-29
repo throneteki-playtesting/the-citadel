@@ -1,4 +1,4 @@
-import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, User as DisplayUser, Link } from "@heroui/react";
+import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, User as DisplayUser, Link, Pagination } from "@heroui/react";
 import { useGetUsersQuery } from "../../../api";
 import { Key, useCallback, useState } from "react";
 import { Permission, User } from "common/models/user";
@@ -9,7 +9,9 @@ import { hasPermission } from "common/utils";
 import Loading from "../../../components/loading";
 
 const Users = () => {
-    const { data: users, isLoading, isError } = useGetUsersQuery();
+    const [page, setPage] = useState(1);
+    const perPage = 10;
+    const { data: usersData, isLoading, isFetching } = useGetUsersQuery({ page, perPage });
     const [editingUser, setEditingUser] = useState<User>();
 
     const columns = [
@@ -71,37 +73,35 @@ const Users = () => {
         }
     }, [editingUser]);
 
-    return <div>
+    return <div className="space-y-2">
         <div>
             <h1><b>Users</b></h1>
             <p className="text-sm">Discord users have certain permissions for this website. Permissions can also be configured for that user's <Link size="sm" href={"/roles"}>roles</Link>.</p>
             <p className="text-sm">For a user to be added, they must be a member of the "SERVER NAME" discord server, and must have logged into this site at least once.</p>
         </div>
-        {isError
-            ? <div>An unexpected error has occured.</div>
-            : <Table>
-                <TableHeader columns={columns}>
-                    {(column) => (
-                        <TableColumn
-                            key={column.key}
-                            className={column.className}
-                        >
-                            {column.label}
-                        </TableColumn>
-                    )}
-                </TableHeader>
-                <TableBody emptyContent={"No users"} items={users ?? []} isLoading={isLoading} loadingContent={<Loading/>}>
-                    {(item) => (
-                        <TableRow key={item.username}>
-                            {(columnKey) => {
-                                const column = columns.find((c) => c.key === columnKey);
-                                return <TableCell className={column?.className}>{renderCell(item, columnKey)}</TableCell>;
-                            }}
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
-        }
+        <Table>
+            <TableHeader columns={columns}>
+                {(column) => (
+                    <TableColumn
+                        key={column.key}
+                        className={column.className}
+                    >
+                        {column.label}
+                    </TableColumn>
+                )}
+            </TableHeader>
+            <TableBody emptyContent="No users from discord server have logged into site" items={usersData?.items ?? []} isLoading={isLoading || isFetching} loadingContent={<Loading/>}>
+                {(item) => (
+                    <TableRow key={item.username}>
+                        {(columnKey) => {
+                            const column = columns.find((c) => c.key === columnKey);
+                            return <TableCell className={column?.className}>{renderCell(item, columnKey)}</TableCell>;
+                        }}
+                    </TableRow>
+                )}
+            </TableBody>
+        </Table>
+        <Pagination page={page} onChange={setPage} total={Math.ceil((usersData?.total ?? 0) / perPage)}/>
         <EditUserModal user={editingUser} onOpenChange={() => setEditingUser(undefined)} />
     </div>;
 };

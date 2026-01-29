@@ -19,21 +19,18 @@ export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
 
 const router = express.Router();
 
-type RenderQuery = { format?: ResourceFormat } & SingleRenderJobOptions & BatchRenderJobOptions;
-type CardBody = SingleOrArray<IRenderCard>;
-
 router.post("/",
     validateRequest((user) => hasPermission(user, Permission.RENDER_CARDS)),
     celebrate({
         [Segments.QUERY]: {
-            format: Joi.string().insensitive().valid("JSON", "PDF", "PNG").default("PNG"),
+            format: Joi.string().insensitive().valid("PDF", "PNG").default("PNG"),
             rounded: Joi.boolean(),
             orientation: Joi.string().valid("horizontal", "vertical"),
             copies: Joi.number(),
             perPage: Joi.number()
         },
         [Segments.BODY]: Schemas.SingleOrArray(Schemas.RenderedCard.Full)
-    }), asyncHandler<unknown, unknown, CardBody, RenderQuery>(async (req, res) => {
+    }), asyncHandler<unknown, unknown, SingleOrArray<IRenderCard>, { format?: ResourceFormat } & SingleRenderJobOptions & BatchRenderJobOptions>(async (req, res) => {
         const { format } = req.query;
         const body = req.body;
 
@@ -43,11 +40,6 @@ router.post("/",
         }
 
         switch (format) {
-            case "JSON": {
-                const json = cards.map((card) => card.toJSON());
-                res.status(StatusCodes.OK).json(Array.isArray(body) ? json : json[0]);
-                break;
-            }
             case "PDF": {
                 const { copies, perPage, rounded } = req.query;
                 const pdf = await renderService.asPDF(cards, { copies, perPage, rounded });
@@ -80,24 +72,27 @@ router.post("/",
                 break;
             }
         }
-    }));
+    })
+);
 
-router.get("/job", celebrate({
-    [Segments.QUERY]: {
-        id: Joi.string().regex(Regex.UUID).required()
-    }
-}), asyncHandler<unknown, unknown, unknown, { id: UUID }>(async (req, res) => {
-    const { id } = req.query;
+router.get("/job",
+    celebrate({
+        [Segments.QUERY]: {
+            id: Joi.string().regex(Regex.UUID).required()
+        }
+    }), asyncHandler<unknown, unknown, unknown, { id: UUID }>(async (req, res) => {
+        const { id } = req.query;
 
-    const job = await dataService.redis.get(id);
-    if (!job || typeof job !== "string") {
-        throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Id", `No render job exists for id "${id}"`);
-    }
-    const jobData = JSON.parse(job);
+        const job = await dataService.redis.get(id);
+        if (!job || typeof job !== "string") {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Id", `No render job exists for id "${id}"`);
+        }
+        const jobData = JSON.parse(job);
 
-    res.status(StatusCodes.OK).json(jobData);
+        res.status(StatusCodes.OK).json(jobData);
 
-    await dataService.redis.del(id);
-}));
+        await dataService.redis.del(id);
+    })
+);
 
 export default router;

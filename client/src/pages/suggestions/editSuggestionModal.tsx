@@ -1,7 +1,7 @@
 import { ICardSuggestion } from "common/models/cards";
 import { BaseElementProps } from "../../types";
 import { addToast, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
-import { useSubmitSuggestionMutation, useUpdateSuggestionMutation } from "../../api";
+import { useCreateSuggestionMutation, useUpdateSuggestionMutation } from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
@@ -15,7 +15,7 @@ import { useSelector } from "react-redux";
 
 const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClose = () => true, onSave = () => true }: EditSuggestionModalProps) => {
     const user = useSelector((state: RootState) => state.auth.user);
-    const [submitSuggestion, { isLoading: isSubmitting }] = useSubmitSuggestionMutation();
+    const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
     const [updateSuggestion, { isLoading: isUpdating }] = useUpdateSuggestionMutation();
     const [suggestion, setSuggestion] = useState<DeepPartial<ICardSuggestion>>({});
 
@@ -29,7 +29,7 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
         setSuggestion(validSuggestion);
 
         try {
-            const newSuggestion = isNew ? await submitSuggestion(validSuggestion).unwrap() : await updateSuggestion(validSuggestion).unwrap();
+            const newSuggestion = isNew ? await createSuggestion(validSuggestion).unwrap() : await updateSuggestion(validSuggestion).unwrap();
             setSuggestion(newSuggestion);
             onSave(newSuggestion);
 
@@ -38,7 +38,7 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
             // TODO: Better error handling from redux (eg. use ApiError.message for description)
             addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
         }
-    }, [isNew, onSave, submitSuggestion, updateSuggestion]);
+    }, [isNew, onSave, createSuggestion, updateSuggestion]);
 
     return <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose() } size="3xl">
         <ModalContent>
@@ -66,7 +66,7 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
                     <ModalFooter>
                         <ModalFooter>
                             <WizardBack onCancel={onClose}/>
-                            <WizardNext isLoading={isSubmitting || isUpdating} color={"primary"}/>
+                            <WizardNext isLoading={isCreating || isUpdating} color={"primary"}/>
                         </ModalFooter>
                     </ModalFooter>
                 </Wizard>

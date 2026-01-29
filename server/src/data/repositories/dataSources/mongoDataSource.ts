@@ -159,11 +159,12 @@ export default class MongoDataSource<T> {
 
     protected async deleteMany(query: MongoFilter<T>, options?: DeleteOptions) {
         if (Object.keys(query).length === 0) {
-            return 0; // Do not delete anything if there are no query parameters
+            return []; // Do not delete anything if there are no query parameters
         }
+        const deleting = await this.find(query);
         const results = await this.collection.deleteMany(query, options);
 
         logger.verbose(`[Mongo] Deleted ${results.deletedCount} documents from ${this.name} collection`);
-        return results.deletedCount;
+        return deleting;
     }
 };

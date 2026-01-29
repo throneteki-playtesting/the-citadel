@@ -17,6 +17,7 @@ const factionMap = {
 
 const cards = db.getCollection("cards");
 
+const latest = {};
 cards.find({}).forEach(card => {
     // Faction mapping
     if (card.faction && factionMap[card.faction]) {
@@ -48,6 +49,28 @@ cards.find({}).forEach(card => {
     // Replace _id with new ObjectId
     const newId = new ObjectId();
 
+    // Set draft (is draft if no playtesting version set)
+    card.draft = !card.playtesting;
+
+    // Set latest (will set true in next loop)
+    card.latest = false;
+    const compareSemver = (a, b) => {
+        const pa = a.split(".");
+        const pb = b.split(".");
+
+        for (let i = 0; i < 3; i++) {
+            const na = Number(pa[i]);
+            const nb = Number(pb[i]);
+            if (na > nb) return 1;
+            if (nb > na) return -1;
+        }
+        return 0;
+    };
+    const key = `${card.project}-${card.number}`;
+    if (!latest[key] || compareSemver(card.version, latest[key].version) > 0) {
+        latest[key] = { ...card, _id: newId };
+    }
+
     // Apply update
     cards.deleteOne({ _id: card._id });
     const { project, ...other } = card;
@@ -58,4 +81,9 @@ cards.find({}).forEach(card => {
     });
 });
 
-cards.createIndex({ project: 1, version: 1, number: 1 }, { unique: true });
+// Set all latest to true
+Object.values(latest).forEach(card => {
+    cards.updateOne({ _id: card._id }, { $set: { latest: true } });
+});
+
+cards.createIndex({ project: 1, number: 1, version: 1 }, { unique: true });

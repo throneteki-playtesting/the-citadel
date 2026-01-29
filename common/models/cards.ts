@@ -59,29 +59,26 @@ export interface PlotStats {
     reserve: PlotValue
 }
 
-export type ImplementationStatus = "not implemented" | "recently implemented" | "implemented";
+export enum DefaultDeckLimit {
+    character = 3,
+    attachment = 3,
+    location = 3,
+    event = 3,
+    plot = 2,
+    agenda = 1
+}
+
 export interface IPlaytestCard extends ICard {
     project: number,
     number: number,
-    // latest: boolean,
     version: SemanticVersion,
+    latest: boolean,
+    draft: boolean,
     note?: NoteDetails,
     playtesting?: SemanticVersion,
     github?: GithubDetails,
     release?: ReleaseDetails,
     suggestionId?: string
-}
-
-export interface IRenderCard extends Omit<ICard, "code"> {
-    code?: Code,
-    key: string,
-    watermark: Watermark
-}
-
-export interface Watermark {
-    top?: string,
-    middle?: string,
-    bottom?: string
 }
 
 export interface NoteDetails {
@@ -95,17 +92,19 @@ export interface GithubDetails {
 }
 
 export interface ReleaseDetails {
-        short: string,
-        number: number
-    }
+    short: string,
+    number: number
+}
 
-export enum DefaultDeckLimit {
-    character = 3,
-    attachment = 3,
-    location = 3,
-    event = 3,
-    plot = 2,
-    agenda = 1
+export interface IRenderCard extends ICard {
+    key: string,
+    watermark: Watermark
+}
+
+export interface Watermark {
+    top?: string,
+    middle?: string,
+    bottom?: string
 }
 
 export interface ICardSuggestion {

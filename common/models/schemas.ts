@@ -101,8 +101,10 @@ export const Card = {
 export const PlaytestingCard = {
     Full: Card.Full.keys({
         project: Joi.number().required(),
-        version: Joi.string().required().regex(Regex.SemanticVersion),
         number: Joi.number().required(),
+        version: Joi.string().required().regex(Regex.SemanticVersion),
+        latest: Joi.boolean(),
+        draft: Joi.boolean(),
         note: Joi.object({
             type: Joi.string().required().valid(...Cards.noteTypes),
             text: Joi.string().when("type", {
@@ -123,8 +125,10 @@ export const PlaytestingCard = {
     }),
     Partial: Card.Partial.keys({
         project: Joi.number(),
-        version: Joi.string().regex(Regex.SemanticVersion),
         number: Joi.number(),
+        version: Joi.string().regex(Regex.SemanticVersion),
+        latest: Joi.boolean(),
+        draft: Joi.boolean(),
         note: Joi.object({
             type: Joi.string().valid(...Cards.noteTypes),
             text: Joi.string()
@@ -142,8 +146,10 @@ export const PlaytestingCard = {
     }),
     Draft: Card.Full.keys({
         project: Joi.number().required(),
-        version: Joi.string().regex(Regex.SemanticVersion),
         number: Joi.number().required(),
+        version: Joi.string().regex(Regex.SemanticVersion),
+        latest: Joi.boolean(),
+        draft: Joi.boolean(),
         note: Joi.object({
             type: Joi.string().required().valid(...Cards.noteTypes),
             text: Joi.string().when("type", {
@@ -331,7 +337,8 @@ export const PlaytestingReview = {
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
-        epoch: Joi.number().required()
+        created: Joi.date().required(),
+        updated: Joi.date().required()
     }),
     Partial: Joi.object({
         reviewer: Joi.string(),
@@ -348,7 +355,24 @@ export const PlaytestingReview = {
             releasable: Joi.string().valid(...statementAnswers)
         }),
         additional: Joi.string(),
-        epoch: Joi.number()
+        created: Joi.date(),
+        updated: Joi.date()
+    }),
+    Draft: Joi.object({
+        reviewer: Joi.string().required(),
+        project: Joi.number().required(),
+        number: Joi.number().required(),
+        version: Joi.string().required().regex(Regex.SemanticVersion),
+        decks: Joi.array().items(Joi.string()),
+        played: Joi.string().required().valid(...playedRanges),
+        statements: Joi.object({
+            boring: Joi.string().required().valid(...statementAnswers),
+            competitive: Joi.string().required().valid(...statementAnswers),
+            creative: Joi.string().required().valid(...statementAnswers),
+            balanced: Joi.string().required().valid(...statementAnswers),
+            releasable: Joi.string().required().valid(...statementAnswers)
+        }).required(),
+        additional: Joi.string()
     })
 };
 

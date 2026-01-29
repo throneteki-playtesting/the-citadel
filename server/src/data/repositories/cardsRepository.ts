@@ -1,4 +1,4 @@
-import { BulkWriteOptions, MongoClient, Sort } from "mongodb";
+import { BulkWriteOptions, DeleteOptions, MongoClient, Sort } from "mongodb";
 import { dataService, logger } from "@/services";
 import { asArray, groupBy } from "common/utils";
 import * as CardsController from "gas/controllers/cardsController";
@@ -11,6 +11,7 @@ import { flatten } from "flat";
 import { IRepository } from "@/types";
 import PlaytestingCard from "../models/cards/playtestingCard";
 import CardCollection from "common/collections/cardCollection";
+import { gt } from "semver";
 
 export default class CardsRepository implements IRepository<IPlaytestCard> {
     public database: CardMongoDataSource;
@@ -60,23 +61,69 @@ export default class CardsRepository implements IRepository<IPlaytestCard> {
 
 class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
     constructor(client: MongoClient) {
-        super(client, "cards", { number: 1, version: 1 });
+        super(client, "cards", { project: 1, number: 1, version: 1 });
     }
 
     public override async create(creating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions) {
         const cards = asArray(creating);
-        // TODO: Implement image storage again (external host)
-        // await renderService.syncImages(new CardCollection(cards));
+        // TODO: Implement image sync with online resource
         const result = await this.insertMany(cards, options);
+        await this.syncLatest(result);
         return result;
     }
 
     public override async update(updating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions & { upsert?: boolean }) {
         const cards = asArray(updating);
-        // TODO: Implement image storage again (external host)
-        // await renderService.syncImages(new CardCollection(cards), true);
+        // TODO: Implement image sync with online resource
         const result = await this.bulkWrite(cards, options);
+        if (options?.upsert) {
+            await this.syncLatest(result);
+        }
         return result;
+    }
+
+    public override async destroy(deleting: SingleOrArray<DeepPartial<IPlaytestCard>>, options?: DeleteOptions) {
+        const deleted = await super.destroy(deleting, options);
+        // TODO: Implement image deletion to online resource
+
+        // We must check if "latest" need to be reassigned.
+        const wasLatest = deleted.filter((card) => card.latest);
+        await this.syncLatest(wasLatest);
+
+        return deleted;
+    }
+
+    /**
+     * Updates all cards with the provided project/number combination to ensure latest flag is accurate
+     */
+    private async syncLatest(syncing: SingleOrArray<{ project: number, number: number }>) {
+        const filter = asArray(syncing);
+        if (filter.length === 0) {
+            return;
+        }
+        // Do not consider draft cards in latest sync, as they cannot be latest
+        const previous = await this.find({ ...filter, draft: false });
+
+        const removeLatest: IPlaytestCard[] = [];
+        const latest = new Map<string, IPlaytestCard>();
+
+        for (const card of previous) {
+            const key = `${card.project}|${card.number}`;
+            const currentLatest = latest.get(key);
+
+            if (!currentLatest || gt(card.version, currentLatest.version)) {
+                if (currentLatest?.latest) {
+                    removeLatest.push({ ...currentLatest, latest: false });
+                }
+                latest.set(key, card);
+            } else if (card.latest) {
+                removeLatest.push({ ...card, latest: false });
+            }
+        }
+        const addLatest = Array.from(latest.values()).map((card) => ({ ...card, latest: true }));
+
+        await this.update(addLatest.concat(removeLatest));
+
     }
 }
 class CardDataSource extends GASDataSource<IPlaytestCard> {

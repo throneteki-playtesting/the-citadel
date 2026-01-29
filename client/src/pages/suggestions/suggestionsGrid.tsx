@@ -30,11 +30,11 @@ const SuggestionsGrid = ({ className, style, size, filter: initialFilter, hideFi
     const [users, setUsers] = useState(initialFilter?.user ?? []);
     const [tags, setTags] = useState(initialFilter?.tags ?? []);
     const filter = useFilter<ICardSuggestion>({ archivedReason: undefined, card: { faction: factions, type: types }, user: { discordId: users.map((user) => user.discordId) }, tags });
-    const [orderBy, setOrderBy] = useState<Sortable<ICardSuggestion> | undefined>({ updated: "desc" });
+    const [orderBy, setOrderBy] = useState<Sortable<ICardSuggestion> | undefined>();
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState<number>(24);
 
-    const { data: suggestions, isLoading } = useGetSuggestionsQuery({ filter, orderBy, page, perPage });
+    const { data: suggestionsData, isLoading, isFetching } = useGetSuggestionsQuery({ filter, orderBy, page, perPage });
 
     return (
         <div className={classNames("w-full flex flex-col gap-2", className)} style={style}>
@@ -44,20 +44,18 @@ const SuggestionsGrid = ({ className, style, size, filter: initialFilter, hideFi
                 {!hideFilters?.user && <UserFilter className="sm:flex-1" label="Suggested By" users={users} setUsers={setUsers}/>}
                 {!hideFilters?.tags && <TagFilter className="sm:flex-1" label="Tags" tags={tags} setTags={setTags}/>}
             </div>
-            <CardGrid className="shrink" cards={suggestions?.data ?? []} isLoading={isLoading} size={size}>
+            <CardGrid className="shrink" cards={suggestionsData?.items} isLoading={isLoading || isFetching} size={size}>
                 {renderMapFunc}
             </CardGrid>
-            {suggestions &&
-                <div className="flex flex-col sm:flex-row sm:items-center">
-                    <div className="w-full flex gap-2">
-                        <Select label="Per Page" labelPlacement="outside-left" className="w-34" selectedKeys={[perPage.toString()]} onSelectionChange={(keys) => setPerPage(keys.currentKey ? parseInt(keys.currentKey) : 12)}>
-                            {[12, 24, 36, 48].map((pp) => <SelectItem key={pp} textValue={pp.toString()}>{pp}</SelectItem>)}
-                        </Select>
-                        <Pagination className="grow" page={page} onChange={setPage} total={Math.ceil(suggestions.total / perPage)}/>
-                    </div>
-                    <OrderBySelector className="sm:w-lg" variant="underlined" labelPlacement="outside-left" options={SortOptions} orderBy={orderBy} setOrderBy={setOrderBy}/>
+            <div className="flex flex-col sm:flex-row sm:items-center">
+                <div className="w-full flex gap-2">
+                    <Select label="Per Page" labelPlacement="outside-left" className="w-34" selectedKeys={[perPage.toString()]} onSelectionChange={(keys) => setPerPage(keys.currentKey ? parseInt(keys.currentKey) : 12)}>
+                        {[12, 24, 36, 48].map((pp) => <SelectItem key={pp} textValue={pp.toString()}>{pp}</SelectItem>)}
+                    </Select>
+                    <Pagination className="grow" page={page} onChange={setPage} total={Math.ceil((suggestionsData?.total ?? 0) / perPage)}/>
                 </div>
-            }
+                <OrderBySelector className="sm:w-lg" variant="underlined" labelPlacement="outside-left" options={SortOptions} orderBy={orderBy} setOrderBy={setOrderBy}/>
+            </div>
         </div>
     );
 };

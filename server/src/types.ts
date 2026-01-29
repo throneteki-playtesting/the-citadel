@@ -37,7 +37,7 @@ export interface IRepository<T> {
     update(updating: T[], upsert?: boolean): Promise<T[]>;
     update(updating: SingleOrArray<T>, upsert?: boolean): Promise<T> | Promise<T[]>;
 
-    destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<number>;
+    destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<T[]>;
 }
 
 export type RenderType = "single" | "batch";
@@ -47,5 +47,8 @@ export type SingleRenderJobOptions = { orientation?: "horizontal" | "vertical", 
 export interface BatchRenderJob extends RenderJob { type: "batch", options?: BatchRenderJobOptions };
 export type BatchRenderJobOptions = { copies?: number, perPage?: number, rounded?: boolean };
 
-export interface IGetEndpoint<T> { filter?: SingleOrArray<DeepPartial<T>>, orderBy?: Sortable<T>, page?: number, perPage?: number }
-export interface IGetResponse<T> { total: number, data: T[] }
+export interface IGetRequest<T> { filter?: SingleOrArray<DeepPartial<T>>, orderBy?: Sortable<T>, page?: number, perPage?: number }
+export interface IGetResponse<T> { total: number, items: T[] }
+
+export interface IDeleteRequest<T> { filter?: SingleOrArray<DeepPartial<T>> }
+export interface IDeleteResponse<T> { total: number, deleted: T[] }

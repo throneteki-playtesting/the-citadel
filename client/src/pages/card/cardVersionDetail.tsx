@@ -3,9 +3,8 @@ import { BaseElementProps } from "../../types";
 import { IPlaytestCard } from "common/models/cards";
 import { Button, Chip, Link, Skeleton } from "@heroui/react";
 import { IProject } from "common/models/projects";
-import { useGetCardVersionReviewsQuery } from "../../api";
 import { CardPreview } from "@agot/card-preview";
-import { renderPlaytestingCard } from "common/utils";
+import { isPreview, renderPlaytestingCard } from "common/utils";
 import CardVersionReviewStats from "./cardVersionReviewStats";
 import dismoji, { emojis } from "../../emojis";
 import { ReactElement, useMemo } from "react";
@@ -14,47 +13,48 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import { Permission } from "common/models/user";
+import { useGetReviewsQuery } from "../../api";
 
-const CardVersionDetail = ({ className, style, card, project, onEdit, onDelete, isLatest, isDraft, isPreview }: CardVersionDetailProps) => {
-    const { data: reviews, isLoading: isReviewsLoading } = useGetCardVersionReviewsQuery({ project: project.number, number: card.number, version: card.version });
+const CardVersionDetail = ({ className, style, card, project, onEdit, onDelete }: CardVersionDetailProps) => {
+    const { data: reviewsData, isLoading: isReviewsLoading } = useGetReviewsQuery({ filter: { project: project.number, number: card.number, version: card.version } });
     const title = useMemo(() => {
-        if (isPreview) {
+        if (isPreview(card)) {
             return `${card.name} (Preview)`;
         }
         return `${card.name}, ver. ${card.version}`;
-    }, [card.name, card.version, isPreview]);
+    }, [card]);
 
     // TODO: Improve with custom color set (in tailwind settings)
     type TagColor = "default" | "success" | "secondary" | "primary" | "warning" | "danger";
     const tags = useMemo(() => {
         return [
-            ...(isLatest ? [({ label:"Latest", color: "success" as TagColor })] : []),
-            ...(isDraft ? [({ label:"Draft", color: "secondary" as TagColor })] : []),
-            ...(isPreview ? [({ label:"Preview", color: "warning" as TagColor })] : [])
+            ...(card.latest ? [({ label:"Latest", color: "success" as TagColor })] : []),
+            ...(card.draft ? [({ label:"Draft", color: "secondary" as TagColor })] : []),
+            ...(isPreview(card) ? [({ label:"Preview", color: "warning" as TagColor })] : [])
         ];
-    }, [isDraft, isLatest, isPreview]);
+    }, [card]);
 
     const decks = useMemo(() => {
-        return reviews?.reduce<{ deck: string, reviewer: string }[]>((all, review) => {
+        return reviewsData?.items.reduce<{ deck: string, reviewer: string }[]>((all, review) => {
             all.push(...review.decks.map((deck) => ({ deck, reviewer: review.reviewer })));
             return all;
         }, []) ?? [];
-    }, [reviews]);
+    }, [reviewsData?.items]);
 
     const buttons = useMemo(() => {
         const buttons: ReactElement[] = [];
-        if (isDraft) {
+        if (card.draft) {
             buttons.push(
-                <PermissionGate requires={Permission.EDIT_CARDS}><Button color="default" startContent={<FontAwesomeIcon icon={faPencil}/>} onPress={onEdit}>Edit</Button></PermissionGate>
+                <PermissionGate requires={Permission.EDIT_CARDS}><Button color="default" startContent={<FontAwesomeIcon icon={faPencil}/>} onPress={() => onEdit(card)}>Edit</Button></PermissionGate>
             );
             if (!isPreview) {
                 buttons.push(
-                    <PermissionGate requires={Permission.DELETE_CARDS}><Button color="danger" startContent={<FontAwesomeIcon icon={faTrash}/>} onPress={onDelete}>Delete</Button></PermissionGate>
+                    <PermissionGate requires={Permission.DELETE_CARDS}><Button color="danger" startContent={<FontAwesomeIcon icon={faTrash}/>} onPress={() => onDelete(card)}>Delete</Button></PermissionGate>
                 );
             }
         }
         return buttons;
-    }, [isDraft, isPreview, onDelete, onEdit]);
+    }, [card, onDelete, onEdit]);
 
     return (
         <div className={classNames("flex flex-col md:flex-row flex-wrap gap-5 p-4 bg-default-100 rounded-2xl", className)} style={style}>
@@ -77,9 +77,9 @@ const CardVersionDetail = ({ className, style, card, project, onEdit, onDelete, 
 
                 <div className="flex flex-col gap-1 p-2">
                     <div className="font-bold">Review Statistics</div>
-                    <div className="text-xs">{`Average review statistics for this card & version. There have been ${reviews?.length ?? 0} reviews.`}</div>
+                    <div className="text-xs">{`Average review statistics for this card & version. There have been ${reviewsData?.items.length ?? 0} reviews.`}</div>
                     <Skeleton className="flex-grow min-h-32" isLoaded={!isReviewsLoading}>
-                        {!isReviewsLoading && <CardVersionReviewStats reviews={reviews} />}
+                        {!isReviewsLoading && <CardVersionReviewStats reviews={reviewsData?.items} />}
                     </Skeleton>
                 </div>
             </div>
@@ -88,7 +88,7 @@ const CardVersionDetail = ({ className, style, card, project, onEdit, onDelete, 
                     <div className="text-xl font-bold">Public decks</div>
                     <div className="text-xs">Decks which were submitted in playtesting reviews for this card & version</div>
                     {
-                        reviews && decks.length > 0 ? decks.map((deck) =>
+                        reviewsData?.items && decks.length > 0 ? decks.map((deck) =>
                             <Link key={deck.deck} href={deck.deck} className="flex gap-2 bg-default-100/50 p-2 rounded-sm">
                                 <ThronesIcon name={card.faction}/> {deck.reviewer}
                             </Link>
@@ -107,6 +107,11 @@ const CardVersionDetail = ({ className, style, card, project, onEdit, onDelete, 
     );
 };
 
-type CardVersionDetailProps = Omit<BaseElementProps, "children"> & { card: IPlaytestCard, project: IProject, onEdit: () => void, onDelete: () => void, isLatest: boolean, isDraft: boolean, isPreview: boolean };
+type CardVersionDetailProps = Omit<BaseElementProps, "children"> & {
+    card: IPlaytestCard,
+    project: IProject,
+    onEdit: (card: IPlaytestCard) => void,
+    onDelete: (card: IPlaytestCard) => void
+};
 
 export default CardVersionDetail;

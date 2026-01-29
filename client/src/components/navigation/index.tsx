@@ -11,12 +11,13 @@ import { useGetProjectsQuery } from "../../api";
 import { Permission } from "common/models/user";
 import dismoji from "../../emojis";
 import { useLocation } from "react-router-dom";
+import { hasPermission } from "common/utils";
 
 const NavigationBar = () => {
     const user = useSelector((state: RootState) => state.auth.user);
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const { data: projects } = useGetProjectsQuery();
+    const { data: projectData } = useGetProjectsQuery(!hasPermission(user, Permission.READ_ALL_PROJECTS) ? { filter: { active: true } } : {});
 
     useEffect(() => {
         if (location) {
@@ -35,10 +36,10 @@ const NavigationBar = () => {
 
     const projectsItem = useMemo(() => {
         const projectsNavItem = navItems.find((item) => item.label === "Projects");
-        if (!projects || !projectsNavItem || !isMenuItem(projectsNavItem)) {
+        if (!projectData || !projectsNavItem || !isMenuItem(projectsNavItem)) {
             return projectsNavItem;
         }
-        const projectsPageItems = projects
+        const projectsPageItems = projectData.items
             .slice()
             .sort((a, b) => b.number - a.number)
             .map((project) => {
@@ -60,7 +61,7 @@ const NavigationBar = () => {
                 ...projectsNavItem.subPages
             ]
         } as MenuItemType;
-    }, [projects]);
+    }, [projectData]);
 
     const items = useMemo(() => {
         const newNavItems = navItems.map((item) => {

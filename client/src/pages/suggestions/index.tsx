@@ -24,12 +24,18 @@ const Suggestions = () => {
     const isRenderingSuggestion = (suggestion: ICardSuggestion) => isRenderingImage && renderingImage?.key === suggestion.id;
 
     const canEdit = (user: User, suggestion: ICardSuggestion) => {
-        return (hasPermission(user, Permission.MAKE_SUGGESTIONS) && user.discordId === suggestion.user.discordId)
-            || hasPermission(user, Permission.EDIT_SUGGESTIONS);
+        return (
+            suggestion.id
+            && (hasPermission(user, Permission.MAKE_SUGGESTIONS) && user.discordId === suggestion.user.discordId)
+            || hasPermission(user, Permission.EDIT_SUGGESTIONS)
+        );
     };
     const canDelete = (user: User, suggestion: ICardSuggestion) => {
-        return (hasPermission(user, Permission.MAKE_SUGGESTIONS) && user.discordId === suggestion.user.discordId)
-            || hasPermission(user, Permission.DELETE_SUGGESTIONS);
+        return (
+            suggestion.id
+            && (hasPermission(user, Permission.MAKE_SUGGESTIONS) && user.discordId === suggestion.user.discordId)
+            || hasPermission(user, Permission.DELETE_SUGGESTIONS)
+        );
     };
 
     const onEdit = (suggestion: ICardSuggestion) => {
@@ -47,8 +53,11 @@ const Suggestions = () => {
         }
     };
     const onDelete = async (suggestion: ICardSuggestion) => {
+        if (!suggestion.id) {
+            return;
+        }
         try {
-            await deleteSuggestion(suggestion).unwrap();
+            await deleteSuggestion({ id: suggestion.id }).unwrap();
             addToast({ title: "Successfully deleted", color: "success", description: "Successfully deleted suggestion" });
         } catch (err) {
             // TODO: Better error handling from redux (eg. use ApiError.message for description)

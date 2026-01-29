@@ -1,14 +1,11 @@
 import { Navigate, useParams } from "react-router-dom";
 import ProjectDetail from "./projectDetail";
-import { useMemo } from "react";
+import { parseParamNumber } from "../../utilities";
 
 const Project = ({ isCreating = false }: ProjectProps) => {
     const { number } = useParams();
 
-    const project = useMemo(() => {
-        const parsed = parseInt(number ?? "0");
-        return !number || isNaN(parsed) ? undefined : parsed;
-    }, [number]);
+    const project = parseParamNumber(number);
 
     if (!isCreating && !project) {
         return <Navigate to="/" replace />;
@@ -18,6 +15,6 @@ const Project = ({ isCreating = false }: ProjectProps) => {
     );
 };
 
-export default Project;
-
 type ProjectProps = { isCreating?: boolean };
+
+export default Project;
