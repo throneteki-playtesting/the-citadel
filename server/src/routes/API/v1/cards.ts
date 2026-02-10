@@ -25,7 +25,7 @@ const handleGetCards = [
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
             ...paging(),
-            ...orderBy(Schemas.PlaytestingCard.Full)
+            ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
         }
     }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res, next) => {
@@ -160,7 +160,7 @@ router.put("/:project/:number/draft",
             }
         }
 
-        let card = { ...body, code, version, draft: true } as IPlaytestCard;
+        let card = { ...body, code, version, draft: true, latest: false } as IPlaytestCard;
         card = await dataService.cards.update(card, true);
 
         res.status(StatusCodes.OK).json(card);

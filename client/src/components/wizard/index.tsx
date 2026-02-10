@@ -9,7 +9,7 @@ import { merge } from "lodash";
 import { BaseElementProps } from "../../types";
 import { useWizard, WizardContext, WizardContextProps } from "./context";
 
-export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true, onError = () => true, children }: WizardProps<T>) {
+export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true, onValidationError = () => true, children }: WizardProps<T>) {
     const [internalData, setInternalData] = useState({} as DeepPartial<T>);
     const [currentPage, setCurrentPage] = useState(1);
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -49,19 +49,21 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
                 }
                 // Needs to match input ids on page
                 const inputId = detail.path.join(".");
-                inputErrors[inputId] = detail.message;
+                const message = detail.message.replace(new RegExp(`^"${inputId}"\\s+`), () => "").replace(/^\w/, (c) => c.toUpperCase());
+                inputErrors[inputId] = message;
             });
 
             if (Object.keys(inputErrors).length > 0) {
-                console.error("Validation Error Details:", error.details);
+                console.error("Validation Error Details:", inputErrors);
                 setValidationErrors(inputErrors);
+                onValidationError(inputErrors, partial);
                 return false;
             }
         }
 
         setValidationErrors({});
         return true;
-    }, [schema, setValidationErrors]);
+    }, [onValidationError, schema]);
 
     const onPageSubmit = useCallback((inputData: Record<string, any>) => {
         const pageData = unflatten<Record<string, any>, Record<string, any>>(inputData);
@@ -74,14 +76,12 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
                 // Validate full object
                 if (validate(newData)) {
                     onSubmit(newData as T);
-                } else {
-                    onError(validationErrors);
                 }
             } else {
-                setCurrentPage((prev) => Math.max(prev + 1, totalPages - 1));
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages));
             }
         }
-    }, [validate, internalData, isLastPage, onSubmit, onError, validationErrors, totalPages]);
+    }, [validate, internalData, isLastPage, onSubmit, totalPages]);
 
     const onPageBack = useCallback(() => {
         setCurrentPage((prev) => Math.max(prev - 1, 0));
@@ -124,7 +124,7 @@ type WizardProps<T> = {
     schema: Joi.Schema,
     data?: DeepPartial<T>,
     onSubmit?: (data: T) => void,
-    onError?: (errors: Record<string, string>) => void,
+    onValidationError?: (errors: Record<string, string>, partial: boolean) => void,
     children: ReactNode | ReactNode[]
 }
 
@@ -219,23 +219,24 @@ export const WizardPage = ({ className, style, children, data, pageNo, allowEmpt
 
     const onSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (data) {
-            // Controlled
-            onPageSubmit(data);
-        } else {
-            // Uncontrolled (eg. using form data & input names)
-            const formData = new FormData(e.target as HTMLFormElement);
-            let objData = Object.fromEntries(formData.entries());
-            if (!allowEmptyValues) {
-                // Sanitises "" values into undefined. Usually helps with validation
-                objData = Object.keys(objData).reduce<Record<string, any>>((acc, key) => {
-                    const value = objData[key];
-                    acc[key] = value === "" ? undefined : value;
-                    return acc;
-                }, {});
-            }
-            onPageSubmit(objData);
+        let pageData: Record<string, any> = {};
+
+        // Gather all form data
+        const formData = new FormData(e.target as HTMLFormElement);
+        pageData = Object.fromEntries(formData.entries());
+        if (!allowEmptyValues) {
+            // Sanitises "" values into undefined. Usually helps with validation
+            pageData = Object.keys(pageData).reduce<Record<string, any>>((acc, key) => {
+                const value = pageData[key];
+                acc[key] = value === "" ? undefined : value;
+                return acc;
+            }, {});
         }
+        // Prioritise controlled data, if provided, merged with form data
+        if (data) {
+            pageData = { ...pageData, ...data };
+        }
+        onPageSubmit(pageData);
     }, [allowEmptyValues, data, onPageSubmit]);
 
     return (

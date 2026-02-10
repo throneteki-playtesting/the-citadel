@@ -118,7 +118,7 @@ const Suggestions = () => {
                         </div>)}
                 </SuggestionsGrid>
             </div>
-            <EditSuggestionModal isOpen={!!editing} suggestion={editing} onClose={() => setEditing(undefined)} onSave={() => setEditing(undefined)}/>
+            <EditSuggestionModal isOpen={!!editing} suggestion={editing} onClose={() => setEditing(undefined)} onSave={(suggestion) => addToast({ title: "Successfully saved", color: "success", description: `"${suggestion.card.name}" suggestion has been saved` })}/>
         </div>
     );
 };

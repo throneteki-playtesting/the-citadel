@@ -10,6 +10,7 @@ import Roles from "./admin/roles";
 import AuthRedirect from "./authRedirect";
 import Project from "./project";
 import Card from "./card";
+import SubmitReview from "./review/submitReview";
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & { path: string, element?: ReactElement };
@@ -28,10 +29,12 @@ export const navItems: NavItem[] = [
     },
     {
         path: "/project/:number",
+        permission: Permission.READ_PROJECTS,
         element: <Project />
     },
     {
         path: "/project/:project/:number",
+        permission: Permission.READ_CARDS,
         element: <Card />
     },
     {
@@ -61,6 +64,12 @@ export const navItems: NavItem[] = [
             Permission.DELETE_SUGGESTIONS
         ],
         element: <Suggestions />
+    },
+    {
+        path: "review/submit",
+        element: <SubmitReview />,
+        label: "Submit Review",
+        permission: Permission.MAKE_REVIEWS
     },
     {
         label: "Admin",

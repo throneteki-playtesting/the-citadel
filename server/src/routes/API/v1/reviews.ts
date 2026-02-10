@@ -44,6 +44,33 @@ router.get("/",
     }
 );
 
+// Read review by project/number/version/reviewer
+router.get("/:project/:number/:version/:reviewer",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required(),
+            number: Joi.number().required(),
+            version: Joi.string().required().regex(Regex.SemanticVersion),
+            reviewer: Joi.string().required()
+        }
+    }),
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
+        const { project, number, version, reviewer } = req.params;
+        try {
+            req.query["filter"] = { project, number, version, reviewer };
+            next();
+        } catch (err) {
+            next(err);
+        }
+    }),
+    ...handleGetReviews,
+    (req, res) => {
+        const response = req["response"] as IGetResponse<IPlaytestReview>;
+        const [review] = response.items;
+        res.status(StatusCodes.OK).json(review);
+    }
+);
+
 // Create review
 router.post("/",
     validateRequest((user) => hasPermission(user, Permission.MAKE_REVIEWS)),
@@ -67,7 +94,7 @@ router.post("/",
 );
 
 // Update review
-router.put("/:project/:number/:version/:discordId",
+router.put("/:project/:number/:version/:reviewer",
     celebrate({
         [Segments.PARAMS]: {
             project: Joi.number().required(),

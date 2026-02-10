@@ -8,7 +8,6 @@ import GASDataSource from "./dataSources/GASDataSource";
 import { DeepPartial, SingleOrArray, Sortable } from "common/types";
 import { IRepository } from "@/types";
 import { flatten } from "flat";
-import Review from "../models/review";
 import ReviewCollection from "common/collections/reviewCollection";
 
 export default class ReviewsRepository implements IRepository<IPlaytestReview> {
@@ -36,7 +35,7 @@ export default class ReviewsRepository implements IRepository<IPlaytestReview> {
 
     public async collection(reading?: SingleOrArray<DeepPartial<IPlaytestReview>>, orderBy?: Sortable<IPlaytestReview>, page?: number, perPage?: number) {
         const result = await this.read(reading, orderBy, page, perPage);
-        return new ReviewCollection(result.map((review) => new Review(review)));
+        return new ReviewCollection(result);
     }
 
     public async count(counting?: SingleOrArray<DeepPartial<IPlaytestReview>>) {

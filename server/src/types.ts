@@ -24,6 +24,13 @@ export interface RefreshAuthResponse {
     message?: string
 }
 
+export interface OAuthTokenResponse {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+  scope?: string;
+}
+
 export interface IRepository<T> {
     create(creating: T): Promise<T>;
     create(creating: T[]): Promise<T[]>;

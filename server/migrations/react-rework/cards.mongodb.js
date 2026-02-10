@@ -17,73 +17,102 @@ const factionMap = {
 
 const cards = db.getCollection("cards");
 
-const latest = {};
-cards.find({}).forEach(card => {
-    // Faction mapping
-    if (card.faction && factionMap[card.faction]) {
-        card.faction = factionMap[card.faction];
+console.log("Migration started: Fetching cards...");
+const allCards = cards.find({}).toArray();
+console.log(`Found ${allCards.length} cards to migrate.`);
+
+const latestMap = {};
+const transformedDocs = [];
+const bulkOps = [];
+
+// 1. Version Comparison Helper
+const compareSemver = (a, b) => {
+    const pa = a.split(".");
+    const pb = b.split(".");
+    for (let i = 0; i < 3; i++) {
+        const na = Number(pa[i]);
+        const nb = Number(pb[i]);
+        if (na > nb) return 1;
+        if (nb > na) return -1;
     }
+    return 0;
+};
 
-    // Lowercase type
-    if (card.type) {
-        card.type = card.type.toLowerCase();
-    }
+// 2. Transformation Loop
+console.log("Transforming card data...");
+allCards.forEach(card => {
+    try {
+        const newId = new ObjectId();
+        const newDoc = {
+            ...card,
+            _id: newId,
+            project: card.projectId,
+            latest: false, // Default to false, will flip later
+            draft: !card.playtesting,
+            implemented: card.playtesting && (!card.github || card.github?.status === "complete")
+        };
 
-    // Lowercase note.type
-    if (card.note?.type) {
-        card.note.type = card.note.type.toLowerCase();
-        delete card["note.type"];
-    }
-
-    // Rename projectId to project
-    if (card.projectId) {
-        card.project = card.projectId;
-        delete card.projectId;
-    }
-
-    // Clean \r from card text
-    if (card.text) {
-        card.text = card.text.replace("\r", "");
-    }
-
-    // Replace _id with new ObjectId
-    const newId = new ObjectId();
-
-    // Set draft (is draft if no playtesting version set)
-    card.draft = !card.playtesting;
-
-    // Set latest (will set true in next loop)
-    card.latest = false;
-    const compareSemver = (a, b) => {
-        const pa = a.split(".");
-        const pb = b.split(".");
-
-        for (let i = 0; i < 3; i++) {
-            const na = Number(pa[i]);
-            const nb = Number(pb[i]);
-            if (na > nb) return 1;
-            if (nb > na) return -1;
+        // Faction mapping
+        if (newDoc.faction && factionMap[newDoc.faction]) {
+            newDoc.faction = factionMap[newDoc.faction];
         }
-        return 0;
-    };
-    const key = `${card.project}-${card.number}`;
-    if (!latest[key] || compareSemver(card.version, latest[key].version) > 0) {
-        latest[key] = { ...card, _id: newId };
+
+        // Lowercasing
+        if (newDoc.type) newDoc.type = newDoc.type.toLowerCase();
+
+        if (newDoc.note?.type) {
+            newDoc.note.type = newDoc.note.type.toLowerCase();
+        }
+
+        // Data cleanup
+        if (newDoc.text) {
+            newDoc.text = newDoc.text.replace(/\r/g, "");
+        }
+
+        // Remove old properties
+        delete newDoc.projectId;
+        delete newDoc["note.type"];
+
+        // Track the latest version for each unique card (project + number)
+        const key = `${newDoc.project}-${newDoc.number}`;
+        if (!latestMap[key] || compareSemver(newDoc.version, latestMap[key].version) > 0) {
+            latestMap[key] = { id: newId, version: newDoc.version };
+        }
+
+        transformedDocs.push({ oldId: card._id, newDoc });
+
+    } catch (err) {
+        console.error(`Error transforming card _id: ${card._id}`);
+        throw err;
+    }
+});
+
+// 3. Finalize 'latest' status and build Bulk Operations
+console.log("Finalizing version flags...");
+const latestIds = new Set(Object.values(latestMap).map(v => v.id.toString()));
+
+transformedDocs.forEach(({ oldId, newDoc }) => {
+    if (latestIds.has(newDoc._id.toString())) {
+        newDoc.latest = true;
     }
 
-    // Apply update
-    cards.deleteOne({ _id: card._id });
-    const { project, ...other } = card;
-    cards.insertOne({
-        project,
-        ...other,
-        _id: newId
-    });
+    bulkOps.push({ deleteOne: { filter: { _id: oldId } } });
+    bulkOps.push({ insertOne: { document: newDoc } });
 });
 
-// Set all latest to true
-Object.values(latest).forEach(card => {
-    cards.updateOne({ _id: card._id }, { $set: { latest: true } });
-});
+// 4. Batch Execution Loop
+const BATCH_SIZE = 500;
+console.log(`Executing ${bulkOps.length} operations in batches of ${BATCH_SIZE}...`);
+
+for (let i = 0; i < bulkOps.length; i += (BATCH_SIZE * 2)) {
+    // We multiply by 2 because each "batch" of 500 cards is 1000 operations (1 delete + 1 insert)
+    const batch = bulkOps.slice(i, i + (BATCH_SIZE * 2));
+
+    const result = cards.bulkWrite(batch, { ordered: true });
+
+    console.log(`Processed batch ${Math.floor(i / (BATCH_SIZE * 2)) + 1}: ${result.insertedCount} inserted, ${result.deletedCount} deleted.`);
+}
+
+console.log("Card migration successfully completed.");
 
 cards.createIndex({ project: 1, number: 1, version: 1 }, { unique: true });

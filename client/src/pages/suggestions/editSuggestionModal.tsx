@@ -32,13 +32,12 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
             const newSuggestion = isNew ? await createSuggestion(validSuggestion).unwrap() : await updateSuggestion(validSuggestion).unwrap();
             setSuggestion(newSuggestion);
             onSave(newSuggestion);
-
-            addToast({ title: "Successfully saved", color: "success", description: `'${newSuggestion.card.name}' has been saved` });
+            onModalClose();
         } catch (err) {
             // TODO: Better error handling from redux (eg. use ApiError.message for description)
             addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
         }
-    }, [isNew, onSave, createSuggestion, updateSuggestion]);
+    }, [isNew, createSuggestion, updateSuggestion, onSave, onModalClose]);
 
     return <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose() } size="3xl">
         <ModalContent>
@@ -47,7 +46,6 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
                     schema={CardSuggestion.Draft}
                     onSubmit={onSubmit}
                     data={suggestion}
-                    onError={() => addToast({ title: "Error", color: "danger", description: "Failed to submit. Check console for errors" })}
                 >
                     <ModalHeader>Card Suggestion Editor</ModalHeader>
                     <ModalBody>

@@ -51,17 +51,10 @@ router.get("/:number",
             number: Joi.number().required()
         }
     }),
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res, next) => {
+    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res, next) => {
         const { number } = req.params;
-        let { filter } = req.query;
         try {
-            filter = filter || {};
-            if (Array.isArray(filter)) {
-                filter.forEach((f) => f.number = number);
-            } else {
-                filter.number = number;
-            }
-            req.query.filter = filter;
+            req.query["filter"] = { number };
             next();
         } catch (err) {
             next(err);
@@ -166,7 +159,7 @@ router.put("/:number",
     validateRequest((user) => hasPermission(user, Permission.EDIT_PROJECTS)),
     celebrate({
         [Segments.PARAMS]: {
-            number: Joi.string().required()
+            number: Joi.number().required()
         },
         [Segments.BODY]: Schemas.Project.Full
     }),

@@ -30,10 +30,12 @@ export const errorHandler = (
             message: details.join("; ")
         };
 
+        logger.verbose(`API Validation Error returned: ${JSON.stringify(apiError)}`);
         return res.status(apiError.code).json(apiError);
     }
     // Handled/intentional error response
     if (isApiError(err)) {
+        logger.verbose(`API Error Response returned: ${JSON.stringify(err)}`);
         return res.status(err.code).json(err);
     }
 

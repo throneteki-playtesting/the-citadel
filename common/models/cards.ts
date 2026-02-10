@@ -78,6 +78,7 @@ export interface IPlaytestCard extends ICard {
     playtesting?: SemanticVersion,
     github?: GithubDetails,
     release?: ReleaseDetails,
+    implemented: boolean
     suggestionId?: string
 }
 
@@ -105,6 +106,11 @@ export interface Watermark {
     top?: string,
     middle?: string,
     bottom?: string
+}
+
+export interface ILabeledCard extends ICard {
+    label: string,
+    workInProgress: boolean
 }
 
 export interface ICardSuggestion {

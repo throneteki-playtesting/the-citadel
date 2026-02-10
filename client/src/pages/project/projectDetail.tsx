@@ -11,7 +11,7 @@ import ProjectContent from "./projectContent";
 const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
     const isNew = useMemo(() => !number, [number]);
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: number! }, { skip: isNew });
-    const { data: cardsData, isLoading: isCardsLoading } = useGetCardsQuery({ filter: { project: number } }, { skip: isNew });
+    const { data: cardsData, isLoading: isCardsLoading } = useGetCardsQuery({ filter: { project: number, latest: true } }, { skip: isNew });
     const [isEditing, setIsEditing] = useState(isNew);
     const [isDeleting, setIsDeleting] = useState(false);
     const navigate = useNavigate();

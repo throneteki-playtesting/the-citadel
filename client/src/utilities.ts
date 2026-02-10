@@ -1,3 +1,5 @@
+import { Faction } from "common/models/cards";
+
 export function enumToArray<T extends { [key: string]: string | number }>(
     e: T
 ): { key: T[keyof T]; value: Extract<keyof T, string> }[] {
@@ -25,4 +27,8 @@ export function parseParamNumber(param?: string) {
     }
     const parsed = parseInt(param);
     return isNaN(parsed) ? undefined : parsed;
+}
+
+export function getFactionCardImage(faction: Faction) {
+    return `https://thronesdb.com/images/factions/${faction}.png`;
 }

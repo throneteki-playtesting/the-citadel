@@ -1,6 +1,7 @@
+import { UUID } from "crypto";
 import * as Cards from "./models/cards";
-import { Permission, User } from "./models/user";
-import { DeepPartial, SingleOrArray } from "./types";
+import { Permission, Role, User } from "./models/user";
+import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -22,7 +23,11 @@ export const Regex = {
         }
     },
     SemanticVersion: /^\d+\.\d+\.\d+$/,
-    UUID: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/
+    UUID: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/,
+    ThronesDB: {
+        DeckLink: /^https:\/\/thronesdb\.com\/deck\/view\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+        DeckListLink: /^https:\/\/thronesdb\.com\/decklist\/view\/\d+\/.*$/
+    }
 };
 
 export function titleCase(value: string) {
@@ -145,6 +150,11 @@ export function parseCardCode(isReleasable: boolean, project: number, number: nu
         return `${project}${number + 500}` as Cards.Code;
     }
 }
+export function isPlaytestingCode(code: Cards.Code) {
+    const number = parseInt(code);
+    const remainder = Math.abs(number) % 1000;
+    return remainder >= 500 && remainder <= 999;
+}
 /**
      * Creates the full url for the specified request, converting query parameters into JSON
      */
@@ -248,11 +258,12 @@ export function renderPlaytestingCard(card: Cards.IPlaytestCard): Cards.IRenderC
 export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>): DeepPartial<Cards.IRenderCard>
 export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>) {
     const versionText = isPreview(card) || !card.version ? "Preview" : `v${card.version}`;
+    const codeText = card.code ?? (card.project && card.number ? parseCardCode(false, card.project, card.number) : undefined) ?? "Unknown Code";
     return {
         ...getBaseCardValues(card),
         key: `${card.code}@${card.version}`,
         watermark: {
-            top: card.code ?? "Unknown Code",
+            top: codeText,
             middle: versionText,
             bottom: "Work In Progress"
         }
@@ -311,4 +322,23 @@ export const thronesIcons: { [key: string]: string } = {
 
 export function isPreview(card: DeepPartial<Cards.IPlaytestCard>) {
     return !card.version || card.version === "0.0.0";
+}
+
+export function fuzzyMatch(expression: string, ...tests: string[]) {
+    const regex = new RegExp(expression.split("").join(".*"), "i");
+    for (const test of tests) {
+        if (regex.test(test)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+export function extractDeckIdentifier(url: DeckLink | DecklistLink) {
+    const pattern = /https:\/\/thronesdb\.com\/(?:deck|decklist)\/view\/(?<target>[^/]+)/;
+    const match = url.match(pattern);
+    // If url is confirmed to be DeckLink or DecklistLink, this should guaranteed not be null
+    const value = match!.groups!.target;
+
+    return /^\d+$/.test(value) ? Number(value) : (value as UUID);
 }

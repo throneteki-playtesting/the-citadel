@@ -25,11 +25,11 @@ const CardGrid = function<T>({ cards = [], size = "md", children: renderMapFunc,
     const columnsClassName = useMemo(() => {
         switch (size) {
             case "sm":
-                return "grid-cols-4 sm:grid-cols-5";
+                return "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6";
             case "md":
-                return "grid-cols-3 sm:grid-cols-4";
+                return "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5";
             case "lg":
-                return "grid-cols-2 sm:grid-cols-3";
+                return "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
         }
     }, [size]);
     return (

@@ -4,6 +4,7 @@ import partials from "express-partials";
 import compression from "compression";
 import cors from "cors";
 import api from "./routes/API/index";
+import thronesdb from "./routes/thronesdb/index";
 import auth from "./routes/auth/index";
 import { logger } from "@/services";
 import swaggerRouter from "./swagger";
@@ -30,6 +31,9 @@ function initialise() {
 
     // Register API
     app.use("/api", authenticate, api);
+
+    // Register thronesdb endpoints
+    app.use("/thronesdb", thronesdb);
 
     // Route authentication services (eg. Discord)
     app.use("/auth", auth);

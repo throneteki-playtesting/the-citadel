@@ -276,6 +276,13 @@ const api = createApi({
             invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
         }),
         // Reviews API
+        getReview: builder.query<IPlaytestReview | undefined, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
+            query: (options) => {
+                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
+                return { url, method: "GET" };
+            },
+            providesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+        }),
         getReviews: builder.query<IGetResponse<IPlaytestReview>, IGetRequest<IPlaytestReview>>({
             query: (options) => {
                 const url = buildUrl("reviews", options);
@@ -341,6 +348,8 @@ export const {
     useUpdateProjectMutation,
     useDeleteProjectMutation,
 
+    useGetReviewQuery,
+    useLazyGetReviewQuery,
     useGetReviewsQuery,
     useCreateReviewMutation,
     useUpdateReviewMutation,

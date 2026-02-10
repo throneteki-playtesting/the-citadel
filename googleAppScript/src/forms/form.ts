@@ -3,7 +3,7 @@ import { Log } from "../cloudLogger";
 import { SemanticVersion } from "common/utils";
 import * as Forms from "../forms/form";
 import * as RestClient from "../restClient";
-import { IPlaytestReview, PlayedRange } from "common/models/reviews";
+import { IPlaytestReview } from "common/models/reviews";
 
 export function get() {
     return FormApp.openById(getProperty(GooglePropertiesType.Script, "formId"));
@@ -32,7 +32,7 @@ export function toReviews(...formResponses: GoogleAppsScript.Forms.FormResponse[
             number,
             version,
             decks,
-            played: parseInt(items[Question.Played].getResponse() as string) as PlayedRange,
+            played: parseInt(items[Question.Played].getResponse() as string),
             statements: {
                 boring: statements[Statements.Boring],
                 competitive: statements[Statements.Competitive],

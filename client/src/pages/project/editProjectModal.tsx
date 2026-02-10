@@ -8,7 +8,7 @@ import { Project } from "common/models/schemas";
 import CardCountEditor from "./cardCountEditor";
 import { useCreateProjectMutation, useUpdateProjectMutation } from "../../api";
 
-const DefaultProjectValues = {
+const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
     draft: true,
     version: 0
@@ -44,7 +44,6 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
                     schema={Project.Draft}
                     onSubmit={onSubmit}
                     data={project}
-                    onError={() => addToast({ title: "Error", color: "danger", description: "Failed to submit. Check console for errors" })}
                 >
                     <ModalHeader>Project Editor</ModalHeader>
                     <ModalBody>

@@ -14,7 +14,7 @@ class ReviewSerializer extends DataSerializer<Review.IPlaytestReview> {
             number: parseInt(values[ReviewColumn.Number]),
             version: values[ReviewColumn.Version] as SemanticVersion,
             decks: values[ReviewColumn.Decks].split("\n").map((deck) => this.extractLinkText(deck, (link) => link)),
-            played: parseInt(values[ReviewColumn.Played]) as Review.PlayedRange,
+            played: parseInt(values[ReviewColumn.Played]),
             statements: {
                 boring: values[ReviewColumn.Boring] as Review.StatementAnswer,
                 competitive: values[ReviewColumn.Competitive] as Review.StatementAnswer,

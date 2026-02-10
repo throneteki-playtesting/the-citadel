@@ -1,28 +1,27 @@
 import { BaseMessageOptions, EmbedBuilder, ForumChannel, Guild, GuildForumTag, GuildMember, Message } from "discord.js";
-import Review from "../data/models/review";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { cardAsAttachment, colors, discordify, emojis, icons } from "./utilities";
 import ejs from "ejs";
 import { dataService, discordService, logger } from "@/services";
-import { StatementQuestions } from "common/models/reviews";
+import { IPlaytestReview, StatementQuestions } from "common/models/reviews";
 import { factions } from "common/models/cards";
 import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { IProject } from "common/models/projects";
 
 export default class ReviewThreads {
-    public static async sync(guild: Guild, canCreate: boolean, ...reviews: Review[]) {
-        const created: Review[] = [];
-        const updated: Review[] = [];
-        const failed: Review[] = [];
+    public static async sync(guild: Guild, canCreate: boolean, ...reviews: IPlaytestReview[]) {
+        const created: IPlaytestReview[] = [];
+        const updated: IPlaytestReview[] = [];
+        const failed: IPlaytestReview[] = [];
 
-        const titleFunc = (card: PlaytestingCard, review: Review) => `${card.number} | ${card.toString()} - ${review.reviewer}`;
+        const titleFunc = (card: PlaytestingCard, review: IPlaytestReview) => `${card.number} | ${card.toString()} - ${review.reviewer}`;
         try {
             const projects = await dataService.projects.read(reviews.map((review) => ({ number: review.number })));
             const { channel, projectTags, factionTags } = await ReviewThreads.validateGuild(guild, ...projects);
 
-            const findReviewThreadFor = async (card: PlaytestingCard, review: Review) => await discordService.findForumThread(channel, (thread) => thread.appliedTags.some((tag) => projectTags[review.project].id === tag) && thread.name === titleFunc(card, review));
+            const findReviewThreadFor = async (card: PlaytestingCard, review: IPlaytestReview) => await discordService.findForumThread(channel, (thread) => thread.appliedTags.some((tag) => projectTags[review.project].id === tag) && thread.name === titleFunc(card, review));
             const autoArchiveDuration = channel.defaultAutoArchiveDuration;
 
             for (const review of reviews) {
@@ -154,7 +153,7 @@ export default class ReviewThreads {
         return { channel, projectTags, factionTags };
     }
 
-    private static generateInitial(review: Review, card: PlaytestingCard, project: IProject, member?: GuildMember) {
+    private static generateInitial(review: IPlaytestReview, card: PlaytestingCard, project: IProject, member?: GuildMember) {
         try {
             const content = ReviewThreads.renderTemplate({ review, card, project, member, template: "initial" });
             const allowedMentions = { parse: ["users"] };
@@ -216,7 +215,7 @@ export default class ReviewThreads {
         }
     }
 
-    private static generateUpdated(review: Review, card: PlaytestingCard, project: IProject, changed: string[], member: GuildMember) {
+    private static generateUpdated(review: IPlaytestReview, card: PlaytestingCard, project: IProject, changed: string[], member: GuildMember) {
 
         try {
             const content = ReviewThreads.renderTemplate({ review, card, project, member, changed, template: "updated" });

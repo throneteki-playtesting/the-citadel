@@ -5,52 +5,75 @@ use(database);
 
 const projects = db.getCollection("projects");
 
-projects.find({}).forEach(project => {
-    // Add number as code
-    project.number = project.code;
+console.log("Migration started: Fetching projects...");
+const allProjects = projects.find({}).toArray();
+console.log(`Found ${allProjects.length} projects to migrate.`);
 
-    // Set code to short
-    project.code = project.short;
-    delete project.short;
+const bulkOps = [];
 
-    // Lowercase type
-    project.type = project.type.toLowerCase();
+// 1. Transformation Loop
+console.log("Transforming project data...");
+allProjects.forEach(project => {
+    try {
+        const newId = new ObjectId();
 
-    // Set version to releases
-    project.version = project.releases;
-    delete project.releases;
+        const newDoc = {
+            ...project,
+            _id: newId,
+            number: project.code,
+            code: project.short,
+            type: project.type.toLowerCase(),
+            version: project.releases,
+            created: new Date(),
+            updated: new Date(),
+            draft: !project.active,
+            cardCount: {
+                baratheon: project.perFaction,
+                greyjoy: project.perFaction,
+                lannister: project.perFaction,
+                martell: project.perFaction,
+                thenightswatch: project.perFaction,
+                stark: project.perFaction,
+                targaryen: project.perFaction,
+                tyrell: project.perFaction,
+                neutral: project.neutral
+            },
+            // Clean up emoji (remove start/end colons)
+            emoji: project.emoji ? project.emoji.replaceAll(":", "") : ""
+        };
 
-    // Set created/updated date
-    project.created = project.updated = new Date();
+        // Remove old/renamed properties
+        delete newDoc.short;
+        delete newDoc.releases;
+        delete newDoc.perFaction;
+        delete newDoc.neutral;
 
-    // Add new fields
-    project.draft = !project.active;
-    project.cardCount = {
-        baratheon: project.perFaction,
-        greyjoy: project.perFaction,
-        lannister: project.perFaction,
-        martell: project.perFaction,
-        thenightswatch: project.perFaction,
-        stark: project.perFaction,
-        targaryen: project.perFaction,
-        tyrell: project.perFaction,
-        neutral: project.neutral
-    };
-    delete project.perFaction;
-    delete project.neutral;
+        // Queue operations (Delete old, Insert new)
+        bulkOps.push({ deleteOne: { filter: { _id: project._id } } });
+        bulkOps.push({ insertOne: { document: newDoc } });
 
-    // Update emoji styling (remove start/end :)
-    project.emoji = project.emoji.replaceAll(":", "");
-
-    // Replace _id with new ObjectId
-    const newId = new ObjectId();
-
-    // Apply update
-    projects.deleteOne({ _id: project._id });
-    projects.insertOne({
-        ...project,
-        _id: newId
-    });
+    } catch (err) {
+        console.error(`Error transforming project _id: ${project._id}`);
+        throw err; // Standard unsuppressed error logging
+    }
 });
+
+// 2. Batch Execution Loop
+const BATCH_SIZE = 500;
+console.log(`Executing bulk operations in batches of ${BATCH_SIZE}...`);
+
+for (let i = 0; i < bulkOps.length; i += (BATCH_SIZE * 2)) {
+    const batch = bulkOps.slice(i, i + (BATCH_SIZE * 2));
+
+    const result = projects.bulkWrite(batch, { ordered: true });
+
+    // Safety check for driver-specific count properties
+    const inserted = result.insertedCount || result.nInserted || 0;
+    const deleted = result.deletedCount || result.nRemoved || 0;
+
+    console.log(`Processed batch ${Math.floor(i / (BATCH_SIZE * 2)) + 1}: ${inserted} inserted, ${deleted} deleted.`);
+}
+
+console.log("Project migration successfully completed.");
 
 projects.createIndex({ number: 1 }, { unique: true });

@@ -64,5 +64,7 @@ export enum Permission {
     /** Can edit other users card reviews */
     EDIT_REVIEWS = "EDIT_REVIEWS",
     /** Can delete other users card reviews */
-    DELETE_REVIEWS = "DELETE_REVIEWS"
+    DELETE_REVIEWS = "DELETE_REVIEWS",
+    /** Can access the card forum on discord */
+    DISCORD_CARD_FORUM = "DISCORD_CARD_FORUM"
 }

@@ -11,7 +11,7 @@ const ProjectContent = ({ project, cards, isLoading = false }: ProjectContentPro
         return <ProjectContentDraft project={project} cards={cards} isLoading={isLoading}/>;
     }
     return (
-        <CardGrid cards={cards} isLoading={!cards || isLoading} className="grid-cols-3 sm:grid-cols-4 gap-1 p-1">
+        <CardGrid cards={cards} isLoading={!cards || isLoading}>
             {(card) => (
                 <Link key={card.code} href={`/project/${project?.number}/${card.number}`}>
                     <CardPreview

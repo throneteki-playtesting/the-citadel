@@ -28,7 +28,7 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
             onSave(newCard);
             onModalClose();
         } catch (err) {
-        // TODO: Better error handling from redux (eg. use ApiError.message for description)
+            // TODO: Better error handling from redux (eg. use ApiError.message for description)
             addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
         }
     }, [onModalClose, onSave, putDraft]);
@@ -46,7 +46,6 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
                     schema={PlaytestingCard.Draft}
                     onSubmit={onSubmit}
                     data={card}
-                    onError={() => addToast({ title: "Error", color: "danger", description: "Failed to submit. Check console for errors" })}
                 >
                     <ModalHeader>Draft Card Editor</ModalHeader>
                     <ModalBody>

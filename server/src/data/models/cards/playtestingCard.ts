@@ -14,6 +14,7 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
     public note?: NoteDetails;
     public playtesting?: SemanticVersion;
     public github?: GithubDetails;
+    public implemented: boolean;
     public release?: ReleaseDetails;
     public suggestionId?: string;
 
@@ -84,6 +85,7 @@ class PlaytestingCard extends BaseCard implements IPlaytestCard {
                 status: this.github.status,
                 issueUrl: this.github.issueUrl
             } : undefined,
+            implemented: this.implemented,
             release: this.release ? {
                 short: this.release.short,
                 number: this.release.number

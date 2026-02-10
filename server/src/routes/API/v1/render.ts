@@ -5,7 +5,7 @@ import { dataService, renderService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IRenderCard } from "common/models/cards";
 import RenderedCard from "@/data/models/cards/renderedCard";
-import { asArray, hasPermission, Regex } from "common/utils";
+import { asArray, hasPermission } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
@@ -78,7 +78,7 @@ router.post("/",
 router.get("/job",
     celebrate({
         [Segments.QUERY]: {
-            id: Joi.string().regex(Regex.UUID).required()
+            id: Joi.string().guid({ version: ["uuidv4"] }).required()
         }
     }), asyncHandler<unknown, unknown, unknown, { id: UUID }>(async (req, res) => {
         const { id } = req.query;

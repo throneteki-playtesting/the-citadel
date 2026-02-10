@@ -19,6 +19,9 @@ declare namespace NodeJS {
         DISCORD_GUILD_ID: string;
         DISCORD_AUTH_REDIRECT: string;
 
+        THRONESDB_CLIENT_ID: string;
+        THRONESDB_CLIENT_SECRET: string;
+
         GOOGLE_PRIVATE_KEY: string;
         GOOGLE_CLIENT_EMAIL: string;
 

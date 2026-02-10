@@ -9,7 +9,7 @@ function App() {
         <HeroUIProvider navigate={navigate} useHref={useHref} className="h-full">
             <NavigationBar />
             <ToastProvider placement="top-right"/>
-            <div className="mx-auto p-4 sm:p-6 w-full max-w-5xl">
+            <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">
                 <Outlet />
             </div>
         </HeroUIProvider>

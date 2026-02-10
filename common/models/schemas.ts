@@ -1,7 +1,7 @@
 import Joi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
-import { playedRanges, statementAnswers } from "./reviews";
+import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import { Permission as UserPermissions } from "./user";
 
@@ -117,6 +117,7 @@ export const PlaytestingCard = {
             status: Joi.string().required().valid(...Cards.githubStatuses),
             issueUrl: Joi.string().required()
         }),
+        implemented: Joi.boolean().required(),
         release: Joi.object({
             short: Joi.string().required(),
             number: Joi.number().required()
@@ -138,6 +139,7 @@ export const PlaytestingCard = {
             status: Joi.string().valid(...Cards.githubStatuses),
             issueUrl: Joi.string()
         }),
+        implemented: Joi.boolean(),
         release: Joi.object({
             short: Joi.string(),
             number: Joi.number()
@@ -162,6 +164,7 @@ export const PlaytestingCard = {
             status: Joi.string().required().valid(...Cards.githubStatuses),
             issueUrl: Joi.string().required()
         }),
+        implemented: Joi.boolean().required(),
         release: Joi.object({
             short: Joi.string().required(),
             number: Joi.number().required()
@@ -327,8 +330,8 @@ export const PlaytestingReview = {
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().items(Joi.string()),
-        played: Joi.string().required().valid(...playedRanges),
+        decks: Joi.array().required().items(Joi.string()).min(1),
+        played: Joi.number().required(),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
             competitive: Joi.string().required().valid(...statementAnswers),
@@ -345,8 +348,8 @@ export const PlaytestingReview = {
         project: Joi.number(),
         number: Joi.number(),
         version: Joi.string().regex(Regex.SemanticVersion),
-        decks: Joi.array().items(Joi.string()),
-        played: Joi.string().valid(...playedRanges),
+        decks: Joi.array().items(Joi.string()).min(1),
+        played: Joi.number(),
         statements: Joi.object({
             boring: Joi.string().valid(...statementAnswers),
             competitive: Joi.string().valid(...statementAnswers),
@@ -363,8 +366,8 @@ export const PlaytestingReview = {
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().items(Joi.string()),
-        played: Joi.string().required().valid(...playedRanges),
+        decks: Joi.array().required().items(Joi.string()).min(1),
+        played: Joi.number().required(),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
             competitive: Joi.string().required().valid(...statementAnswers),
