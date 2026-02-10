@@ -1,6 +1,6 @@
 import { UUID } from "crypto";
 import * as Cards from "./models/cards";
-import { Permission, Role, User } from "./models/user";
+import { Permission, User } from "./models/user";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
