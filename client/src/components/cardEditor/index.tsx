@@ -9,7 +9,7 @@ import classNames from "classnames";
 
 const defaultVisibility: VisibilityOptions = { type: true, faction: true };
 
-const CardEditor = ({ /*ref, */className, style, card: initial, inputOptions = {}, onUpdate = () => true }: CardEditorProps) => {
+const CardEditor = ({ className, style, card: initial, inputOptions = {}, onUpdate = () => true }: CardEditorProps) => {
     const [card, setCard] = useState<DeepPartial<ICard>>({});
     const [visibility, setVisibility] = useState<VisibilityOptions>(defaultVisibility);
 
@@ -86,10 +86,12 @@ const CardEditor = ({ /*ref, */className, style, card: initial, inputOptions = {
 
     return (
         <div className={classNames("space-y-2 w-full", className)} style={style}>
-            <div className="flex flex-col gap-2 sm:flex-row md:flex-col lg:flex-row lg:min-w-98">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:flex-col lg:flex-row lg:flex-wrap">
+                <div className="flex gap-2 w-full">
+                    {isVisible("faction") && <FactionSelect value={card.faction} setValue={(value) => handleChange("faction", value)} isDisabled={isDisabled("faction")}/>}
+                    {isVisible("loyal") && <LoyalButton value={card.loyal} setValue={(value) => handleChange("loyal", value)} isDisabled={isDisabled("loyal")}/>}
+                </div>
                 {isVisible("type") && <TypeSelect value={card.type} setValue={(value) => handleChange("type", value)} isDisabled={isDisabled("type")}/>}
-                {isVisible("faction") && <FactionSelect value={card.faction} setValue={(value) => handleChange("faction", value)} isDisabled={isDisabled("faction")}/>}
-                {isVisible("loyal") && <LoyalButton value={card.loyal} setValue={(value) => handleChange("loyal", value)} isDisabled={isDisabled("loyal")}/>}
             </div>
             <div className="flex gap-1 items-center">
                 {isVisible("cost") && <CostInput className="max-w-24" value={card.cost} setValue={(value) => handleChange("cost", value)} isDisabled={isDisabled("cost")}/>}

@@ -1,9 +1,11 @@
-import { Chip, ChipProps, Select, SelectItem } from "@heroui/react";
+import { Button, Chip, ChipProps, Select, SelectItem } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BaseElementProps } from "../types";
 import classNames from "classnames";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 
-const ComboBox = ({ name, className, style, classNames: classGroups, label, placeholder, chip, values: initialValues, onChange, isDisabled, addKeys = ["Enter"] }: ComboBoxProps) => {
+const ComboBox = ({ name, className, style, classNames: classGroups, label, placeholder, chip, values: initialValues, onChange = () => true, isDisabled, addKeys = ["Enter"], allowDuplicates = false }: ComboBoxProps) => {
     const [values, setValues] = useState<string[]>(initialValues ?? []);
     const [inputValue, setInputValue] = useState("");
     const inputRef = useRef<HTMLInputElement | null>(null);
@@ -13,15 +15,15 @@ const ComboBox = ({ name, className, style, classNames: classGroups, label, plac
     const addItem = useCallback((item: string) => {
         const value = item.trim();
         if (value) {
-            const newValues = [...values, value];
-            setValues(newValues);
             setInputValue("");
-            inputRef.current?.focus();
-            if (onChange) {
+            if (allowDuplicates || !values.includes(value)) {
+                const newValues = [...values, value];
+                setValues(newValues);
                 onChange(newValues);
             }
+            inputRef.current?.focus();
         }
-    }, [onChange, values]);
+    }, [allowDuplicates, onChange, values]);
 
     const removeItem = useCallback((index: number) => {
         const newValues = values.filter((_, i) => i !== index);
@@ -97,12 +99,16 @@ const ComboBox = ({ name, className, style, classNames: classGroups, label, plac
                 renderValue={renderInput}
                 className={classGroups?.wrapper ?? className}
                 classNames={{
-                    trigger: "py-2"
+                    trigger: "pr-1",
+                    selectorIcon: "hidden",
+                    endContent: "mb-0",
+                    innerWrapper: "w-full my-auto"
                 }}
                 style={style}
                 isDisabled={isDisabled}
                 onClick={() => inputRef.current?.focus()}
                 onFocus={() => inputRef.current?.focus()}
+                endContent={<Button isIconOnly variant="ghost" onPress={() => addItem(inputValue)}><FontAwesomeIcon icon={faPlus}/></Button>}
             >
                 {renderedItems.map((item) => <SelectItem key={item} textValue={item}>{item}</SelectItem>)}
             </Select>
@@ -110,6 +116,6 @@ const ComboBox = ({ name, className, style, classNames: classGroups, label, plac
     );
 };
 
-type ComboBoxProps = Omit<BaseElementProps, "children"> & { name?: string, label?: React.ReactNode, placeholder?: string, chip?: ChipProps, values?: string[], onChange?: (items: string[]) => void, classNames?: { wrapper?: string, input?: string, chip?: string }, isDisabled?: boolean, addKeys?: string[] }
+type ComboBoxProps = Omit<BaseElementProps, "children"> & { name?: string, label?: React.ReactNode, placeholder?: string, chip?: ChipProps, values?: string[], onChange?: (items: string[]) => void, classNames?: { wrapper?: string, input?: string, chip?: string }, isDisabled?: boolean, addKeys?: string[], allowDuplicates?: boolean }
 
 export default ComboBox;

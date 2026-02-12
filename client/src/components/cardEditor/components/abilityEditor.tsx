@@ -27,7 +27,7 @@ export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, erro
         extensions: [TextDocument, Text, TriggeredAbility, AutoTextConversions, Trait, AbilityIcon, NewLine],
         content: convertIncomingText(text),
         onUpdate({ editor }) {
-            const html = convertOutgoingHtml(editor.getHTML());
+            const html = convertOutgoingHtml(editor.getHTML()) || undefined;
             setText(html);
         },
         editorProps: {
