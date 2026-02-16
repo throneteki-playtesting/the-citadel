@@ -3,10 +3,10 @@ import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { IProject } from "common/models/projects";
+import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
 import { hasPermission } from "common/utils";
-import { Permission } from "common/models/user";
+import { Permission, User } from "common/models/user";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, isEqual } from "lodash-es";
@@ -16,6 +16,18 @@ import { orderBy, paging } from "@/schemas";
 import { generateGetResponse } from "@/utils";
 
 const router = express.Router();
+
+const validateProjectParam = () => {
+    return asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res, next) => {
+        const { number } = req.params;
+        const [project] = await dataService.projects.read({ number });
+        if (!project) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
+        }
+        req["project"] = project;
+        next();
+    });
+};
 
 const handleGetProjects = [
     celebrate({
@@ -98,21 +110,20 @@ router.post("/:number/initialise",
             number: Joi.number().required()
         }
     }),
+    validateProjectParam(),
     asyncHandler(async (req, res, next) => {
-        const { number } = req.params;
-        const [project] = await dataService.projects.read({ number });
+        const project = req["project"] as IProject;
         if (!project) {
             throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
         }
         if (!project.draft) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Only draft projects can be initialised");
         }
-        const cards = await dataService.cards.read({ project: number });
+        const cards = await dataService.cards.read({ project: project.number });
         const totalSlots = Object.values(project.cardCount).reduce((acc, num) => acc + num, 0);
         if (cards.length < totalSlots) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Slots", "Project is missing cards for allocated slots; either provide cards, or adjust card slots");
         }
-        req["project"] = project;
         req["cards"] = cards;
         next();
     }),
@@ -235,6 +246,80 @@ router.delete("/:number",
         await dataService.cards.destroy({ project: number });
 
         res.status(StatusCodes.OK).json(deleted);
+    })
+);
+
+// Process playtesting update
+router.post("/:number/playtesting/update",
+    validateRequest((user) => hasPermission(user, Permission.GENERATE_PLAYTESTING_UPDATES)),
+    celebrate({
+        [Segments.PARAMS]: {
+            number: Joi.number().required()
+        },
+        [Segments.BODY]: Schemas.PlaytestingUpdate.Draft
+    }),
+    validateProjectParam(),
+    asyncHandler<{ number: number }, unknown, IPlaytestingUpdate, unknown>(async (req, res, next) => {
+        const project = req["project"] as IProject;
+
+        if (!project.active) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Cannot create playtesting update for inactive projects");
+        }
+
+        const playtestingUpdate = req.body;
+
+        const draftCards = await dataService.cards.read({ project: project.number, draft: true });
+        const newCards: IPlaytestCard[] = [];
+        const missing: string[] = [];
+
+        for (const [number, version] of Object.entries(playtestingUpdate.cardChanges)) {
+            const draftCard = draftCards.find(((card) => card.number === parseInt(number) && card.version === version));
+            if (!draftCard) {
+                missing.push(`${number} (v${version})`);
+            } else {
+                newCards.push(draftCard);
+            }
+        }
+
+        if (missing.length > 0) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Changes", `Some card changes do not exist as draft cards: ${missing.join(", ")}`);
+        }
+
+        req["project"] = project;
+        req["playtestingUpdate"] = playtestingUpdate;
+        req["newCards"] = newCards;
+        next();
+    }),
+    asyncHandler(async (req, res) => {
+        let project = req["project"] as IProject;
+        let playtestingUpdate = req["playtestingUpdate"] as IPlaytestingUpdate;
+        const newCards = req["newCards"] as IPlaytestCard[];
+        const user = req["user"] as User;
+
+        playtestingUpdate.project = project.number;
+        playtestingUpdate.version = project.version + 1;
+        playtestingUpdate.createdBy = user.discordId;
+        playtestingUpdate.created = new Date();
+        playtestingUpdate.updated = playtestingUpdate.created;
+
+        playtestingUpdate = await dataService.playtestingUpdates.create(playtestingUpdate);
+
+        for (const newCard of newCards) {
+            // Cards are no longer in draft. Update process will automatically update them to latest
+            newCard.draft = false;
+        }
+        const cards = await dataService.cards.update(newCards);
+
+        project.version = project.version + 1;
+        project.updated = new Date();
+
+        project = await dataService.projects.update(project);
+
+        res.status(StatusCodes.OK).json({
+            playtestingUpdate,
+            project,
+            cards
+        });
     })
 );
 

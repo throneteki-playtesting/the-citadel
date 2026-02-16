@@ -68,18 +68,14 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         const cards = asArray(creating);
         // TODO: Implement image sync with online resource
         const result = await this.insertMany(cards, options);
-        await this.syncLatest(result);
-        return result;
+        return await this.syncLatest(result);
     }
 
     public override async update(updating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions & { upsert?: boolean }) {
         const cards = asArray(updating);
         // TODO: Implement image sync with online resource
         const result = await this.bulkWrite(cards, options);
-        if (options?.upsert) {
-            await this.syncLatest(result);
-        }
-        return result;
+        return await this.syncLatest(result);
     }
 
     public override async destroy(deleting: SingleOrArray<DeepPartial<IPlaytestCard>>, options?: DeleteOptions) {
@@ -87,22 +83,25 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         // TODO: Implement image deletion to online resource
 
         // We must check if "latest" need to be reassigned.
-        const wasLatest = deleted.filter((card) => card.latest);
-        await this.syncLatest(wasLatest);
-
+        if (deleted.some((card) => card.latest)) {
+            return await this.syncLatest(deleted);
+        }
         return deleted;
     }
 
     /**
      * Updates all cards with the provided project/number combination to ensure latest flag is accurate
      */
-    private async syncLatest(syncing: SingleOrArray<{ project: number, number: number }>) {
-        const filter = asArray(syncing);
+    private async syncLatest(syncing: IPlaytestCard): Promise<IPlaytestCard>;
+    private async syncLatest(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
+    private async syncLatest(syncing: SingleOrArray<IPlaytestCard>) {
+        const syncingArray = asArray(syncing);
+        const filter = syncingArray.map(({ project, number }) => ({ project, number, draft: false }));
         if (filter.length === 0) {
             return;
         }
         // Do not consider draft cards in latest sync, as they cannot be latest
-        const previous = await this.find({ ...filter, draft: false });
+        const previous = await this.find({ $or: filter });
 
         const removeLatest: IPlaytestCard[] = [];
         const latest = new Map<string, IPlaytestCard>();
@@ -122,8 +121,12 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         }
         const addLatest = Array.from(latest.values()).map((card) => ({ ...card, latest: true }));
 
-        await this.update(addLatest.concat(removeLatest));
+        const allChanges = addLatest.concat(removeLatest);
+        await this.bulkWrite(allChanges);
 
+        // If the card was updated in the recent changes, then use that. Otherwise, use original card.
+        const result = syncingArray.map((card) => allChanges.find(({ project, number, version }) => project === card.project && number === card.number && version === card.version) ?? card);
+        return Array.isArray(syncing) ? result : result[0];
     }
 }
 class CardDataSource extends GASDataSource<IPlaytestCard> {

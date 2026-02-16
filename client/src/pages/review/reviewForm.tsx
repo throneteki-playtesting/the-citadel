@@ -403,8 +403,8 @@ const DeckSummary = ({ src, onDelete, onBroken = () => true }: DeckSummaryProps)
             </div>
             <div className="flex flex-col gap-1">
                 <div className="grid grid-cols-4 gap-0.5">
-                    <CardImage key={deck.faction} code={deck.faction} />
-                    {deck.agendas.map((code) => <CardImage key={code} code={code}/>)}
+                    <CardImage key={deck.faction} card={deck.faction} />
+                    {deck.agendas.map((code) => <CardImage key={code} card={code}/>)}
                 </div>
                 <div>
                     {cardSummary}

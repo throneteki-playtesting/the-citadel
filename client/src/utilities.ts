@@ -1,4 +1,6 @@
-import { Faction } from "common/models/cards";
+import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
+import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
+import { Faction, NoteType } from "common/models/cards";
 
 export function enumToArray<T extends { [key: string]: string | number }>(
     e: T
@@ -32,3 +34,10 @@ export function parseParamNumber(param?: string) {
 export function getFactionCardImage(faction: Faction) {
     return `https://thronesdb.com/images/factions/${faction}.png`;
 }
+
+export const noteTypeIcon: Record<NoteType, IconDefinition> = {
+    updated: faAnglesUp,
+    reworked: faArrowRotateLeft,
+    replaced: faArrowRightArrowLeft,
+    implemented: faCheckCircle
+};

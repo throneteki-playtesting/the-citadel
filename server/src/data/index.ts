@@ -8,6 +8,7 @@ import RolesRepository from "./repositories/rolesRepository";
 import SuggestionsRepository from "./repositories/suggestionsRepository";
 import AuthRepository from "./repositories/authRepository";
 import { createClient, RedisClientType } from "redis";
+import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
 
 class DataService {
     private database: MongoClient;
@@ -16,6 +17,7 @@ class DataService {
     private isConnected: boolean;
 
     private _projects: ProjectsRepository;
+    private _playtestingUpdates: PlaytestingUpdateRepository;
     private _cards: CardsRepository;
     private _reviews: ReviewsRepository;
     private _users: UsersRepository;
@@ -37,6 +39,7 @@ class DataService {
             logger.info(`MongoDB connected to ${this.database.db().databaseName}`);
 
             this._projects = new ProjectsRepository(this.database);
+            this._playtestingUpdates = new PlaytestingUpdateRepository(this.database);
             this._cards = new CardsRepository(this.database);
             this._reviews = new ReviewsRepository(this.database);
             this._users = new UsersRepository(this.database);
@@ -76,6 +79,10 @@ class DataService {
 
     get projects() {
         return this.getRepository<ProjectsRepository>("projects");
+    }
+
+    get playtestingUpdates() {
+        return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates");
     }
 
     get cards() {

@@ -27,6 +27,8 @@ export enum Permission {
     READ_PROJECTS = "READ_PROJECTS",
     /** Can initialise draft projects (eg. confirm starting lineups) */
     INITIALISE_PROJECTS = "INITIALISE_PROJECTS",
+    /** Can create playtesting updates for a specific project */
+    GENERATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
     /** Can view playtesting cards */
     READ_CARDS = "READ_CARDS",
     /** Can edit playtesting cards */

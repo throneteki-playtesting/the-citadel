@@ -324,6 +324,43 @@ export const Project = {
     })
 };
 
+export const PlaytestingUpdate = {
+    Full: Joi.object({
+        project: Joi.number().required(),
+        version: Joi.number().required(),
+        description: Joi.string(),
+        cardChanges: Joi.object().pattern(
+            Joi.number(),
+            Joi.string().regex(Regex.SemanticVersion)
+        ).required(),
+        pullRequest: Joi.string(),
+        createdBy: Joi.string().required(),
+        created: Joi.date().required(),
+        updated: Joi.date().required()
+    }),
+    Partial: Joi.object({
+        project: Joi.number(),
+        version: Joi.number(),
+        description: Joi.string(),
+        cardChanges: Joi.object().pattern(
+            Joi.number(),
+            Joi.string().regex(Regex.SemanticVersion)
+        ),
+        pullRequest: Joi.string(),
+        createdBy: Joi.string(),
+        created: Joi.date(),
+        updated: Joi.date()
+    }),
+    Draft: Joi.object({
+        project: Joi.number().required(),
+        description: Joi.string(),
+        cardChanges: Joi.object().pattern(
+            Joi.number(),
+            Joi.string().regex(Regex.SemanticVersion)
+        ).required()
+    })
+};
+
 export const PlaytestingReview = {
     Full: Joi.object({
         reviewer: Joi.string().required(),

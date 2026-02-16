@@ -342,3 +342,8 @@ export function extractDeckIdentifier(url: DeckLink | DecklistLink) {
 
     return /^\d+$/.test(value) ? Number(value) : (value as UUID);
 }
+
+export function generateReleaseImageUrl(short: string, number: number, name: string) {
+    const safeName = name.replace(/[<>:"/\\|?*']/g, "").replace(/\s/g, "_");
+    return encodeURI(`https://throneteki.ams3.cdn.digitaloceanspaces.com/packs/${short}/${number}_${safeName}.png`);
+}

@@ -1,9 +1,9 @@
 import { NoteDetails, NoteType, noteTypes } from "common/models/cards";
 import { Select, SelectItem, Textarea } from "@heroui/react";
 import { useEffect, useState } from "react";
-import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { DeepPartial } from "common/types";
+import { noteTypeIcon } from "../../utilities";
 
 const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
     const [type, setType] = useState<NoteType>();
@@ -14,23 +14,10 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
         setText(initial?.text);
     }, [initial?.type, initial?.text]);
 
-    const getIcon = (type: NoteType) => {
-        switch (type) {
-            case "updated":
-                return faAnglesUp;
-            case "reworked":
-                return faArrowRotateLeft;
-            case "replaced":
-                return faArrowRightArrowLeft;
-            case "implemented":
-                return faCheckCircle;
-        }
-    };
-
     const getHeader = (type: NoteType) => {
         return (
             <div className="flex gap-1 text-medium">
-                <FontAwesomeIcon icon={getIcon(type)}/>
+                <FontAwesomeIcon icon={noteTypeIcon[type]}/>
                 <span className="capitalize leading-tight font-bold">{type}</span>
             </div>
         );
@@ -85,7 +72,7 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                     selectedKeys={type ? [type] : []}
                     renderValue={(items) => items.map(({ key }) => key && (
                         <div className="flex gap-1">
-                            <FontAwesomeIcon icon={getIcon(key as NoteType)}/>
+                            <FontAwesomeIcon icon={noteTypeIcon[type as NoteType]}/>
                             <span className="capitalize leading-tight">{type}</span>
                         </div>
                     ))}

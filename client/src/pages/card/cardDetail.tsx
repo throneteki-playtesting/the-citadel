@@ -7,7 +7,7 @@ import { cloneDeep, sortBy } from "lodash";
 import { CardPreview } from "@agot/card-preview";
 import { extractDeckIdentifier, hasPermission, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faExclamationTriangle, faExternalLink, faHandFist, faLightbulb, faMeh, faPencil, faPenToSquare, faPlayCircle, faScaleBalanced, faStar, faThumbsDown, faThumbsUp, faTrash, faTrophy, faUser, faWarning, IconDefinition } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faAngleRight, faCircleCheck, faExclamationTriangle, faExternalLink, faHandFist, faLightbulb, faMeh, faPencil, faPenToSquare, faPlayCircle, faScaleBalanced, faStar, faThumbsDown, faThumbsUp, faTrash, faTrophy, faUser, faWarning, IconDefinition } from "@fortawesome/free-solid-svg-icons";
 import { DeckLink, DecklistLink } from "common/types";
 import { gt } from "semver";
 import { IPlaytestReview, StatementAnswer, statementAnswers, StatementQuestions, Statements } from "common/models/reviews";
@@ -21,11 +21,15 @@ import DeleteCardModal from "./deleteCardModal";
 import LoadingCard from "../../components/loadingCard";
 import { BaseTickContentProps, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import ThronesIcon from "../../components/thronesIcon";
-import { faDiscord, faGithub } from "@fortawesome/free-brands-svg-icons";
+import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import { Permission } from "common/models/user";
 import { useNavigate } from "react-router-dom";
 import { IProject } from "common/models/projects";
+import { noteTypeIcon } from "../../utilities";
+import ImplementStatus from "../../components/status/implementStatus";
+import GithubStatus from "../../components/status/githubStatus";
+import DevelopmentStatus from "../../components/status/developmentStatus";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -109,8 +113,19 @@ const CardVersions = ({ isLoading = false, cards }: CardVersionsProps) => {
         );
     }
 
+    const released = cards.find((card) => card.latest && card.release);
+
     return (
         <Tabs aria-label="Card Versions" variant="underlined" color="primary" destroyInactiveTabPanel={false}>
+            {released && (
+                <Tab
+                    key="release"
+                    title={<span className="text-medium font-semibold">Release</span>}
+                    className="flex flex-col items-center"
+                >
+                    <CardImage card={released} className={released.type === "plot" ? "max-w-98" : "max-w-64"}/>
+                </Tab>
+            )}
             {cards.map((card) => {
                 let label: string = card.version;
                 if (card.latest) {
@@ -124,13 +139,15 @@ const CardVersions = ({ isLoading = false, cards }: CardVersionsProps) => {
                         title={<span className="text-medium font-semibold">{label}</span>}
                         className="flex flex-col items-center"
                     >
-                        <CardPreview card={renderPlaytestingCard(card)} className="max-w-64"/>
+                        <CardPreview card={renderPlaytestingCard(card)} className={card.type === "plot" ? "max-w-98" : "max-w-64"}/>
                         {card.note && (
                             <Accordion>
                                 <AccordionItem title={<span className="text-small italic">Expand for details</span>} textValue="Change Note" classNames={{ trigger: "pb-0" }}>
                                     <Divider className="mb-2"/>
-                                    <div className="text-small">Card has been <span className="font-bold">{card.note.type}.</span></div>
-                                    <div className="text-tiny italic">{card.note.text}</div>
+                                    <Card className="p-2">
+                                        <div className="text-small font-semibold capitalize"><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
+                                        <div className="text-tiny italic p-1">{card.note.text}</div>
+                                    </Card>
                                     {/* TODO: Add updated date here */}
                                 </AccordionItem>
                             </Accordion>
@@ -142,18 +159,24 @@ const CardVersions = ({ isLoading = false, cards }: CardVersionsProps) => {
     );
 };
 
-type CardVersionsProps = { isLoading?: boolean, cards: IPlaytestCard[] }
+type CardVersionsProps = { isLoading?: boolean, released?: IPlaytestCard, cards: IPlaytestCard[] }
 
 const HeadingCard = ({ isLoading = false, project, number, draft, latest }: HeadingCardProps) => {
     const [editing, setEditing] = useState<IPlaytestCard>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
+    const navigate = useNavigate();
 
-    const onNewVersion = useCallback((latest: IPlaytestCard) => {
+    const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
         delete draft.note;
+        delete draft.github;
+        delete draft.release;
         draft.latest = false;
+        draft.implemented = false;
         setEditing(draft);
     }, []);
+
+    const totalProjectCards = useMemo(() => project ? Object.values(project.cardCount).reduce((arr, num) => arr + num, 0) : 0, [project]);
 
     if (isLoading) {
         return (
@@ -171,11 +194,17 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
 
     return (
         <>
-            {project && latest && <div className="text-large px-2">{project.name} #{parseCardCode(!!latest.release, project.number, number)}</div>}
+            { project && latest && (
+                <div className="flex items-center text-large px-2">
+                    {number > 1 && <Button isIconOnly variant="light" onPress={() => navigate(`/project/${project.number}/${--number}`)}><FontAwesomeIcon icon={faAngleLeft}/></Button>}
+                    <div className="grow px-2">{project.name} #{parseCardCode(!!latest.release, project.number, number)}</div>
+                    {number < totalProjectCards && <Button isIconOnly variant="light" onPress={() => navigate(`/project/${project.number}/${++number}`)}><FontAwesomeIcon icon={faAngleRight}/></Button>}
+                </div>
+            )}
             <Divider className="my-2"/>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1">
                 <PermissionGate requires={Permission.CREATE_CARDS}>
-                    {!draft && latest && <Button onPress={() => onNewVersion(latest)} startContent={<FontAwesomeIcon icon={faStar} className="text-small md:text-medium"/>} className="text-small md:text-medium">New Version</Button>}
+                    {!draft && latest && <Button onPress={() => onNewDraft(latest)} startContent={<FontAwesomeIcon icon={faStar} className="text-small md:text-medium"/>} className="text-small md:text-medium">New Draft</Button>}
                 </PermissionGate>
                 <PermissionGate requires={Permission.EDIT_CARDS}>
                     {draft && <Button onPress={() => setEditing(draft)} startContent={<FontAwesomeIcon icon={faPencil}/>} className="text-small md:text-medium">Edit Draft</Button>}
@@ -197,87 +226,11 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
 type HeadingCardProps = { isLoading?: boolean, project?: IProject, number: number, draft?: IPlaytestCard, latest?: IPlaytestCard }
 
 const StatusBoard = ({ latest, draft }: StatusBoardProps) => {
-    const onlineAlert = useMemo(() => {
-        const status = latest?.implemented ? "Implemented" : "Not Implemented";
-        const color = latest?.implemented ? "success" : "warning";
-        const href = "https://playtesting.theironthrone.net"; // TODO: Make env variable?
-        return (
-            <Alert color={color} title="Online Platform" endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink}/></Link>}>
-                {status}
-            </Alert>
-        );
-    }, [latest?.implemented]);
-
-    const githubAlert = useMemo(() => {
-        const title = "Github Issue";
-
-        if (!latest?.github) {
-            return (
-                <Alert color="danger" title={title}>
-                    Missing
-                </Alert>
-            );
-        }
-        const href = latest.github.issueUrl;
-
-        if (latest.github.status === "open") {
-            return (
-                <Alert color="primary" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faGithub}/></Link>}>
-                    Open
-                </Alert>
-            );
-        }
-
-        if (latest.github.status === "closed") {
-            return (
-                <Alert color="default" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faGithub}/></Link>}>
-                    Closed
-                </Alert>
-            );
-        }
-
-        if (latest.github.status === "complete") {
-            return (
-                <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faGithub}/></Link>}>
-                    Merged
-                </Alert>
-            );
-        }
-
-        return null;
-    }, [latest?.github]);
-
-    const developmentAlert = useMemo(() => {
-        // TODO: More options for this, potentially with manual updates from dt?
-        const title = "Development Status";
-
-        if (draft) {
-            return (
-                <Alert color="secondary" title={title}>
-                    Drafting changes (v{draft.version})
-                </Alert>
-            );
-        }
-        if (latest?.release) {
-            const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.release.number)}`;
-            return (
-                <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink}/></Link>}>
-                    Released in {latest.release.short}
-                </Alert>
-            );
-        }
-        return (
-            <Alert color="success" title={title}>
-                Playtesting Latest
-            </Alert>
-        );
-    }, [draft, latest?.project, latest?.release]);
-
     return (
         <div className="py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
-            {onlineAlert}
-            {githubAlert}
-            {developmentAlert}
+            <ImplementStatus card={draft ?? latest}/>
+            <GithubStatus card={draft ?? latest}/>
+            <DevelopmentStatus latest={latest} draft={draft}/>
         </div>
     );
 };
@@ -367,11 +320,11 @@ const DeckSummaries = ({ isLoading = false, cards, reviews, safe = true }: DeckS
 
                 return (
                     <Link key={url} href={url} target="_blank">
-                        <Card className="p-2">
+                        <Card className="p-2 w-full">
                             <div className="flex gap-1">
                                 <div className={classNames("grid gap-0.5 flex-1", getColsClassName(deck))}>
-                                    <CardImage key={deck.faction} code={deck.faction} className="flex-1"/>
-                                    {deck.agendas.map((code) => <CardImage key={code} code={code} className="flex-1"/>)}
+                                    <CardImage key={deck.faction} card={deck.faction} className="flex-1"/>
+                                    {deck.agendas.map((code) => <CardImage key={code} card={code} className="flex-1"/>)}
                                 </div>
                                 <div className="flex flex-col flex-2 px-1">
                                     <div className="text-small sm:text-medium lg:text-large font-semibold">

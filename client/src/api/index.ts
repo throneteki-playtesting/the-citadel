@@ -1,5 +1,5 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
-import { IProject } from "common/models/projects";
+import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { Role, User } from "common/models/user";
 import { asArray, buildUrl, SemanticVersion } from "common/utils";
 import { clearUser } from "./authSlice";
@@ -10,7 +10,7 @@ import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards
 import { IPlaytestReview } from "common/models/reviews";
 
 export const baseUrl = import.meta.env.VITE_SERVER_HOST || "";
-const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "review"] as const;
+const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "playtestingUpdate", "review"] as const;
 type ApiTag = typeof tagTypes[number];
 
 const baseQuery = fetchBaseQuery({
@@ -275,6 +275,20 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
         }),
+        // Playtesting Update API (eg. Projects API)
+        createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
+            query: (playtestingUpdate) => {
+                const url = buildUrl(`projects/${playtestingUpdate.project}/playtesting/update`);
+                const body = playtestingUpdate;
+                return { url, method: "POST", body };
+            },
+            // TODO: FIX THIS (ensure that, after a pt update is made, it invalidates all cards involved in that update)
+            // Also (not related to here), there was a weird bug with updating Melisandre, where 1.3.1 got merged with a previous version. Investigate.
+            invalidatesTags: (result) => [
+                { type: "playtestingUpdate", id: "LIST" },
+                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            ]
+        }),
         // Reviews API
         getReview: builder.query<IPlaytestReview | undefined, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
@@ -328,6 +342,7 @@ export const {
     useUpdateRoleMutation,
 
     useGetCardsQuery,
+    useLazyGetCardsQuery,
     usePutDraftCardMutation,
     useDeleteDraftMutation,
 
@@ -347,6 +362,8 @@ export const {
     useInitialiseProjectMutation,
     useUpdateProjectMutation,
     useDeleteProjectMutation,
+
+    useCreatePlaytestingUpdateMutation,
 
     useGetReviewQuery,
     useLazyGetReviewQuery,

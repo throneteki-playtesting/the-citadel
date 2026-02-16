@@ -1,3 +1,5 @@
+import { SemanticVersion } from "common/utils";
+
 export const types = ["cycle", "expansion"] as const;
 export type Type = typeof types[number];
 export type Code = `${number}`;
@@ -31,4 +33,15 @@ export type FactionCardCount = {
     targaryen: number,
     tyrell: number,
     neutral: number
+}
+
+export interface IPlaytestingUpdate {
+    project: number,
+    version: number,
+    description?: string,
+    cardChanges: Record<number, SemanticVersion>,
+    pullRequest?: string,
+    createdBy: string,
+    created: Date,
+    updated: Date
 }
