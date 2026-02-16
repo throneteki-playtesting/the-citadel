@@ -4,7 +4,7 @@ import asyncHandler from "express-async-handler";
 import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { eq, inc } from "semver";
 import { dataService, logger } from "@/services";
-import { asArray, hasPermission, parseCardCode, SemanticVersion } from "common/utils";
+import { asArray, hasPermission, isPreview, parseCardCode, SemanticVersion } from "common/utils";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import * as Schemas from "common/models/schemas";
 import { DeepPartial, SingleOrArray } from "common/types";
@@ -13,7 +13,6 @@ import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
 import { generateGetResponse, NoteVersion } from "@/utils";
-import { ICardVersionCollection } from "common/collections/cardCollection";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 
@@ -128,39 +127,49 @@ router.put("/:project/:number/draft",
         if (!project) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} does not exist`);
         }
-        const existing = (await dataService.cards.collection({ project: projectNumber, number }))[number];
-        if (!project.draft && !existing) {
+        const [latest] = await dataService.cards.read({ project: projectNumber, number, latest: true });
+        const [draft] = await dataService.cards.read({ project: projectNumber, number, draft: true });
+
+        if (!project.draft && !(latest || draft)) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Card #${number} does not exist for project #${projectNumber}`);
         }
         if (project.draft && !eq(version, "0.0.0")) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.0 version`);
         }
 
-        req.params.existing = existing;
-        return hasPermission(user, (existing?.draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
+        req["project"] = project;
+        req["latest"] = latest;
+        req["draft"] = draft;
+        return hasPermission(user, (draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
     }),
-    asyncHandler<{ project: number, number: number, existing?: ICardVersionCollection<PlaytestingCard> }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
-        const { project, number, existing } = req.params;
-        const body = req.body;
+    asyncHandler<{ project: number, number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
+        const { project, number } = req.params;
+        const latest = req["latest"] as IPlaytestCard | undefined;
+        const existing = req["draft"] as IPlaytestCard | undefined;
+
+        let card = req.body;
         const code = parseCardCode(false, project, number);
 
         // If card does not exist, version should be preview (0.0.0)
-        let version = "0.0.0";
-        if (existing) {
+        let version = "0.0.0" as SemanticVersion;
+        if (latest) {
             // Preview cards are simply updated, without version incrementing
             // To initialise all preview cards to 1.0.0, use /:project/initialise
-            const latest = existing.latest;
-            version = latest?.isPreview ? latest.version : inc(body.playtesting, NoteVersion[body.note.type]) as SemanticVersion;
-
-            // Existing draft with different version needs to be removed first as upsert will not match (as version is a primary key)
-            const draft = existing.draft;
-            if (draft && draft.version !== version) {
-                const { project, number, version } = draft;
-                await dataService.cards.destroy({ project, number, version });
-            }
+            version = isPreview(latest) ? latest.version : inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion;
         }
 
-        let card = { ...body, code, version, draft: true, latest: false } as IPlaytestCard;
+        if (existing && existing.version !== version) {
+            // Existing draft with different version needs to be removed first as upsert will not match (as version is a primary key)
+            await dataService.cards.destroy({ project, number, version: existing.version });
+        }
+
+        card.code = code;
+        card.version = version;
+        card.draft = true;
+        card.latest = false;
+        card.implemented = false;
+        delete card.github;
+        delete card.release;
         card = await dataService.cards.update(card, true);
 
         res.status(StatusCodes.OK).json(card);
