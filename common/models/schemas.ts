@@ -164,7 +164,7 @@ export const PlaytestingCard = {
             status: Joi.string().required().valid(...Cards.githubStatuses),
             issueUrl: Joi.string().required()
         }),
-        implemented: Joi.boolean().required(),
+        implemented: Joi.boolean(),
         release: Joi.object({
             short: Joi.string().required(),
             number: Joi.number().required()
