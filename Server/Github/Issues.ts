@@ -26,7 +26,7 @@ type NotePackage = { icons: string, title: string, text: string };
 export class Issue {
     static forCard(project: Project, card: Card) {
         const milestone = project.milestone;
-        const type = card.note?.type || (card.isPreTesting && card.implementStatus !== "Implemented" ? "Implemented" : null);
+        const type = card.note?.type || (card.isInitial && card.implementStatus !== "Implemented" ? "Implemented" : null);
         if (!type) {
             return null;
         }
@@ -89,30 +89,28 @@ export class Issue {
         const noteTypeOrdered = ["Replaced", "Reworked", "Updated", "Implemented"] as Cards.NoteType[];
         const notesUsed = new Set<Cards.NoteType>();
         const notesMap = cards.reduce((map, card) => {
-            const noteType = card.note?.type;
+            const noteType = card.note?.type ?? (card.implementStatus === "Recently Implemented" ? "Implemented" : undefined);
             // Only collate cards which have notes on them
             if (noteType && noteTypeOrdered.includes(noteType)) {
-                // Set ensures we do not have duplicate icons
-                const icons = new Set<string>();
+                const allNoteTypes = [noteType];
                 // Some cards can be updated, and can also be implemented in the same update
-                // For these, add "implemented" emoji first
-                if (card.implementStatus === "Recently Implemented") {
-                    icons.add(emojis["Implemented"]);
+                if (noteType !== "Implemented" && card.implementStatus === "Recently Implemented") {
+                    allNoteTypes.unshift("Implemented");
                 }
-                // Add note type emoji
-                icons.add(emojis[noteType]);
                 const title = `${card.code} | ${card.name} v${card.version}`;
                 const text = card.note?.text || null;
+                const icons = allNoteTypes.map((ant) => emojis[ant]).join("");
                 const current = map.get(noteType) || [];
-                current.push({ icons: [...icons].join(""), title, text });
+                current.push({ icons, title, text });
                 map.set(noteType, current);
+
                 // Add all icons to "notesUsed" set for legend
-                icons.forEach(notesUsed.add, notesUsed);
+                allNoteTypes.forEach((nt) => notesUsed.add(nt));
             }
             return map;
         }, new Map<Cards.NoteType, NotePackage[]>());
 
-        const notesLegend = noteTypeOrdered.filter((nt) => notesUsed.has(nt)).map((nt) => `${nt} = ${emojis[nt]}`).join(" | ");
+        const notesLegend = noteTypeOrdered.filter((nt) => notesUsed.has(nt)).map((nt) => `${nt} = ${emojis[nt]}`).join(", ");
         const notes = noteTypeOrdered.map((nt) => notesMap.get(nt)).flat().filter((n) => n);
         const number = project.releases + 1;
         const pdf = {

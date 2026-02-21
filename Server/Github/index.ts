@@ -120,12 +120,6 @@ class GithubService {
                 updated = true;
             }
 
-            // Mark card as "complete" if already in playtesting (from prior update) & recently implemented
-            if (card.isPlaytesting && card.implementStatus === "Recently Implemented") {
-                card.github.status = "complete";
-                updated = true;
-            }
-
             if (updated) {
                 needsUpdate.push(card);
             }
