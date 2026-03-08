@@ -5,7 +5,7 @@ import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
-import { hasPermission } from "common/utils";
+import { hasPermission, Regex, SemanticVersion } from "common/utils";
 import { Permission, User } from "common/models/user";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
@@ -14,6 +14,7 @@ import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { orderBy, paging } from "@/schemas";
 import { generateGetResponse } from "@/utils";
+import { syncImage } from "@/rendering/hosting";
 
 const router = express.Router();
 
@@ -136,7 +137,7 @@ router.post("/:number/initialise",
 
         project.draft = false;
         for (const card of cards) {
-            const newCard = { ...cloneDeep(card), version: "1.0.0", draft: false } as IPlaytestCard;
+            const newCard: IPlaytestCard = { ...cloneDeep(card), version: "1.0.0", draft: false };
             if (newCard.suggestionId) {
                 suggestionNumbers[newCard.suggestionId] = newCard.number;
             }
@@ -149,6 +150,7 @@ router.post("/:number/initialise",
         await dataService.cards.destroy(cards);
         newCards = await dataService.cards.create(newCards);
 
+        // Archive any used suggestions
         const suggestionIds = Object.keys(suggestionNumbers);
         if (suggestionIds.length > 0) {
             const suggestions = await dataService.suggestions.read(suggestionIds.map((id) => ({ id })));
@@ -178,11 +180,18 @@ router.put("/:number",
         const { number } = req.params;
         let project = req.body;
 
+        const newNumber = project.number !== number;
         project.number = number;
         project.updated = new Date();
 
         const [previous] = await dataService.projects.read({ number: project.number });
-        project = await dataService.projects.update(project);
+        // If the project number changes, we need to destroy + create, as its a primary key
+        if (newNumber) {
+            await dataService.projects.destroy({ number });
+            project = await dataService.projects.create(project);
+        } else {
+            project = await dataService.projects.update(project);
+        }
 
         // If card counts changed, we need to adjust existing card numbers to ensure they move with the faction adjustments.
         // This means dynamically updating each card number based on the slots each previous faction should have.
@@ -293,7 +302,7 @@ router.post("/:number/playtesting/update",
     asyncHandler(async (req, res) => {
         let project = req["project"] as IProject;
         let playtestingUpdate = req["playtestingUpdate"] as IPlaytestingUpdate;
-        const newCards = req["newCards"] as IPlaytestCard[];
+        let newCards = req["newCards"] as IPlaytestCard[];
         const user = req["user"] as User;
 
         playtestingUpdate.project = project.number;
@@ -308,7 +317,7 @@ router.post("/:number/playtesting/update",
             // Cards are no longer in draft. Update process will automatically update them to latest
             newCard.draft = false;
         }
-        const cards = await dataService.cards.update(newCards);
+        newCards = await dataService.cards.update(newCards);
 
         project.version = project.version + 1;
         project.updated = new Date();
@@ -318,8 +327,34 @@ router.post("/:number/playtesting/update",
         res.status(StatusCodes.OK).json({
             playtestingUpdate,
             project,
-            cards
+            cards: newCards
         });
+    })
+);
+
+// Sync project card images
+router.post("/:number/sync/images",
+    validateRequest((user) => hasPermission(user, Permission.SAVE_RENDER_FILES)),
+    celebrate({
+        [Segments.PARAMS]: {
+            number: Joi.number().required()
+        },
+        [Segments.QUERY]: {
+            number: Joi.number(),
+            version: Joi.string().regex(Regex.SemanticVersion),
+            latest: Joi.boolean()
+        }
+    }),
+    validateProjectParam(),
+    asyncHandler<{ number: number }, unknown, unknown, { number?: number, version?: SemanticVersion, latest?: boolean }>(async (req, res) => {
+        const project = req["project"] as IProject;
+        const { number, version, latest } = req.query;
+        let cards = await dataService.cards.read({ project: project.number, number, version, latest });
+
+        cards = await syncImage(cards);
+        cards = await dataService.cards.update(cards);
+
+        res.status(StatusCodes.OK).json(cards);
     })
 );
 

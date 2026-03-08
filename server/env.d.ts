@@ -36,5 +36,12 @@ declare namespace NodeJS {
         JWT_SECRET: string;
         ACCESS_TOKEN_TTL: number;
         REFRESH_TOKEN_TTL: number;
+
+        S3_BASE_URL: string;
+        S3_BUCKET: string;
+        S3_ENDPOINT: string;
+        S3_REGION: string;
+        S3_ACCESS_KEY_ID: string;
+        S3_SECRET_ACCESS_KEY: string;
     }
 }

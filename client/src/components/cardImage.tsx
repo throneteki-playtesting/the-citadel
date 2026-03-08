@@ -56,7 +56,7 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
     const showImage = !isLoading && !isError;
 
     return (
-        <div className={classNames("relative w-full [container-type:size] flex items-center justify-center overflow-hidden rounded-xl", actualOrientation === "horizontal" ? "aspect-[333/240]" : "aspect-[240/333]", className)} style={style}>
+        <div className={classNames("relative w-full [container-type:size] flex items-center justify-center overflow-hidden", actualOrientation === "horizontal" ? "aspect-[333/240]" : "aspect-[240/333]", className)} style={style}>
             {isLoading && (
                 <Skeleton className="absolute inset-0 z-10 block w-full h-full" />
             )}

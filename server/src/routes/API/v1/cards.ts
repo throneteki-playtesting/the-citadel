@@ -1,13 +1,11 @@
 import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
-import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { eq, inc } from "semver";
-import { dataService, logger } from "@/services";
-import { asArray, hasPermission, isPreview, parseCardCode, SemanticVersion } from "common/utils";
-import { IPlaytestCard, NoteType } from "common/models/cards";
+import { dataService } from "@/services";
+import { hasPermission, isPreview, parseCardCode, SemanticVersion } from "common/utils";
+import { IPlaytestCard } from "common/models/cards";
 import * as Schemas from "common/models/schemas";
-import { DeepPartial, SingleOrArray } from "common/types";
 import { Permission } from "common/models/user";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
@@ -111,7 +109,7 @@ router.get("/:project/:number",
     }
 );
 
-// Update draft card
+// Upsert draft card
 router.put("/:project/:number/draft",
     celebrate({
         [Segments.PARAMS]: {
@@ -170,7 +168,12 @@ router.put("/:project/:number/draft",
         card.implemented = false;
         delete card.github;
         delete card.release;
-        card = await dataService.cards.update(card, true);
+
+        if (existing && existing.version === version) {
+            card = await dataService.cards.update(card, false);
+        } else {
+            card = await dataService.cards.create(card);
+        }
 
         res.status(StatusCodes.OK).json(card);
     })
@@ -198,67 +201,67 @@ router.delete("/:project/:number/draft",
 // TODO: Consider adding update + delete any card (with separate permission)
 
 // Legacy (GAS script updates)
-router.post("/",
-    validateRequest((user) => hasPermission(user, Permission.CREATE_CARDS)),
-    celebrate({
-        [Segments.BODY]: Schemas.SingleOrArray(Schemas.PlaytestingCard.Full)
-    }),
-    asyncHandler<unknown, unknown, SingleOrArray<IPlaytestCard>, unknown>(async (req, res) => {
-        const body = req.body;
-        const cards = asArray(body).map((card) => new PlaytestingCard(card));
+// router.post("/",
+//     validateRequest((user) => hasPermission(user, Permission.CREATE_CARDS)),
+//     celebrate({
+//         [Segments.BODY]: Schemas.SingleOrArray(Schemas.PlaytestingCard.Full)
+//     }),
+//     asyncHandler<unknown, unknown, SingleOrArray<IPlaytestCard>, unknown>(async (req, res) => {
+//         const body = req.body;
+//         const cards = asArray(body).map((card) => new PlaytestingCard(card));
 
-        const incType = (type: NoteType) => {
-            switch (type) {
-                case "replaced": return "major";
-                case "reworked": return "minor";
-                case "updated": return "patch";
-            }
-        };
-        logger.verbose(`Recieved ${cards.length} card update(s) from sheets`);
-        const latest: IPlaytestCard[] = [];
-        const upsert: IPlaytestCard[] = [];
-        const destroy: DeepPartial<IPlaytestCard>[] = [];
+//         const incType = (type: NoteType) => {
+//             switch (type) {
+//                 case "replaced": return "major";
+//                 case "reworked": return "minor";
+//                 case "updated": return "patch";
+//             }
+//         };
+//         logger.verbose(`Recieved ${cards.length} card update(s) from sheets`);
+//         const latest: IPlaytestCard[] = [];
+//         const upsert: IPlaytestCard[] = [];
+//         const destroy: DeepPartial<IPlaytestCard>[] = [];
 
-        for (const card of cards) {
-        // If card is not in playtesting, push updates
-            if (!card.playtesting) {
-                upsert.push(card);
-            }
+//         for (const card of cards) {
+//         // If card is not in playtesting, push updates
+//             if (!card.playtesting) {
+//                 upsert.push(card);
+//             }
 
-            // If card is currently being drafted (eg. edited)
-            if (card.isDraft) {
-                const expectedVersion = inc(card.playtesting, incType(card.note.type));
-                // If it's version has not been incremented, increment it, and push new id card to database/archive
-                if (card.version !== expectedVersion) {
-                    const newCard = card.clone();
-                    // Setting the incremented version of "latest" (card) for sheet and to the newly upserted card into database
-                    card.version = newCard.version = inc(card.playtesting, incType(card.note.type)) as SemanticVersion;
-                    upsert.push(newCard);
-                } else {
-                    upsert.push(card);
-                }
-                // Either way, push changes to latest to properly sync
-                latest.push(card);
-            }
-            // If versions do not match (and is not in draft), then a draft has been reverted, and thus should be deleted in database/archive, and version reverted in latest
-            else if (card.version !== card.playtesting) {
-                destroy.push({ project: card.project, number: card.number, version: card.version });
-                card.version = card.playtesting;
-                latest.push(card);
-            }
-        }
+//             // If card is currently being drafted (eg. edited)
+//             if (card.isDraft) {
+//                 const expectedVersion = inc(card.playtesting, incType(card.note.type));
+//                 // If it's version has not been incremented, increment it, and push new id card to database/archive
+//                 if (card.version !== expectedVersion) {
+//                     const newCard = card.clone();
+//                     // Setting the incremented version of "latest" (card) for sheet and to the newly upserted card into database
+//                     card.version = newCard.version = inc(card.playtesting, incType(card.note.type)) as SemanticVersion;
+//                     upsert.push(newCard);
+//                 } else {
+//                     upsert.push(card);
+//                 }
+//                 // Either way, push changes to latest to properly sync
+//                 latest.push(card);
+//             }
+//             // If versions do not match (and is not in draft), then a draft has been reverted, and thus should be deleted in database/archive, and version reverted in latest
+//             else if (card.version !== card.playtesting) {
+//                 destroy.push({ project: card.project, number: card.number, version: card.version });
+//                 card.version = card.playtesting;
+//                 latest.push(card);
+//             }
+//         }
 
-        await dataService.cards.update(upsert, true);
-        if (destroy.length > 0) {
-            await dataService.cards.destroy(destroy);
-        }
-        await dataService.cards.spreadsheet.update(latest, { sheets: ["latest"] });
+//         await dataService.cards.update(upsert, true);
+//         if (destroy.length > 0) {
+//             await dataService.cards.destroy(destroy);
+//         }
+//         await dataService.cards.spreadsheet.update(latest, { sheets: ["latest"] });
 
-        res.status(StatusCodes.OK).send({
-            updated: upsert.length + latest.length,
-            deleted: destroy.length
-        });
-    })
-);
+//         res.status(StatusCodes.OK).send({
+//             updated: upsert.length + latest.length,
+//             deleted: destroy.length
+//         });
+//     })
+// );
 
 export default router;

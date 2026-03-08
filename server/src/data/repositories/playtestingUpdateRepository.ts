@@ -4,6 +4,7 @@ import { MongoClient, Sort } from "mongodb";
 import { DeepPartial, SingleOrArray, Sortable } from "common/types";
 import { IRepository } from "@/types";
 import { flatten } from "flat";
+import { IPlaytestCard } from "common/models/cards";
 
 export default class PlaytestingUpdateRepository implements IRepository<IPlaytestingUpdate> {
     public database: MongoDataSource<IPlaytestingUpdate>;
@@ -38,5 +39,10 @@ export default class PlaytestingUpdateRepository implements IRepository<IPlaytes
 
     public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestingUpdate>>) {
         return await this.database.destroy(destroying);
+    }
+
+    public async for(card: IPlaytestCard) {
+        const [result] = await this.database.read({ cardChanges: { [card.number]: card.version } });
+        return result;
     }
 }

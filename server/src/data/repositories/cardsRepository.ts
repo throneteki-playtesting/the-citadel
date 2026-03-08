@@ -1,32 +1,35 @@
 import { BulkWriteOptions, DeleteOptions, MongoClient, Sort } from "mongodb";
-import { dataService, logger } from "@/services";
-import { asArray, groupBy } from "common/utils";
-import * as CardsController from "gas/controllers/cardsController";
-import { CardSheet } from "gas/spreadsheets/serializers/cardSerializer";
+import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
-import GASDataSource from "./dataSources/GASDataSource";
 import { IPlaytestCard } from "common/models/cards";
 import { DeepPartial, SingleOrArray, Sortable } from "common/types";
 import { flatten } from "flat";
-import { IRepository } from "@/types";
-import PlaytestingCard from "../models/cards/playtestingCard";
-import CardCollection from "common/collections/cardCollection";
-import { gt } from "semver";
+import { gt, eq, compare } from "semver";
+import { deleteImage, syncImage } from "@/rendering/hosting";
+import { AuditableRepository } from "./shared";
+import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
+import { logger } from "@/services";
 
-export default class CardsRepository implements IRepository<IPlaytestCard> {
+export default class CardsRepository extends AuditableRepository<IPlaytestCard> {
     public database: CardMongoDataSource;
-    public spreadsheet: CardDataSource;
     constructor(mongoClient: MongoClient) {
+        super();
         this.database = new CardMongoDataSource(mongoClient);
-        this.spreadsheet = new CardDataSource();
     }
 
-    public async create(creating: IPlaytestCard): Promise<IPlaytestCard>;
-    public async create(creating: IPlaytestCard[]): Promise<IPlaytestCard[]>;
-    public async create(creating: SingleOrArray<IPlaytestCard>) {
-        const result = await this.database.create(creating);
-        // await this.spreadsheet.create(creating);
-        return Array.isArray(creating) ? result : result[0];
+    public override async create(creating: IPlaytestCard): Promise<IPlaytestCard>;
+    public override async create(creating: IPlaytestCard[]): Promise<IPlaytestCard[]>;
+    public override async create(creating: SingleOrArray<IPlaytestCard>) {
+        let data = asArray(creating);
+        data = await super.create(data);
+        try {
+            let synced = await syncImage(data);
+            synced = await syncCardForum(synced);
+            data = await super.update(synced, false);
+        } catch (err) {
+            logger.warn("Failed to sync cards after create", { cause: err });
+        }
+        return Array.isArray(creating) ? data : data[0];
     }
 
     public async read(reading?: SingleOrArray<DeepPartial<IPlaytestCard>>, orderBy?: Sortable<IPlaytestCard>, page?: number, perPage?: number) {
@@ -40,22 +43,87 @@ export default class CardsRepository implements IRepository<IPlaytestCard> {
         return await this.database.count(counting);
     }
 
-    public async collection(reading?: SingleOrArray<DeepPartial<IPlaytestCard>>, orderBy?: Sortable<IPlaytestCard>, page?: number, perPage?: number) {
-        const result = await this.read(reading, orderBy, page, perPage);
-        return new CardCollection(result.map((card) => new PlaytestingCard(card)));
-    }
-
     public async update(updating: IPlaytestCard, upsert?: boolean): Promise<IPlaytestCard>;
     public async update(updating: IPlaytestCard[], upsert?: boolean): Promise<IPlaytestCard[]>;
     public async update(updating: SingleOrArray<IPlaytestCard>, upsert = true) {
-        const result = await this.database.update(updating, { upsert });
-        // await this.spreadsheet.update(updating, { upsert });
-        return Array.isArray(updating) ? result : result[0];
+        let data = asArray(updating);
+        data = await super.update(data, upsert);
+        try {
+            let synced = await syncImage(data);
+            synced = await syncCardForum(synced);
+            data = await super.update(synced, false);
+        } catch (err) {
+            logger.warn("Failed to sync cards after update", { cause: err });
+        }
+        return Array.isArray(updating) ? data : data[0];
     }
 
     public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        return await this.database.destroy(destroying);
-        // await this.spreadsheet.destroy(destroying);
+        const result = await this.database.destroy(destroying);
+        try {
+            await deleteImage(result);
+            const drafts = result.filter((card) => card.draft);
+            for (const draft of drafts) {
+                await deleteDraft(draft);
+            }
+        } catch (err) {
+            logger.warn("Failed to sync cards after destroy", { cause: err });
+        }
+        return result;
+    }
+
+    public async sync(syncing: SingleOrArray<DeepPartial<IPlaytestCard>>) {
+        let data = await this.read(syncing);
+        data = await syncImage(data);
+        data = await syncCardForum(data);
+        return data;
+    }
+
+    public async previous(card: { project: number, number: number, version: SemanticVersion }) {
+        const all = await this.read({ project: card.project, number: card.number });
+        const sorted = all.sort((a, b) => compare(a.version, b.version));
+        const index = sorted.findIndex(v => eq(v.version, card.version));
+        if (index <= 0) {
+            return undefined;
+        }
+        return sorted[index - 1];
+    }
+
+    protected override async applyAudit(auditing: IPlaytestCard, isNew: boolean): Promise<IPlaytestCard>;
+    protected override async applyAudit(auditing: IPlaytestCard[], isNew: boolean): Promise<IPlaytestCard[]>;
+    protected override async applyAudit(auditing: SingleOrArray<IPlaytestCard>, isNew: boolean) {
+        let audited = await super.applyAudit(asArray(auditing), isNew);
+        // Intentionally excluding imageUrl
+        const cardProperties = [
+            "code", "cost", "deckLimit", "designer", "faction", "flavor", "icons", "illustrator", "loyal", "name", "plotStats", "strength", "traits", "text", "type", "unique", "quantity"
+        ];
+
+        const tempKey = (card: IPlaytestCard) => `${card.project}@${card.number}@${card.version}`;
+
+        const existingFilter = audited.map(({ project, number, version }) => ({ project, number, version }));
+        const existing = await this.read(existingFilter);
+        const existingDocsMap = new Map<string, IPlaytestCard>();
+        existing.forEach((card) => {
+            existingDocsMap.set(tempKey(card), card);
+        });
+
+        audited = audited.map((card) => {
+            const existing = existingDocsMap.get(tempKey(card));
+            let hasChangedCard = !existing;
+            if (existing) {
+                const flatExisting = flatten(existing, { safe: false });
+                const flatCard = flatten(card, { safe: false });
+                hasChangedCard = cardProperties.some(
+                    (field) => flatExisting[field] !== flatCard[field]
+                );
+            }
+
+            return {
+                ...card,
+                ...(hasChangedCard && { cardUpdated: new Date() })
+            };
+        });
+        return Array.isArray(auditing) ? audited : audited[0];
     }
 }
 
@@ -66,22 +134,18 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
 
     public override async create(creating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions) {
         const cards = asArray(creating);
-        // TODO: Implement image sync with online resource
         const result = await this.insertMany(cards, options);
         return await this.syncLatest(result);
     }
 
-    public override async update(updating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions & { upsert?: boolean }) {
+    public override async update(updating: SingleOrArray<IPlaytestCard>, options?: BulkWriteOptions) {
         const cards = asArray(updating);
-        // TODO: Implement image sync with online resource
         const result = await this.bulkWrite(cards, options);
         return await this.syncLatest(result);
     }
 
     public override async destroy(deleting: SingleOrArray<DeepPartial<IPlaytestCard>>, options?: DeleteOptions) {
         const deleted = await super.destroy(deleting, options);
-        // TODO: Implement image deletion to online resource
-
         // We must check if "latest" need to be reassigned.
         if (deleted.some((card) => card.latest)) {
             return await this.syncLatest(deleted);
@@ -128,89 +192,96 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         const result = syncingArray.map((card) => allChanges.find(({ project, number, version }) => project === card.project && number === card.number && version === card.version) ?? card);
         return Array.isArray(syncing) ? result : result[0];
     }
-}
-class CardDataSource extends GASDataSource<IPlaytestCard> {
-    public async create(creating: SingleOrArray<IPlaytestCard>) {
-        const cards = asArray(creating);
-        const groups = groupBy(cards, (card) => card.project);
 
-        const created: IPlaytestCard[] = [];
-        for (const [pNumber, pCards] of groups.entries()) {
-            const [project] = await dataService.projects.read({ number: pNumber });
 
-            const url = `${project.script}/cards/create`;
-            const body = JSON.stringify(pCards);
-            const response = await this.client.post<CardsController.CreateResponse>(url, null, body);
-            created.push(...response.created);
-            logger.verbose(`${created.length} card(s) created in Google App Script (${project.name})`);
-        }
-        return created;
-    }
+    protected override async bulkWrite(cards: IPlaytestCard[], { upsert, ...options }: BulkWriteOptions & { upsert?: boolean } = { upsert: true }): Promise<IPlaytestCard[]> {
 
-    public async read(reading?: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        const cards = asArray(reading);
-        const groups = groupBy(cards, (card) => card.project);
-        // If no project is specified, read that from all active projects
-        if (groups.has(undefined)) {
-            const noProjectCards = groups.get(undefined);
-            const allActiveProjects = await dataService.projects.read({ active: true });
-            allActiveProjects.forEach((project) => groups.set(project.number, noProjectCards));
-            groups.delete(undefined);
-        }
-        const read: IPlaytestCard[] = [];
-        for (const [pNumber, pCards] of groups.entries()) {
-            const [project] = await dataService.projects.read({ number: pNumber });
-            // TODO: Error if project is missing
-            for (const pCard of pCards) {
-                const url = `${project.script}/cards`;
-                const query = { filter: pCard };
-                const response = await this.client.get<CardsController.ReadResponse>(url, query);
-                read.push(...response.cards);
-            }
-            logger.verbose(`${read.length} card(s) read from Google App Script (${project.name})`);
-        }
-        return read;
-    }
 
-    public async update(updating: SingleOrArray<IPlaytestCard>, { upsert = true, sheets }: { upsert?: boolean; sheets?: CardSheet[] } = {}) {
-        const cards = asArray(updating);
-        const groups = groupBy(cards, (card) => card.project);
-        const updated: IPlaytestCard[] = [];
-        for (const [pNumber, pCards] of groups.entries()) {
-            const [project] = await dataService.projects.read({ number: pNumber });
-            // TODO: Error if project is missing
-            const url = `${project.script}/cards/update`;
-            const query = { upsert, sheets };
-            const body = JSON.stringify(pCards);
-            const response = await this.client.post<CardsController.UpdateResponse>(url, query, body);
-            updated.push(...response.updated);
-            logger.verbose(`${updated.length} card(s) updated in Google App Script (${project.name})`);
-        }
-        return updated;
-    }
-
-    public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        const cards = asArray(destroying);
-        const groups = groupBy(cards, (card) => card.project);
-        // If no project is specified, read that from all active projects
-        if (groups.has(undefined)) {
-            const noProjectCards = groups.get(undefined);
-            const allActiveProjects = await dataService.projects.read({ active: true });
-            allActiveProjects.forEach((project) => groups.set(project.number, noProjectCards));
-            groups.delete(undefined);
-        }
-        const destroyed: IPlaytestCard[] = [];
-        for (const [pNumber, pCards] of groups.entries()) {
-            const [project] = await dataService.projects.read({ number: pNumber });
-
-            for (const pCard of pCards) {
-                const url = `${project.script}/cards/destroy`;
-                const query = { filter: pCard };
-                const response = await this.client.post<CardsController.DestroyResponse>(url, query);
-                destroyed.push(...response.destroyed);
-            }
-            logger.verbose(`${destroyed.length} card(s) deleted in Google App Script (${project.name})`);
-        }
-        return destroyed.length;
+        return super.bulkWrite(cards, { upsert, ...options });
     }
 }
+// class CardDataSource extends GASDataSource<IPlaytestCard> {
+//     public async create(creating: SingleOrArray<IPlaytestCard>) {
+//         const cards = asArray(creating);
+//         const groups = groupBy(cards, (card) => card.project);
+
+//         const created: IPlaytestCard[] = [];
+//         for (const [pNumber, pCards] of groups.entries()) {
+//             const [project] = await dataService.projects.read({ number: pNumber });
+
+//             const url = `${project.script}/cards/create`;
+//             const body = JSON.stringify(pCards);
+//             const response = await this.client.post<CardsController.CreateResponse>(url, null, body);
+//             created.push(...response.created);
+//             logger.verbose(`${created.length} card(s) created in Google App Script (${project.name})`);
+//         }
+//         return created;
+//     }
+
+//     public async read(reading?: SingleOrArray<DeepPartial<IPlaytestCard>>) {
+//         const cards = asArray(reading);
+//         const groups = groupBy(cards, (card) => card.project);
+//         // If no project is specified, read that from all active projects
+//         if (groups.has(undefined)) {
+//             const noProjectCards = groups.get(undefined);
+//             const allActiveProjects = await dataService.projects.read({ active: true });
+//             allActiveProjects.forEach((project) => groups.set(project.number, noProjectCards));
+//             groups.delete(undefined);
+//         }
+//         const read: IPlaytestCard[] = [];
+//         for (const [pNumber, pCards] of groups.entries()) {
+//             const [project] = await dataService.projects.read({ number: pNumber });
+//             // TODO: Error if project is missing
+//             for (const pCard of pCards) {
+//                 const url = `${project.script}/cards`;
+//                 const query = { filter: pCard };
+//                 const response = await this.client.get<CardsController.ReadResponse>(url, query);
+//                 read.push(...response.cards);
+//             }
+//             logger.verbose(`${read.length} card(s) read from Google App Script (${project.name})`);
+//         }
+//         return read;
+//     }
+
+//     public async update(updating: SingleOrArray<IPlaytestCard>, { upsert = true, sheets }: { upsert?: boolean; sheets?: CardSheet[] } = {}) {
+//         const cards = asArray(updating);
+//         const groups = groupBy(cards, (card) => card.project);
+//         const updated: IPlaytestCard[] = [];
+//         for (const [pNumber, pCards] of groups.entries()) {
+//             const [project] = await dataService.projects.read({ number: pNumber });
+//             // TODO: Error if project is missing
+//             const url = `${project.script}/cards/update`;
+//             const query = { upsert, sheets };
+//             const body = JSON.stringify(pCards);
+//             const response = await this.client.post<CardsController.UpdateResponse>(url, query, body);
+//             updated.push(...response.updated);
+//             logger.verbose(`${updated.length} card(s) updated in Google App Script (${project.name})`);
+//         }
+//         return updated;
+//     }
+
+//     public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
+//         const cards = asArray(destroying);
+//         const groups = groupBy(cards, (card) => card.project);
+//         // If no project is specified, read that from all active projects
+//         if (groups.has(undefined)) {
+//             const noProjectCards = groups.get(undefined);
+//             const allActiveProjects = await dataService.projects.read({ active: true });
+//             allActiveProjects.forEach((project) => groups.set(project.number, noProjectCards));
+//             groups.delete(undefined);
+//         }
+//         const destroyed: IPlaytestCard[] = [];
+//         for (const [pNumber, pCards] of groups.entries()) {
+//             const [project] = await dataService.projects.read({ number: pNumber });
+
+//             for (const pCard of pCards) {
+//                 const url = `${project.script}/cards/destroy`;
+//                 const query = { filter: pCard };
+//                 const response = await this.client.post<CardsController.DestroyResponse>(url, query);
+//                 destroyed.push(...response.destroyed);
+//             }
+//             logger.verbose(`${destroyed.length} card(s) deleted in Google App Script (${project.name})`);
+//         }
+//         return destroyed.length;
+//     }
+// }

@@ -122,7 +122,15 @@ export const PlaytestingCard = {
             short: Joi.string().required(),
             number: Joi.number().required()
         }),
-        suggestionId: Joi.string()
+        suggestionId: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }).required(),
+        updated: Joi.date(),
+        updatedBy: Joi.string(),
+        created: Joi.date(),
+        createdBy: Joi.date()
     }),
     Partial: Card.Partial.keys({
         project: Joi.number(),
@@ -144,7 +152,15 @@ export const PlaytestingCard = {
             short: Joi.string(),
             number: Joi.number()
         }),
-        suggestionId: Joi.string()
+        suggestionId: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
+        updated: Joi.date(),
+        updatedBy: Joi.string(),
+        created: Joi.date(),
+        createdBy: Joi.date()
     }),
     Draft: Card.Full.keys({
         project: Joi.number().required(),
@@ -169,7 +185,15 @@ export const PlaytestingCard = {
             short: Joi.string().required(),
             number: Joi.number().required()
         }),
-        suggestionId: Joi.string()
+        suggestionId: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
+        updated: Joi.date(),
+        updatedBy: Joi.string(),
+        created: Joi.date(),
+        createdBy: Joi.date()
     })
 };
 

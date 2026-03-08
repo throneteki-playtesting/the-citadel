@@ -16,7 +16,16 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
     const [card, setCard] = useState<DeepPartial<IPlaytestCard>>({});
 
     useEffect(() => {
-        setCard(initial ?? {});
+        const data: DeepPartial<IPlaytestCard> = !initial ? {} : {
+            ...initial,
+            // Need to manually handle this; once API layer is fixed (and Zod implemented), revisit this
+            created: undefined,
+            createdBy: undefined,
+            updated: undefined,
+            updatedBy: undefined,
+            cardUpdated: undefined
+        };
+        setCard(data);
     }, [initial]);
 
     const onSubmit = useCallback(async (validCard: IPlaytestCard) => {

@@ -59,6 +59,8 @@ export enum Permission {
     EDIT_ROLES = "EDIT_ROLES",
     /** Can render cards to another format (eg. PDF, PNG)*/
     RENDER_CARDS = "RENDER_CARDS",
+    /** Can save render files to hosting service */
+    SAVE_RENDER_FILES = "SAVE_RENDER_FILES",
     /** Can view all card reviews */
     READ_REVIEWS = "READ_REVIEWS",
     /** Can create, edit and delete their own card reviews */

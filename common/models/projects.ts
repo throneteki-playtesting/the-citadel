@@ -1,10 +1,11 @@
 import { SemanticVersion } from "common/utils";
+import { IAuditable } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
 export type Type = typeof types[number];
 export type Code = `${number}`;
 
-export interface IProject {
+export interface IProject extends IAuditable {
     number: number,
     name: string,
     code: string,
@@ -18,9 +19,7 @@ export interface IProject {
     milestone?: number,
     mandateUrl?: string,
     formUrl?: string,
-    emoji?: string,
-    created: Date,
-    updated: Date
+    emoji?: string
 }
 
 export type FactionCardCount = {
@@ -35,13 +34,10 @@ export type FactionCardCount = {
     neutral: number
 }
 
-export interface IPlaytestingUpdate {
+export interface IPlaytestingUpdate extends IAuditable {
     project: number,
     version: number,
     description?: string,
     cardChanges: Record<number, SemanticVersion>,
-    pullRequest?: string,
-    createdBy: string,
-    created: Date,
-    updated: Date
+    pullRequest?: string
 }

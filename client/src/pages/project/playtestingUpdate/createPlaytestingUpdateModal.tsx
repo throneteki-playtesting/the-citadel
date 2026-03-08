@@ -56,7 +56,6 @@ const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose =
         setPlaytestingUpdate(playtestingUpdate);
         try {
             const { playtestingUpdate: newPlaytestingUpdate } = await createPlaytestingUpdate(playtestingUpdate).unwrap();
-            setPlaytestingUpdate(newPlaytestingUpdate);
             onSave(newPlaytestingUpdate);
             onModalClose();
         } catch (err) {

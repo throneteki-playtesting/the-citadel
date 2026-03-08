@@ -15,6 +15,6 @@
 		"outDir": "dist",
 		"strict": true
 	},
-	"include": ["src", "../common"],
+	"include": ["src", "../common", "../server/src/permissions.ts"],
 	"exclude": ["node_modules", "dist"]
 }

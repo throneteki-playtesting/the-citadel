@@ -1,5 +1,6 @@
 import { SemanticVersion } from "../utils";
 import * as Projects from "./projects";
+import { IAuditable } from "./shared";
 
 export const factions = ["baratheon", "greyjoy", "lannister", "martell", "thenightswatch", "stark", "targaryen", "tyrell", "neutral"] as const;
 export const types = ["character", "location", "attachment", "event", "plot", "agenda"] as const;
@@ -68,7 +69,7 @@ export enum DefaultDeckLimit {
     agenda = 1
 }
 
-export interface IPlaytestCard extends ICard {
+export interface IPlaytestCard extends ICard, IAuditable {
     project: number,
     number: number,
     version: SemanticVersion,
@@ -78,8 +79,13 @@ export interface IPlaytestCard extends ICard {
     playtesting?: SemanticVersion,
     github?: GithubDetails,
     release?: ReleaseDetails,
-    implemented: boolean
-    suggestionId?: string
+    implemented: boolean,
+    suggestionId?: string,
+    discord?: {
+        messageUrl?: string,
+        lastSynced?: Date
+    },
+    cardUpdated: Date // Specific for when card values are updated
 }
 
 export interface NoteDetails {
@@ -113,7 +119,7 @@ export interface ILabeledCard extends ICard {
     workInProgress: boolean
 }
 
-export interface ICardSuggestion {
+export interface ICardSuggestion extends IAuditable {
     /** Unique Id of this saved suggestion (undefined for new) */
     id?: string,
     /** User who suggested */
@@ -121,12 +127,10 @@ export interface ICardSuggestion {
         discordId: string,
         displayname: string
     },
-    /** Date suggestion was first created */
-    created: Date,
-    /** Date suggested was last updated */
-    updated: Date,
-    /** Discord forum thread Id, if it has been created */
-    threadId?: string,
+    discord: {
+        messageUrl?: string,
+        lastSynced?: Date
+    },
     /** Discord Id array of users who like this suggestion */
     likedBy: string[],
     /** Discord Id of user who approved this suggestion */

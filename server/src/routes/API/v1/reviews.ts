@@ -1,11 +1,10 @@
 import express, { Request } from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService, discordService } from "@/services";
-import ReviewThreads from "@/discord/reviewThreads";
+import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IPlaytestReview } from "common/models/reviews";
-import { asArray, hasPermission, Regex, SemanticVersion, validate } from "common/utils";
+import { hasPermission, Regex, SemanticVersion, validate } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
 import { Permission, User } from "common/models/user";
@@ -153,31 +152,31 @@ router.delete("/:project/:number/:version/:discordId",
 );
 
 // Legacy (GAS Api)
-router.post("/bulk", celebrate({
-    [Segments.BODY]: Joi.array().items(Schemas.PlaytestingReview.Draft)
-}), asyncHandler<unknown, unknown, IPlaytestReview[], unknown>(async (req, res) => {
-    const body = req.body;
+// router.post("/bulk", celebrate({
+//     [Segments.BODY]: Joi.array().items(Schemas.PlaytestingReview.Draft)
+// }), asyncHandler<unknown, unknown, IPlaytestReview[], unknown>(async (req, res) => {
+//     const body = req.body;
 
-    await dataService.reviews.update(body, true);
+//     await dataService.reviews.update(body, true);
 
-    const allCreated = [];
-    const allUpdated = [];
-    const allFailed = [];
+//     const allCreated = [];
+//     const allUpdated = [];
+//     const allFailed = [];
 
-    const reviews = asArray(body);
-    const guilds = await discordService.getGuilds();
-    for (const guild of guilds) {
-        const { created, updated, failed } = await ReviewThreads.sync(guild, true, ...reviews);
-        allCreated.push(...created);
-        allUpdated.push(...updated);
-        allFailed.push(...failed);
-    }
+//     const reviews = asArray(body);
+//     const guilds = await discordService.getGuilds();
+//     for (const guild of guilds) {
+//         const { created, updated, failed } = await ReviewThreads.sync(guild, true, ...reviews);
+//         allCreated.push(...created);
+//         allUpdated.push(...updated);
+//         allFailed.push(...failed);
+//     }
 
-    res.send({
-        created: allCreated,
-        updated: allUpdated,
-        failed: allFailed
-    });
-}));
+//     res.send({
+//         created: allCreated,
+//         updated: allUpdated,
+//         failed: allFailed
+//     });
+// }));
 
 export default router;

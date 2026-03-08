@@ -3,10 +3,10 @@ import { ICard, IPlaytestCard } from "./cards";
 export type ReleaseDate = `${number}-${number}-${number}`;
 
 export interface IPack {
-    // cgdbId?: string,
+    cgdbId?: string,
     code: string,
     name: string,
-    releaseDate: ReleaseDate,
+    releaseDate: ReleaseDate | null,
     workInProgress?: boolean,
     cards: ICard[]
 }

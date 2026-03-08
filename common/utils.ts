@@ -257,7 +257,7 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
 export function renderPlaytestingCard(card: Cards.IPlaytestCard): Cards.IRenderCard
 export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>): DeepPartial<Cards.IRenderCard>
 export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>) {
-    const versionText = isPreview(card) || !card.version ? "Preview" : `v${card.version}`;
+    const versionText = !card.version || isPreview(card) ? "Preview" : `v${card.version}`;
     const codeText = card.code ?? (card.project && card.number ? parseCardCode(false, card.project, card.number) : undefined) ?? "Unknown Code";
     return {
         ...getBaseCardValues(card),
@@ -320,8 +320,11 @@ export const thronesIcons: { [key: string]: string } = {
     agenda: "\ue611"
 };
 
-export function isPreview(card: DeepPartial<Cards.IPlaytestCard>) {
-    return !card.version || card.version === "0.0.0";
+export function isPreview(card: { version?: SemanticVersion }) {
+    return card.version === "0.0.0";
+}
+export function isInitial(card: { version?: SemanticVersion }) {
+    return card.version === "1.0.0";
 }
 
 export function fuzzyMatch(expression: string, ...tests: string[]) {
@@ -341,6 +344,10 @@ export function extractDeckIdentifier(url: DeckLink | DecklistLink) {
     const value = match!.groups!.target;
 
     return /^\d+$/.test(value) ? Number(value) : (value as UUID);
+}
+
+export function generatePlaytestingImageUrl(card: { project: number, number: number, version: SemanticVersion }) {
+    return encodeURI(`https://throneteki.ams3.cdn.digitaloceanspaces.com/playtesting/${card.project}/${parseCardCode(false, card.project, card.number)}@${card.version}.png`);
 }
 
 export function generateReleaseImageUrl(short: string, number: number, name: string) {

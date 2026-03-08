@@ -1,5 +1,6 @@
 import { DeckLink, DecklistLink } from "common/types";
 import { SemanticVersion } from "../utils";
+import { IAuditable } from "./shared";
 
 export const statementAnswers = ["strongly disagree", "somewhat disagree", "neither agree nor disagree", "somewhat agree", "strongly agree"];
 export type StatementAnswer = typeof statementAnswers[number];
@@ -11,7 +12,7 @@ export type Statements = {
     releasable: StatementAnswer
 };
 
-export interface IPlaytestReview {
+export interface IPlaytestReview extends IAuditable {
     reviewer: string,
     project: number,
     number: number,
@@ -19,9 +20,7 @@ export interface IPlaytestReview {
     decks: (DeckLink | DecklistLink)[],
     played: number,
     statements: Statements,
-    additional?: string,
-    created: Date,
-    updated: Date
+    additional?: string
 }
 
 export enum StatementQuestions {

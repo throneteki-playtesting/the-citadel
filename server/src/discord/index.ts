@@ -1,8 +1,10 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { logger } from "@/services";
-import { Client, ForumChannel, ForumThreadChannel, Guild, ThreadChannel, Events } from "discord.js";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore } from "discord.js";
 import { updateFormData } from "../processing/reviews";
+import { requestContext } from "@/middleware/context";
+import { authDiscordUser } from "@/middleware/auth";
 
 class DiscordService {
     private client: Client;
@@ -17,19 +19,19 @@ class DiscordService {
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
 
-        this.client.once(Events.ClientReady, () => {
-            logger.info(`Discord connected with ${this.client.user?.tag}`);
+        this.client.once(Events.ClientReady, (client) => {
+            logger.info(`Discord connected with ${client.user.tag}`);
         });
 
         buildCommands().then((available) => {
             const deployOptions = { token, clientId };
             this.client.on(Events.GuildCreate, async (guild) => {
-                if (this.isValidGuild(guild)) {
+                if (this.isGuild(guild)) {
                     await deployCommands(available, { ...deployOptions, guild });
                 }
             });
             this.client.on(Events.GuildAvailable, async (guild) => {
-                if (this.isValidGuild(guild)) {
+                if (this.isGuild(guild)) {
                     await deployCommands(available, { ...deployOptions, guild });
                 }
             });
@@ -37,16 +39,21 @@ class DiscordService {
 
         this.client.on(Events.InteractionCreate, async (interaction) => {
             try {
-                if (!this.isValidGuild(interaction.guild)) {
+                if (!this.isGuild(interaction.guild)) {
                     return;
                 }
                 if (interaction.isCommand() || interaction.isAutocomplete()) {
-                    const command = commands[interaction.commandName as keyof typeof commands];
-                    if (interaction.isChatInputCommand()) {
-                        await command.execute(interaction);
-                    } else if (interaction.isAutocomplete() && command.autocomplete) {
-                        await command.autocomplete(interaction);
-                    }
+                    // Captures the discord user to save user context
+                    const member = interaction.member;
+                    const user = await authDiscordUser(member);
+                    requestContext.run({ user }, async () => {
+                        const command = commands[interaction.commandName as keyof typeof commands];
+                        if (interaction.isChatInputCommand()) {
+                            await command.execute(interaction);
+                        } else if (interaction.isAutocomplete() && command.autocomplete) {
+                            await command.autocomplete(interaction);
+                        }
+                    });
                 }
             } catch (err) {
                 logger.error(err);
@@ -54,7 +61,7 @@ class DiscordService {
         });
 
         this.client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-            if (!this.isValidGuild(newMember.guild)) {
+            if (!this.isGuild(newMember.guild)) {
                 return;
             }
             const playtesterRole = await this.findRoleByName(newMember.guild, "Playtesting Team");
@@ -74,16 +81,12 @@ class DiscordService {
         this.client.login(token);
     }
 
-    private isValidGuild(guild: Guild) {
-        return this.guildId === guild.id;
+    public async getGuild() {
+        return await this.client.guilds.fetch(this.guildId);
     }
 
-    get primaryGuild() {
-        return this.client.guilds.cache.find((guild) => guild.id = this.guildId);
-    }
-
-    public async getGuilds() {
-        return this.client.guilds.cache.filter((guild) => this.isValidGuild(guild)).values();
+    private isGuild(guild: Guild) {
+        return guild.id === this.guildId;
     }
 
     /**
@@ -92,22 +95,36 @@ class DiscordService {
      * @param threadFunc Function to match thread on
      * @returns The found thread, or null if none can be found within the given Forum Channel
      */
-    public async findForumThread(forum: ForumChannel, threadFunc: (thread: ThreadChannel) => boolean) {
-        let result = forum.threads.cache.find(threadFunc);
-        // If thread is not found in cache, refresh cache & check again
-        let before = undefined;
-        if (!result) {
-            do {
-                const batch = await forum.threads.fetch({ archived: { fetchAll: true, before } }, { cache: true });
-                before = batch.hasMore ? Math.min(...batch.threads.map(t => t.archivedAt.getTime())) : undefined;
-
-                result = batch.threads.find(threadFunc) as ForumThreadChannel;
-
-                // Continue if result has no been found, or if "before" is present (eg. batch.hasMore == true)
-            } while (!result && before);
+    public async findForumThread(forum: ForumChannel, threadFunc: (thread: ThreadChannel) => Promise<boolean> | boolean) {
+        // First check unarchived threads
+        const active = await forum.threads.fetchActive();
+        for (const thread of active.threads.values()) {
+            if (await Promise.resolve(threadFunc(thread))) {
+                return thread;
+            }
         }
 
-        return result;
+        let before: string | undefined;
+        let batch: FetchedThreadsMore;
+
+        do {
+            batch = await forum.threads.fetchArchived({
+                type: "public",
+                fetchAll: true,
+                before,
+                limit: 100
+            });
+
+            for (const thread of batch.threads.values()) {
+                if (await Promise.resolve(threadFunc(thread))) {
+                    return thread;
+                }
+            }
+
+            before = batch.threads.last()?.id;
+        } while (batch.hasMore);
+
+        return null;
     }
 
     /**

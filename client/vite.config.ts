@@ -29,6 +29,9 @@ export default defineConfig(({ mode }) => {
                     target: serverHost,
                     changeOrigin: true
                 }
+            },
+            fs: {
+                allow: [".."]
             }
         },
         define: {

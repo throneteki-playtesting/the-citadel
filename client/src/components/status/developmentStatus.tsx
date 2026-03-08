@@ -27,7 +27,7 @@ const DevelopmentStatus = ({ draft, latest }: DevelopmentStatusProps) => {
     if (latest.release) {
         const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.release.number)}`;
         return (
-            <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink}/></Link>}>
+            <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink} className="text-xl"/></Link>}>
                     Released in {latest.release.short}
             </Alert>
         );

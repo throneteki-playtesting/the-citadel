@@ -20,7 +20,7 @@ const publish = {
             .setDMPermission(false);
     },
     async execute(interaction: ChatInputCommandInteraction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: ["Ephemeral"] });
         try {
             const projectId = parseInt(interaction.options.getString("project"));
 

@@ -1,6 +1,4 @@
-import BaseCard from "@/data/models/cards/baseCard";
-import { AttachmentBuilder, ColorResolvable } from "discord.js";
-import path from "path";
+import { ColorResolvable } from "discord.js";
 
 export const emojis = {
     unique: "<:unique:701045474332770385>",
@@ -16,18 +14,18 @@ export const emojis = {
     stark: "<:stark:701045474370650112>",
     targaryen: "<:targaryen:701045474714452058>",
     tyrell: "<:tyrell:701045474374975528>",
-    Playtesting: ":dart:",
-    PhysicalPlaytesting: ":flower_playing_cards:",
-    DigitalPlaytesting: ":computer:",
-    ChangeLog: ":memo:",
-    ChangeNotes: ":card_file_box:",
-    Implemented: ":white_check_mark:",
-    NotImplemented: ":no_entry_sign:",
-    Replaced: ":twisted_rightwards_arrows:",
-    Reworked: ":arrows_clockwise:",
-    Updated: ":arrow_double_up:",
-    Bugfixed: ":wrench:",
-    Other: ":eight_spoked_asterisk:",
+    playtesting: ":dart:",
+    physicalPlaytesting: ":flower_playing_cards:",
+    digitalPlaytesting: ":computer:",
+    changeLog: ":memo:",
+    changeNotes: ":card_file_box:",
+    implemented: ":white_check_mark:",
+    notImplemented: ":no_entry_sign:",
+    replaced: ":twisted_rightwards_arrows:",
+    reworked: ":arrows_clockwise:",
+    updated: ":arrow_double_up:",
+    bugfixed: ":wrench:",
+    other: ":eight_spoked_asterisk:",
     "Strongly agree": ":thumbsup::thumbsup:",
     "Somewhat agree": ":thumbsup:",
     "Neither agree nor disagree": ":fist:",
@@ -37,16 +35,16 @@ export const emojis = {
 } as { [emoji: string]: string };
 
 export const colors = {
-    "Review": "#660087",
-    "House Baratheon": "#e3d852",
-    "House Greyjoy": "#1d7a99",
-    "House Lannister": "#c00106",
-    "House Martell": "#e89521",
-    "House Stark": "#cfcfcf",
-    "The Night's Watch": "#7a7a7a",
-    "House Targaryen": "#1c1c1c",
-    "House Tyrell": "#509f16",
-    "Neutral": "#a99560"
+    review: "#660087",
+    baratheon: "#e3d852",
+    greyjoy: "#1d7a99",
+    lannister: "#c00106",
+    martell: "#e89521",
+    stark: "#cfcfcf",
+    thenightswatch: "#7a7a7a",
+    targaryen: "#1c1c1c",
+    tyrell: "#509f16",
+    neutral: "#a99560"
 } as { [color: string]: ColorResolvable };
 
 export const icons = {
@@ -69,10 +67,4 @@ export function discordify(text: string) {
         result = result.replaceAll(`[${key}]`, emoji);
     }
     return result;
-}
-
-export function cardAsAttachment(card: BaseCard) {
-    return new AttachmentBuilder(card.imageUrl)
-        .setName(path.basename(card.imageUrl))
-        .setDescription(`${card.toString()}`);
 }

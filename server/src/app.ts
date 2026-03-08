@@ -9,7 +9,6 @@ import auth from "./routes/auth/index";
 import { logger } from "@/services";
 import swaggerRouter from "./swagger";
 import cookieParser from "cookie-parser";
-import { authenticate } from "./middleware/auth";
 import { errorHandler } from "./errors";
 import { StatusCodes } from "http-status-codes";
 
@@ -30,7 +29,7 @@ function initialise() {
     app.use(cookieParser());
 
     // Register API
-    app.use("/api", authenticate, api);
+    app.use("/api", api);
 
     // Register thronesdb endpoints
     app.use("/thronesdb", thronesdb);

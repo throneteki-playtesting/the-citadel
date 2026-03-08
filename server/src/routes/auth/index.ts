@@ -3,7 +3,6 @@ import express, { Response } from "express";
 import asyncHandler from "express-async-handler";
 import { dataService, discordService, logger } from "@/services";
 import { APIGuildMember, RESTPostOAuth2AccessTokenResult } from "discord.js";
-import { User } from "common/models/user";
 import jwt from "jsonwebtoken";
 import { buildUrl } from "common/utils";
 import { createHash, randomUUID } from "crypto";
@@ -11,6 +10,7 @@ import { RefreshToken } from "common/models/auth";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { AccessTokenPayload, AuthStatus, RefreshAuthResponse } from "@/types";
+import { authDiscordUser } from "@/middleware/auth";
 
 const router = express.Router();
 
@@ -46,43 +46,13 @@ router.get("/discord/callback",
             const authToken = await getAuthenticationToken(code);
 
             // 2. Fetch discord user & member info
-            const discordMember = await get<APIGuildMember>(`users/@me/guilds/${discordService.primaryGuild.id}/member`, authToken);
-            const discordUser = discordMember.user;
-            const discordRoles = await Promise.all(discordMember.roles.map((roleId) => discordService.findRoleById(discordService.primaryGuild, roleId)));
+            const guild = await discordService.getGuild();
+            const discordMember = await get<APIGuildMember>(`users/@me/guilds/${guild.id}/member`, authToken);
 
-            // 3. Fetch user from database
-            let [user] = await dataService.users.read({ discordId: discordUser.id });
+            // 3. Authenticate discord member to user
+            const user = await authDiscordUser(discordMember);
 
-            if (!user) {
-                user = {
-                    discordId: discordUser.id,
-                    permissions: [],
-                    roles: []
-                } as User;
-            }
-            // 4. Add/Update user data from discord
-            user.username = discordUser.username;
-            user.displayname = discordMember.nick ?? discordUser.username;
-            user.avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
-            user.lastLogin = new Date();
-
-            // Fetch and (if missing) save roles
-            if (discordRoles.length > 0) {
-                const roles = await dataService.roles.read(discordRoles.map(({ name }) => ({ name })));
-                const missingRoles = discordRoles.filter(({ id }) => !roles.some((role) => role.discordId === id));
-                if (missingRoles.length > 0) {
-                    const creating = missingRoles.map(({ id, name }) => ({ discordId: id, name, permissions: [] }));
-                    await dataService.roles.create(creating);
-                    roles.push(...creating);
-                }
-
-                user.roles = roles;
-            }
-
-            // 5. Push potential user changes back to database
-            await dataService.users.update(user);
-
-            // 6. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
+            // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             await applyTokensToResponse(res, user.discordId);
 
             res.redirect(buildUrl(REDIRECT_URL, { status: "success" } as { status: AuthStatus }));

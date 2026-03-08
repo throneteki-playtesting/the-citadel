@@ -6,10 +6,14 @@ import { IPlaytestCard } from "common/models/cards";
 const GithubStatus = ({ card }: GithubStatusProps) => {
     const title = "Github Issue";
 
-    if (!card?.github) {
+    if (!card) {
+        return null;
+    }
+
+    if (!card.github) {
         return (
-            <Alert color="danger" title={title}>
-                    Missing
+            <Alert color="warning" title={title}>
+                Missing
             </Alert>
         );
     }
@@ -18,28 +22,22 @@ const GithubStatus = ({ card }: GithubStatusProps) => {
     if (card.github.status === "open") {
         return (
             <Alert color="primary" title={title} endContent={endContent}>
-                    Open
+                Open
             </Alert>
         );
-    }
-
-    if (card.github.status === "closed") {
-        return (
-            <Alert color="default" title={title} endContent={endContent}>
-                    Closed
-            </Alert>
-        );
-    }
-
-    if (card.github.status === "complete") {
+    } else if (card.github.status === "closed") {
         return (
             <Alert color="success" title={title} endContent={endContent}>
-                    Merged
+                Closed
+            </Alert>
+        );
+    } else {
+        return (
+            <Alert color="success" title={title} endContent={endContent}>
+                Merged
             </Alert>
         );
     }
-
-    return null;
 };
 
 type GithubStatusProps = { card?: IPlaytestCard }

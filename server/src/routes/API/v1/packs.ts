@@ -2,50 +2,78 @@ import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
-import { Pack } from "@/data/models/pack";
+import { IPack, IPlaytestPack, ReleaseDate } from "common/models/pack";
+import { ApiErrorResponse } from "@/errors";
+import { StatusCodes } from "http-status-codes";
+import { IProject } from "common/models/projects";
 
 const router = express.Router();
 
-type ProjectParam = { project: number };
-type ReleaseQuery = { short: string, name: string, release: Date };
-
+const validateProjectParam = () => {
+    return asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res, next) => {
+        const { project: number } = req.params;
+        const [project] = await dataService.projects.read({ number });
+        if (!project) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
+        }
+        req["project"] = project;
+        next();
+    });
+};
 // TODO: Openapi spec
-router.get("/:project/development", celebrate({
-    [Segments.PARAMS]: {
-        project: Joi.number().required()
-    }
-}), asyncHandler<ProjectParam, unknown, unknown, unknown>(async (req, res) => {
-    const { project } = req.params;
+router.get("/:project/development",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required()
+        }
+    }),
+    validateProjectParam(),
+    asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = req["project"] as IProject;
+        const cards = await dataService.cards.read({ project: project.number, latest: true, release: null });
 
-    // TODO: Error if project does not exist
-    const [pack] = await dataService.projects.read({ number: project });
-    const cards = await dataService.cards.collection({ project });
-    const latest = cards.latest.filter((card) => !card.isReleasable);
-    const developmentPack = new Pack(pack.code, pack.name, latest);
+        const pack: IPlaytestPack = {
+            cgdbId: null,
+            code: project.code,
+            name: project.name,
+            releaseDate: null,
+            workInProgress: true,
+            cards
+        };
 
-    res.json(developmentPack.toPackData());
-}));
+        res.json(pack);
+    }));
 
-router.get("/:project/release", celebrate({
-    [Segments.PARAMS]: {
-        project: Joi.number().required()
-    },
-    [Segments.QUERY]: {
-        short: Joi.string().required(),
-        name: Joi.string().required(),
-        release: Joi.date().required()
-    }
-}), asyncHandler<ProjectParam, unknown, unknown, ReleaseQuery>(async (req, res) => {
-    const { project } = req.params;
-    const { short, name, release } = req.query;
+router.get("/:project/release",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required()
+        }
+    }),
+    validateProjectParam(),
+    celebrate({
+        [Segments.QUERY]: {
+            short: Joi.string().required(),
+            name: Joi.string().required(),
+            release: Joi.date().required()
+        }
+    }),
+    asyncHandler<{ project: number }, unknown, unknown, { short: string, name: string, release: Date }>(async (req, res) => {
+        const project = req["project"] as IProject;
+        const { short, name, release } = req.query;
 
-    // TODO: Error if project does not exist
-    const cards = await dataService.cards.collection({ project });
-    const releasing = cards.latest.filter((card) => card.release?.short === short);
-    // TODO: Add validation
-    const releasePack = new Pack(short, name, releasing, release);
+        const cards = await dataService.cards.read({ project: project.number, latest: true, release: { short } });
+        // TODO: Add validation
+        const releaseDate = new Date(release.getTime() - (release.getTimezoneOffset() * 60000)).toISOString().split("T")[0] as ReleaseDate;
+        const pack: IPack = {
+            cgdbId: null,
+            code: short,
+            name,
+            releaseDate,
+            cards
+        };
 
-    res.json(releasePack.toPackData());
-}));
+        res.json(pack);
+    }));
 
 export default router;

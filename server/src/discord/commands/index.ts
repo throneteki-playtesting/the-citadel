@@ -3,6 +3,8 @@ import { dataService, logger } from "@/services";
 // import refresh from "./refresh";
 import sync from "./sync";
 import finalise from "./finalise";
+import { sortBy } from "lodash-es";
+import { Code } from "common/models/cards";
 
 export const commands = {
     sync,
@@ -14,25 +16,25 @@ export class FollowUpHelper {
     static async information(interaction: ChatInputCommandInteraction, message: string) {
         await interaction.followUp({
             content: message,
-            ephemeral: true
+            flags: ["Ephemeral"]
         }).catch(logger.error);
     }
     static async warning(interaction: ChatInputCommandInteraction, message: string) {
         await interaction.followUp({
             content: `:grey_exclamation: ${message}`,
-            ephemeral: true
+            flags: ["Ephemeral"]
         }).catch(logger.error);
     }
     static async error(interaction: ChatInputCommandInteraction, message: string) {
         await interaction.followUp({
             content: `:exclamation: ${message}`,
-            ephemeral: true
+            flags: ["Ephemeral"]
         }).catch(logger.error);
     }
     static async success(interaction: ChatInputCommandInteraction, message: string) {
         await interaction.followUp({
             content: `:white_check_mark: ${message}`,
-            ephemeral: true
+            flags: ["Ephemeral"]
         }).catch(logger.error);
     }
 }
@@ -41,41 +43,41 @@ export class AutoCompleteHelper {
     static async complete(interaction: AutocompleteInteraction) {
         const focusedOption = interaction.options.getFocused(true);
         const focusedValue = focusedOption.value.trim().toLowerCase();
-        const projectId = interaction.options.getString("project") ? parseInt(interaction.options.getString("project")) : undefined;
-        let choices = undefined;
+        const project = interaction.options.getString("project") ? parseInt(interaction.options.getString("project")) : undefined;
+        let choices = [];
         switch (focusedOption.name) {
-            case "project":
-                if (!projectId) {
-                    const projects = await dataService.projects.read();
-                    choices = projects
-                        .filter((p) => p.active && p.name.toLowerCase().includes(focusedValue))
-                        .map((p) => ({ name: p.name, value: p.number.toString() }));
-                }
+            case "project": {
+                const projects = await dataService.projects.read();
+                choices = sortBy(projects, "number")
+                    .filter((p) => p.active && p.name.toLowerCase().includes(focusedValue))
+                    .map((p) => ({ name: p.name, value: p.number.toString() }));
                 break;
-            case "card":
-                if (projectId) {
-                    // Choices should be cards
-                    const cards = await dataService.cards.database.read({ project: projectId });
-                    // Reverse to ensure the latest cards are added first
-                    choices = cards.reverse().reduce((chs, card) => {
-                        const name = `${card.number} - ${card.name}`;
-                        const value = card.number.toString();
+            }
+            case "card": {
+                // Choices should be cards
+                let cards = await dataService.cards.database.read({ project });
+                // Manually filter out released cards (as their codes are different to dev version)
+                cards = cards.filter((card) => !card.release);
+                // Reverse to ensure the latest cards are added first
+                choices = sortBy(cards, ["project", "number"])
+                    .reduce((chs, card) => {
+                        const name = `${card.code} - ${card.name}`;
+                        const value = card.code;
 
                         // Only fetch if it matches the focused value, and wasn't already added (as a later version)
                         if (name.toLowerCase().includes(focusedValue.toLowerCase()) && !chs.some((c) => c.value === value)) {
                             chs.push({ name, value });
                         }
                         return chs;
-                    }, [] as { name: string, value: string }[]).sort((a, b) => parseInt(a.value) - parseInt(b.value));
-                }
+                    }, [] as { name: string, value: string }[]);
                 break;
-            case "version":
-                if (projectId) {
-                    const number = parseInt(interaction.options.getString("card"));
-                    const cards = await dataService.cards.database.read({ project: projectId, number });
-                    choices = cards.map((card) => ({ name: card.version, value: card.version }));
-                }
+            }
+            case "version": {
+                const code = interaction.options.getString("card") as Code;
+                const cards = await dataService.cards.database.read({ project, code });
+                choices = cards.map((card) => ({ name: card.version, value: card.version }));
                 break;
+            }
         }
 
         // Only get first 25 (limit by discord)

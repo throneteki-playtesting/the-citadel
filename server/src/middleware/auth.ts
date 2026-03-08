@@ -4,8 +4,9 @@ import jwt from "jsonwebtoken";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { AccessTokenPayload } from "@/types";
+import * as Discord from "discord.js";
 
-export const authenticate = asyncHandler<unknown, unknown, unknown, unknown>(
+export const authMiddleware = asyncHandler<unknown, unknown, unknown, unknown>(
     async (req, res, next) => {
         // TODO: Update to "integration token"
         if (process.env.NODE_ENV === "development" && req.header("Authorization")?.startsWith("Basic")) {
@@ -15,6 +16,10 @@ export const authenticate = asyncHandler<unknown, unknown, unknown, unknown>(
             if (username !== process.env.BASIC_USERNAME || password !== process.env.BASIC_PASSWORD) {
                 throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Basic credentials are invalid or missing");
             }
+
+            // TODO: Properly add integration as user, rather than using stephen id
+            const [user] = await dataService.users.read({ discordId: "120834530801221634" });
+            req["user"] = user;
             next();
         } else {
             const { accessToken } = req.cookies;
@@ -36,3 +41,29 @@ export const authenticate = asyncHandler<unknown, unknown, unknown, unknown>(
         }
     }
 );
+
+export async function authDiscordUser(member: Discord.APIGuildMember | Discord.GuildMember) {
+    const discordUser = member.user;
+
+    let [user] = await dataService.users.read({ discordId: discordUser.id });
+    const nickname = discordUser["nick"] ?? discordUser["nickname"];
+    if (!user) {
+        user = {
+            discordId: discordUser.id,
+            username: discordUser.username,
+            displayname: nickname ?? discordUser.username,
+            avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+            permissions: [],
+            roles: [],
+            lastLogin: new Date()
+        };
+    } else {
+        user.username = discordUser.username;
+        user.displayname = nickname ?? discordUser.username;
+        user.avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
+        user.lastLogin = new Date();
+    }
+    await dataService.users.update(user);
+
+    return user;
+}

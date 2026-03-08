@@ -275,22 +275,27 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
         }),
-        // Playtesting Update API (eg. Projects API)
         createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
             query: (playtestingUpdate) => {
                 const url = buildUrl(`projects/${playtestingUpdate.project}/playtesting/update`);
                 const body = playtestingUpdate;
                 return { url, method: "POST", body };
             },
-            // TODO: FIX THIS (ensure that, after a pt update is made, it invalidates all cards involved in that update)
-            // Also (not related to here), there was a weird bug with updating Melisandre, where 1.3.1 got merged with a previous version. Investigate.
             invalidatesTags: (result) => [
                 { type: "playtestingUpdate", id: "LIST" },
-                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`),
+                ...mapTags(result?.project, "project", (project) => project.number)
             ]
         }),
+        syncCardImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
+            query: (options) => {
+                const url = buildUrl(`projects/${options.project}/sync/images`, { number: options.number, version: options.version, latest: options.latest });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+        }),
         // Reviews API
-        getReview: builder.query<IPlaytestReview | undefined, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
+        getReview: builder.query<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
                 const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
                 return { url, method: "GET" };
@@ -362,6 +367,7 @@ export const {
     useInitialiseProjectMutation,
     useUpdateProjectMutation,
     useDeleteProjectMutation,
+    useSyncCardImagesMutation,
 
     useCreatePlaytestingUpdateMutation,
 

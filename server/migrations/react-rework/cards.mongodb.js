@@ -38,6 +38,9 @@ const compareSemver = (a, b) => {
     return 0;
 };
 
+const now = new Date();
+const userId = "120834530801221634";
+
 // 2. Transformation Loop
 console.log("Transforming card data...");
 allCards.forEach(card => {
@@ -49,8 +52,20 @@ allCards.forEach(card => {
             project: card.projectId,
             latest: false, // Default to false, will flip later
             draft: !card.playtesting,
-            implemented: card.playtesting && (!card.github || card.github?.status === "complete")
+            implemented: card.playtesting && (!card.github || card.github.status === "complete"),
+            created: now,
+            createdBy: userId,
+            updated: now,
+            updatedBy: userId,
+            cardUpdated: now
         };
+
+        // Code calculating
+        if (newDoc.release) {
+            newDoc.code = `${newDoc.project}${newDoc.release.number.toString().padStart(3, "0")}`;
+        } else {
+            newDoc.code = `${newDoc.project}${newDoc.number + 500}`;
+        }
 
         // Faction mapping
         if (newDoc.faction && factionMap[newDoc.faction]) {

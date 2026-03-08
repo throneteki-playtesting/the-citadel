@@ -7,7 +7,6 @@ import ejs from "ejs";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestReview, StatementQuestions } from "common/models/reviews";
 import { factions } from "common/models/cards";
-import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { IProject } from "common/models/projects";
 
 export default class ReviewThreads {
@@ -36,7 +35,7 @@ export default class ReviewThreads {
                     if (!thread) {
                         // Prevent review thread from being created, but warn it was attempted
                         if (!canCreate) {
-                            logger.warning(`Review thread missing for ${review.toString()}, but thread creation not allowed`);
+                            logger.warn(`Review thread missing for ${review.toString()}, but thread creation not allowed`);
                             continue;
                         }
 

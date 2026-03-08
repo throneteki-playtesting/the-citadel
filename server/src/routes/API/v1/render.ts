@@ -1,10 +1,9 @@
 import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService, renderService } from "@/services";
+import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IRenderCard } from "common/models/cards";
-import RenderedCard from "@/data/models/cards/renderedCard";
 import { asArray, hasPermission } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { ApiErrorResponse } from "@/errors";
@@ -14,6 +13,7 @@ import archiver from "archiver";
 import { BatchRenderJobOptions, SingleRenderJobOptions } from "@/types";
 import { validateRequest } from "@/middleware/permissions";
 import { Permission } from "common/models/user";
+import { asPDF, asPNG } from "@/rendering";
 
 export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
 
@@ -34,7 +34,7 @@ router.post("/",
         const { format } = req.query;
         const body = req.body;
 
-        const cards = asArray(body).map((card) => new RenderedCard(card));
+        const cards = asArray(body);
         if (cards.length === 0) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Arguments", "Must provide at least one card to render");
         }
@@ -42,7 +42,7 @@ router.post("/",
         switch (format) {
             case "PDF": {
                 const { copies, perPage, rounded } = req.query;
-                const pdf = await renderService.asPDF(cards, { copies, perPage, rounded });
+                const pdf = await asPDF(cards, { copies, perPage, rounded });
                 res.contentType("application/pdf");
                 res.status(StatusCodes.OK).send(pdf);
                 break;
@@ -51,12 +51,12 @@ router.post("/",
                 const { orientation, rounded } = req.query;
                 if (cards.length === 1) {
                     const [card] = cards;
-                    const image = await renderService.asPNG(card, { orientation, rounded });
+                    const image = await asPNG(card, { orientation, rounded });
                     res.type("png");
                     res.status(StatusCodes.OK).send(image.buffer);
                 } else {
                     res.type("application/zip");
-                    const images = await renderService.asPNG(cards, { orientation, rounded });
+                    const images = await asPNG(cards, { orientation, rounded });
                     const archive = archiver("zip", { zlib: { level: 9 } });
                     archive.pipe(res);
 
@@ -64,7 +64,7 @@ router.post("/",
                         throw new ApiErrorResponse(StatusCodes.INTERNAL_SERVER_ERROR, "Archive Error", "An internal server error has occurred during archive process of multiple rendered images", err);
                     });
                     for (const image of images) {
-                        archive.append(image.buffer, { name: image.filename });
+                        archive.append(image.buffer, { name: `${image.card.key}.png}` });
                     }
                     // Sends to client
                     archive.finalize();

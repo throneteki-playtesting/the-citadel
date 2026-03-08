@@ -3,16 +3,17 @@ import * as FormController from "gas/controllers/formController";
 import GasClient from "@/google/gasClient";
 
 export async function updateFormData(...projectNumbers: number[]) {
-    const playtesterRole = await discordService.findRoleByName(discordService.primaryGuild, "Playtesting Team");
+    const guild = await discordService.getGuild();
+    const playtesterRole = await discordService.findRoleByName(guild, "Playtesting Team");
     if (!playtesterRole) {
-        throw Error(`"Playtesting Team" role is missing from ${discordService.primaryGuild.name}`);
+        throw Error(`"Playtesting Team" role is missing from ${guild.name}`);
     }
     const reviewers = [...new Set(playtesterRole.members.map((member) => member.nickname || member.displayName).sort())];
 
     const projects = await dataService.projects.read(projectNumbers.map((number) => ({ number })));
     for (const project of projects) {
-        const cards = await dataService.cards.collection({ project: project.number });
-        const cardNames = cards.latest.map((card) => `${card.number} - ${card.toString()}`);
+        const cards = await dataService.cards.read({ project: project.number, latest: true });
+        const cardNames = cards.map((card) => `${card.number} - ${card.toString()}`);
 
         const client = new GasClient();
         const url = `${project.script}/form`;

@@ -30,6 +30,7 @@ import { noteTypeIcon } from "../../utilities";
 import ImplementStatus from "../../components/status/implementStatus";
 import GithubStatus from "../../components/status/githubStatus";
 import DevelopmentStatus from "../../components/status/developmentStatus";
+import ImageStatus from "../../components/status/imageStatus";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -98,6 +99,7 @@ const CardDetail = ({ className, style, project: projectNumber, number }: CardDe
 type CardDetailProps = Omit<BaseElementProps, "children"> & { project: number, number: number };
 
 const CardVersions = ({ isLoading = false, cards }: CardVersionsProps) => {
+    const { format } = useTimezone();
     if (isLoading) {
         return (
             <div className="flex flex-col gap-2">
@@ -137,20 +139,28 @@ const CardVersions = ({ isLoading = false, cards }: CardVersionsProps) => {
                     <Tab
                         key={card.version}
                         title={<span className="text-medium font-semibold">{label}</span>}
-                        className="flex flex-col items-center"
+                        className="flex justify-center flex-wrap md:flex-col md:items-center md:flex-nowrap"
                     >
                         <CardPreview card={renderPlaytestingCard(card)} className={card.type === "plot" ? "max-w-98" : "max-w-64"}/>
                         {card.note && (
-                            <Accordion>
-                                <AccordionItem title={<span className="text-small italic">Expand for details</span>} textValue="Change Note" classNames={{ trigger: "pb-0" }}>
-                                    <Divider className="mb-2"/>
-                                    <Card className="p-2">
-                                        <div className="text-small font-semibold capitalize"><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
-                                        <div className="text-tiny italic p-1">{card.note.text}</div>
-                                    </Card>
-                                    {/* TODO: Add updated date here */}
-                                </AccordionItem>
-                            </Accordion>
+                            <div className="grow min-w-64">
+                                <Accordion>
+                                    <AccordionItem title={<span className="text-small italic">Expand for details</span>} textValue="Change Note" classNames={{ trigger: "pb-0" }}>
+                                        <Divider className="mb-2"/>
+                                        <div className="space-y-1">
+                                            <Card className="p-2" radius="sm">
+                                                <div className="text-small font-semibold capitalize"><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
+                                                <div className="text-tiny italic p-1">{card.note.text}</div>
+                                            </Card>
+                                            <Card className="p-2" radius="sm">
+                                                <div className="text-small">
+                                                    <span><FontAwesomeIcon icon={faPenToSquare}/> {format(new Date(card.updated))}</span>
+                                                </div>
+                                            </Card>
+                                        </div>
+                                    </AccordionItem>
+                                </Accordion>
+                            </div>
                         )}
                     </Tab>
                 );
@@ -171,6 +181,7 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
         delete draft.note;
         delete draft.github;
         delete draft.release;
+        delete draft.discord;
         draft.latest = false;
         draft.implemented = false;
         setEditing(draft);
@@ -203,18 +214,32 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
             )}
             <Divider className="my-2"/>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1">
-                <PermissionGate requires={Permission.CREATE_CARDS}>
-                    {!draft && latest && <Button onPress={() => onNewDraft(latest)} startContent={<FontAwesomeIcon icon={faStar} className="text-small md:text-medium"/>} className="text-small md:text-medium">New Draft</Button>}
-                </PermissionGate>
-                <PermissionGate requires={Permission.EDIT_CARDS}>
-                    {draft && <Button onPress={() => setEditing(draft)} startContent={<FontAwesomeIcon icon={faPencil}/>} className="text-small md:text-medium">Edit Draft</Button>}
-                </PermissionGate>
-                <PermissionGate requires={Permission.DELETE_CARDS}>
-                    {draft && <Button color="danger" onPress={() => setDeleting(draft)} startContent={<FontAwesomeIcon icon={faTrash} className="text-small md:text-medium"/>} className="text-small md:text-medium">Delete Draft</Button>}
-                </PermissionGate>
-                <PermissionGate requires={Permission.DISCORD_CARD_FORUM}>
-                    <Button isDisabled as={Link} href={""} target="_blank" startContent={<FontAwesomeIcon icon={faDiscord} className="text-small md:text-medium"/>} className="text-small md:text-medium">Join Discussion</Button>
-                </PermissionGate>
+                {!latest?.release && (
+                    <>
+                        <PermissionGate requires={Permission.CREATE_CARDS}>
+                            {!draft && latest && <Button onPress={() => onNewDraft(latest)} startContent={<FontAwesomeIcon icon={faStar} className="text-small md:text-medium"/>} className="text-small md:text-medium">New Draft</Button>}
+                        </PermissionGate>
+                        <PermissionGate requires={Permission.EDIT_CARDS}>
+                            {draft && <Button onPress={() => setEditing(draft)} startContent={<FontAwesomeIcon icon={faPencil}/>} className="text-small md:text-medium">Edit Draft</Button>}
+                        </PermissionGate>
+                        <PermissionGate requires={Permission.DELETE_CARDS}>
+                            {draft && <Button color="danger" onPress={() => setDeleting(draft)} startContent={<FontAwesomeIcon icon={faTrash} className="text-small md:text-medium"/>} className="text-small md:text-medium">Delete Draft</Button>}
+                        </PermissionGate>
+                    </>
+                )}
+                {latest?.discord?.messageUrl && (
+                    <PermissionGate requires={Permission.DISCORD_CARD_FORUM}>
+                        <Button
+                            as={Link}
+                            href={latest.discord.messageUrl.replace("https://", "discord://")}
+                            target="_blank"
+                            startContent={<FontAwesomeIcon icon={faDiscord} className="text-small md:text-medium"/>}
+                            className="text-small md:text-medium"
+                        >
+                            Join Discussion
+                        </Button>
+                    </PermissionGate>
+                )}
             </div>
             <StatusBoard latest={latest} draft={draft} />
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `'${card.name}' ver. ${card.version} has been ${draft ? "edited" : "created"}` })}/>
@@ -229,8 +254,11 @@ const StatusBoard = ({ latest, draft }: StatusBoardProps) => {
     return (
         <div className="py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
             <ImplementStatus card={draft ?? latest}/>
-            <GithubStatus card={draft ?? latest}/>
+            {!latest?.release && <GithubStatus card={draft ?? latest}/>}
             <DevelopmentStatus latest={latest} draft={draft}/>
+            <PermissionGate requires={Permission.SAVE_RENDER_FILES}>
+                {!draft && <ImageStatus card={latest}/>}
+            </PermissionGate>
         </div>
     );
 };
@@ -303,6 +331,7 @@ const DeckSummaries = ({ isLoading = false, cards, reviews, safe = true }: DeckS
     return (
         <ScrollShadow className="flex flex-col gap-1 min-h-20 max-h-98 p-1">
             {sorted.map(([url, { review, card, deck }]) => {
+                const agendas = [...deck.agendas].reverse();
                 const getColsClassName = (deck: IDecklist) => {
                     switch (deck.agendas.length) {
                         case 2:
@@ -323,8 +352,8 @@ const DeckSummaries = ({ isLoading = false, cards, reviews, safe = true }: DeckS
                         <Card className="p-2 w-full">
                             <div className="flex gap-1">
                                 <div className={classNames("grid gap-0.5 flex-1", getColsClassName(deck))}>
-                                    <CardImage key={deck.faction} card={deck.faction} className="flex-1"/>
-                                    {deck.agendas.map((code) => <CardImage key={code} card={code} className="flex-1"/>)}
+                                    <CardImage key={deck.faction} card={deck.faction} className="rounded-sm"/>
+                                    {agendas.map((code) => <CardImage key={code} card={code} className="rounded-sm"/>)}
                                 </div>
                                 <div className="flex flex-col flex-2 px-1">
                                     <div className="text-small sm:text-medium lg:text-large font-semibold">

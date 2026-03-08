@@ -9,14 +9,14 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
 
     if (card?.implemented) {
         return (
-            <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink}/></Link>}>
+            <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink} className="text-xl"/></Link>}>
                 <span>Implemented {card.draft && <Tooltip content="Requires a Playtesting Update"><FontAwesomeIcon icon={faWarning} className="text-orange-500 animate-pulse"/></Tooltip>}</span>
             </Alert>
         );
     } else {
         return (
-            <Alert color="warning" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink}/></Link>}>
-                Not Implemented
+            <Alert color="warning" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink} className="text-xl"/></Link>}>
+                <span className="text-sm">Not Implemented</span>
             </Alert>
         );
     }
