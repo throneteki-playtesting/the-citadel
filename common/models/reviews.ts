@@ -20,6 +20,10 @@ export interface IPlaytestReview extends IAuditable {
     decks: (DeckLink | DecklistLink)[],
     played: number,
     statements: Statements,
+    discord?: {
+        messageUrl?: string,
+        lastSynced?: Date
+    },
     additional?: string
 }
 

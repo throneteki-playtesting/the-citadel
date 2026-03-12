@@ -77,14 +77,7 @@ router.post("/",
         [Segments.BODY]: Schemas.PlaytestingReview.Draft
     }),
     asyncHandler<unknown, unknown, IPlaytestReview, unknown>(async (req, res) => {
-        const body = req.body;
-
-        const created = new Date();
-        let review = {
-            ...body,
-            created,
-            updated: created
-        } as IPlaytestReview;
+        let review = req.body;
 
         review = await dataService.reviews.create(review);
 
@@ -108,19 +101,18 @@ router.put("/:project/:number/:version/:reviewer",
         return !!review && hasPermission(user, Permission.EDIT_REVIEWS) || validate(user, Permission.MAKE_REVIEWS, (user) => user.discordId === review.reviewer);
     }),
     celebrate({
-        [Segments.BODY]: Schemas.PlaytestingReview.Full
+        [Segments.BODY]: Schemas.PlaytestingReview.Draft
     }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
-        const body = req.body;
+        let review = req.body;
 
-        body.project = project;
-        body.number = number;
-        body.version = version;
-        body.reviewer = reviewer;
-        body.updated = new Date();
+        review.project = project;
+        review.number = number;
+        review.version = version;
+        review.reviewer = reviewer;
 
-        const review = await dataService.reviews.update(body);
+        review = await dataService.reviews.update(review);
 
         res.status(StatusCodes.OK).json(review);
     })

@@ -17,7 +17,7 @@ const SubmitReview = () => {
 
     const { project, number } = useMemo(() => ({
         project: parseNumber(searchParams.get("project")),
-        number: parseNumber(searchParams.get("card"))
+        number: parseNumber(searchParams.get("number"))
     }), [searchParams]);
 
     return (

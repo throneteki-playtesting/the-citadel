@@ -2,7 +2,6 @@ import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { logger } from "@/services";
 import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore } from "discord.js";
-import { updateFormData } from "../processing/reviews";
 import { requestContext } from "@/middleware/context";
 import { authDiscordUser } from "@/middleware/auth";
 
@@ -57,24 +56,6 @@ class DiscordService {
                 }
             } catch (err) {
                 logger.error(err);
-            }
-        });
-
-        this.client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-            if (!this.isGuild(newMember.guild)) {
-                return;
-            }
-            const playtesterRole = await this.findRoleByName(newMember.guild, "Playtesting Team");
-            if (!playtesterRole) {
-                logger.error(`Detected user "${newMember.nickname || newMember.displayName}" has been updated in guild "${newMember.guild.name}", but "Playtesting Team" role is missing`);
-                return;
-            }
-            const oldHas = oldMember.roles.cache.has(playtesterRole.id);
-            const newHas = newMember.roles.cache.has(playtesterRole.id);
-            // If user lost or gained role
-            if ((oldHas !== newHas)) {
-                logger.info(`Detected user "${newMember.nickname || newMember.displayName}" has ${newHas ? "gained" : "lost"} the "Playtesting Team" role. Updating form names...`);
-                await updateFormData();
             }
         });
 

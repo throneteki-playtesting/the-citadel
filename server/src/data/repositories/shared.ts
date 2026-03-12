@@ -52,5 +52,7 @@ export abstract class AuditableRepository<T extends IAuditable> implements IRepo
         return Array.isArray(updating) ? result : result[0];
     }
 
-    public abstract destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<T[]>;
+    public async destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<T[]> {
+        return await this.database.destroy(destroying);
+    }
 }

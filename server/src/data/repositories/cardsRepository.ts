@@ -1,8 +1,8 @@
-import { BulkWriteOptions, DeleteOptions, MongoClient, Sort } from "mongodb";
+import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
 import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
-import { DeepPartial, SingleOrArray, Sortable } from "common/types";
+import { DeepPartial, SingleOrArray } from "common/types";
 import { flatten } from "flat";
 import { gt, eq, compare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
@@ -27,25 +27,14 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
             synced = await syncCardForum(synced);
             data = await super.update(synced, false);
         } catch (err) {
-            logger.warn("Failed to sync cards after create", { cause: err });
+            logger.warn(new Error("Failed to sync cards after create", { cause: err }));
         }
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public async read(reading?: SingleOrArray<DeepPartial<IPlaytestCard>>, orderBy?: Sortable<IPlaytestCard>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as Sort : undefined;
-        const limit = perPage;
-        const skip = (page - 1) * perPage;
-        return await this.database.read(reading, { sort, limit, skip });
-    }
-
-    public async count(counting?: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        return await this.database.count(counting);
-    }
-
-    public async update(updating: IPlaytestCard, upsert?: boolean): Promise<IPlaytestCard>;
-    public async update(updating: IPlaytestCard[], upsert?: boolean): Promise<IPlaytestCard[]>;
-    public async update(updating: SingleOrArray<IPlaytestCard>, upsert = true) {
+    public override async update(updating: IPlaytestCard, upsert?: boolean): Promise<IPlaytestCard>;
+    public override async update(updating: IPlaytestCard[], upsert?: boolean): Promise<IPlaytestCard[]>;
+    public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true) {
         let data = asArray(updating);
         data = await super.update(data, upsert);
         try {
@@ -53,12 +42,12 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
             synced = await syncCardForum(synced);
             data = await super.update(synced, false);
         } catch (err) {
-            logger.warn("Failed to sync cards after update", { cause: err });
+            logger.warn(new Error("Failed to sync cards after update", { cause: err }));
         }
         return Array.isArray(updating) ? data : data[0];
     }
 
-    public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
+    public override async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
         const result = await this.database.destroy(destroying);
         try {
             await deleteImage(result);
@@ -67,7 +56,7 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
                 await deleteDraft(draft);
             }
         } catch (err) {
-            logger.warn("Failed to sync cards after destroy", { cause: err });
+            logger.warn(new Error("Failed to sync cards after destroy", { cause: err }));
         }
         return result;
     }
@@ -191,13 +180,6 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         // If the card was updated in the recent changes, then use that. Otherwise, use original card.
         const result = syncingArray.map((card) => allChanges.find(({ project, number, version }) => project === card.project && number === card.number && version === card.version) ?? card);
         return Array.isArray(syncing) ? result : result[0];
-    }
-
-
-    protected override async bulkWrite(cards: IPlaytestCard[], { upsert, ...options }: BulkWriteOptions & { upsert?: boolean } = { upsert: true }): Promise<IPlaytestCard[]> {
-
-
-        return super.bulkWrite(cards, { upsert, ...options });
     }
 }
 // class CardDataSource extends GASDataSource<IPlaytestCard> {

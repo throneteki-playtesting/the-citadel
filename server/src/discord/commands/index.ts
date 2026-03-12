@@ -1,15 +1,11 @@
 import { AutocompleteInteraction, ChatInputCommandInteraction } from "discord.js";
 import { dataService, logger } from "@/services";
-// import refresh from "./refresh";
 import sync from "./sync";
-import finalise from "./finalise";
 import { sortBy } from "lodash-es";
 import { Code } from "common/models/cards";
 
 export const commands = {
-    sync,
-    // refresh,
-    finalise
+    sync
 };
 
 export class FollowUpHelper {

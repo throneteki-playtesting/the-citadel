@@ -26,11 +26,11 @@ export const emojis = {
     updated: ":arrow_double_up:",
     bugfixed: ":wrench:",
     other: ":eight_spoked_asterisk:",
-    "Strongly agree": ":thumbsup::thumbsup:",
-    "Somewhat agree": ":thumbsup:",
-    "Neither agree nor disagree": ":fist:",
-    "Somewhat disagree": ":thumbsdown:",
-    "Strongly disagree": ":thumbsdown::thumbsdown:",
+    "strongly agree": ":thumbsup::thumbsup:",
+    "somewhat agree": ":thumbsup:",
+    "neither agree nor disagree": ":fist:",
+    "somewhat disagree": ":thumbsdown:",
+    "strongly disagree": ":thumbsdown::thumbsdown:",
     white_check_mark: "\u2705"
 } as { [emoji: string]: string };
 

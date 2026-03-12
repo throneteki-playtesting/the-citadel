@@ -1,8 +1,0 @@
-<% if (member) { %><@<%= member.id %>><% } else { %><%= review.reviewer %> (Not in discord)<% } %> has updated this review. <i>If the reviewer did not make this update, please contact a manager or admin.</i>
-
-The following changes were made:
-<% for(const change of changed) { -%>
-- <%- change -%><br>
-<% } %>
-
-<i>Please check pinned message for latest version of this review.</i>

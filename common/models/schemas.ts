@@ -130,7 +130,7 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.date()
+        createdBy: Joi.string()
     }),
     Partial: Card.Partial.keys({
         project: Joi.number(),
@@ -160,7 +160,7 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.date()
+        createdBy: Joi.string()
     }),
     Draft: Card.Full.keys({
         project: Joi.number().required(),
@@ -193,7 +193,7 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.date()
+        createdBy: Joi.string()
     })
 };
 
@@ -290,7 +290,9 @@ export const Project = {
         formUrl: Joi.string(),
         emoji: Joi.string(),
         created: Joi.date().required(),
-        updated: Joi.date().required()
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
     }),
     Partial: Joi.object({
         number: Joi.number(),
@@ -318,7 +320,9 @@ export const Project = {
         formUrl: Joi.string(),
         emoji: Joi.string(),
         created: Joi.date(),
-        updated: Joi.date()
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     }),
     Draft: Joi.object({
         number: Joi.number().required(),
@@ -344,7 +348,11 @@ export const Project = {
         milestone: Joi.number(),
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
-        emoji: Joi.string()
+        emoji: Joi.string(),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     })
 };
 
@@ -358,9 +366,10 @@ export const PlaytestingUpdate = {
             Joi.string().regex(Regex.SemanticVersion)
         ).required(),
         pullRequest: Joi.string(),
-        createdBy: Joi.string().required(),
         created: Joi.date().required(),
-        updated: Joi.date().required()
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
     }),
     Partial: Joi.object({
         project: Joi.number(),
@@ -371,9 +380,10 @@ export const PlaytestingUpdate = {
             Joi.string().regex(Regex.SemanticVersion)
         ),
         pullRequest: Joi.string(),
-        createdBy: Joi.string(),
         created: Joi.date(),
-        updated: Joi.date()
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     }),
     Draft: Joi.object({
         project: Joi.number().required(),
@@ -381,7 +391,11 @@ export const PlaytestingUpdate = {
         cardChanges: Joi.object().pattern(
             Joi.number(),
             Joi.string().regex(Regex.SemanticVersion)
-        ).required()
+        ).required(),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     })
 };
 
@@ -401,8 +415,14 @@ export const PlaytestingReview = {
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
         created: Joi.date().required(),
-        updated: Joi.date().required()
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
     }),
     Partial: Joi.object({
         reviewer: Joi.string(),
@@ -419,8 +439,14 @@ export const PlaytestingReview = {
             releasable: Joi.string().valid(...statementAnswers)
         }),
         additional: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
         created: Joi.date(),
-        updated: Joi.date()
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     }),
     Draft: Joi.object({
         reviewer: Joi.string().required(),
@@ -436,7 +462,15 @@ export const PlaytestingReview = {
             balanced: Joi.string().required().valid(...statementAnswers),
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
-        additional: Joi.string()
+        additional: Joi.string(),
+        discord: Joi.object({
+            messageUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
     })
 };
 

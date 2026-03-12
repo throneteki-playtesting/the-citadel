@@ -591,7 +591,14 @@ const ReviewSummaries = ({ project, number, reviews, cards }: ReviewSummariesPro
                                             <span className="hidden sm:inline">{card.latest ? "Edit" : "Submit New"}</span>
                                         </Button>
                                     </PermissionGate>
-                                    <Button isDisabled onPress={() => true} variant="light" className="px-unit-0 sm:px-unit-4 min-w-10 sm:min-w-24">
+                                    <Button
+                                        as={Link}
+                                        variant="light"
+                                        isDisabled={!review.discord?.messageUrl}
+                                        href={review.discord?.messageUrl?.replace("https://", "discord://")}
+                                        target="_blank"
+                                        className="px-unit-0 sm:px-unit-4 min-w-10 sm:min-w-24"
+                                    >
                                         <FontAwesomeIcon icon={faDiscord}/>
                                         <span className="hidden sm:inline">Join Discussion</span>
                                     </Button>
