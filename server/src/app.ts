@@ -5,6 +5,7 @@ import compression from "compression";
 import cors from "cors";
 import api from "./routes/API/index";
 import thronesdb from "./routes/thronesdb/index";
+import webhooks from "./routes/webhooks";
 import auth from "./routes/auth/index";
 import { logger } from "@/services";
 import swaggerRouter from "./swagger";
@@ -33,6 +34,8 @@ function initialise() {
 
     // Register thronesdb endpoints
     app.use("/thronesdb", thronesdb);
+
+    app.use("/webhooks", webhooks);
 
     // Route authentication services (eg. Discord)
     app.use("/auth", auth);

@@ -4,14 +4,13 @@ import { IAuditable } from "./shared";
 
 export const factions = ["baratheon", "greyjoy", "lannister", "martell", "thenightswatch", "stark", "targaryen", "tyrell", "neutral"] as const;
 export const types = ["character", "location", "attachment", "event", "plot", "agenda"] as const;
-export const noteTypes = ["updated", "reworked", "replaced", "implemented"] as const;
-export const githubStatuses = ["open", "closed", "complete"] as const;
+export const noteTypes = ["updated", "reworked", "replaced"] as const;
+export const githubStatuses = ["open", "closed"] as const;
 export const challengeIcons = ["military", "intrigue", "power"] as const;
 export const plotStats = ["income", "initiative", "claim", "reserve"] as const;
 export type Faction = typeof factions[number];
 export type Type = typeof types[number];
 export type NoteType = typeof noteTypes[number];
-export type GithubStatus = typeof githubStatuses[number];
 export type ChallengeIcon = typeof challengeIcons[number];
 export type PlotStat = typeof plotStats[number];
 
@@ -77,10 +76,14 @@ export interface IPlaytestCard extends ICard, IAuditable {
     draft: boolean,
     note?: NoteDetails,
     playtesting?: SemanticVersion,
-    github?: GithubDetails,
     release?: ReleaseDetails,
     implemented: boolean,
     suggestionId?: string,
+    github?: {
+        status?: typeof githubStatuses[number],
+        issueUrl?: string,
+        lastSynced?: Date
+    },
     discord?: {
         messageUrl?: string,
         lastSynced?: Date
@@ -91,11 +94,6 @@ export interface IPlaytestCard extends ICard, IAuditable {
 export interface NoteDetails {
     type: NoteType,
     text: string
-}
-
-export interface GithubDetails {
-    status: GithubStatus,
-    issueUrl: string
 }
 
 export interface ReleaseDetails {

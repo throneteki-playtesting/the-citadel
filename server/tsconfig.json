@@ -20,6 +20,6 @@
 		"strict": false,
 		"experimentalDecorators": true
 	},
-	"include": ["src", "../common"],
+	"include": ["src", "../common", "env.d.ts"],
 	"exclude": ["node_modules", "dist"]
 }

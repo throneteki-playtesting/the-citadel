@@ -1,145 +1,329 @@
-import fs from "fs";
-import ejs from "ejs";
-import { emojis, githubify } from "./utils";
-import path from "path";
-import { fileURLToPath } from "url";
-import { NoteType } from "common/models/cards";
-import PlaytestingCard from "@/data/models/cards/playtestingCard";
 import { IProject } from "common/models/projects";
+import { getMilestone } from "./milestones";
+import type { Endpoints } from "@octokit/types";
+import { IPlaytestCard } from "common/models/cards";
+import { dataService, githubService, logger } from "@/services";
+import { isInitial, parseCardCode } from "common/utils";
+import { GithubContext } from ".";
+import { syncImage } from "@/rendering/hosting";
+import { emojis } from "./utils";
+import { getTimeLockedImageUrl, pascalCase } from "@/utils";
 
-export type GeneratedIssue = {
-    title: string,
-    body: string,
-    labels: string[],
-    milestone: number
-};
-export type GeneratedPullRequest = {
-    title: string,
-    body: string,
-    labels: string[],
-    milestone: number
-};
+type Issue = Endpoints["GET /repos/{owner}/{repo}/issues"]["response"]["data"][number];
 
-type NotePackage = { icons: string, title: string, text: string };
+export async function syncIssues(cards: IPlaytestCard[]) {
+    const projects = await dataService.projects.read([...new Set(cards.map((card) => card.project))].map((number) => ({ number })));
+    const context = githubService.getContext();
 
-export class Issue {
-    static forCard(project: IProject, card: PlaytestingCard) {
-        const milestone = project.milestone;
-        const type = card.note?.type || (card.isPreTesting && card.implementStatus !== "implemented" ? "implemented" : null);
-        if (!type) {
-            return null;
+    // Contains cached issues, split by project number
+    const cachedIssues: Record<number, Issue[]> = {};
+    const getIssuesForProject = async (project: IProject) => {
+        let issues = cachedIssues[project.number];
+        if (!issues) {
+            const milestone = await getMilestone(project);
+            issues = await context.client.paginate(context.client.rest.issues.listForRepo, {
+                owner: context.owner,
+                repo: context.repo,
+                milestone: milestone.toString(),
+                labels: "automated",
+                state: "all",
+                per_page: 100
+            });
+
+            cachedIssues[project.number] = issues;
         }
-        const slimCard = {
-            name: card.name,
-            version: card.version,
-            imageUrl: card.imageUrl,
-            note: card.note?.text
-        };
-        const previousSlimCard = () => {
-            if (!card.playtesting) {
-                throw Error("Playtesting version is missing or invalid");
-            }
-            const version = card.playtesting;
-            const imageUrl = card.previousImageUrl;
-            return { version, imageUrl };
-        };
-        let title = `${card.code} | ${project.code} - `;
 
-        switch (type) {
-            case "replaced": {
-                title += `Replace with ${card.toString()}`;
-                const replaced = slimCard;
-                const previous = previousSlimCard();
-                const body = Issue.renderTemplate({ type, replaced, previous, project });
-                const labels = ["automated", "implement-card", "update-card"];
-                return { title, body, labels, milestone } as GeneratedIssue;
-            }
-            case "reworked": {
-                title += `Rework as ${card.toString()}`;
-                const reworked = slimCard;
-                const previous = previousSlimCard();
-                const body = Issue.renderTemplate({ type, reworked, previous, project });
-                const labels = ["automated", "update-card"];
-                return { title, body, labels, milestone } as GeneratedIssue;
-            }
-            case "updated": {
-                title += `Update to ${card.toString()}`;
-                const updated = slimCard;
-                const previous = previousSlimCard();
-                const body = Issue.renderTemplate({ type, updated, previous, project });
-                const labels = ["automated", "update-card"];
-                return { title, body, labels, milestone } as GeneratedIssue;
-            }
-            case "implemented": {
-                title += `Implement ${card.toString()}`;
-                const implemented = slimCard;
-                const body = Issue.renderTemplate({ type, implemented, project });
-                const labels = ["automated", "implement-card"];
-                return { title, body, labels, milestone } as GeneratedIssue;
-            }
-            default: throw Error(`"${type}" is not a valid note type`);
-        }
-    }
-    static forUpdate(project: IProject, cards: PlaytestingCard[]) {
-        if (cards.length === 0) {
-            return null;
-        }
-        const milestone = project.milestone;
-        const noteTypeOrdered = ["replaced", "reworked", "updated", "implemented"] as NoteType[];
-        const notesUsed = new Set<NoteType>();
-        const notesMap = cards.reduce((map, card) => {
-            const noteType = card.note?.type;
-            // Only collate cards which have notes on them
-            if (noteType && noteTypeOrdered.includes(noteType)) {
-                // Set ensures we do not have duplicate icons
-                const icons = new Set<string>();
-                // Some cards can be updated, and can also be implemented in the same update
-                // For these, add "implemented" emoji first
-                if (card.implementStatus === "recently implemented") {
-                    icons.add(emojis["Implemented"]);
+        return issues;
+    };
+
+    const toUpdate: IPlaytestCard[] = [];
+    let needsUpdate = false;
+    for (let card of cards) {
+        try {
+            const project = projects.find((project) => project.number === card.project);
+            let isMissing = isIssueMissing(card);
+            if (isMissing) {
+                // Fetches issues for project (from cache, or github)
+                const projectIssues = await getIssuesForProject(project);
+                const existingIssue = projectIssues.find((i) => i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version));
+
+                if (existingIssue) {
+                    card.github = card.github ?? {};
+                    card.github.issueUrl = existingIssue.html_url;
+                    card.github.status = existingIssue.state as "open" | "closed";
+                    card.github.lastSynced = new Date(existingIssue.updated_at);
+
+                    isMissing = false;
+                    logger.info(`[Github] Missing issue found & attached to ${card.name} (${card.version})`);
                 }
-                // Add note type emoji
-                icons.add(emojis[noteType]);
-                const title = `${card.code} | ${card.name} v${card.version}`;
-                const text = card.note?.text || null;
-                const current = map.get(noteType) || [];
-                current.push({ icons: [...icons].join(""), title, text });
-                map.set(noteType, current);
-                // Add all icons to "notesUsed" set for legend
-                icons.forEach(notesUsed.add, notesUsed);
             }
-            return map;
-        }, new Map<NoteType, NotePackage[]>());
-
-        const notesLegend = noteTypeOrdered.filter((nt) => notesUsed.has(nt)).map((nt) => `${nt} = ${emojis[nt]}`).join(" | ");
-        const notes = noteTypeOrdered.map((nt) => notesMap.get(nt)).flat().filter((n) => n);
-        const number = project.version + 1;
-        const pdf = {
-            all: encodeURI(`${process.env.SERVER_HOST}/pdf/${project.code}/${number}_all.pdf`),
-            updated: cards.some((card) => card.isChanged) ? encodeURI(`${process.env.SERVER_HOST}/pdf/${project.code}/${number}_updated.pdf`) : undefined
-        };
-        const date = new Date().toDateString();
-        const body = Issue.renderTemplate({ type: "Playtesting Update", emojis, number, project, pdf, notesLegend, notes, date });
-
-        const title = `${project.code} | Playtesting Update ${number}`;
-        const labels = ["automated", "playtest-update"];
-
-        return { title, body, labels, milestone } as GeneratedPullRequest;
+            if (isMissing || isIssueOutdated(card)) {
+                needsUpdate = true;
+                if (isInitial(card)) {
+                    card = await syncInitial(card, project);
+                } else {
+                    switch (card.note?.type) {
+                        case "updated": {
+                            card = await syncUpdate(card, project);
+                            break;
+                        }
+                        case "reworked": {
+                            card = await syncRework(card, project);
+                            break;
+                        }
+                        case "replaced": {
+                            card = await syncReplace(card, project);
+                            break;
+                        }
+                        default: {
+                            logger.warn(`Attempted to sync issue for ${card.name} (${card.version}) with missing note type`);
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            logger.warn(new Error(`[Github] Failed to sync ${card.name} (${card.version})`, { cause: err }));
+        }
+        toUpdate.push(card);
     }
 
-    private static renderTemplate(data: ejs.Data) {
-        const { type, ...restData } = data;
-        const __dirname = path.dirname(fileURLToPath(import.meta.url));
-        const filePath = `${__dirname}/Templates/${type}.ejs`;
-        const file = fs.readFileSync(filePath).toString();
+    if (needsUpdate) {
+        cards = await dataService.cards.update(toUpdate, false, false);
+    }
+    return cards;
+}
+export async function clearIssues(cards: IPlaytestCard[]) {
+    const context = githubService.getContext();
+    for (const card of cards) {
+        try {
+            if (!isIssueMissing(card)) {
+                const { issueNumber } = extractFromURL(card.github.issueUrl);
+                const { data: issue } = await context.client.rest.issues.get({ issue_number: issueNumber, owner: context.owner, repo: context.repo });
+                await context.client.graphql(
+                    `mutation DeleteIssue($issueId: ID!) {
+                        deleteIssue(input: { issueId: $issueId }) {
+                            repository {
+                                id
+                            }
+                        }
+                    }`,
+                    { issueId: issue.node_id }
+                );
 
-        const jsonRepoData = {
-            name: "throneteki-json-data",
-            url: "https://github.com/throneteki-playtesting/throneteki-json-data"
-        };
-        const date = new Date().toDateString();
-        const render = ejs.render(file, { filename: filePath, jsonRepoData, date, emojis, ...restData });
+                delete card.github;
+            }
+        } catch (err) {
+            logger.warn(new Error(`[Github] Failed to clear issue for ${card.name} (${card.version})`, { cause: err }));
+        }
+    }
 
-        return githubify(render);
+    return cards;
+}
+
+/**
+ * Syncs initial cards (eg. to implement)
+ */
+async function syncInitial(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+    logger.info(`[Github] Syncing "initial" issue for ${card.name} (${card.version})`);
+    try {
+        context = context ?? githubService.getContext();
+        if (!isInitial(card)) {
+            new Error("Card must be initial version");
+        }
+        card = await syncImage(card);
+
+        const details = await issues.initial(card, project, context);
+        card = await internalSync(card, details, context);
+        return card;
+    } catch (err) {
+        throw new Error(`Error syncing issue for ${card.name} (${card.version})`, { cause: err });
     }
 }
+/**
+ * Syncs cards with a "updated" note type
+ */
+async function syncUpdate(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+    logger.info(`[Github] Syncing "update" issue for ${card.name} (${card.version})`);
+    try {
+        context = context ?? githubService.getContext();
+        if (card.note?.type !== "updated") {
+            new Error("Card must have a note type of \"updated\"");
+        }
+        card = await syncImage(card);
+        let previous = await dataService.cards.previous(card);
+        previous = await dataService.cards.sync(previous);
+
+        const details = await issues.updated(card, previous, project, context);
+        card = await internalSync(card, details, context);
+
+        return card;
+    } catch (err) {
+        throw new Error(`Error syncing issue for ${card.name} (${card.version})`, { cause: err });
+    }
+}
+/**
+ * Syncs cards with a "reworked" note type
+ */
+async function syncRework(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+    logger.info(`[Github] Syncing "rework" issue for ${card.name} (${card.version})`);
+    try {
+        context = context ?? githubService.getContext();
+        if (card.note?.type !== "reworked") {
+            new Error("Card must have a note type of \"reworked\"");
+        }
+        card = await syncImage(card);
+        let previous = await dataService.cards.previous(card);
+        previous = await dataService.cards.sync(previous);
+
+        const details = await issues.reworked(card, previous, project, context);
+        card = await internalSync(card, details, context);
+
+        return card;
+    } catch (err) {
+        throw new Error(`Error syncing issue for ${card.name} (${card.version})`, { cause: err });
+    }
+}
+/**
+ * Syncs cards with a "replaced" note type
+ */
+async function syncReplace(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+    logger.info(`[Github] Syncing "replace" issue for ${card.name} (${card.version})`);
+    try {
+        context = context ?? githubService.getContext();
+        if (card.note?.type !== "replaced") {
+            new Error("Card must have a note type of \"replaced\"");
+        }
+        card = await syncImage(card);
+        let previous = await dataService.cards.previous(card);
+        previous = await dataService.cards.sync(previous);
+
+        const details = await issues.replaced(card, previous, project, context);
+        card = await internalSync(card, details, context);
+
+        return card;
+    } catch (err) {
+        throw new Error(`Error syncing issue for ${card.name} (${card.version})`, { cause: err });
+    }
+}
+
+/**
+ * Handles internal logic for creating or updating an issue for a card, if appropriate.
+ */
+async function internalSync(card: IPlaytestCard, details: { title: string, body: string, labels: string[], milestone: number, owner: string, repo: string }, context: GithubContext) {
+    if (isIssueMissing(card)) {
+        const { data: issue } = await context.client.rest.issues.create(details);
+        logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
+        card.github = {
+            issueUrl: issue.html_url,
+            status: issue.state as "open" | "closed",
+            lastSynced: new Date()
+        };
+    } else {
+        const { issueNumber } = extractFromURL(card.github.issueUrl);
+        const { data: issue } = await context.client.rest.issues.update({ issue_number: issueNumber, ...details });
+        logger.info(`[Github] Updated issue #${issue.number} for ${card.name} (${card.version})`);
+        card.github.status = issue.state as "open" | "closed";
+        card.github.lastSynced = new Date();
+    }
+    return card;
+}
+
+function isIssueMissing(card: IPlaytestCard) {
+    return !card.github?.issueUrl;
+}
+function isIssueOutdated(card: IPlaytestCard) {
+    return !card.github?.lastSynced || card.updated > card.github.lastSynced;
+}
+
+function extractFromURL(url: string) {
+    const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
+    if (!match) throw new Error(`Invalid GitHub issue URL: ${url}`);
+    return { owner: match[1], repo: match[2], issueNumber: parseInt(match[3], 10) };
+}
+
+const issues = {
+    async initial(card: IPlaytestCard, project: IProject, context: GithubContext) {
+        const imageUrl = getTimeLockedImageUrl(card);
+        const title = `${card.code} | ${project.code} - Implement ${card.name} (${card.version})`;
+        const milestone = await getMilestone(project);
+        const body = `## :memo: Implementation requested for ${card.name} (${project.code})`
+            + "\n\n### What needs to be done?"
+            + "\nNew card needs to be added to this repository, which will require a card file to be created and potentially code implementation."
+            + `\n\n![image](${imageUrl})`
+            + "\n\n---"
+            + "\n\n### Implementation Steps"
+            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
+            + `\n2. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on above card.`
+            + `\n3. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
+            + "\n4. (Optional) Local testing. Test files are not required for playtesting."
+            + "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
+            + "\n\n---"
+            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const labels = ["automated", "implement-card"];
+
+        return { title, body, labels, milestone, owner: context.owner, repo: context.repo };
+    },
+    async updated(card: IPlaytestCard, previous: IPlaytestCard, project: IProject, context: GithubContext) {
+        const imageUrl = getTimeLockedImageUrl(card);
+        const previousImageUrl = getTimeLockedImageUrl(previous);
+        const title = `${card.code} | ${project.code} - Update ${card.name} (${card.version})`;
+        const milestone = await getMilestone(project);
+        const body = `## :memo: Update requested for ${card.name} (${project.code})`
+            + "\n\n### What needs to be done?"
+            + "\nUpdate this cards version and, if there are non-keyword textbox changes, update the card's code."
+            + "\n\nPrevious Version | New Version"
+            + "\n:-------------------------:|:-------------------------:"
+            + `\n![image](${previousImageUrl}) |![image](${imageUrl})`
+            + "\n\n### Change Notes"
+            + `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}`
+            + "\n\n---"
+            + "\n\n### Implementation Steps"
+            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
+            + `\n2. Update \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` to match the new version (if applicable).`
+            + `\n3. Within \`${pascalCase(card.name)}.js\`, update version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
+            + "\n4. (Optional) Local testing. Test files are not required for playtesting."
+            + "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
+            + "\n\n---"
+            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const labels = ["automated", "update-card"];
+        if (!previous.implemented) {
+            labels.push("implement-card");
+        }
+        return { title, body, labels, milestone, owner: context.owner, repo: context.repo };
+    },
+    async reworked(card: IPlaytestCard, previous: IPlaytestCard, project: IProject, context: GithubContext) {
+        // Same template for updated & reworked, except title
+        const title = `${card.code} | ${project.code} - Rework ${card.name} (${card.version})`;
+        const { body, labels, milestone, owner, repo } = await issues.updated(card, previous, project, context);
+        return { title, body, labels, milestone, owner, repo };
+    },
+    async replaced(card: IPlaytestCard, previous: IPlaytestCard, project: IProject, context: GithubContext) {
+        const imageUrl = getTimeLockedImageUrl(card);
+        const previousImageUrl = getTimeLockedImageUrl(previous);
+        const title = `${card.code} | ${project.code} - Replace with ${card.name} (${card.version})`;
+        const milestone = await getMilestone(project);
+        const body = `## :memo: Replacement requested to ${card.name} (${project.code})`
+            + "\n\n### What needs to be done?"
+            + "\nPrevious card should be deleted, and replacement card needs to be added to this repository, which will require a card file to be created and potentially code implementation."
+            + "\n\nPrevious Card | Replacement Card"
+            + "\n:-------------------------:|:-------------------------:"
+            + `\n![image](${previousImageUrl}) |![image](${imageUrl})`
+            + "\n\n### Change Notes"
+            + `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}`
+            + "\n\n---"
+            + "\n\n### Implementation Steps"
+            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
+            + `\n2. Delete \`server/game/cards/${project.code}/${pascalCase(previous.name)}.js\`, and any external code which was created explicitly for it (eg. new effects).`
+            + `\n3. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on replacement card.`
+            + `\n4. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
+            + "\n5. (Optional) Local testing. Test files are not required for playtesting."
+            + "\n6. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
+            + "\n\n---"
+            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const labels = ["automated", "update-card"];
+        if (!previous.implemented) {
+            labels.push("implement-card");
+        }
+        return { title, body, labels, milestone, owner: context.owner, repo: context.repo };
+    }
+};

@@ -30,7 +30,8 @@ const sync = {
             const project = parseInt(interaction.options.getString("project")) || undefined;
             const code = interaction.options.getString("card") as Code || undefined;
 
-            const cards = await dataService.cards.sync([{ project, code, latest: true }, { project, code, draft: true }]);
+            let cards = await dataService.cards.read([{ project, code, latest: true }, { project, code, draft: true }]);
+            cards = await dataService.cards.sync(cards);
             await FollowUpHelper.success(interaction, `Successfully synced ${cards.length} cards`);
         } catch (err) {
             logger.error(err);

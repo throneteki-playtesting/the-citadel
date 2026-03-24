@@ -1,5 +1,5 @@
 import { ActionRowBuilder, BaseMessageOptions, ButtonBuilder, ButtonStyle, EmbedBuilder, ForumChannel, Guild, GuildForumTag, Role } from "discord.js";
-import { emojis, colors } from "../utilities";
+import { emojis, colors } from "../utils";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
@@ -7,8 +7,7 @@ import { factionNames, isInitial, isPreview } from "common/utils";
 import { syncImage } from "@/rendering/hosting";
 import { capitalize } from "lodash-es";
 import { User } from "common/models/user";
-
-// type TemplateType = "preview" | "initial" | "newLatest" | "draft/primary" | "draft/updated" | "draft/deleted";
+import { getTimeLockedImageUrl } from "@/utils";
 
 /**
  * Creates any new threads & messages for cards which are missing their discordMessageUrl.
@@ -18,9 +17,12 @@ import { User } from "common/models/user";
 export async function syncCardForum(cards: IPlaytestCard[]) {
     const context = await getCardForumContext();
 
+    const toUpdate: IPlaytestCard[] = [];
+    let needsUpdate = false;
     for (let card of cards) {
         try {
             if (isMessageOutdated(card)) {
+                needsUpdate = true;
                 // Drafts & Regular releases are treated differently:
                 // - Draft will send a new message to the existing thread, and can be incrementally updated (sends as new message)
                 // - Regular will send a new thread, and shouldn't ever be updated (that's what drafts are for!)
@@ -38,7 +40,7 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                     const messageExists = !!card.discord?.messageUrl;
                     if (messageExists) {
                         // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
-                        logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update an existing message`);
+                        logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
                     } else {
                         const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
                         if (existingThread) {
@@ -62,6 +64,10 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
         } catch (err) {
             logger.warn(new Error(`[Discord] Failed to sync ${card.name} (${card.version})`, { cause: err }));
         }
+        toUpdate.push(card);
+    }
+    if (needsUpdate) {
+        cards = await dataService.cards.update(toUpdate, false, false);
     }
     return cards;
 }
@@ -256,7 +262,7 @@ export async function deleteDraft(card: IPlaytestCard) {
             throw new Error(`Found channel is not a thread with id: ${channelId}`);
         }
         const draftMessage = await channel.messages.fetch(messageId);
-        draftMessage.delete();
+        await draftMessage.delete();
 
         const { thread } = await getThreadFor(card);
         const starter = await thread.fetchStarterMessage();
@@ -352,7 +358,7 @@ function createMessageButtons(card: IPlaytestCard, previousUrl?: string) {
 }
 function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
     // Add a time component to force discord to see it as a new url/image (as it caches based on url)
-    const imageUrl = `${card.imageUrl}?t=${card.cardUpdated.getTime()}`;
+    const imageUrl = getTimeLockedImageUrl(card);
     let imageEmbed = new EmbedBuilder()
         .setColor(colors[card.faction])
         .setImage(imageUrl)

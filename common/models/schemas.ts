@@ -113,16 +113,17 @@ export const PlaytestingCard = {
             })
         }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
-        github: Joi.object({
-            status: Joi.string().required().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string().required()
-        }),
         implemented: Joi.boolean().required(),
         release: Joi.object({
             short: Joi.string().required(),
             number: Joi.number().required()
         }),
         suggestionId: Joi.string(),
+        github: Joi.object({
+            status: Joi.string().valid(...Cards.githubStatuses),
+            issueUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
         discord: Joi.object({
             messageUrl: Joi.string(),
             lastSynced: Joi.date()
@@ -130,7 +131,8 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string()
+        createdBy: Joi.string(),
+        cardUpdated: Joi.date()
     }),
     Partial: Card.Partial.keys({
         project: Joi.number(),
@@ -143,16 +145,17 @@ export const PlaytestingCard = {
             text: Joi.string()
         }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
-        github: Joi.object({
-            status: Joi.string().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string()
-        }),
         implemented: Joi.boolean(),
         release: Joi.object({
             short: Joi.string(),
             number: Joi.number()
         }),
         suggestionId: Joi.string(),
+        github: Joi.object({
+            status: Joi.string().valid(...Cards.githubStatuses),
+            issueUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
         discord: Joi.object({
             messageUrl: Joi.string(),
             lastSynced: Joi.date()
@@ -160,7 +163,8 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string()
+        createdBy: Joi.string(),
+        cardUpdated: Joi.date()
     }),
     Draft: Card.Full.keys({
         project: Joi.number().required(),
@@ -176,16 +180,17 @@ export const PlaytestingCard = {
             })
         }).when("version", { not: Joi.string().valid("0.0.0"), then: Joi.required() }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
-        github: Joi.object({
-            status: Joi.string().required().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string().required()
-        }),
         implemented: Joi.boolean(),
         release: Joi.object({
             short: Joi.string().required(),
             number: Joi.number().required()
         }),
         suggestionId: Joi.string(),
+        github: Joi.object({
+            status: Joi.string().valid(...Cards.githubStatuses),
+            issueUrl: Joi.string(),
+            lastSynced: Joi.date()
+        }),
         discord: Joi.object({
             messageUrl: Joi.string(),
             lastSynced: Joi.date()
@@ -193,7 +198,8 @@ export const PlaytestingCard = {
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string()
+        createdBy: Joi.string(),
+        cardUpdated: Joi.date()
     })
 };
 

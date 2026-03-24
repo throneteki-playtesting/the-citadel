@@ -37,7 +37,7 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
                 type: values[CardColumn.NoteType].toLowerCase() as Card.NoteType,
                 text: values[CardColumn.NoteText]
             } : undefined,
-            playtesting: values[CardColumn.PlaytestVersion] || undefined,
+            // playtesting: values[CardColumn.PlaytestVersion] || undefined,
             github: this.extractLinkText(values[CardColumn.GithubIssue], (link, text) => ({ status: text, issueUrl: link })) || undefined,
             release: values[CardColumn.PackShort] ? {
                 short: values[CardColumn.PackShort],
@@ -92,7 +92,7 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
         values[CardColumn.Illustrator] = model.illustrator || "";
         values[CardColumn.NoteType] = model.note ? model.note.type as string : "";
         values[CardColumn.NoteText] = model.note?.text || "";
-        values[CardColumn.PlaytestVersion] = model.playtesting || "";
+        // values[CardColumn.PlaytestVersion] = model.playtesting || "";
         values[CardColumn.GithubIssue] = model.github ? `<a href="${model.github.issueUrl}">${model.github.status}</a>` : "";
         values[CardColumn.PackShort] = model.release?.short || "";
         values[CardColumn.ReleaseNumber] = model.release?.number.toString() || "";

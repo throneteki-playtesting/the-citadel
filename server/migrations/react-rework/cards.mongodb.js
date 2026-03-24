@@ -67,6 +67,14 @@ allCards.forEach(card => {
             newDoc.code = `${newDoc.project}${newDoc.number + 500}`;
         }
 
+        // Update github
+        if (newDoc.github) {
+            if (newDoc.github.status === "complete") {
+                newDoc.github.status = "closed";
+            }
+            newDoc.github.lastSynced = now;
+        }
+
         // Faction mapping
         if (newDoc.faction && factionMap[newDoc.faction]) {
             newDoc.faction = factionMap[newDoc.faction];
@@ -87,6 +95,7 @@ allCards.forEach(card => {
         // Remove old properties
         delete newDoc.projectId;
         delete newDoc["note.type"];
+        delete newDoc.playtesting;
 
         // Track the latest version for each unique card (project + number)
         const key = `${newDoc.project}-${newDoc.number}`;

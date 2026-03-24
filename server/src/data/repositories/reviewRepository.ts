@@ -1,10 +1,9 @@
 import MongoDataSource from "./dataSources/mongoDataSource";
-import { MongoClient, Sort } from "mongodb";
+import { MongoClient } from "mongodb";
 import { logger } from "@/services";
 import { IPlaytestReview } from "common/models/reviews";
 import { asArray } from "common/utils";
-import { DeepPartial, SingleOrArray, Sortable } from "common/types";
-import { flatten } from "flat";
+import { DeepPartial, SingleOrArray } from "common/types";
 import { AuditableRepository } from "./shared";
 import { deleteInitial, syncPlaytestingReviews } from "@/discord/forums/playtestingReviews";
 
@@ -15,55 +14,58 @@ export default class ReviewsRepository extends AuditableRepository<IPlaytestRevi
         this.database = new MongoDataSource<IPlaytestReview>(mongoClient, "reviews", { project: 1, number: 1, version: 1, reviewer: 1 });
     }
 
-    public override async create(creating: IPlaytestReview): Promise<IPlaytestReview>;
-    public override async create(creating: IPlaytestReview[]): Promise<IPlaytestReview[]>;
-    public override async create(creating: SingleOrArray<IPlaytestReview>) {
+    public override async create(creating: IPlaytestReview, sync?: boolean): Promise<IPlaytestReview>;
+    public override async create(creating: IPlaytestReview[], sync?: boolean): Promise<IPlaytestReview[]>;
+    public override async create(creating: SingleOrArray<IPlaytestReview>, sync = true) {
         let data = asArray(creating);
         data = await super.create(data);
-        try {
-            const synced = await syncPlaytestingReviews(data);
-            data = await super.update(synced, false);
-        } catch (err) {
-            logger.warn(new Error("Failed to sync cards after create", { cause: err }));
+        if (sync) {
+            data = await this.sync(data);
         }
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async read(reading?: SingleOrArray<DeepPartial<IPlaytestReview>>, orderBy?: Sortable<IPlaytestReview>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as Sort : undefined;
-        const limit = perPage;
-        const skip = (page - 1) * perPage;
-        return await this.database.read(reading, { sort, limit, skip });
-    }
-
-    public async count(counting?: SingleOrArray<DeepPartial<IPlaytestReview>>) {
-        return await this.database.count(counting);
-    }
-
-    public override async update(updating: IPlaytestReview, upsert?: boolean): Promise<IPlaytestReview>;
-    public override async update(updating: IPlaytestReview[], upsert?: boolean): Promise<IPlaytestReview[]>;
-    public override async update(updating: SingleOrArray<IPlaytestReview>, upsert = true) {
+    public override async update(updating: IPlaytestReview, upsert?: boolean, sync?: boolean): Promise<IPlaytestReview>;
+    public override async update(updating: IPlaytestReview[], upsert?: boolean, sync?: boolean): Promise<IPlaytestReview[]>;
+    public override async update(updating: SingleOrArray<IPlaytestReview>, upsert = true, sync = true) {
         let data = asArray(updating);
         data = await super.update(data, upsert);
-        try {
-            const synced = await syncPlaytestingReviews(data);
-            data = await super.update(synced, false);
-        } catch (err) {
-            logger.warn(new Error("Failed to sync cards after update", { cause: err }));
+        if (sync) {
+            data = await this.sync(data);
         }
         return Array.isArray(updating) ? data : data[0];
     }
 
     public override async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestReview>>) {
-        const result = await this.database.destroy(destroying);
+        let data = await this.database.destroy(destroying);
+        data = await this.desync(data);
+        return data;
+    }
+
+    public async sync(syncing: IPlaytestReview): Promise<IPlaytestReview>;
+    public async sync(syncing: IPlaytestReview[]): Promise<IPlaytestReview[]>;
+    public async sync(syncing: SingleOrArray<IPlaytestReview>) {
+        let data = asArray(syncing);
         try {
-            for (const review of result) {
+            data = await syncPlaytestingReviews(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        return Array.isArray(syncing) ? data : data[0];
+    }
+
+    public async desync(desyncing: IPlaytestReview): Promise<IPlaytestReview>;
+    public async desync(desyncing: IPlaytestReview[]): Promise<IPlaytestReview[]>;
+    public async desync(desyncing: SingleOrArray<IPlaytestReview>) {
+        const data = asArray(desyncing);
+        try {
+            for (const review of data) {
                 await deleteInitial(review);
             }
         } catch (err) {
-            logger.warn(new Error("Failed to sync cards after destroy", { cause: err }));
+            logger.warn(err);
         }
-        return result;
+        return Array.isArray(desyncing) ? data : data[0];
     }
 }
 // class ReviewDataSource extends GASDataSource<IPlaytestReview> {

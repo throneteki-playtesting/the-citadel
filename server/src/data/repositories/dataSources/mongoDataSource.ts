@@ -32,9 +32,12 @@ export default class MongoDataSource<T> {
 
         // By default, MongoDB treats "undefined" as value not existing.
         // This converts any "undefined" to count as any value for existing
+        // and "null" to count as the value not existing
         for (const [key, value] of Object.entries(query)) {
             if (value === undefined) {
                 query[key] = { $exists: true };
+            } else if (value === null) {
+                query[key] = { $exists: false };
             }
         }
         return query as MongoFilter<T>;

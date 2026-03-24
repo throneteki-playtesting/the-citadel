@@ -5,8 +5,9 @@ import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { AccessTokenPayload } from "@/types";
 import * as Discord from "discord.js";
+import { createHmac, timingSafeEqual } from "crypto";
 
-export const authMiddleware = asyncHandler<unknown, unknown, unknown, unknown>(
+export const authMiddleware = asyncHandler(
     async (req, res, next) => {
         // TODO: Update to "integration token"
         if (process.env.NODE_ENV === "development" && req.header("Authorization")?.startsWith("Basic")) {
@@ -67,3 +68,26 @@ export async function authDiscordUser(member: Discord.APIGuildMember | Discord.G
 
     return user;
 }
+
+export const authGithubWebhook = asyncHandler(
+    async (req, res, next) => {
+        const signature = req.headers["x-hub-signature-256"] as string;
+        if (!signature) {
+            res.status(StatusCodes.UNAUTHORIZED).send("Missing signature");
+            return;
+        }
+
+        const hmac = createHmac("sha256", process.env.GITHUB_WEBHOOK_SECRET);
+        const digest = `sha256=${hmac.update(JSON.stringify(req.body)).digest("hex")}`;
+
+        if (!timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+            res.status(StatusCodes.UNAUTHORIZED).send("Invalid signature");
+            return;
+        }
+
+        // TODO: When Integrations are implemented, change this to a "GITHUB" integration app, rather than stephens user
+        const [user] = await dataService.users.read({ discordId: "120834530801221634" });
+        req["user"] = user;
+
+        next();
+    });

@@ -10,7 +10,6 @@ import { IPlaytestCard } from "../models/cards";
 class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
     public latest: T[] = [];
     public all: T[] = [];
-    public playtesting: T[] = [];
     public draft: T[] = [];
     [number: number]: ICardVersionCollection<T> | undefined;
 
@@ -38,7 +37,7 @@ class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
             }
 
             // Is draft
-            if (!item.playtesting || Ver.neq(item.playtesting, item.version)) {
+            if (item.draft) {
                 if (!vCollection.draft || Ver.gt(item.version, vCollection.draft.version)) {
                     vCollection.draft = item;
                 }
@@ -55,12 +54,6 @@ class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
             if (draft) {
                 pushSorted(this.draft, draft, compareFn);
             }
-
-            // Set playtesting on both number & version collections as we now know the actual latests
-            if (latest.playtesting && vCollection[latest.playtesting]) {
-                vCollection.playtesting = vCollection[latest.playtesting];
-                pushSorted(this.playtesting, vCollection[latest.playtesting], compareFn);
-            }
         }
     }
 
@@ -72,7 +65,6 @@ class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
 export interface ICardCollection<T> {
     latest: T[],
     all: T[],
-    playtesting: T[],
     draft: T[],
     [number: number]: ICardVersionCollection<T> | undefined
 }
@@ -80,7 +72,6 @@ export interface ICardCollection<T> {
 export interface ICardVersionCollection<T> {
     latest: T,
     all: T[],
-    playtesting?: T,
     draft?: T,
     [version: SemanticVersion]: T
 }

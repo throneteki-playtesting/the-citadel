@@ -7,7 +7,11 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
     const title = "Online Platform";
     const href = "https://playtesting.theironthrone.net"; // TODO: Make env variable?
 
-    if (card?.implemented) {
+    if (!card) {
+        return null;
+    }
+
+    if (card.implemented) {
         return (
             <Alert color="success" title={title} endContent={<Link href={href} target="_blank"><FontAwesomeIcon icon={faExternalLink} className="text-xl"/></Link>}>
                 <span>Implemented {card.draft && <Tooltip content="Requires a Playtesting Update"><FontAwesomeIcon icon={faWarning} className="text-orange-500 animate-pulse"/></Tooltip>}</span>

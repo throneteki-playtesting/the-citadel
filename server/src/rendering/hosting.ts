@@ -3,7 +3,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { SingleOrArray } from "common/types";
 import { asPDF, asPNG } from ".";
 import { asArray, generateReleaseImageUrl, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
-import { logger } from "@/services";
+import { dataService, logger } from "@/services";
 import { BatchRenderJobOptions } from "@/types";
 
 const baseUrl = process.env.S3_BASE_URL;
@@ -58,25 +58,24 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
     const rejected = results.filter((result) => result.status === "rejected");
     const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> => result.status === "fulfilled";
 
-    if (rejected.length === 0 && results.every(isFulfilled)) {
-        const unchanged = successful.length - uploaded.length;
+    if (rejected.length > 0) {
+        // Gracefully handle if one or more failed
         if (uploaded.length > 0) {
-            logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${unchanged > 0 ? ` (${unchanged} unchanged)` : ""}`);
-        } else {
-            logger.info(`[Hosting] No files uploaded to S3 bucket${unchanged > 0 ? ` (${unchanged} unchanged)` : ""}`);
+            // If any fail, delete all which were uploaded
+            logger.verbose(`[Hosting] Safely reverting ${uploaded.length} uploaded files`);
+            await deleteS3Files(uploaded);
         }
-
-        const responses = results.map((result) => result.value);
-        return Array.isArray(data) ? responses : responses[0];
+        throw new Error(`Failed to sync ${rejected.length} image(s)`, { cause: rejected.map((r) => r.reason) });
     }
 
-    // Gracefully handle if one or more failed
+    const unchanged = successful.length - uploaded.length;
     if (uploaded.length > 0) {
-        // If any fail, delete all which were uploaded
-        logger.verbose(`[Hosting] Safely reverting ${uploaded.length} uploaded files`);
-        await deleteS3Files(uploaded);
+        logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${unchanged > 0 ? ` (${unchanged} unchanged)` : ""}`);
     }
-    throw new Error(`Failed to sync ${rejected.length} image(s)`, { cause: rejected.map((r) => r.reason) });
+
+    let responses = results.filter(isFulfilled).map((result) => result.value);
+    responses = await dataService.cards.update(responses, false, false);
+    return Array.isArray(data) ? responses : responses[0];
 }
 
 async function isImageOutdated(card: IPlaytestCard) {

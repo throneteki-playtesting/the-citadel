@@ -1,7 +1,7 @@
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestReview, StatementQuestions } from "common/models/reviews";
 import { Guild, ForumChannel, GuildForumTag, BaseMessageOptions, EmbedBuilder, AttachmentBuilder, ButtonStyle, ActionRowBuilder, ButtonBuilder, GuildMember } from "discord.js";
-import { colors, emojis } from "../utilities";
+import { colors, emojis } from "../utils";
 import { capitalize } from "lodash-es";
 import { dataService, discordService, logger } from "@/services";
 import { factionNames, isPreview, parseCardCode } from "common/utils";
@@ -9,9 +9,12 @@ import { factionNames, isPreview, parseCardCode } from "common/utils";
 export async function syncPlaytestingReviews(reviews: IPlaytestReview[]) {
     const context = await getPlaytestingReviewContext();
 
+    const toUpdate: IPlaytestReview[] = [];
+    let needsUpdate = false;
     for (let review of reviews) {
         try {
             if (isMessageOutdated(review)) {
+                needsUpdate = true;
                 logger.info(`[Discord] Syncing ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
                 const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
                 const member = await context.guild.members.fetch(review.reviewer);
@@ -43,6 +46,11 @@ export async function syncPlaytestingReviews(reviews: IPlaytestReview[]) {
         } catch (err) {
             logger.warn(new Error(`[Discord] Failed to sync ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`, { cause: err }));
         }
+        toUpdate.push(review);
+    }
+
+    if (needsUpdate) {
+        reviews = await dataService.reviews.update(toUpdate, false, false);
     }
 
     return reviews;

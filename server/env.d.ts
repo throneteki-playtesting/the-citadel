@@ -10,6 +10,7 @@ declare namespace NodeJS {
         SERVER_HOST: string;
         CLIENT_PORT: number;
         CLIENT_HOST: string;
+        WEBHOOK_URL?: string;
         REDIS_PORT: string;
         REDIS_HOST: string;
 
@@ -29,13 +30,14 @@ declare namespace NodeJS {
         GITHUB_REPOSITORY: string;
         GITHUB_APP_ID: string;
         GITHUB_PRIVATE_KEY: string;
+        GITHUB_WEBHOOK_SECRET: string;
 
         DATABASE_NAME: string;
         DATABASE_URL: string;
 
         JWT_SECRET: string;
-        ACCESS_TOKEN_TTL: number;
-        REFRESH_TOKEN_TTL: number;
+        ACCESS_TOKEN_TTL: string;
+        REFRESH_TOKEN_TTL: string;
 
         S3_BASE_URL: string;
         S3_BUCKET: string;

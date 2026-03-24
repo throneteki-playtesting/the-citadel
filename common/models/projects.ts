@@ -2,6 +2,7 @@ import { SemanticVersion } from "common/utils";
 import { IAuditable } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
+export const githubStatuses = ["open", "closed"] as const;
 export type Type = typeof types[number];
 export type Code = `${number}`;
 
@@ -39,5 +40,10 @@ export interface IPlaytestingUpdate extends IAuditable {
     version: number,
     description?: string,
     cardChanges: Record<number, SemanticVersion>,
-    pullRequest?: string
+    github?: {
+        status?: typeof githubStatuses[number],
+        mergedAt?: Date,
+        pullRequestUrl?: string,
+        lastSynced?: Date
+    }
 }

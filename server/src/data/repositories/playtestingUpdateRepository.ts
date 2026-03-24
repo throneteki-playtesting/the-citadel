@@ -1,44 +1,48 @@
 import { IPlaytestingUpdate } from "common/models/projects";
 import MongoDataSource from "./dataSources/mongoDataSource";
-import { MongoClient, Sort } from "mongodb";
-import { DeepPartial, SingleOrArray, Sortable } from "common/types";
-import { IRepository } from "@/types";
-import { flatten } from "flat";
+import { MongoClient } from "mongodb";
 import { IPlaytestCard } from "common/models/cards";
+import { AuditableRepository } from "./shared";
+import { syncPullRequests } from "@/github/pullRequests";
+import { logger } from "@/services";
+import { SingleOrArray } from "common/types";
+import { asArray } from "common/utils";
 
-export default class PlaytestingUpdateRepository implements IRepository<IPlaytestingUpdate> {
+export default class PlaytestingUpdateRepository extends AuditableRepository<IPlaytestingUpdate> {
     public database: MongoDataSource<IPlaytestingUpdate>;
     constructor(mongoClient: MongoClient) {
+        super();
         this.database = new MongoDataSource<IPlaytestingUpdate>(mongoClient, "playtestingUpdates", { project: 1, version: 1 });
     }
 
-    public async create(creating: IPlaytestingUpdate): Promise<IPlaytestingUpdate>;
-    public async create(creating: IPlaytestingUpdate[]): Promise<IPlaytestingUpdate[]>;
-    public async create(creating: SingleOrArray<IPlaytestingUpdate>) {
-        const result = await this.database.create(creating);
-        return Array.isArray(creating) ? result : result[0];
+    public override async create(creating: IPlaytestingUpdate, sync?: boolean): Promise<IPlaytestingUpdate>;
+    public override async create(creating: IPlaytestingUpdate[], sync?: boolean): Promise<IPlaytestingUpdate[]>;
+    public override async create(creating: SingleOrArray<IPlaytestingUpdate>, sync = true) {
+        let data = asArray(creating);
+        data = await super.create(data);
+        if (sync) {
+            await this.sync();
+        }
+        return Array.isArray(creating) ? data : data[0];
     }
 
-    public async read(reading?: SingleOrArray<DeepPartial<IPlaytestingUpdate>>, orderBy?: Sortable<IPlaytestingUpdate>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as Sort : undefined;
-        const limit = perPage;
-        const skip = (page - 1) * perPage;
-        return await this.database.read(reading, { sort, limit, skip });
+    public override async update(updating: IPlaytestingUpdate, upsert?: boolean, sync?: boolean): Promise<IPlaytestingUpdate>;
+    public override async update(updating: IPlaytestingUpdate[], upsert?: boolean, sync?: boolean): Promise<IPlaytestingUpdate[]>;
+    public override async update(updating: SingleOrArray<IPlaytestingUpdate>, upsert = true, sync = true) {
+        let data = asArray(updating);
+        data = await super.update(data, upsert);
+        if (sync) {
+            await this.sync();
+        }
+        return Array.isArray(updating) ? data : data[0];
     }
 
-    public async count(counting?: SingleOrArray<DeepPartial<IPlaytestingUpdate>>) {
-        return await this.database.count(counting);
-    }
-
-    public async update(updating: IPlaytestingUpdate, upsert?: boolean): Promise<IPlaytestingUpdate>;
-    public async update(updating: IPlaytestingUpdate[], upsert?: boolean): Promise<IPlaytestingUpdate[]>;
-    public async update(updating: SingleOrArray<IPlaytestingUpdate>, upsert = true) {
-        const result = await this.database.update(updating, { upsert });
-        return Array.isArray(updating) ? result : result[0];
-    }
-
-    public async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestingUpdate>>) {
-        return await this.database.destroy(destroying);
+    public async sync() {
+        try {
+            await syncPullRequests();
+        } catch (err) {
+            logger.warn(err);
+        }
     }
 
     public async for(card: IPlaytestCard) {

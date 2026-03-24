@@ -4,11 +4,13 @@ import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
 import { DeepPartial, SingleOrArray } from "common/types";
 import { flatten } from "flat";
-import { gt, eq, compare } from "semver";
+import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { AuditableRepository } from "./shared";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
-import { logger } from "@/services";
+import { dataService, logger } from "@/services";
+import { clearIssues, syncIssues } from "@/github/issues";
+import { IPlaytestingUpdate } from "common/models/projects";
 
 export default class CardsRepository extends AuditableRepository<IPlaytestCard> {
     public database: CardMongoDataSource;
@@ -17,65 +19,103 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
         this.database = new CardMongoDataSource(mongoClient);
     }
 
-    public override async create(creating: IPlaytestCard): Promise<IPlaytestCard>;
-    public override async create(creating: IPlaytestCard[]): Promise<IPlaytestCard[]>;
-    public override async create(creating: SingleOrArray<IPlaytestCard>) {
+    public override async create(creating: IPlaytestCard, sync?: boolean): Promise<IPlaytestCard>;
+    public override async create(creating: IPlaytestCard[], sync?: boolean): Promise<IPlaytestCard[]>;
+    public override async create(creating: SingleOrArray<IPlaytestCard>, sync = true) {
         let data = asArray(creating);
         data = await super.create(data);
-        try {
-            let synced = await syncImage(data);
-            synced = await syncCardForum(synced);
-            data = await super.update(synced, false);
-        } catch (err) {
-            logger.warn(new Error("Failed to sync cards after create", { cause: err }));
+        if (sync) {
+            data = await this.sync(data);
         }
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async update(updating: IPlaytestCard, upsert?: boolean): Promise<IPlaytestCard>;
-    public override async update(updating: IPlaytestCard[], upsert?: boolean): Promise<IPlaytestCard[]>;
-    public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true) {
+    public override async update(updating: IPlaytestCard, upsert?: boolean, sync?: boolean): Promise<IPlaytestCard>;
+    public override async update(updating: IPlaytestCard[], upsert?: boolean, sync?: boolean): Promise<IPlaytestCard[]>;
+    public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true, sync = true) {
         let data = asArray(updating);
         data = await super.update(data, upsert);
-        try {
-            let synced = await syncImage(data);
-            synced = await syncCardForum(synced);
-            data = await super.update(synced, false);
-        } catch (err) {
-            logger.warn(new Error("Failed to sync cards after update", { cause: err }));
+        if (sync) {
+            data = await this.sync(data);
         }
         return Array.isArray(updating) ? data : data[0];
     }
 
     public override async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        const result = await this.database.destroy(destroying);
+        let data = await this.database.destroy(destroying);
+        data = await this.desync(data);
+        return data;
+    }
+
+    public async sync(syncing: IPlaytestCard): Promise<IPlaytestCard>;
+    public async sync(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
+    public async sync(syncing: SingleOrArray<IPlaytestCard>) {
+        let data = asArray(syncing);
         try {
-            await deleteImage(result);
-            const drafts = result.filter((card) => card.draft);
+            data = await syncImage(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        try {
+            data = await syncCardForum(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        try {
+            data = await syncIssues(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        try {
+            await dataService.playtestingUpdates.sync();
+        } catch (err) {
+            logger.warn(err);
+        }
+        return Array.isArray(syncing) ? data : data[0];
+    }
+
+    public async desync(desyncing: IPlaytestCard): Promise<IPlaytestCard>;
+    public async desync(desyncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
+    public async desync(desyncing: SingleOrArray<IPlaytestCard>) {
+        const data = asArray(desyncing);
+        try {
+            await deleteImage(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        try {
+            // TODO: Account for card forum threads, as well as draft, just in case.
+            const drafts = data.filter((card) => card.draft);
             for (const draft of drafts) {
                 await deleteDraft(draft);
             }
         } catch (err) {
-            logger.warn(new Error("Failed to sync cards after destroy", { cause: err }));
+            logger.warn(err);
         }
-        return result;
-    }
-
-    public async sync(syncing: SingleOrArray<DeepPartial<IPlaytestCard>>) {
-        let data = await this.read(syncing);
-        data = await syncImage(data);
-        data = await syncCardForum(data);
-        return data;
+        try {
+            await clearIssues(data);
+        } catch (err) {
+            logger.warn(err);
+        }
+        try {
+            await dataService.playtestingUpdates.sync();
+        } catch (err) {
+            logger.warn(err);
+        }
+        return Array.isArray(desyncing) ? data : data[0];
     }
 
     public async previous(card: { project: number, number: number, version: SemanticVersion }) {
         const all = await this.read({ project: card.project, number: card.number });
-        const sorted = all.sort((a, b) => compare(a.version, b.version));
-        const index = sorted.findIndex(v => eq(v.version, card.version));
-        if (index <= 0) {
-            return undefined;
-        }
-        return sorted[index - 1];
+        const lower = all.filter(item => lt(item.version, card.version));
+        const sorted = lower.sort((x, y) => rcompare(x.version, y.version));
+        return sorted.at(0);
+    }
+
+    public async forUpdate(playtestingUpdate: IPlaytestingUpdate) {
+        const filters = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ number: parseInt(number), version }));
+        const cards = await this.read(filters);
+        return cards;
     }
 
     protected override async applyAudit(auditing: IPlaytestCard, isNew: boolean): Promise<IPlaytestCard>;

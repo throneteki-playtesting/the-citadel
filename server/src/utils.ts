@@ -1,12 +1,12 @@
-import { ILabeledCard, NoteType } from "common/models/cards";
+import { ILabeledCard, IPlaytestCard, NoteType } from "common/models/cards";
 import { IGetResponse } from "./types";
 import { IDecklist } from "common/models/decks";
+import { camelCase, startCase } from "lodash-es";
 
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     "replaced": "major",
     "reworked": "minor",
-    "updated": "patch",
-    "implemented": undefined
+    "updated": "patch"
 };
 
 export function generateGetResponse<T>(items: T[], total?: number): IGetResponse<T> {
@@ -58,4 +58,20 @@ export function convertTDBCard(obj: any): ILabeledCard {
         workInProgress: obj.work_in_progress,
         label: obj.label
     };
+}
+
+/**
+ * Returns a card imageUrl which is locked to the time its values were last updated.
+ * This helps bypassing cache logic for other researches like discord or github, which retains an
+ * image based on the url rather than its last modified date.
+ */
+export function getTimeLockedImageUrl(card: IPlaytestCard) {
+    if (!card.imageUrl) {
+        throw new Error("Attempted to create time locked image url for card with no image");
+    }
+    return `${card.imageUrl}?t=${card.cardUpdated.getTime()}`;
+}
+
+export function pascalCase(value: string) {
+    return startCase(camelCase(value)).replace(/ /g, "");
 }
