@@ -287,6 +287,7 @@ const api = createApi({
                 ...mapTags(result?.project, "project", (project) => project.number)
             ]
         }),
+        // Syncing API
         syncCardImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
             query: (options) => {
                 const url = buildUrl(`projects/${options.project}/sync/images`, { number: options.number, version: options.version, latest: options.latest });
@@ -294,6 +295,9 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
         }),
+        // TODO: Add Sync Discord
+        // TODO: Add Sync Issues
+        // TODO: Add Sync PullRequest
         // Reviews API
         getReview: builder.query<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {

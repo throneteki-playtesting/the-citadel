@@ -49,14 +49,16 @@ export const githubWebhookMiddleware = asyncHandler(
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Missing signature");
         }
 
-        const rawToken = process.env.GITHUB_WEBHOOK_SECRET;
-        const hmac = createHmac("sha256", rawToken);
+        const secret = process.env.GITHUB_WEBHOOK_SECRET;
+        const hmac = createHmac("sha256", secret);
         const digest = `sha256=${hmac.update(JSON.stringify(req.body)).digest("hex")}`;
 
         if (!timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
         }
 
+        // TODO: Separate Github into its own integration, rather than using internal
+        const rawToken = await dataService.integrations.fetchInternalToken();
         const integration = await dataService.integrations.findByToken(rawToken);
         if (!integration) {
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");

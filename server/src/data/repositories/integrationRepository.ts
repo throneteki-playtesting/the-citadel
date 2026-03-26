@@ -45,7 +45,7 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
     }
 
     async fetchInternalToken() {
-        const rawToken = await dataService.redis.get(this.internalKey);
+        const rawToken = await dataService.redis.get(this.internalKey) as string;
         return rawToken;
     }
 

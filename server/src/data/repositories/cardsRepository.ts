@@ -62,7 +62,10 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
 
         // Client does not need to wait for syncing to complete
         if (source === "client") {
-            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
+            // Run image sync first (as others rely on it), then run the rest together
+            void syncs[0]().catch(err => logger.warn(err)).then(() => {
+                syncs.slice(1).forEach(fn => void fn().catch(err => logger.warn(err)));
+            });
         } else {
             for (const fn of syncs) {
                 try {

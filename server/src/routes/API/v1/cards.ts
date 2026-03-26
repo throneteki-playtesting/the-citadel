@@ -166,6 +166,7 @@ router.put("/:project/:number/draft",
         card.draft = true;
         card.latest = false;
         card.implemented = false;
+        delete card.imageUrl;
         delete card.github;
         delete card.release;
 

@@ -226,8 +226,8 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
                         </PermissionGate>
                     </>
                 )}
-                {latest?.discord?.messageUrl && (
-                    <PermissionGate requires={Permission.DISCORD_CARD_FORUM}>
+                <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                    {latest?.discord?.messageUrl &&
                         <Button
                             as={Link}
                             href={latest.discord.messageUrl.replace("https://", "discord://")}
@@ -237,8 +237,8 @@ const HeadingCard = ({ isLoading = false, project, number, draft, latest }: Head
                         >
                             Join Discussion
                         </Button>
-                    </PermissionGate>
-                )}
+                    }
+                </PermissionGate>
             </div>
             <StatusBoard latest={latest} draft={draft} />
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `'${card.name}' ver. ${card.version} has been ${draft ? "edited" : "created"}` })}/>
@@ -252,10 +252,10 @@ type HeadingCardProps = { isLoading?: boolean, project?: IProject, number: numbe
 const StatusBoard = ({ latest, draft }: StatusBoardProps) => {
     return (
         <div className="py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
-            <ImplementStatus card={draft ?? latest}/>
             <DevelopmentStatus latest={latest} draft={draft}/>
+            <ImplementStatus card={draft ?? latest}/>
             <PermissionGate requires={Permission.SAVE_RENDER_FILES}>
-                {!draft && <ImageStatus card={latest}/>}
+                <ImageStatus card={draft ?? latest}/>
             </PermissionGate>
         </div>
     );

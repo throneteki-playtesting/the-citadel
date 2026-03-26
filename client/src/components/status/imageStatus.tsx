@@ -7,7 +7,7 @@ import { ReactNode, useMemo } from "react";
 import { useCardSync } from "../../api/hooks";
 import { UIColor } from "../../types";
 
-type StatusData = { icon?: ReactNode, label: string, color: UIColor, onPress?: () => void };
+type StatusData = { icon?: ReactNode, label: string, color: UIColor, onPress?: () => void, href?: string };
 
 const ImageStatus = ({ card }: ImageStatusProps) => {
     const [syncCardImage, { isLoading: isSyncing }] = useSyncCardImagesMutation();
@@ -35,6 +35,7 @@ const ImageStatus = ({ card }: ImageStatusProps) => {
         }
 
         return {
+            href: card.imageUrl,
             color: "success",
             label: "Synced"
         };
@@ -46,6 +47,9 @@ const ImageStatus = ({ card }: ImageStatusProps) => {
     const alert = <Alert icon={data.icon} color={data.color} title="Image URL" className="h-full" hideIconWrapper description={data.label}></Alert>;
     if (data.onPress) {
         return <a className="cursor-pointer" onClick={data.onPress}>{alert}</a>;
+    }
+    if (data.href) {
+        return <a href={data.href} target={"_blank"}>{alert}</a>;
     }
     return alert;
 };

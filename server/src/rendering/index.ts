@@ -94,7 +94,7 @@ async function createJob(type: RenderType, cards: IRenderCard[], options?: Singl
 async function launchPuppeteer(defaultViewport?: Viewport) {
     return await puppeteer.launch({
         ...(defaultViewport ? { defaultViewport } : {}),
-        headless: false,
+        headless: true,
         args: [
             "--disable-features=IsolateOrigins",
             "--disable-site-isolation-trials",
