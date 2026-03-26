@@ -1,6 +1,5 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { Role, User } from "common/models/user";
 import { asArray, buildUrl, SemanticVersion } from "common/utils";
 import { clearUser } from "./authSlice";
 import { StatusCodes } from "http-status-codes";
@@ -8,6 +7,7 @@ import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
 import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestReview } from "common/models/reviews";
+import { Role, User } from "common/models/auth";
 
 export const baseUrl = import.meta.env.VITE_SERVER_HOST || "";
 const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "playtestingUpdate", "review"] as const;
@@ -70,9 +70,9 @@ const api = createApi({
             invalidatesTags: [{ type: "me" }]
         }),
         // Users API
-        authenticate: builder.query<User | undefined, void>({
+        getMe: builder.query<User | undefined, void>({
             query: () => {
-                const url = buildUrl("users/auth");
+                const url = buildUrl("users/me");
                 return {
                     url,
                     method: "GET",

@@ -6,8 +6,8 @@ import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { factionNames, isInitial, isPreview } from "common/utils";
 import { syncImage } from "@/rendering/hosting";
 import { capitalize } from "lodash-es";
-import { User } from "common/models/user";
 import { getTimeLockedImageUrl } from "@/utils";
+import { User } from "common/models/auth";
 
 /**
  * Creates any new threads & messages for cards which are missing their discordMessageUrl.

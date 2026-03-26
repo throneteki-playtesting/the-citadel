@@ -4,14 +4,12 @@ import { logger } from "@/services";
 import { IPlaytestReview } from "common/models/reviews";
 import { asArray } from "common/utils";
 import { DeepPartial, SingleOrArray } from "common/types";
-import { AuditableRepository } from "./shared";
+import { BasicAuditableRepository } from "./shared";
 import { deleteInitial, syncPlaytestingReviews } from "@/discord/forums/playtestingReviews";
 
-export default class ReviewsRepository extends AuditableRepository<IPlaytestReview> {
-    public database: MongoDataSource<IPlaytestReview>;
+export default class ReviewsRepository extends BasicAuditableRepository<IPlaytestReview> {
     constructor(mongoClient: MongoClient) {
-        super();
-        this.database = new MongoDataSource<IPlaytestReview>(mongoClient, "reviews", { project: 1, number: 1, version: 1, reviewer: 1 });
+        super(new MongoDataSource<IPlaytestReview>(mongoClient, "reviews", { project: 1, number: 1, version: 1, reviewer: 1 }));
     }
 
     public override async create(creating: IPlaytestReview, sync?: boolean): Promise<IPlaytestReview>;

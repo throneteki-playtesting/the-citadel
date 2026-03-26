@@ -1,32 +1,30 @@
-import { ApiErrorResponse } from "@/errors";
 import { AsyncLocalStorage } from "async_hooks";
-import { User } from "common/models/user";
-import { NextFunction, Request, Response } from "express";
-import { StatusCodes } from "http-status-codes";
+import { Integration, User } from "common/models/auth";
 
-export interface RequestContext {
-    user: User
-}
+type RequestSource = "client" | "api" | "webhook" | "internal";
+
+type RequestContext =
+    | { source: "client"; principal: User; timestamp: Date; traceId: string }
+    | { source: Exclude<RequestSource, "client">; principal: User | Integration; timestamp: Date; traceId: string }
 
 export const requestContext = new AsyncLocalStorage<RequestContext>();
 
-declare module "express-serve-static-core" {
-  interface Request {
-    user: User;
-  }
+export function createContext(source: "client", principal: User): RequestContext;
+export function createContext(source: Exclude<RequestSource, "client">, principal: User | Integration): RequestContext;
+export function createContext(source: RequestSource, principal: User | Integration): RequestContext {
+    return {
+        source,
+        principal,
+        timestamp: new Date(),
+        traceId: crypto.randomUUID()
+    } as RequestContext;
 }
-export function contextMiddleware(req: Request, res: Response, next: NextFunction) {
-    const { user } = req;
 
-    if (!user) {
-        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid User", "User not loaded into request context");
+export function getContext() {
+    const context = requestContext.getStore();
+    if (!context) {
+        throw new Error("Request context not found");
     }
 
-    requestContext.run({ user }, next);
-}
-
-export function getCurrentUser(): User {
-    const store = requestContext.getStore();
-    if (!store) throw new Error("No request context found");
-    return store.user;
+    return context;
 }

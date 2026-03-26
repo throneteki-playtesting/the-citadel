@@ -1,4 +1,4 @@
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { ReactNode } from "react";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";

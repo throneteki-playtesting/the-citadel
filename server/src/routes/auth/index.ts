@@ -10,7 +10,7 @@ import { RefreshToken } from "common/models/auth";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { AccessTokenPayload, AuthStatus, RefreshAuthResponse } from "@/types";
-import { authDiscordUser } from "@/middleware/auth";
+import DiscordService from "@/discord";
 
 const router = express.Router();
 
@@ -50,7 +50,7 @@ router.get("/discord/callback",
             const discordMember = await get<APIGuildMember>(`users/@me/guilds/${guild.id}/member`, authToken);
 
             // 3. Authenticate discord member to user
-            const user = await authDiscordUser(discordMember);
+            const user = await DiscordService.getUserFromMember(discordMember);
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             await applyTokensToResponse(res, user.discordId);

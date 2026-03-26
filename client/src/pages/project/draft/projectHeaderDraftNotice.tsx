@@ -1,5 +1,5 @@
 import { addToast, Alert, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
 import { IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";

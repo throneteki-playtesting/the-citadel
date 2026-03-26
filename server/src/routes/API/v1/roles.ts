@@ -3,18 +3,18 @@ import { celebrate, Segments } from "celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
-import { Permission, Role } from "common/models/user";
+import Permission from "common/models/permissions";
 import { validateRequest } from "@/middleware/permissions";
-import { hasPermission } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
+import { Role } from "common/models/auth";
 
 const router = express.Router();
 
 const handleGetRoles = [
-    validateRequest((user) => hasPermission(user, Permission.READ_ROLES)),
+    validateRequest(Permission.READ_ROLES),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.Role.Partial),

@@ -1,8 +1,8 @@
 import { Avatar, Select, SelectItem, SharedSelection } from "@heroui/react";
-import { User } from "common/models/user";
 import { useGetUsersQuery } from "../../api";
 import { useCallback, useEffect, useState } from "react";
 import { BaseElementProps } from "../../types";
+import { User } from "common/models/auth";
 
 const UserFilter = ({ className, style, label = "Users", setUsers, users = [] }: UserFilterProps) => {
     const [page, setPage] = useState(1);

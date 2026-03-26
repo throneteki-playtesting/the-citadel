@@ -1,7 +1,7 @@
 import { ReactElement, useState } from "react";
 import { ICardSuggestion } from "common/models/cards";
 import { useDeleteSuggestionMutation, useRenderImageMutation } from "../../api";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
 import { addToast, Button, Spinner } from "@heroui/react";
 import { DeepPartial, SingleOrArray } from "common/types";
@@ -10,9 +10,10 @@ import { hasPermission, renderCardSuggestion, ValidationStep } from "common/util
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileExport, faFileImage, faFileImport, faPencil, faX } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { download } from "../../utilities";
+import { download } from "../../utils";
 import { CardPreview } from "@agot/card-preview";
 import SuggestionsGrid from "./suggestionsGrid";
+import { User } from "common/models/auth";
 
 
 const Suggestions = () => {
@@ -65,7 +66,7 @@ const Suggestions = () => {
         }
     };
 
-    const CardButton = ({ isLoading, children, onPress, requires }: { isLoading?: boolean, children: ReactElement, onPress: () => void, requires?: SingleOrArray<ValidationStep> }) => {
+    const CardButton = ({ isLoading, children, onPress, requires }: { isLoading?: boolean, children: ReactElement, onPress: () => void, requires?: SingleOrArray<ValidationStep<User>> }) => {
         return (
             <PermissionGate requires={requires}>
                 <Button isLoading={isLoading} isIconOnly radius="full" variant="faded" size="sm" onPress={onPress}>

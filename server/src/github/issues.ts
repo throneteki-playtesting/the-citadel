@@ -8,10 +8,12 @@ import { GithubContext } from ".";
 import { syncImage } from "@/rendering/hosting";
 import { emojis } from "./utils";
 import { getTimeLockedImageUrl, pascalCase } from "@/utils";
+import { createSyncEmitter } from "@/services/sseService";
 
 type Issue = Endpoints["GET /repos/{owner}/{repo}/issues"]["response"]["data"][number];
 
 export async function syncIssues(cards: IPlaytestCard[]) {
+
     const projects = await dataService.projects.read([...new Set(cards.map((card) => card.project))].map((number) => ({ number })));
     const context = githubService.getContext();
 
@@ -39,15 +41,19 @@ export async function syncIssues(cards: IPlaytestCard[]) {
     const toUpdate: IPlaytestCard[] = [];
     let needsUpdate = false;
     for (let card of cards) {
+        const emitter = createSyncEmitter("card", "issue", `${card.project}|${card.number}|${card.version}`);
         try {
+            emitter.start();
             const project = projects.find((project) => project.number === card.project);
             let isMissing = isIssueMissing(card);
             if (isMissing) {
+                emitter.progress("Searching");
                 // Fetches issues for project (from cache, or github)
                 const projectIssues = await getIssuesForProject(project);
                 const existingIssue = projectIssues.find((i) => i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version));
 
                 if (existingIssue) {
+                    needsUpdate = true;
                     card.github = card.github ?? {};
                     card.github.issueUrl = existingIssue.html_url;
                     card.github.status = existingIssue.state as "open" | "closed";
@@ -59,6 +65,7 @@ export async function syncIssues(cards: IPlaytestCard[]) {
             }
             if (isMissing || isIssueOutdated(card)) {
                 needsUpdate = true;
+                emitter.progress("Syncing");
                 if (isInitial(card)) {
                     card = await syncInitial(card, project);
                 } else {
@@ -82,9 +89,11 @@ export async function syncIssues(cards: IPlaytestCard[]) {
                 }
             }
         } catch (err) {
+            emitter.error("Failure");
             logger.warn(new Error(`[Github] Failed to sync ${card.name} (${card.version})`, { cause: err }));
         }
         toUpdate.push(card);
+        emitter.complete(card);
     }
 
     if (needsUpdate) {

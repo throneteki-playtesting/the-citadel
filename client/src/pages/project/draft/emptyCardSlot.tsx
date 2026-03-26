@@ -5,7 +5,7 @@ import { Code, Faction } from "common/models/cards";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAddressCard, faStarOfLife } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { memo, useState } from "react";
 import RadialMenu from "../../../components/radialMenu";
 import PermissionGate from "../../../components/permissionGate";

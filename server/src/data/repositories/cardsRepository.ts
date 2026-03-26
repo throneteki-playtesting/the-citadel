@@ -6,17 +6,17 @@ import { DeepPartial, SingleOrArray } from "common/types";
 import { flatten } from "flat";
 import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
-import { AuditableRepository } from "./shared";
+import { BasicAuditableRepository } from "./shared";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
 import { dataService, logger } from "@/services";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
+import { getContext } from "@/middleware/context";
 
-export default class CardsRepository extends AuditableRepository<IPlaytestCard> {
-    public database: CardMongoDataSource;
+export default class CardsRepository extends BasicAuditableRepository<IPlaytestCard> {
+    declare protected database: CardMongoDataSource;
     constructor(mongoClient: MongoClient) {
-        super();
-        this.database = new CardMongoDataSource(mongoClient);
+        super(new CardMongoDataSource(mongoClient));
     }
 
     public override async create(creating: IPlaytestCard, sync?: boolean): Promise<IPlaytestCard>;
@@ -51,25 +51,26 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
     public async sync(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
         let data = asArray(syncing);
-        try {
-            data = await syncImage(data);
-        } catch (err) {
-            logger.warn(err);
-        }
-        try {
-            data = await syncCardForum(data);
-        } catch (err) {
-            logger.warn(err);
-        }
-        try {
-            data = await syncIssues(data);
-        } catch (err) {
-            logger.warn(err);
-        }
-        try {
-            await dataService.playtestingUpdates.sync();
-        } catch (err) {
-            logger.warn(err);
+        const syncs = [
+            () => syncImage(data).then(result => { data = result; }),
+            () => syncCardForum(data).then(result => { data = result; }),
+            () => syncIssues(data).then(result => { data = result; }),
+            () => dataService.playtestingUpdates.sync()
+        ];
+
+        const { source } = getContext();
+
+        // Client does not need to wait for syncing to complete
+        if (source === "client") {
+            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
+        } else {
+            for (const fn of syncs) {
+                try {
+                    await fn();
+                } catch (err) {
+                    logger.warn(err);
+                }
+            }
         }
         return Array.isArray(syncing) ? data : data[0];
     }
@@ -78,30 +79,28 @@ export default class CardsRepository extends AuditableRepository<IPlaytestCard> 
     public async desync(desyncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
     public async desync(desyncing: SingleOrArray<IPlaytestCard>) {
         const data = asArray(desyncing);
-        try {
-            await deleteImage(data);
-        } catch (err) {
-            logger.warn(err);
-        }
-        try {
-            // TODO: Account for card forum threads, as well as draft, just in case.
-            const drafts = data.filter((card) => card.draft);
-            for (const draft of drafts) {
-                await deleteDraft(draft);
+        const syncs = [
+            () => deleteImage(data),
+            () => Promise.all(data.filter(card => card.draft).map(draft => deleteDraft(draft))),
+            () => clearIssues(data),
+            () => dataService.playtestingUpdates.sync()
+        ];
+
+        const { source } = getContext();
+
+        // Client does not need to wait for syncing to complete
+        if (source === "client") {
+            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
+        } else {
+            for (const fn of syncs) {
+                try {
+                    await fn();
+                } catch (err) {
+                    logger.warn(err);
+                }
             }
-        } catch (err) {
-            logger.warn(err);
         }
-        try {
-            await clearIssues(data);
-        } catch (err) {
-            logger.warn(err);
-        }
-        try {
-            await dataService.playtestingUpdates.sync();
-        } catch (err) {
-            logger.warn(err);
-        }
+
         return Array.isArray(desyncing) ? data : data[0];
     }
 

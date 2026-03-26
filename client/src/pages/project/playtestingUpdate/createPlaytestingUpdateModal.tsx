@@ -11,7 +11,7 @@ import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
-import { noteTypeIcon } from "../../../utilities";
+import { noteTypeIcon } from "../../../utils";
 import { sortBy } from "lodash";
 import ImplementStatus from "../../../components/status/implementStatus";
 

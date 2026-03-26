@@ -4,7 +4,7 @@ import { Button } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { renderPlaytestingCard } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { faPencil, faX } from "@fortawesome/free-solid-svg-icons";
 import { memo } from "react";
 

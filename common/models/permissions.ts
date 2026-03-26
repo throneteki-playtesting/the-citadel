@@ -1,20 +1,4 @@
-export interface User {
-    username: string,
-    displayname: string,
-    discordId: string,
-    avatarUrl: string,
-    lastLogin: Date;
-    permissions: Permission[],
-    roles: Role[]
-}
-
-export interface Role {
-    discordId: string,
-    name: string,
-    permissions: Permission[]
-}
-
-export enum Permission {
+enum Permission {
     /** Can create new projects */
     CREATE_PROJECTS = "CREATE_PROJECTS",
     /** Can edit existing projects */
@@ -72,3 +56,5 @@ export enum Permission {
     /** Can access the card forum on discord */
     DISCORD_CARD_FORUM = "DISCORD_CARD_FORUM"
 }
+
+export default Permission;

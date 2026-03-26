@@ -1,11 +1,11 @@
 import { Key, useCallback, useState } from "react";
 import { useGetRolesQuery } from "../../../api";
-import { Role } from "common/models/user";
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Pagination, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import EditRoleModal from "./editRoleModal";
 import Loading from "../../../components/loading";
+import { Role } from "common/models/auth";
 
 const Roles = () => {
     const [page, setPage] = useState(1);

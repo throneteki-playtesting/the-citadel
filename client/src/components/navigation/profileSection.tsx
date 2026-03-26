@@ -13,7 +13,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     const dispatch = useDispatch();
     const [logout] = useLogoutMutation();
     const navigate = useNavigate();
-    const { data: authUser, isLoading: isAuthLoading } = api.useAuthenticateQuery();
+    const { data: authUser, isLoading: isAuthLoading } = api.useGetMeQuery();
     const { user, isAuthenticating } = useSelector((state: RootState) => state.auth);
 
     const [isLoggingIn, setIsProcessing] = useState(false);

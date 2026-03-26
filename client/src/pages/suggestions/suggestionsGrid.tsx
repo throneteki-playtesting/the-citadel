@@ -2,7 +2,6 @@ import { ReactElement, useState } from "react";
 import { Faction, ICardSuggestion, Type } from "common/models/cards";
 import { useGetSuggestionsQuery } from "../../api";
 import { useFilter } from "../../api/hooks";
-import { User } from "common/models/user";
 import { Sortable } from "common/types";
 import CardGrid from "../../components/cardGrid";
 import { BaseElementProps } from "../../types";
@@ -13,6 +12,7 @@ import UserFilter from "../../components/data/userFilter";
 import TagFilter from "../../components/data/tagFilter";
 import { Pagination, Select, SelectItem } from "@heroui/react";
 import classNames from "classnames";
+import { User } from "common/models/auth";
 
 const SortOptions = {
     card: {

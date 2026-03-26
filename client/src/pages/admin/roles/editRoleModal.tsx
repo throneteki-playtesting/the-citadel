@@ -1,9 +1,11 @@
 import { addToast, Button, Chip, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Select, SelectItem } from "@heroui/react";
 import { BaseElementProps } from "../../../types";
-import { Permission, Role } from "common/models/user";
+import Permission from "common/models/permissions";
 import { availablePermissions } from "../../../constants";
 import { useUpdateRoleMutation } from "../../../api";
 import { useCallback, useEffect, useState } from "react";
+import { cloneDeep } from "lodash";
+import { Role } from "common/models/auth";
 
 const EditRoleModal = ({ role, onOpenChange, onSave: onRoleSave }: EditRoleModalProps) => {
     const [updateRole, { isLoading }] = useUpdateRoleMutation();
@@ -11,7 +13,7 @@ const EditRoleModal = ({ role, onOpenChange, onSave: onRoleSave }: EditRoleModal
 
     const onSave = useCallback(async () => {
         if (role) {
-            const model = { ...role } as Role;
+            const model = cloneDeep(role);
             model.permissions = [...permissions].map((p) => p as Permission);
 
             // TODO: Consider (somehow) updating the users who have this role on open sessions?

@@ -2,6 +2,7 @@ import { configureStore, isRejectedWithValue, Middleware } from "@reduxjs/toolki
 import api from ".";
 import auth from "./authSlice";
 import thronesdbApi from "./thronesdb";
+import { initSSEListener } from "./sseMiddleware";
 
 // Temporary solution to at least see errors coming in.
 // This should be replaced with a more clear-intended method of:
@@ -37,6 +38,7 @@ export const store = configureStore({
             .concat(api.middleware)
             .concat(thronesdbApi.middleware)
 });
+initSSEListener();
 
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;

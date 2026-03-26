@@ -2,17 +2,16 @@ import { IPlaytestingUpdate } from "common/models/projects";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { IPlaytestCard } from "common/models/cards";
-import { AuditableRepository } from "./shared";
+import { BasicAuditableRepository } from "./shared";
 import { syncPullRequests } from "@/github/pullRequests";
 import { logger } from "@/services";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
+import { getContext } from "@/middleware/context";
 
-export default class PlaytestingUpdateRepository extends AuditableRepository<IPlaytestingUpdate> {
-    public database: MongoDataSource<IPlaytestingUpdate>;
+export default class PlaytestingUpdateRepository extends BasicAuditableRepository<IPlaytestingUpdate> {
     constructor(mongoClient: MongoClient) {
-        super();
-        this.database = new MongoDataSource<IPlaytestingUpdate>(mongoClient, "playtestingUpdates", { project: 1, version: 1 });
+        super(new MongoDataSource<IPlaytestingUpdate>(mongoClient, "playtestingUpdates", { project: 1, version: 1 }));
     }
 
     public override async create(creating: IPlaytestingUpdate, sync?: boolean): Promise<IPlaytestingUpdate>;
@@ -38,10 +37,23 @@ export default class PlaytestingUpdateRepository extends AuditableRepository<IPl
     }
 
     public async sync() {
-        try {
-            await syncPullRequests();
-        } catch (err) {
-            logger.warn(err);
+        const syncs = [
+            () => syncPullRequests()
+        ];
+
+        const { source } = getContext();
+
+        // Client does not need to wait for syncing to complete
+        if (source === "client") {
+            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
+        } else {
+            for (const fn of syncs) {
+                try {
+                    await fn();
+                } catch (err) {
+                    logger.warn(err);
+                }
+            }
         }
     }
 

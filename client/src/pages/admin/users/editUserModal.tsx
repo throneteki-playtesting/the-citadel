@@ -1,9 +1,11 @@
 import { addToast, Button, Chip, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Select, SelectItem } from "@heroui/react";
 import { BaseElementProps } from "../../../types";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import { availablePermissions } from "../../../constants";
 import { useUpdateUserMutation } from "../../../api";
 import { useCallback, useEffect, useState } from "react";
+import { User } from "common/models/auth";
+import { cloneDeep } from "lodash";
 
 const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModalProps) => {
     const [updateUser, { isLoading }] = useUpdateUserMutation();
@@ -11,7 +13,7 @@ const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModal
 
     const onSave = useCallback(async () => {
         if (user) {
-            const model = { ...user } as User;
+            const model = cloneDeep(user);
             model.permissions = [...permissions].map((p) => p as Permission);
 
             // TODO: Consider (somehow) updating edited user who have sessions open?

@@ -23,14 +23,13 @@ import { BaseTickContentProps, PolarAngleAxis, PolarGrid, Radar, RadarChart, Res
 import ThronesIcon from "../../components/thronesIcon";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { useNavigate } from "react-router-dom";
 import { IProject } from "common/models/projects";
-import { noteTypeIcon } from "../../utilities";
-import ImplementStatus from "../../components/status/implementStatus";
-import GithubStatus from "../../components/status/githubStatus";
+import { noteTypeIcon } from "../../utils";
 import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
+import ImplementStatus from "../../components/status/implementStatus";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -254,7 +253,6 @@ const StatusBoard = ({ latest, draft }: StatusBoardProps) => {
     return (
         <div className="py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
             <ImplementStatus card={draft ?? latest}/>
-            {!latest?.release && <GithubStatus card={draft ?? latest}/>}
             <DevelopmentStatus latest={latest} draft={draft}/>
             <PermissionGate requires={Permission.SAVE_RENDER_FILES}>
                 {!draft && <ImageStatus card={latest}/>}

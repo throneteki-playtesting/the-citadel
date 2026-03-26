@@ -7,7 +7,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faPencil, faX } from "@fortawesome/free-solid-svg-icons";
 import PermissionGate from "../../components/permissionGate";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectHeaderPlaytestingUpdateNotice from "./playtestingUpdate/projectHeaderSubmitNotice";

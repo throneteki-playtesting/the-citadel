@@ -1,6 +1,6 @@
 import * as Schemas from "common/models/schemas";
 import { celebrate, Joi, Segments } from "celebrate";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { Request } from "express";
 import { ICardSuggestion } from "common/models/cards";
@@ -16,7 +16,7 @@ import { ApiErrorResponse } from "@/errors";
 const router = express.Router();
 
 const handleGetSuggestions = [
-    validateRequest((user) => validate(user, Permission.READ_SUGGESTIONS)),
+    validateRequest(Permission.READ_SUGGESTIONS),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.CardSuggestion.Partial),
@@ -113,7 +113,7 @@ router.get("/:userDiscordId",
 
 // Create suggestion
 router.post("/",
-    validateRequest((user: User) => validate(user, Permission.MAKE_SUGGESTIONS)),
+    validateRequest(Permission.MAKE_SUGGESTIONS),
     celebrate({
         [Segments.BODY]: Schemas.CardSuggestion.Draft
     }), asyncHandler<unknown, unknown, Omit<ICardSuggestion, "id" | "updated" | "created">, unknown>(async (req, res) => {
@@ -138,10 +138,10 @@ router.put("/:id",
             id: Joi.string().required()
         }
     }),
-    validateRequest(async (user: User, req: Request<{ id: string }, unknown, ICardSuggestion, unknown>) => {
+    validateRequest(async (principal, req: Request<{ id: string }, unknown, ICardSuggestion, unknown>) => {
         const { id } = req.params;
         const [suggestion] = await dataService.suggestions.read({ id });
-        return !!suggestion && hasPermission(user, Permission.EDIT_SUGGESTIONS) || validate(user, Permission.MAKE_SUGGESTIONS, (user) => user.discordId === suggestion.user.discordId);
+        return !!suggestion && hasPermission(principal, Permission.EDIT_SUGGESTIONS) || validate(principal, Permission.MAKE_SUGGESTIONS, (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId);
     }),
     celebrate({
         [Segments.BODY]: Schemas.CardSuggestion.Full
@@ -166,10 +166,10 @@ router.delete("/:id",
             id: Joi.string().required()
         }
     }),
-    validateRequest(async (user: User, req: Request<{ id: string }, unknown, unknown, unknown>) => {
+    validateRequest(async (principal, req: Request<{ id: string }, unknown, unknown, unknown>) => {
         const { id } = req.params;
         const [suggestion] = await dataService.suggestions.read({ id });
-        return !!suggestion && hasPermission(user, Permission.DELETE_SUGGESTIONS) || validate(user, Permission.MAKE_SUGGESTIONS, (user) => user.discordId === suggestion.user.discordId);
+        return !!suggestion && hasPermission(principal, Permission.DELETE_SUGGESTIONS) || validate(principal, Permission.MAKE_SUGGESTIONS, (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId);
     }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;

@@ -1,4 +1,4 @@
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
@@ -11,6 +11,7 @@ import AuthRedirect from "./authRedirect";
 import Project from "./project";
 import Card from "./card";
 import SubmitReview from "./review/submitReview";
+import { User } from "common/models/auth";
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & { path: string, element?: ReactElement };

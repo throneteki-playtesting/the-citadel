@@ -3,7 +3,7 @@ import { Select, SelectItem, Textarea } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { DeepPartial } from "common/types";
-import { noteTypeIcon } from "../../utilities";
+import { noteTypeIcon } from "../../utils";
 
 const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
     const [type, setType] = useState<NoteType>();
@@ -46,12 +46,6 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                         <span className="text-xs italic">Example: Removing a Winterfell card entirely to make room for a new White Harbor card.</span>
                     </div>
                 );
-            case "implemented":
-                return (
-                    <div className="flex flex-col gap-1 p-1">
-                        <span className="text-sm">The transition of a design from a preview version or spoiler to a functional, playable card on TheIronThrone.</span>
-                    </div>
-                );
         }
     };
 
@@ -63,7 +57,7 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                     name="note.type"
                     label="Type"
                     isMultiline
-                    items={noteTypes.filter((type) => type !== "implemented").map((type) => ({ type })) ?? []}
+                    items={noteTypes.map((type) => ({ type })) ?? []}
                     onSelectionChange={(keys) => {
                         const newType = keys.currentKey as NoteType;
                         setType(newType);

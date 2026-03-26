@@ -7,7 +7,7 @@ import { IPlaytestReview } from "common/models/reviews";
 import { hasPermission, Regex, SemanticVersion, validate } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
@@ -16,7 +16,7 @@ import { ApiErrorResponse } from "@/errors";
 const router = express.Router();
 
 const handleGetReviews = [
-    validateRequest((user) => hasPermission(user, Permission.READ_REVIEWS)),
+    validateRequest(Permission.READ_REVIEWS),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.PlaytestingReview.Partial),
@@ -72,7 +72,7 @@ router.get("/:project/:number/:version/:reviewer",
 
 // Create review
 router.post("/",
-    validateRequest((user) => hasPermission(user, Permission.MAKE_REVIEWS)),
+    validateRequest(Permission.MAKE_REVIEWS),
     celebrate({
         [Segments.BODY]: Schemas.PlaytestingReview.Draft
     }),
@@ -95,10 +95,10 @@ router.put("/:project/:number/:version/:reviewer",
             reviewer: Joi.string().required()
         }
     }),
-    validateRequest(async (user: User, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>) => {
+    validateRequest(async (principal, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
-        return !!review && hasPermission(user, Permission.EDIT_REVIEWS) || validate(user, Permission.MAKE_REVIEWS, (user) => user.discordId === review.reviewer);
+        return !!review && hasPermission(principal, Permission.EDIT_REVIEWS) || validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
     }),
     celebrate({
         [Segments.BODY]: Schemas.PlaytestingReview.Draft
@@ -128,10 +128,10 @@ router.delete("/:project/:number/:version/:discordId",
             reviewer: Joi.string().required()
         }
     }),
-    validateRequest(async (user: User, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>) => {
+    validateRequest(async (principal, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
-        return !!review && hasPermission(user, Permission.DELETE_REVIEWS) || validate(user, Permission.MAKE_REVIEWS, (user) => user.discordId === review.reviewer);
+        return !!review && hasPermission(principal, Permission.DELETE_REVIEWS) || validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
     }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;

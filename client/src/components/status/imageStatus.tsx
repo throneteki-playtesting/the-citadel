@@ -1,90 +1,53 @@
-import { faCloudArrowUp, faExternalLink } from "@fortawesome/free-solid-svg-icons";
+import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { addToast, Alert, Button, Link, Spinner } from "@heroui/react";
+import { Alert, Spinner } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
 import { useSyncCardImagesMutation } from "../../api";
-import { generateReleaseImageUrl } from "common/utils";
-import { useEffect, useState } from "react";
+import { ReactNode, useMemo } from "react";
+import { useCardSync } from "../../api/hooks";
+import { UIColor } from "../../types";
+
+type StatusData = { icon?: ReactNode, label: string, color: UIColor, onPress?: () => void };
 
 const ImageStatus = ({ card }: ImageStatusProps) => {
     const [syncCardImage, { isLoading: isSyncing }] = useSyncCardImagesMutation();
-    const [urlReachable, setUrlReachable] = useState<boolean>();
-    const [isLoading, setIsLoading] = useState(true);
-
-    const title = "Image URL";
-    const imageUrl = !card || !card.release ? card?.imageUrl : generateReleaseImageUrl(card.release.short, card.release.number, card.name);
-
-    useEffect(() => {
-        // TODO: Move this to more generic function
-        const checkIfImageExists = (url: string) => {
-            return new Promise(() => {
-                const img = new Image();
-                img.onload = () => {
-                    setUrlReachable(true);
-                    setIsLoading(false);
-                };
-                img.onerror = () => {
-                    setUrlReachable(false);
-                    setIsLoading(false);
-                };
-                img.src = url;
-            });
-        };
-
-        if (imageUrl) {
-            checkIfImageExists(imageUrl);
+    const { status, step, error } = useCardSync(card).image;
+    const data = useMemo<StatusData | null>(() => {
+        if (!card) {
+            return null;
         }
-    }, [imageUrl]);
 
-    if (!card) {
+        if (status === "progress" || isSyncing) {
+            return {
+                icon: <Spinner />,
+                label: step ?? status ?? "Processing",
+                color: "secondary"
+            };
+        }
+
+        if ((!card.imageUrl && status !== "complete") || status === "error") {
+            return {
+                icon: <FontAwesomeIcon icon={faRotate} size="xl"/>,
+                onPress: async () => await syncCardImage({ project: card.project, number: card.number, version: card.version }).unwrap(),
+                color: "danger",
+                label: error ?? "Requires Sync"
+            };
+        }
+
+        return {
+            color: "success",
+            label: "Synced"
+        };
+    }, [card, error, isSyncing, status, step, syncCardImage]);
+
+    if (!data) {
         return null;
     }
-
-    if (!imageUrl) {
-        const SyncButton = () => {
-            const onPress = async () => {
-                try {
-                    await syncCardImage({ project: card.project, number: card.number, version: card.version }).unwrap();
-                    addToast({ title: "Success", color: "success", description: "Successfully synced card image url" });
-                } catch (err) {
-                    addToast({ title: "Error", color: "danger", description: "Failed to sync card image url" });
-                }
-            };
-            return (
-                <Button variant="light" isIconOnly isLoading={isSyncing} onPress={onPress}>
-                    <FontAwesomeIcon icon={faCloudArrowUp} className="text-xl"/>
-                </Button>
-            );
-        };
-
-        return (
-            <Alert color="warning" title={title} endContent={<SyncButton />}>
-                Not Synced
-            </Alert>
-        );
+    const alert = <Alert icon={data.icon} color={data.color} title="Image URL" className="h-full" hideIconWrapper description={data.label}></Alert>;
+    if (data.onPress) {
+        return <a className="cursor-pointer" onClick={data.onPress}>{alert}</a>;
     }
-
-    if (isLoading) {
-        return (
-            <Alert color="default" title={title} endContent={<Spinner />}>
-                <div className="flex"><span>Checking...</span></div>
-            </Alert>
-        );
-    }
-    if (!urlReachable) {
-        return (
-            <Alert color="danger" title={title}>
-                Not Found
-            </Alert>
-        );
-    }
-
-    const endContent = <Link href={imageUrl} target="_blank" className="text-xl"><FontAwesomeIcon icon={faExternalLink}/></Link>;
-    return (
-        <Alert color="success" title={title} endContent={endContent}>
-            Synced
-        </Alert>
-    );
+    return alert;
 };
 
 type ImageStatusProps = { card?: IPlaytestCard }

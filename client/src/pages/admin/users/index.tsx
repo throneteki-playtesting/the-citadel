@@ -1,12 +1,13 @@
 import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, User as DisplayUser, Link, Pagination } from "@heroui/react";
 import { useGetUsersQuery } from "../../../api";
 import { Key, useCallback, useState } from "react";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import EditUserModal from "./editUserModal";
 import { hasPermission } from "common/utils";
 import Loading from "../../../components/loading";
+import { User } from "common/models/auth";
 
 const Users = () => {
     const [page, setPage] = useState(1);

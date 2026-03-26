@@ -1,7 +1,8 @@
 import { UUID } from "crypto";
 import * as Cards from "./models/cards";
-import { Permission, User } from "./models/user";
+import Permission from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
+import { Principal } from "./models/auth";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -172,9 +173,9 @@ export function buildUrl<T>(baseUrl: string, queryParameters?: T) {
     return url;
 }
 
-export type ValidationStep = Permission | ((user: User) => boolean);
-export function validate(user?: User, ...steps: ValidationStep[]) {
-    const { checks, permissions } = steps.reduce<{ checks: ((user: User) => boolean)[], permissions: Permission[] }>(
+export type ValidationStep<T extends Principal> = Permission | ((principal: T) => boolean);
+export function validate<T extends Principal>(principal?: T, ...steps: ValidationStep<T>[]) {
+    const { checks, permissions } = steps.reduce<{ checks: ((principal: T) => boolean)[], permissions: Permission[] }>(
         (results, step) => {
             if (typeof step === "function") {
                 results.checks.push(step);
@@ -184,15 +185,15 @@ export function validate(user?: User, ...steps: ValidationStep[]) {
             return results;
         }, { checks: [], permissions: [] }
     );
-    return hasPermission(user, ...permissions) && checks.every((check) => !!user && check(user));
+    return hasPermission(principal, ...permissions) && checks.every((check) => !!principal && check(principal));
 };
 
-export function hasPermission(user?: User, ...permissions: Permission[]) {
+export function hasPermission<T extends Principal>(principal?: T, ...permissions: Permission[]) {
     if (permissions.length === 0) {
         return true;
     }
 
-    if (!user) {
+    if (!principal) {
         return false;
     }
 
@@ -200,11 +201,11 @@ export function hasPermission(user?: User, ...permissions: Permission[]) {
         return permissions.some((a) => ps.some((b) => a === b));
     };
 
-    if (includesPermission(user.permissions)) {
+    if (includesPermission(principal.permissions)) {
         return true;
     }
 
-    if (user.roles.some((role) => includesPermission(role.permissions))) {
+    if (principal.roles.some((role) => includesPermission(role.permissions))) {
         return true;
     }
 

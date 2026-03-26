@@ -5,6 +5,7 @@ import { asPDF, asPNG } from ".";
 import { asArray, generateReleaseImageUrl, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { dataService, logger } from "@/services";
 import { BatchRenderJobOptions } from "@/types";
+import { createSyncEmitter } from "@/services/sseService";
 
 const baseUrl = process.env.S3_BASE_URL;
 const bucket = process.env.S3_BUCKET;
@@ -21,61 +22,76 @@ const client = new S3Client({
 export async function syncImage(card: IPlaytestCard): Promise<IPlaytestCard>
 export async function syncImage(cards: IPlaytestCard[]): Promise<IPlaytestCard[]>
 export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
-    const cards = asArray(data);
+    let cards = asArray(data);
     const uploaded: string[] = [];
-    const successful: string[] = [];
 
-    const cardImageChecks = await Promise.all(
-        cards.map(async (card) => ({
-            card,
-            outdated: await isImageOutdated(card)
-        }))
+    const packages = await Promise.all(
+        cards.map(async (card) => {
+            const emitter = createSyncEmitter("card", "image", `${card.project}|${card.number}|${card.version}`);
+            try {
+                emitter.start();
+                emitter.progress("Checking");
+                const isOutdated = await isImageOutdated(card);
+                emitter.progress("Processing");
+                const render = isOutdated ? renderPlaytestingCard(card) : null;
+                const key = render?.key ?? `${card.code}@${card.version}`;
+                return {
+                    key,
+                    card,
+                    render,
+                    emitter
+                };
+            } catch (err) {
+                emitter.error("Unexpected Error");
+                throw err;
+            }
+        })
     );
-    const renders = cardImageChecks.filter(({ card, outdated }) => outdated && !card.release).map(({ card }) => renderPlaytestingCard(card));
-    const pngResponses = await asPNG(renders);
+    const renders = packages
+        .filter(({ card, render }) => render && !card.release)
+        .map(({ render }) => render);
 
-    const imagePromises = cards.map(async (card) => {
-        if (card.release) {
-            card.imageUrl = generateReleaseImageUrl(card.release.short, card.release.number, card.name);
-            return card;
+    const buffers = (await asPNG(renders)).reduce<Record<string, Buffer<ArrayBufferLike>>>((all, response) => {
+        all[response.card.key] = all[response.card.key] ?? response.buffer;
+        return all;
+    }, {});
+
+    const promises = packages.map(async (pkg) => {
+        try {
+            if (pkg.card.release) {
+                pkg.card.imageUrl = generateReleaseImageUrl(pkg.card.release.short, pkg.card.release.number, pkg.card.name);
+                const response = await fetch(pkg.card.imageUrl, { method: "HEAD" });
+                if (!response.ok) {
+                    pkg.emitter.error("Release Image Missing");
+                    return;
+                }
+            } else {
+                const fileKey = `${pkg.card.project}/${createImgFilenameFor(pkg.card)}`;
+                const buffer = buffers[pkg.key];
+                if (buffer) {
+                    pkg.emitter.progress("Uploading");
+                    const imageUrl = await uploadS3File(buffer, fileKey, "PNG");
+                    uploaded.push(fileKey);
+                    pkg.card.imageUrl = imageUrl;
+                }
+            }
+            pkg.emitter.complete(pkg.card);
+        } catch (err) {
+            pkg.emitter.error("Unexpected Error");
+            throw err;
         }
-        const key = `${card.project}/${createImgFilenameFor(card)}`;
-        const isOutdated = cardImageChecks.find((outdated) => outdated.card === card).outdated;
-        if (!isOutdated) {
-            successful.push(key);
-            return card;
-        }
-        // Relying on renders & cards both being in same order
-        const { buffer } = pngResponses.shift();
-        const imageUrl = await uploadS3File(buffer, key, "PNG");
-        uploaded.push(key);
-        successful.push(key);
-        card.imageUrl = imageUrl;
-        return card;
     });
 
-    const results = await Promise.allSettled(imagePromises);
-    const rejected = results.filter((result) => result.status === "rejected");
-    const isFulfilled = <T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> => result.status === "fulfilled";
+    const results = await Promise.allSettled(promises);
 
-    if (rejected.length > 0) {
-        // Gracefully handle if one or more failed
-        if (uploaded.length > 0) {
-            // If any fail, delete all which were uploaded
-            logger.verbose(`[Hosting] Safely reverting ${uploaded.length} uploaded files`);
-            await deleteS3Files(uploaded);
-        }
-        throw new Error(`Failed to sync ${rejected.length} image(s)`, { cause: rejected.map((r) => r.reason) });
-    }
-
-    const unchanged = successful.length - uploaded.length;
+    const successful = results.filter((result) => result.status === "fulfilled").length;
+    const errored = packages.length - successful;
     if (uploaded.length > 0) {
-        logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${unchanged > 0 ? ` (${unchanged} unchanged)` : ""}`);
+        logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${errored > 0 ? `, ${errored} errored` : ""}`);
     }
 
-    let responses = results.filter(isFulfilled).map((result) => result.value);
-    responses = await dataService.cards.update(responses, false, false);
-    return Array.isArray(data) ? responses : responses[0];
+    cards = await dataService.cards.update(packages.map(({ card }) => card), false, false);
+    return Array.isArray(data) ? cards : cards[0];
 }
 
 async function isImageOutdated(card: IPlaytestCard) {

@@ -1,51 +1,64 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { MongoClient } from "mongodb";
 import { logger } from "@/services";
+import { createClient, RedisClientType } from "redis";
+import AuthRepository from "./repositories/authRepository";
 import CardsRepository from "./repositories/cardsRepository";
+import IntegrationRepository from "./repositories/integrationRepository";
+import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
 import ProjectsRepository from "./repositories/projectsRepository";
 import ReviewsRepository from "./repositories/reviewRepository";
-import UsersRepository from "./repositories/usersRepository";
 import RolesRepository from "./repositories/rolesRepository";
 import SuggestionsRepository from "./repositories/suggestionsRepository";
-import AuthRepository from "./repositories/authRepository";
-import { createClient, RedisClientType } from "redis";
-import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
+import UsersRepository from "./repositories/usersRepository";
+import { Database } from "./repositories/shared";
+
+type RepositoryConstructor = new (client: MongoClient) => Database<any>;
+
+interface RepositoryConfig {
+    key: string;
+    ctor: RepositoryConstructor;
+}
+
+const REPOSITORIES: RepositoryConfig[] = [
+    { key: "projects", ctor: ProjectsRepository },
+    { key: "playtestingUpdates", ctor: PlaytestingUpdateRepository },
+    { key: "cards", ctor: CardsRepository },
+    { key: "reviews", ctor: ReviewsRepository },
+    { key: "users", ctor: UsersRepository },
+    { key: "roles", ctor: RolesRepository },
+    { key: "suggestions", ctor: SuggestionsRepository },
+    { key: "auth", ctor: AuthRepository },
+    { key: "integrations", ctor: IntegrationRepository }
+];
 
 class DataService {
-    private database: MongoClient;
+    private database: MongoClient | null = null;
     public redis: RedisClientType;
+    public ready: Promise<[boolean, boolean]>;
 
-    private isConnected: boolean;
-
-    private _projects: ProjectsRepository;
-    private _playtestingUpdates: PlaytestingUpdateRepository;
-    private _cards: CardsRepository;
-    private _reviews: ReviewsRepository;
-    private _users: UsersRepository;
-    private _roles: RolesRepository;
-    private _suggestions: SuggestionsRepository;
-    private _auth: AuthRepository;
+    private repos = new Map<string, Database<any>>();
 
     constructor() {
-        this.connectDb();
-        this.connectRedis();
+        this.ready = Promise.all([this.connectDb(), this.connectRedis()]);
     }
 
-    private async connectDb() {
-        const url = process.env.DATABASE_URL || "mongodb://mongodb:27017";
+    private async connectDb(): Promise<boolean> {
+        const url = process.env.DATABASE_URL ?? "mongodb://mongodb:27017";
         try {
-            this.database = new MongoClient(`${url}?retryWrites=true&retryReads=true`, { ignoreUndefined: true, maxPoolSize: 10, connectTimeoutMS: 5000 });
-            await this.database.db().command({ ping: 1 });
-            // Confirms that MongoDB is running
-            logger.info(`MongoDB connected to ${this.database.db().databaseName}`);
+            const client = new MongoClient(`${url}?retryWrites=true&retryReads=true`, {
+                ignoreUndefined: true,
+                maxPoolSize: 10,
+                connectTimeoutMS: 5000
+            });
+            await client.db().command({ ping: 1 });
+            logger.info(`MongoDB connected to ${client.db().databaseName}`);
 
-            this._projects = new ProjectsRepository(this.database);
-            this._playtestingUpdates = new PlaytestingUpdateRepository(this.database);
-            this._cards = new CardsRepository(this.database);
-            this._reviews = new ReviewsRepository(this.database);
-            this._users = new UsersRepository(this.database);
-            this._roles = new RolesRepository(this.database);
-            this._suggestions = new SuggestionsRepository(this.database);
-            this._auth = new AuthRepository(this.database);
+            this.database = client;
+            this.repos.clear();
+            for (const { key, ctor } of REPOSITORIES) {
+                this.repos.set(key, new ctor(this.database));
+            }
             return true;
         } catch (err) {
             logger.error(err);
@@ -53,10 +66,10 @@ class DataService {
         }
     }
 
-    private async connectRedis() {
-        const url = process.env.REDIS_HOST || "redis://redis:6379";
+    private async connectRedis(): Promise<boolean> {
+        const url = process.env.REDIS_HOST ?? "redis://redis:6379";
         try {
-            this.redis = createClient({ url });
+            this.redis = createClient({ url }) as RedisClientType;
             await this.redis.connect();
             logger.info(`Redis connected at ${url}`);
             return true;
@@ -66,48 +79,27 @@ class DataService {
         }
     }
 
-    private getRepository<T>(repository: string) {
-        const repo = this[`_${repository}`] as T;
+    private getRepository<T extends Database<any>>(key: string): T {
+        const repo = this.repos.get(key);
         if (!repo) {
-            logger.log("warning", `Failed to connect to ${repository}, attempting to reconnect to database...`);
-            if (!this.connectDb()) {
-                throw Error("Failed to connect to database");
-            }
+            throw new Error(`Repository "${key}" unavailable — call await dataService.reconnect() to retry.`);
         }
-        return repo;
+        return repo as T;
     }
 
-    get projects() {
-        return this.getRepository<ProjectsRepository>("projects");
+    async reconnect(): Promise<void> {
+        await this.connectDb();
     }
 
-    get playtestingUpdates() {
-        return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates");
-    }
-
-    get cards() {
-        return this.getRepository<CardsRepository>("cards");
-    }
-
-    get reviews() {
-        return this.getRepository<ReviewsRepository>("reviews");
-    }
-
-    get users() {
-        return this.getRepository<UsersRepository>("users");
-    }
-
-    get roles() {
-        return this.getRepository<RolesRepository>("roles");
-    }
-
-    get suggestions() {
-        return this.getRepository<SuggestionsRepository>("suggestions");
-    }
-
-    get auth() {
-        return this.getRepository<AuthRepository>("auth");
-    }
+    get projects() { return this.getRepository<ProjectsRepository>("projects"); }
+    get playtestingUpdates() { return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates"); }
+    get cards() { return this.getRepository<CardsRepository>("cards"); }
+    get reviews() { return this.getRepository<ReviewsRepository>("reviews"); }
+    get users() { return this.getRepository<UsersRepository>("users"); }
+    get roles() { return this.getRepository<RolesRepository>("roles"); }
+    get suggestions() { return this.getRepository<SuggestionsRepository>("suggestions"); }
+    get auth() { return this.getRepository<AuthRepository>("auth"); }
+    get integrations() { return this.getRepository<IntegrationRepository>("integrations"); }
 }
 
 export default DataService;

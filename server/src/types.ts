@@ -1,7 +1,8 @@
 import { DeepPartial, SingleOrArray, Sortable } from "common/types";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
-import { IRenderCard } from "common/models/cards";
+import { IPlaytestCard, IRenderCard } from "common/models/cards";
+import { IPlaytestingUpdate } from "common/models/projects";
 
 export interface AccessTokenPayload {
     discordId: string,
@@ -59,3 +60,48 @@ export interface IGetResponse<T> { total: number, items: T[] }
 
 export interface IDeleteRequest<T> { filter?: SingleOrArray<DeepPartial<T>> }
 export interface IDeleteResponse<T> { total: number, deleted: T[] }
+
+
+export type SyncType = "card" | "playtestingUpdate";
+interface SyncDataMap {
+    card: IPlaytestCard;
+    playtestingUpdate: IPlaytestingUpdate;
+}
+interface SyncOperationMap {
+    card: "image" | "discord" | "issue";
+    playtestingUpdate: "pullRequest";
+}
+export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
+export type SyncStatus = "start" | "progress" | "complete" | "error";
+interface BaseSyncEvent<K extends SyncType> {
+    type: K;
+    id: string;
+    operation: SyncOperation<K>;
+    status: SyncStatus;
+    message?: string;
+}
+
+export interface SyncStartEvent<K extends SyncType> extends BaseSyncEvent<K> {
+    status: "start";
+}
+
+export interface SyncProgressEvent<K extends SyncType> extends BaseSyncEvent<K> {
+    status: "progress";
+    step: string;
+}
+
+export interface SyncCompleteEvent<K extends SyncType> extends BaseSyncEvent<K> {
+    status: "complete";
+    data: SyncDataMap[K];
+}
+
+export interface SyncErrorEvent<K extends SyncType> extends BaseSyncEvent<K> {
+    status: "error";
+    error: string;
+}
+
+export type SyncEvent<K extends SyncType = SyncType> =
+    | SyncStartEvent<K>
+    | SyncProgressEvent<K>
+    | SyncCompleteEvent<K>
+    | SyncErrorEvent<K>;

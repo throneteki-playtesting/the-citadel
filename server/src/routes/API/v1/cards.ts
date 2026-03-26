@@ -6,7 +6,7 @@ import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import * as Schemas from "common/models/schemas";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
@@ -17,7 +17,7 @@ import { IGetRequest, IGetResponse } from "@/types";
 const router = express.Router();
 
 const handleGetCards = [
-    validateRequest((user) => hasPermission(user, Permission.READ_CARDS)),
+    validateRequest(Permission.READ_CARDS),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
@@ -118,7 +118,7 @@ router.put("/:project/:number/draft",
         },
         [Segments.BODY]: Schemas.PlaytestingCard.Draft
     }),
-    validateRequest(async (user, req) => {
+    validateRequest(async (principal, req) => {
         const { project: projectNumber, number } = req.params;
         const { version } = req.body;
         const [project] = await dataService.projects.read({ number: projectNumber });
@@ -138,7 +138,7 @@ router.put("/:project/:number/draft",
         req["project"] = project;
         req["latest"] = latest;
         req["draft"] = draft;
-        return hasPermission(user, (draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
+        return hasPermission(principal, (draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
     }),
     asyncHandler<{ project: number, number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
         const { project, number } = req.params;
@@ -181,7 +181,7 @@ router.put("/:project/:number/draft",
 
 // Delete draft card
 router.delete("/:project/:number/draft",
-    validateRequest((user) => hasPermission(user, Permission.DELETE_CARDS)),
+    validateRequest(Permission.DELETE_CARDS),
     celebrate({
         [Segments.PARAMS]: {
             project: Joi.number().required(),
@@ -202,7 +202,7 @@ router.delete("/:project/:number/draft",
 
 // Legacy (GAS script updates)
 // router.post("/",
-//     validateRequest((user) => hasPermission(user, Permission.CREATE_CARDS)),
+//     validateRequest(Permission.CREATE_CARDS),
 //     celebrate({
 //         [Segments.BODY]: Schemas.SingleOrArray(Schemas.PlaytestingCard.Full)
 //     }),

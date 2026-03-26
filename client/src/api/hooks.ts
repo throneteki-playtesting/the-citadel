@@ -1,5 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Filterable } from "common/types";
+import { SyncOperation, SyncStatus, SyncType } from "server/types";
+import { SemanticVersion } from "common/utils";
+import { baseUrl } from ".";
 
 export function useFilter<T>(filter?: Filterable<T>) {
     return useMemo(() => {
@@ -66,3 +69,59 @@ export const useTimezone = () => {
 
     return { timezone, format };
 };
+
+interface SyncState {
+    status?: SyncStatus;
+    step?: string;
+    error?: string;
+}
+
+type SyncListenerState<K extends SyncType> = Record<SyncOperation<K>, SyncState>;
+
+const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
+    card: {
+        image: {},
+        discord: {},
+        issue: {}
+    },
+    playtestingUpdate: {
+        pullRequest: {}
+    }
+};
+
+export function useSyncListener<K extends SyncType>(type: K, id?: string) {
+    const [syncStates, setSyncStates] = useState<SyncListenerState<K>>(defaultStates[type]);
+
+    useEffect(() => {
+        if (!id) {
+            return;
+        }
+        const es = new EventSource(`${baseUrl}/api/v1/sync/progress/${type}/${id}`, { withCredentials: true });
+
+        const update = (operation: SyncOperation<K>, partial: Partial<SyncState>) =>
+            setSyncStates(s => ({
+                ...s,
+                [operation]: { ...s[operation], ...partial }
+            }));
+
+        es.addEventListener("message", (e) => {
+            const event = JSON.parse(e.data);
+            const { operation, status } = event;
+
+            switch (status as SyncStatus) {
+                case "start": update(operation, { status: "start" }); break;
+                case "progress": update(operation, { status: "progress", step: event.step }); break;
+                case "complete": update(operation, { status: "complete" }); break;
+                case "error": update(operation, { status: "error", error: event.error }); break;
+            }
+        });
+
+        return () => es.close();
+    }, [type, id]);
+
+    return syncStates;
+}
+export function useCardSync(card?: { project: number, number: number, version: SemanticVersion }) {
+    const id = card ? `${card.project}|${card.number}|${card.version}` : undefined;
+    return useSyncListener("card", id);
+}

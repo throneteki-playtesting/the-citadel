@@ -3,7 +3,7 @@ import * as Cards from "./cards";
 import * as Projects from "./projects";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
-import { Permission as UserPermissions } from "./user";
+import PermissionEnum from "./permissions";
 
 const JoiXNumber = Joi.alternatives().try(
     Joi.number(),
@@ -14,7 +14,7 @@ const JoiXDashNumber = Joi.alternatives().try(
     Joi.string().valid("X", "-")
 );
 
-const Permission = Joi.string().valid(...Object.values(UserPermissions));
+const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
 export type SchemaType = Joi.ObjectSchema<unknown>;
 

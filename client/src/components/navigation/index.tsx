@@ -8,7 +8,7 @@ import classNames from "classnames";
 import { useSelector } from "react-redux";
 import { RootState } from "../../api/store";
 import { useGetProjectsQuery } from "../../api";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import dismoji from "../../emojis";
 import { useLocation } from "react-router-dom";
 import { hasPermission } from "common/utils";

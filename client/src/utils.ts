@@ -1,5 +1,5 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
-import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
+import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
 
 export function enumToArray<T extends { [key: string]: string | number }>(
@@ -38,6 +38,5 @@ export function getFactionCardImage(faction: Faction) {
 export const noteTypeIcon: Record<NoteType, IconDefinition> = {
     updated: faAnglesUp,
     reworked: faArrowRotateLeft,
-    replaced: faArrowRightArrowLeft,
-    implemented: faCheckCircle
+    replaced: faArrowRightArrowLeft
 };

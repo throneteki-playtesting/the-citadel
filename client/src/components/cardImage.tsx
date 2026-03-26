@@ -1,7 +1,7 @@
 import { Code, Faction, factions, IPlaytestCard } from "common/models/cards";
 import { useLazyGetCardQuery } from "../api/thronesdb";
 import { Alert, Skeleton } from "@heroui/react";
-import { getFactionCardImage } from "../utilities";
+import { getFactionCardImage } from "../utils";
 import { useEffect, useMemo, useState } from "react";
 import classNames from "classnames";
 import { generateReleaseImageUrl } from "common/utils";

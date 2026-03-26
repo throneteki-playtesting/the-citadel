@@ -7,6 +7,7 @@ import packs from "./packs";
 import reviews from "./reviews";
 import render from "./render";
 import suggestions from "./suggestions";
+import sync from "./sync";
 import { parseAPIRequest } from "@/middleware/filters";
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.use("/packs", parseAPIRequest, packs);
 router.use("/reviews", parseAPIRequest, reviews);
 router.use("/render", parseAPIRequest, render);
 router.use("/suggestions", parseAPIRequest, suggestions);
+router.use("/sync", parseAPIRequest, sync);
 
 router.post("/login", (req, res) => {
     res.redirect("/auth/discord");

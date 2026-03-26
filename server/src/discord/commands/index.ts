@@ -51,7 +51,7 @@ export class AutoCompleteHelper {
             }
             case "card": {
                 // Choices should be cards
-                let cards = await dataService.cards.database.read({ project });
+                let cards = await dataService.cards.read({ project });
                 // Manually filter out released cards (as their codes are different to dev version)
                 cards = cards.filter((card) => !card.release);
                 // Reverse to ensure the latest cards are added first
@@ -70,7 +70,7 @@ export class AutoCompleteHelper {
             }
             case "version": {
                 const code = interaction.options.getString("card") as Code;
-                const cards = await dataService.cards.database.read({ project, code });
+                const cards = await dataService.cards.read({ project, code });
                 choices = cards.map((card) => ({ name: card.version, value: card.version }));
                 break;
             }

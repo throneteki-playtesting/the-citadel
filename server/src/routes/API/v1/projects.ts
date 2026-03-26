@@ -5,8 +5,8 @@ import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
-import { hasPermission, Regex, SemanticVersion } from "common/utils";
-import { Permission, User } from "common/models/user";
+import { Regex, SemanticVersion } from "common/utils";
+import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, isEqual } from "lodash-es";
@@ -83,7 +83,7 @@ router.get("/:number",
 
 // Create project
 router.post("/",
-    validateRequest((user) => hasPermission(user, Permission.CREATE_PROJECTS)),
+    validateRequest(Permission.CREATE_PROJECTS),
     celebrate({
         [Segments.BODY]: Schemas.Project.Draft
     }),
@@ -105,7 +105,7 @@ router.post("/",
 
 // Initialise drafted project
 router.post("/:number/initialise",
-    validateRequest((user) => hasPermission(user, Permission.INITIALISE_PROJECTS)),
+    validateRequest(Permission.INITIALISE_PROJECTS),
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
@@ -169,7 +169,7 @@ router.post("/:number/initialise",
 
 // Update project
 router.put("/:number",
-    validateRequest((user) => hasPermission(user, Permission.EDIT_PROJECTS)),
+    validateRequest(Permission.EDIT_PROJECTS),
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
@@ -240,7 +240,7 @@ router.put("/:number",
 
 // Delete project
 router.delete("/:number",
-    validateRequest((user) => hasPermission(user, Permission.DELETE_PROJECTS)),
+    validateRequest(Permission.DELETE_PROJECTS),
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
@@ -260,7 +260,7 @@ router.delete("/:number",
 
 // Process playtesting update
 router.post("/:number/playtesting/update",
-    validateRequest((user) => hasPermission(user, Permission.GENERATE_PLAYTESTING_UPDATES)),
+    validateRequest(Permission.GENERATE_PLAYTESTING_UPDATES),
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
@@ -303,13 +303,9 @@ router.post("/:number/playtesting/update",
         let project = req["project"] as IProject;
         let playtestingUpdate = req["playtestingUpdate"] as IPlaytestingUpdate;
         let newCards = req["newCards"] as IPlaytestCard[];
-        const user = req["user"] as User;
 
         playtestingUpdate.project = project.number;
         playtestingUpdate.version = project.version + 1;
-        playtestingUpdate.createdBy = user.discordId;
-        playtestingUpdate.created = new Date();
-        playtestingUpdate.updated = playtestingUpdate.created;
 
         playtestingUpdate = await dataService.playtestingUpdates.create(playtestingUpdate);
 
@@ -334,7 +330,7 @@ router.post("/:number/playtesting/update",
 
 // Sync project card images
 router.post("/:number/sync/images",
-    validateRequest((user) => hasPermission(user, Permission.SAVE_RENDER_FILES)),
+    validateRequest(Permission.SAVE_RENDER_FILES),
     celebrate({
         [Segments.PARAMS]: {
             number: Joi.number().required()
@@ -352,7 +348,6 @@ router.post("/:number/sync/images",
         let cards = await dataService.cards.read({ project: project.number, number, version, latest });
 
         cards = await syncImage(cards);
-        cards = await dataService.cards.update(cards);
 
         res.status(StatusCodes.OK).json(cards);
     })

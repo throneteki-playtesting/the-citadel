@@ -22,9 +22,9 @@ export async function asPNG(data: SingleOrArray<IRenderCard>, options?: SingleRe
     const page = (await browser.pages())[0] ?? await browser.newPage();
     const job = await createJob("single", cards, options);
     try {
-        // TODO: Create integration authorization
-        await page.setExtraHTTPHeaders({ "Authorization": `Basic ${Buffer.from(`${process.env.BASIC_USERNAME}:${process.env.BASIC_PASSWORD}`).toString("base64")}` });
-        await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "networkidle0" });
+        const token = await dataService.integrations.fetchInternalToken();
+        await page.setExtraHTTPHeaders({ "Authorization": `Bearer ${token}` });
+        await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "domcontentloaded" });
         await page.evaluate(() => document.fonts.ready);
         // TODO: Handle error handling, but checking a "status" div on rendered page.
         //       That div should contain either "OK" or a stringified object of the error
@@ -94,7 +94,7 @@ async function createJob(type: RenderType, cards: IRenderCard[], options?: Singl
 async function launchPuppeteer(defaultViewport?: Viewport) {
     return await puppeteer.launch({
         ...(defaultViewport ? { defaultViewport } : {}),
-        headless: true,
+        headless: false,
         args: [
             "--disable-features=IsolateOrigins",
             "--disable-site-isolation-trials",

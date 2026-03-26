@@ -3,13 +3,11 @@ import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";
 import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent } from "@octokit/webhooks-types";
 import { dataService, githubService, logger } from "@/services";
-import { authGithubWebhook } from "@/middleware/auth";
-import { contextMiddleware } from "@/middleware/context";
+import { githubWebhookMiddleware } from "@/middleware/auth";
 
 const router = express.Router();
 
-router.use(authGithubWebhook);
-router.use(contextMiddleware);
+router.use(githubWebhookMiddleware);
 
 router.post("/issue",
     asyncHandler(async (req, res) => {

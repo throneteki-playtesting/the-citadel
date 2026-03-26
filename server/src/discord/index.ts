@@ -1,9 +1,8 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
-import { logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore } from "discord.js";
-import { requestContext } from "@/middleware/context";
-import { authDiscordUser } from "@/middleware/auth";
+import { dataService, logger } from "@/services";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember } from "discord.js";
+import { discordCommandMiddleware } from "@/middleware/auth";
 
 class DiscordService {
     private client: Client;
@@ -42,10 +41,7 @@ class DiscordService {
                     return;
                 }
                 if (interaction.isCommand() || interaction.isAutocomplete()) {
-                    // Captures the discord user to save user context
-                    const member = interaction.member;
-                    const user = await authDiscordUser(member);
-                    requestContext.run({ user }, async () => {
+                    await discordCommandMiddleware(interaction.member, async () => {
                         const command = commands[interaction.commandName as keyof typeof commands];
                         if (interaction.isChatInputCommand()) {
                             await command.execute(interaction);
@@ -152,6 +148,34 @@ class DiscordService {
         }
         return result || null;
     }
+
+    static async getUserFromMember(member: APIGuildMember | GuildMember) {
+        const discordUser = member.user;
+
+        let [user] = await dataService.users.read({ discordId: discordUser.id });
+        const nickname = discordUser["nick"] ?? discordUser["nickname"];
+        if (!user) {
+            user = {
+                id: discordUser.id,
+                discordId: discordUser.id,
+                username: discordUser.username,
+                displayname: nickname ?? discordUser.username,
+                avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+                permissions: [],
+                roles: [],
+                lastLogin: new Date()
+            };
+        } else {
+            user.username = discordUser.username;
+            user.displayname = nickname ?? discordUser.username;
+            user.avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
+            user.lastLogin = new Date();
+        }
+        await dataService.users.update(user);
+
+        return user;
+    }
+
 }
 
 export default DiscordService;

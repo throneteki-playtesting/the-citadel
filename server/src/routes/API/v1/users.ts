@@ -3,26 +3,31 @@ import { celebrate, Joi, Segments } from "celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
-import { Permission, User } from "common/models/user";
+import Permission from "common/models/permissions";
 import { validateRequest } from "@/middleware/permissions";
-import { hasPermission } from "common/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { orderBy, paging } from "@/schemas";
 import { generateGetResponse } from "@/utils";
 import { StatusCodes } from "http-status-codes";
+import { getContext } from "@/middleware/context";
+import { User } from "common/models/auth";
 
 const router = express.Router();
 
-// Authenticate user
-router.get("/auth",
+// Fetch current user (for client)
+router.get("/me",
     (req, res) => {
-        const user = req["user"];
+        const { source, principal } = getContext();
+        let user: User = null;
+        if (source === "client") {
+            user = principal;
+        }
         res.status(StatusCodes.OK).json(user);
     }
 );
 
 const handleGetUsers = [
-    validateRequest((user) => hasPermission(user, Permission.READ_USERS)),
+    validateRequest(Permission.READ_USERS),
     celebrate({
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.User.Partial),

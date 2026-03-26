@@ -4,7 +4,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IRenderCard } from "common/models/cards";
-import { asArray, hasPermission } from "common/utils";
+import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
@@ -12,7 +12,7 @@ import { UUID } from "crypto";
 import archiver from "archiver";
 import { BatchRenderJobOptions, SingleRenderJobOptions } from "@/types";
 import { validateRequest } from "@/middleware/permissions";
-import { Permission } from "common/models/user";
+import Permission from "common/models/permissions";
 import { asPDF, asPNG } from "@/rendering";
 
 export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
@@ -20,7 +20,7 @@ export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
 const router = express.Router();
 
 router.post("/",
-    validateRequest((user) => hasPermission(user, Permission.RENDER_CARDS)),
+    validateRequest(Permission.RENDER_CARDS),
     celebrate({
         [Segments.QUERY]: {
             format: Joi.string().insensitive().valid("PDF", "PNG").default("PNG"),

@@ -1,6 +1,6 @@
 import { Navigate, useParams } from "react-router-dom";
 import ProjectDetail from "./projectDetail";
-import { parseParamNumber } from "../../utilities";
+import { parseParamNumber } from "../../utils";
 
 const Project = ({ isCreating = false }: ProjectProps) => {
     const { number } = useParams();
