@@ -3,33 +3,21 @@ import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import { IPack, IPlaytestPack, ReleaseDate } from "common/models/pack";
-import { ApiErrorResponse } from "@/errors";
-import { StatusCodes } from "http-status-codes";
 import { IProject } from "common/models/projects";
+import { loadProjectByParam } from "@/utils";
 
 const router = express.Router();
 
-const validateProjectParam = () => {
-    return asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res, next) => {
-        const { project: number } = req.params;
-        const [project] = await dataService.projects.read({ number });
-        if (!project) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
-        }
-        req["project"] = project;
-        next();
-    });
+const ProjectParams = {
+    project: Joi.number().required()
 };
+
 // TODO: Openapi spec
 router.get("/:project/development",
-    celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required()
-        }
-    }),
-    validateProjectParam(),
+    celebrate({ [Segments.PARAMS]: ProjectParams }),
+    loadProjectByParam,
     asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
-        const project = req["project"] as IProject;
+        const project = res.locals.project as IProject;
         const cards = await dataService.cards.read({ project: project.number, latest: true, release: null });
 
         const pack: IPlaytestPack = {
@@ -42,24 +30,21 @@ router.get("/:project/development",
         };
 
         res.json(pack);
-    }));
+    })
+);
 
 router.get("/:project/release",
     celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required()
-        }
-    }),
-    validateProjectParam(),
-    celebrate({
+        [Segments.PARAMS]: ProjectParams,
         [Segments.QUERY]: {
             short: Joi.string().required(),
             name: Joi.string().required(),
             release: Joi.date().required()
         }
     }),
+    loadProjectByParam,
     asyncHandler<{ project: number }, unknown, unknown, { short: string, name: string, release: Date }>(async (req, res) => {
-        const project = req["project"] as IProject;
+        const project = res.locals.project as IProject;
         const { short, name, release } = req.query;
 
         const cards = await dataService.cards.read({ project: project.number, latest: true, release: { short } });
@@ -74,6 +59,7 @@ router.get("/:project/release",
         };
 
         res.json(pack);
-    }));
+    })
+);
 
 export default router;

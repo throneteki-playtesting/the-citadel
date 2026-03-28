@@ -10,123 +10,106 @@ import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
-import { generateGetResponse, NoteVersion } from "@/utils";
+import { applyToFilter, generateGetResponse, NoteVersion } from "@/utils";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 
 const router = express.Router();
 
-const handleGetCards = [
-    validateRequest(Permission.READ_CARDS),
-    celebrate({
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
-            ...paging(),
-            ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
-        }
-    }),
-    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res, next) => {
-        const { filter, orderBy, page, perPage } = req.query;
+// Shared param schemas
+const ProjectParams = {
+    project: Joi.number().required()
+};
 
-        const result = await dataService.cards.read(filter, orderBy, page, perPage);
-        const count = await dataService.cards.count(filter);
-        req["response"] = generateGetResponse(result, count);
-        next();
-    })
-];
+const CardParams = {
+    ...ProjectParams,
+    number: Joi.number().required()
+};
 
-// Read cards
-router.get("/",
-    ...handleGetCards,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IPlaytestCard>;
-        res.status(StatusCodes.OK).json(response);
+// Core data-fetching logic, shared across GET routes
+async function getCards(
+    filter: IGetRequest<IPlaytestCard>["filter"],
+    orderBy: IGetRequest<IPlaytestCard>["orderBy"],
+    page: IGetRequest<IPlaytestCard>["page"],
+    perPage: IGetRequest<IPlaytestCard>["perPage"]
+): Promise<IGetResponse<IPlaytestCard>> {
+    const [result, count] = await Promise.all([
+        dataService.cards.read(filter, orderBy, page, perPage),
+        dataService.cards.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
+
+// Reusable query schema for getting filtered, paged, ordered items
+const getQuerySchema = {
+    [Segments.QUERY]: {
+        filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
+        ...paging(),
+        ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
     }
+};
+
+// Read all cards
+router.get("/",
+    validateRequest(Permission.READ_CARDS),
+    celebrate({ [Segments.QUERY]: getQuerySchema }),
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getCards(filter, orderBy, page, perPage);
+        res.status(StatusCodes.OK).json(response);
+    })
 );
 
 // Read cards for project
 router.get("/:project",
-    celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required()
-        }
-    }),
-    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>((req, res, next) => {
+    celebrate({ [Segments.PARAMS]: ProjectParams }),
+    validateRequest(Permission.READ_CARDS),
+    celebrate({ [Segments.QUERY]: getQuerySchema }),
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project } = req.params;
-        let { filter } = req.query;
-        try {
-            filter = filter || {};
-            if (Array.isArray(filter)) {
-                filter.forEach((f) => f.project = project);
-            } else {
-                filter.project = project;
-            }
-            req.query.filter = filter;
-            next();
-        } catch (err) {
-            next(err);
-        }
-    }),
-    ...handleGetCards,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IPlaytestCard>;
+        const { filter, orderBy, page, perPage } = req.query;
+
+        const normalizedFilter = applyToFilter(filter, { project });
+        const response = await getCards(normalizedFilter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
-// Read all versions of card in project
+// Read all versions of a card in a project
 router.get("/:project/:number",
-    celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required()
-        }
-    }),
-    asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>((req, res, next) => {
+    celebrate({ [Segments.PARAMS]: CardParams }),
+    validateRequest(Permission.READ_CARDS),
+    celebrate({ [Segments.QUERY]: getQuerySchema }),
+    asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project, number } = req.params;
-        let { filter } = req.query;
-        try {
-            filter = filter || {};
-            if (Array.isArray(filter)) {
-                filter.forEach((f) => {
-                    f.project = project;
-                    f.number = number;
-                });
-            } else {
-                filter.project = project;
-                filter.number = number;
-            }
-            req.query.filter = filter;
-            next();
-        } catch (err) {
-            next(err);
-        }
-    }),
-    ...handleGetCards,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IPlaytestCard>;
+        const { filter, orderBy, page, perPage } = req.query;
+
+        const normalizedFilter = applyToFilter(filter, { project, number });
+        const response = await getCards(normalizedFilter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
 // Upsert draft card
 router.put("/:project/:number/draft",
     celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required()
-        },
+        [Segments.PARAMS]: CardParams,
         [Segments.BODY]: Schemas.PlaytestingCard.Draft
     }),
-    validateRequest(async (principal, req) => {
+    // Load and validate entities, separate from permission check
+    asyncHandler<{ project: number, number: number }, unknown, IPlaytestCard, unknown>(async (req, res, next) => {
         const { project: projectNumber, number } = req.params;
         const { version } = req.body;
+
         const [project] = await dataService.projects.read({ number: projectNumber });
         if (!project) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} does not exist`);
         }
-        const [latest] = await dataService.cards.read({ project: projectNumber, number, latest: true });
-        const [draft] = await dataService.cards.read({ project: projectNumber, number, draft: true });
+
+        const [[latest], [draft]] = await Promise.all([
+            dataService.cards.read({ project: projectNumber, number, latest: true }),
+            dataService.cards.read({ project: projectNumber, number, draft: true })
+        ]);
 
         if (!project.draft && !(latest || draft)) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Card #${number} does not exist for project #${projectNumber}`);
@@ -135,29 +118,30 @@ router.put("/:project/:number/draft",
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.0 version`);
         }
 
-        req["project"] = project;
-        req["latest"] = latest;
-        req["draft"] = draft;
-        return hasPermission(principal, (draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS));
+        res.locals.project = project;
+        res.locals.latest = latest as IPlaytestCard | undefined;
+        res.locals.draft = draft as IPlaytestCard | undefined;
+        next();
+    }),
+    // Permission check now uses already-loaded entities from res.locals
+    validateRequest((principal, req, res) => {
+        const { draft } = res.locals;
+        return hasPermission(principal, draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS);
     }),
     asyncHandler<{ project: number, number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
         const { project, number } = req.params;
-        const latest = req["latest"] as IPlaytestCard | undefined;
-        const existing = req["draft"] as IPlaytestCard | undefined;
+        const latest = res.locals.latest as IPlaytestCard | undefined;
+        const existing = res.locals.draft as IPlaytestCard | undefined;
 
         let card = req.body;
         const code = parseCardCode(false, project, number);
 
-        // If card does not exist, version should be preview (0.0.0)
         let version = "0.0.0" as SemanticVersion;
         if (latest) {
-            // Preview cards are simply updated, without version incrementing
-            // To initialise all preview cards to 1.0.0, use /:project/initialise
             version = isPreview(latest) ? latest.version : inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion;
         }
 
         if (existing && existing.version !== version) {
-            // Existing draft with different version needs to be removed first as upsert will not match (as version is a primary key)
             await dataService.cards.destroy({ project, number, version: existing.version });
         }
 
@@ -184,10 +168,7 @@ router.put("/:project/:number/draft",
 router.delete("/:project/:number/draft",
     validateRequest(Permission.DELETE_CARDS),
     celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required()
-        }
+        [Segments.PARAMS]: CardParams
     }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number } = req.params;
@@ -198,71 +179,5 @@ router.delete("/:project/:number/draft",
         res.status(StatusCodes.OK).json(deleted);
     })
 );
-
-// TODO: Consider adding update + delete any card (with separate permission)
-
-// Legacy (GAS script updates)
-// router.post("/",
-//     validateRequest(Permission.CREATE_CARDS),
-//     celebrate({
-//         [Segments.BODY]: Schemas.SingleOrArray(Schemas.PlaytestingCard.Full)
-//     }),
-//     asyncHandler<unknown, unknown, SingleOrArray<IPlaytestCard>, unknown>(async (req, res) => {
-//         const body = req.body;
-//         const cards = asArray(body).map((card) => new PlaytestingCard(card));
-
-//         const incType = (type: NoteType) => {
-//             switch (type) {
-//                 case "replaced": return "major";
-//                 case "reworked": return "minor";
-//                 case "updated": return "patch";
-//             }
-//         };
-//         logger.verbose(`Recieved ${cards.length} card update(s) from sheets`);
-//         const latest: IPlaytestCard[] = [];
-//         const upsert: IPlaytestCard[] = [];
-//         const destroy: DeepPartial<IPlaytestCard>[] = [];
-
-//         for (const card of cards) {
-//         // If card is not in playtesting, push updates
-//             if (!card.playtesting) {
-//                 upsert.push(card);
-//             }
-
-//             // If card is currently being drafted (eg. edited)
-//             if (card.isDraft) {
-//                 const expectedVersion = inc(card.playtesting, incType(card.note.type));
-//                 // If it's version has not been incremented, increment it, and push new id card to database/archive
-//                 if (card.version !== expectedVersion) {
-//                     const newCard = card.clone();
-//                     // Setting the incremented version of "latest" (card) for sheet and to the newly upserted card into database
-//                     card.version = newCard.version = inc(card.playtesting, incType(card.note.type)) as SemanticVersion;
-//                     upsert.push(newCard);
-//                 } else {
-//                     upsert.push(card);
-//                 }
-//                 // Either way, push changes to latest to properly sync
-//                 latest.push(card);
-//             }
-//             // If versions do not match (and is not in draft), then a draft has been reverted, and thus should be deleted in database/archive, and version reverted in latest
-//             else if (card.version !== card.playtesting) {
-//                 destroy.push({ project: card.project, number: card.number, version: card.version });
-//                 card.version = card.playtesting;
-//                 latest.push(card);
-//             }
-//         }
-
-//         await dataService.cards.update(upsert, true);
-//         if (destroy.length > 0) {
-//             await dataService.cards.destroy(destroy);
-//         }
-//         await dataService.cards.spreadsheet.update(latest, { sheets: ["latest"] });
-
-//         res.status(StatusCodes.OK).send({
-//             updated: upsert.length + latest.length,
-//             deleted: destroy.length
-//         });
-//     })
-// );
 
 export default router;

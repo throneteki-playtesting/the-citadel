@@ -1,4 +1,4 @@
-import express, { Request } from "express";
+import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
@@ -10,99 +10,102 @@ import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
-import { generateGetResponse } from "@/utils";
+import { generateGetResponse, applyToFilter } from "@/utils";
 import { ApiErrorResponse } from "@/errors";
 
 const router = express.Router();
 
-const handleGetReviews = [
-    validateRequest(Permission.READ_REVIEWS),
-    celebrate({
+const reviewParams = {
+    project: Joi.number().required(),
+    number: Joi.number().required(),
+    version: Joi.string().required().regex(Regex.SemanticVersion),
+    reviewer: Joi.string().required()
+};
+
+async function getReviews(
+    filter: IGetRequest<IPlaytestReview>["filter"],
+    orderBy: IGetRequest<IPlaytestReview>["orderBy"],
+    page: IGetRequest<IPlaytestReview>["page"],
+    perPage: IGetRequest<IPlaytestReview>["perPage"]
+): Promise<IGetResponse<IPlaytestReview>> {
+    const [result, count] = await Promise.all([
+        dataService.reviews.read(filter, orderBy, page, perPage),
+        dataService.reviews.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
+
+// Reusable query schema for getting filtered, paged, ordered items
+const getQuerySchema = {
+    [Segments.QUERY]: {
         [Segments.QUERY]: {
             filter: Schemas.SingleOrArray(Schemas.PlaytestingReview.Partial),
             ...paging(),
             ...orderBy<IPlaytestReview>(Schemas.PlaytestingReview.Full, { updated: "desc" })
         }
-    }),
-    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestReview>>(async (req, res, next) => {
-        const { filter, orderBy, page, perPage } = req.query;
-        const result = await dataService.reviews.read(filter, orderBy, page, perPage);
-        const count = await dataService.reviews.count(filter);
-
-        req["response"] = generateGetResponse(result, count);
-        next();
-    })
-];
+    }
+};
 
 // Read reviews
 router.get("/",
-    ...handleGetReviews,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IPlaytestReview>;
+    validateRequest(Permission.READ_REVIEWS),
+    celebrate({ [Segments.QUERY]: getQuerySchema }),
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestReview>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getReviews(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
 // Read review by project/number/version/reviewer
 router.get("/:project/:number/:version/:reviewer",
+    validateRequest(Permission.READ_REVIEWS),
     celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required(),
-            version: Joi.string().required().regex(Regex.SemanticVersion),
-            reviewer: Joi.string().required()
-        }
+        [Segments.PARAMS]: reviewParams,
+        [Segments.QUERY]: getQuerySchema
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, IGetRequest<IPlaytestReview>>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
-        try {
-            req.query["filter"] = { project, number, version, reviewer };
-            next();
-        } catch (err) {
-            next(err);
-        }
-    }),
-    ...handleGetReviews,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IPlaytestReview>;
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getReviews(applyToFilter(filter, { project, number, version, reviewer }), orderBy, page, perPage);
         const [review] = response.items;
         res.status(StatusCodes.OK).json(review);
-    }
+    })
 );
 
 // Create review
 router.post("/",
     validateRequest(Permission.MAKE_REVIEWS),
-    celebrate({
-        [Segments.BODY]: Schemas.PlaytestingReview.Draft
-    }),
+    celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
     asyncHandler<unknown, unknown, IPlaytestReview, unknown>(async (req, res) => {
         let review = req.body;
-
         review = await dataService.reviews.create(review);
-
         res.status(StatusCodes.OK).json(review);
     })
 );
 
 // Update review
 router.put("/:project/:number/:version/:reviewer",
-    celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required(),
-            version: Joi.string().required().regex(Regex.SemanticVersion),
-            reviewer: Joi.string().required()
-        }
-    }),
-    validateRequest(async (principal, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>) => {
+    // Initial check to see if they have one of the appropriate permissions
+    validateRequest((principal) => hasPermission(principal, Permission.EDIT_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)),
+    celebrate({ [Segments.PARAMS]: reviewParams }),
+    // Load review for ownership check
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
-        return !!review && hasPermission(principal, Permission.EDIT_REVIEWS) || validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
+        if (!review) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", "Review for that project, number, version & reviewer does not exist");
+        }
+        res.locals.review = review;
+        next();
     }),
-    celebrate({
-        [Segments.BODY]: Schemas.PlaytestingReview.Draft
+    // Further permission check, now with context of the review
+    validateRequest((principal, req, res) => {
+        const review = res.locals.review as IPlaytestReview;
+        return hasPermission(principal, Permission.EDIT_REVIEWS) ||
+            validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
     }),
+    celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         let review = req.body;
@@ -113,62 +116,36 @@ router.put("/:project/:number/:version/:reviewer",
         review.reviewer = reviewer;
 
         review = await dataService.reviews.update(review);
-
         res.status(StatusCodes.OK).json(review);
     })
 );
 
 // Delete review
-router.delete("/:project/:number/:version/:discordId",
-    celebrate({
-        [Segments.PARAMS]: {
-            project: Joi.number().required(),
-            number: Joi.number().required(),
-            version: Joi.string().required().regex(Regex.SemanticVersion),
-            reviewer: Joi.string().required()
-        }
-    }),
-    validateRequest(async (principal, req: Request<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>) => {
+router.delete("/:project/:number/:version/:reviewer",
+    // Initial check to see if they have one of the appropriate permissions
+    validateRequest((principal) => hasPermission(principal, Permission.DELETE_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)),
+    celebrate({ [Segments.PARAMS]: reviewParams }),
+    // Load review for ownership check
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
-        return !!review && hasPermission(principal, Permission.DELETE_REVIEWS) || validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
+        if (!review) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", "Review for that project, number, version & reviewer does not exist");
+        }
+        res.locals.review = review;
+        next();
+    }),
+    // Further permission check, now with context of the review
+    validateRequest((principal, req, res) => {
+        const review = res.locals.review as IPlaytestReview;
+        return hasPermission(principal, Permission.DELETE_REVIEWS) ||
+            validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
     }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         const [deleted] = await dataService.reviews.destroy({ project, number, version, reviewer });
-        if (!deleted) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", "Review for that project, number, version & reviewer does not exist");
-        }
         res.status(StatusCodes.OK).json(deleted);
     })
 );
-
-// Legacy (GAS Api)
-// router.post("/bulk", celebrate({
-//     [Segments.BODY]: Joi.array().items(Schemas.PlaytestingReview.Draft)
-// }), asyncHandler<unknown, unknown, IPlaytestReview[], unknown>(async (req, res) => {
-//     const body = req.body;
-
-//     await dataService.reviews.update(body, true);
-
-//     const allCreated = [];
-//     const allUpdated = [];
-//     const allFailed = [];
-
-//     const reviews = asArray(body);
-//     const guilds = await discordService.getGuilds();
-//     for (const guild of guilds) {
-//         const { created, updated, failed } = await ReviewThreads.sync(guild, true, ...reviews);
-//         allCreated.push(...created);
-//         allUpdated.push(...updated);
-//         allFailed.push(...failed);
-//     }
-
-//     res.send({
-//         created: allCreated,
-//         updated: allUpdated,
-//         failed: allFailed
-//     });
-// }));
 
 export default router;

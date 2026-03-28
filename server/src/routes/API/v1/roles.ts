@@ -13,7 +13,20 @@ import { Role } from "common/models/auth";
 
 const router = express.Router();
 
-const handleGetRoles = [
+async function getRoles(
+    filter: IGetRequest<Role>["filter"],
+    orderBy: IGetRequest<Role>["orderBy"],
+    page: IGetRequest<Role>["page"],
+    perPage: IGetRequest<Role>["perPage"]
+): Promise<IGetResponse<Role>> {
+    const [result, count] = await Promise.all([
+        dataService.roles.read(filter, orderBy, page, perPage),
+        dataService.roles.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
+
+const validateGetRoles = [
     validateRequest(Permission.READ_ROLES),
     celebrate({
         [Segments.QUERY]: {
@@ -21,38 +34,29 @@ const handleGetRoles = [
             ...paging(),
             ...orderBy<Role>(Schemas.Role.Full, { name: "asc" })
         }
-    }),
-    asyncHandler<unknown, unknown, unknown, IGetRequest<Role>>(async (req, res, next) => {
-        const { filter, orderBy, page, perPage } = req.query;
-        const result = await dataService.users.read(filter, orderBy, page, perPage);
-        const count = await dataService.users.count(filter);
-
-        req["response"] = generateGetResponse(result, count);
-        next();
     })
 ];
 
 // Read roles
 router.get("/",
-    ...handleGetRoles,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<Role>;
+    ...validateGetRoles,
+    asyncHandler<unknown, unknown, unknown, IGetRequest<Role>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getRoles(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
 // Update role
 router.put("/:discordId",
-    celebrate({
-        [Segments.BODY]: Schemas.Role.Full
-    }), asyncHandler<{ discordId: string }, unknown, Role, unknown>(async (req, res) => {
+    celebrate({ [Segments.BODY]: Schemas.Role.Full }),
+    asyncHandler<{ discordId: string }, unknown, Role, unknown>(async (req, res) => {
         const { discordId } = req.params;
         const role = req.body;
         // Prevent discordId from being changed
         role.discordId = discordId;
 
         const result = await dataService.roles.update(role);
-
         res.status(StatusCodes.OK).json(result);
     })
 );

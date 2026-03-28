@@ -1,7 +1,11 @@
 import { ILabeledCard, IPlaytestCard, NoteType } from "common/models/cards";
-import { IGetResponse } from "./types";
+import { IGetRequest, IGetResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
+import { StatusCodes } from "http-status-codes";
+import { ApiErrorResponse } from "./errors";
+import { dataService } from "./services";
+import asyncHandler from "express-async-handler";
 
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     "replaced": "major",
@@ -74,4 +78,40 @@ export function getTimeLockedImageUrl(card: IPlaytestCard) {
 
 export function pascalCase(value: string) {
     return startCase(camelCase(value)).replace(/ /g, "");
+}
+
+// Shared middleware: loads a project by :number param into res.locals.project
+// Works for routes where the project param is named "number"
+export const loadProjectByNumber = asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res, next) => {
+    const { number } = req.params;
+    const [project] = await dataService.projects.read({ number });
+    if (!project) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
+    }
+    res.locals.project = project;
+    next();
+});
+
+// Shared middleware: loads a project by :project param into res.locals.project
+// Works for routes where the project param is named "project"
+export const loadProjectByParam = asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res, next) => {
+    const { project: number } = req.params;
+    const [project] = await dataService.projects.read({ number });
+    if (!project) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
+    }
+    res.locals.project = project;
+    next();
+});
+
+// Applies extra filter fields to a single filter or each filter in an array,
+// without mutating the original value
+export function applyToFilter<T>(
+    filter: IGetRequest<T>["filter"],
+    extra: Partial<T>
+): IGetRequest<T>["filter"] {
+    if (Array.isArray(filter)) {
+        return filter.map((f) => ({ ...f, ...extra } as typeof f));
+    }
+    return { ...(filter ?? {}), ...extra } as typeof filter;
 }

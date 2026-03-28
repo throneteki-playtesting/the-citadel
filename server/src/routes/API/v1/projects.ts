@@ -13,72 +13,64 @@ import { cloneDeep, isEqual } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { orderBy, paging } from "@/schemas";
-import { generateGetResponse } from "@/utils";
+import { generateGetResponse, applyToFilter, loadProjectByNumber } from "@/utils";
 import { syncImage } from "@/rendering/hosting";
 
 const router = express.Router();
 
-const validateProjectParam = () => {
-    return asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res, next) => {
-        const { number } = req.params;
-        const [project] = await dataService.projects.read({ number });
-        if (!project) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
-        }
-        req["project"] = project;
-        next();
-    });
+const numberParams = {
+    number: Joi.number().required()
 };
 
-const handleGetProjects = [
-    celebrate({
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.Project.Partial),
-            ...paging(),
-            ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
-        }
-    }),
-    asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, res, next) => {
-        const { filter, orderBy, page, perPage } = req.query;
-        const result = await dataService.projects.read(filter, orderBy, page, perPage);
-        const count = await dataService.projects.count(filter);
+async function getProjects(
+    filter: IGetRequest<IProject>["filter"],
+    orderBy: IGetRequest<IProject>["orderBy"],
+    page: IGetRequest<IProject>["page"],
+    perPage: IGetRequest<IProject>["perPage"]
+): Promise<IGetResponse<IProject>> {
+    const [result, count] = await Promise.all([
+        dataService.projects.read(filter, orderBy, page, perPage),
+        dataService.projects.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
 
-        req["response"] = generateGetResponse(result, count);
-        next();
-    })
-];
+// Reusable query schema for getting filtered, paged, ordered items
+const getQuerySchema = {
+    [Segments.QUERY]: {
+        filter: Schemas.SingleOrArray(Schemas.Project.Partial),
+        ...paging(),
+        ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
+    }
+};
 
 // Read projects
 router.get("/",
-    ...handleGetProjects,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IProject>;
+    validateRequest(Permission.READ_PROJECTS),
+    celebrate({
+        [Segments.QUERY]: getQuerySchema
+    }),
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getProjects(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
 // Read project by number
 router.get("/:number",
+    validateRequest(Permission.READ_PROJECTS),
     celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        }
+        [Segments.PARAMS]: numberParams,
+        [Segments.QUERY]: getQuerySchema
     }),
-    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res, next) => {
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
         const { number } = req.params;
-        try {
-            req.query["filter"] = { number };
-            next();
-        } catch (err) {
-            next(err);
-        }
-    }),
-    ...handleGetProjects,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<IProject>;
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getProjects(applyToFilter(filter, { number }), orderBy, page, perPage);
         const [project] = response.items;
         res.status(StatusCodes.OK).json(project);
-    }
+    })
 );
 
 // Create project
@@ -106,17 +98,10 @@ router.post("/",
 // Initialise drafted project
 router.post("/:number/initialise",
     validateRequest(Permission.INITIALISE_PROJECTS),
-    celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        }
-    }),
-    validateProjectParam(),
+    celebrate({ [Segments.PARAMS]: numberParams }),
+    loadProjectByNumber,
     asyncHandler(async (req, res, next) => {
-        const project = req["project"] as IProject;
-        if (!project) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
-        }
+        const project = res.locals.project as IProject;
         if (!project.draft) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Only draft projects can be initialised");
         }
@@ -125,12 +110,12 @@ router.post("/:number/initialise",
         if (cards.length < totalSlots) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Slots", "Project is missing cards for allocated slots; either provide cards, or adjust card slots");
         }
-        req["cards"] = cards;
+        res.locals.cards = cards;
         next();
     }),
     asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
-        let project = req["project"] as IProject;
-        const cards = req["cards"] as IPlaytestCard[];
+        let project = res.locals.project as IProject;
+        const cards = res.locals.cards as IPlaytestCard[];
         let newCards: IPlaytestCard[] = [];
         // Mapping suggestion id's to the card numbers they have been consumed for
         const suggestionNumbers: Record<string, number> = {};
@@ -146,7 +131,7 @@ router.post("/:number/initialise",
 
         project = await dataService.projects.update(project);
         // Need to destroy old versions (0.0.0) and create new (1.0.0)
-        // Destory + Create required, as version is a primary key
+        // Destroy + Create required, as version is a primary key
         await dataService.cards.destroy(cards);
         newCards = await dataService.cards.create(newCards);
 
@@ -157,13 +142,10 @@ router.post("/:number/initialise",
             for (const suggestion of suggestions) {
                 suggestion.archivedReason = `Used for ${project.code} card #${suggestionNumbers[suggestion.id]}`;
             }
-
             await dataService.suggestions.update(suggestions);
         }
-        res.status(StatusCodes.OK).json({
-            project,
-            cards: newCards
-        });
+
+        res.status(StatusCodes.OK).json({ project, cards: newCards });
     })
 );
 
@@ -171,9 +153,7 @@ router.post("/:number/initialise",
 router.put("/:number",
     validateRequest(Permission.EDIT_PROJECTS),
     celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        },
+        [Segments.PARAMS]: numberParams,
         [Segments.BODY]: Schemas.Project.Full
     }),
     asyncHandler<{ number: number }, unknown, IProject, unknown>(async (req, res) => {
@@ -209,11 +189,7 @@ router.put("/:number",
                 previousLimit += oldVal;
                 const newMax = previousLimit + totalShift + (newVal - oldVal);
 
-                shifts[faction] = {
-                    offset: totalShift,
-                    newMax: newMax
-                };
-
+                shifts[faction] = { offset: totalShift, newMax };
                 totalShift += (newVal - oldVal);
             }
 
@@ -241,11 +217,7 @@ router.put("/:number",
 // Delete project
 router.delete("/:number",
     validateRequest(Permission.DELETE_PROJECTS),
-    celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        }
-    }),
+    celebrate({ [Segments.PARAMS]: numberParams }),
     asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
         const { number } = req.params;
         const [deleted] = await dataService.projects.destroy({ number });
@@ -253,7 +225,6 @@ router.delete("/:number",
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);
         }
         await dataService.cards.destroy({ project: number });
-
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -262,27 +233,24 @@ router.delete("/:number",
 router.post("/:number/playtesting/update",
     validateRequest(Permission.GENERATE_PLAYTESTING_UPDATES),
     celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        },
+        [Segments.PARAMS]: numberParams,
         [Segments.BODY]: Schemas.PlaytestingUpdate.Draft
     }),
-    validateProjectParam(),
+    loadProjectByNumber,
     asyncHandler<{ number: number }, unknown, IPlaytestingUpdate, unknown>(async (req, res, next) => {
-        const project = req["project"] as IProject;
+        const project = res.locals.project as IProject;
 
         if (!project.active) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Cannot create playtesting update for inactive projects");
         }
 
         const playtestingUpdate = req.body;
-
         const draftCards = await dataService.cards.read({ project: project.number, draft: true });
         const newCards: IPlaytestCard[] = [];
         const missing: string[] = [];
 
         for (const [number, version] of Object.entries(playtestingUpdate.cardChanges)) {
-            const draftCard = draftCards.find(((card) => card.number === parseInt(number) && card.version === version));
+            const draftCard = draftCards.find((card) => card.number === parseInt(number) && card.version === version);
             if (!draftCard) {
                 missing.push(`${number} (v${version})`);
             } else {
@@ -294,19 +262,17 @@ router.post("/:number/playtesting/update",
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Changes", `Some card changes do not exist as draft cards: ${missing.join(", ")}`);
         }
 
-        req["project"] = project;
-        req["playtestingUpdate"] = playtestingUpdate;
-        req["newCards"] = newCards;
+        res.locals.playtestingUpdate = playtestingUpdate;
+        res.locals.newCards = newCards;
         next();
     }),
     asyncHandler(async (req, res) => {
-        let project = req["project"] as IProject;
-        let playtestingUpdate = req["playtestingUpdate"] as IPlaytestingUpdate;
-        let newCards = req["newCards"] as IPlaytestCard[];
+        let project = res.locals.project as IProject;
+        let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
+        let newCards = res.locals.newCards as IPlaytestCard[];
 
         playtestingUpdate.project = project.number;
         playtestingUpdate.version = project.version + 1;
-
         playtestingUpdate = await dataService.playtestingUpdates.create(playtestingUpdate);
 
         for (const newCard of newCards) {
@@ -317,14 +283,9 @@ router.post("/:number/playtesting/update",
 
         project.version = project.version + 1;
         project.updated = new Date();
-
         project = await dataService.projects.update(project);
 
-        res.status(StatusCodes.OK).json({
-            playtestingUpdate,
-            project,
-            cards: newCards
-        });
+        res.status(StatusCodes.OK).json({ playtestingUpdate, project, cards: newCards });
     })
 );
 
@@ -332,18 +293,16 @@ router.post("/:number/playtesting/update",
 router.post("/:number/sync/images",
     validateRequest(Permission.SAVE_RENDER_FILES),
     celebrate({
-        [Segments.PARAMS]: {
-            number: Joi.number().required()
-        },
+        [Segments.PARAMS]: numberParams,
         [Segments.QUERY]: {
             number: Joi.number(),
             version: Joi.string().regex(Regex.SemanticVersion),
             latest: Joi.boolean()
         }
     }),
-    validateProjectParam(),
+    loadProjectByNumber,
     asyncHandler<{ number: number }, unknown, unknown, { number?: number, version?: SemanticVersion, latest?: boolean }>(async (req, res) => {
-        const project = req["project"] as IProject;
+        const project = res.locals.project as IProject;
         const { number, version, latest } = req.query;
         let cards = await dataService.cards.read({ project: project.number, number, version, latest });
 

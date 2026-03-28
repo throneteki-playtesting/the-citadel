@@ -14,6 +14,30 @@ import { User } from "common/models/auth";
 
 const router = express.Router();
 
+async function getUsers(
+    filter: IGetRequest<User>["filter"],
+    orderBy: IGetRequest<User>["orderBy"],
+    page: IGetRequest<User>["page"],
+    perPage: IGetRequest<User>["perPage"]
+): Promise<IGetResponse<User>> {
+    const [result, count] = await Promise.all([
+        dataService.users.read(filter, orderBy, page, perPage),
+        dataService.users.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
+
+const validateGetUsers = [
+    validateRequest(Permission.READ_USERS),
+    celebrate({
+        [Segments.QUERY]: {
+            filter: Schemas.SingleOrArray(Schemas.User.Partial),
+            ...paging(),
+            ...orderBy<User>(Schemas.User.Full, { displayname: "asc" })
+        }
+    })
+];
+
 // Fetch current user (for client)
 router.get("/me",
     (req, res) => {
@@ -26,61 +50,36 @@ router.get("/me",
     }
 );
 
-const handleGetUsers = [
-    validateRequest(Permission.READ_USERS),
-    celebrate({
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.User.Partial),
-            ...paging(),
-            ...orderBy<User>(Schemas.User.Full, { displayname: "asc" })
-        }
-    }),
-    asyncHandler<unknown, unknown, unknown, IGetRequest<User>>(async (req, res, next) => {
-        const { filter, orderBy, page, perPage } = req.query;
-        const result = await dataService.users.read(filter, orderBy, page, perPage);
-        const count = await dataService.users.count(filter);
-
-        req["response"] = generateGetResponse(result, count);
-        next();
-    })
-];
-
 // Read users
 router.get("/",
-    ...handleGetUsers,
-    (req, res) => {
-        const response = req["response"] as IGetResponse<User>;
+    ...validateGetUsers,
+    asyncHandler<unknown, unknown, unknown, IGetRequest<User>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getUsers(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
-    }
+    })
 );
 
-// Read user by id
+// Read user by discordId
 router.get("/:discordId",
-    celebrate({
-        [Segments.PARAMS]: {
-            discordId: Joi.string().required()
-        }
-    }),
+    celebrate({ [Segments.PARAMS]: { discordId: Joi.string().required() } }),
     asyncHandler<{ discordId: string }, unknown, unknown, unknown>(async (req, res) => {
         const { discordId } = req.params;
         const [result] = await dataService.users.read({ discordId });
-
         res.status(StatusCodes.OK).json(result);
     })
 );
 
 // Update user
 router.put("/:discordId",
-    celebrate({
-        [Segments.BODY]: Schemas.User.Full
-    }), asyncHandler<{ discordId: string }, unknown, User, unknown>(async (req, res) => {
+    celebrate({ [Segments.BODY]: Schemas.User.Full }),
+    asyncHandler<{ discordId: string }, unknown, User, unknown>(async (req, res) => {
         const { discordId } = req.params;
         const user = req.body;
         // Prevent discordId from being changed
         user.discordId = discordId;
 
         const result = await dataService.users.update(user);
-
         res.status(StatusCodes.OK).json(result);
     })
 );
