@@ -37,11 +37,9 @@ async function getProjects(
 
 // Reusable query schema for getting filtered, paged, ordered items
 const getQuerySchema = {
-    [Segments.QUERY]: {
-        filter: Schemas.SingleOrArray(Schemas.Project.Partial),
-        ...paging(),
-        ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
-    }
+    filter: Schemas.SingleOrArray(Schemas.Project.Partial),
+    ...paging(),
+    ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
 };
 
 // Read projects

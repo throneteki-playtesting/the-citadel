@@ -27,16 +27,12 @@ async function getUsers(
     return generateGetResponse(result, count);
 }
 
-const validateGetUsers = [
-    validateRequest(Permission.READ_USERS),
-    celebrate({
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.User.Partial),
-            ...paging(),
-            ...orderBy<User>(Schemas.User.Full, { displayname: "asc" })
-        }
-    })
-];
+// Reusable query schema for getting filtered, paged, ordered items
+const getQuerySchema = {
+    filter: Schemas.SingleOrArray(Schemas.User.Partial),
+    ...paging(),
+    ...orderBy<User>(Schemas.User.Full, { displayname: "asc" })
+};
 
 // Fetch current user (for client)
 router.get("/me",
@@ -52,7 +48,8 @@ router.get("/me",
 
 // Read users
 router.get("/",
-    ...validateGetUsers,
+    validateRequest(Permission.READ_USERS),
+    celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<User>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getUsers(filter, orderBy, page, perPage);
@@ -62,6 +59,7 @@ router.get("/",
 
 // Read user by discordId
 router.get("/:discordId",
+    validateRequest(Permission.READ_USERS),
     celebrate({ [Segments.PARAMS]: { discordId: Joi.string().required() } }),
     asyncHandler<{ discordId: string }, unknown, unknown, unknown>(async (req, res) => {
         const { discordId } = req.params;
@@ -72,6 +70,7 @@ router.get("/:discordId",
 
 // Update user
 router.put("/:discordId",
+    validateRequest(Permission.EDIT_USERS),
     celebrate({ [Segments.BODY]: Schemas.User.Full }),
     asyncHandler<{ discordId: string }, unknown, User, unknown>(async (req, res) => {
         const { discordId } = req.params;

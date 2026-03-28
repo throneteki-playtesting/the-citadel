@@ -37,13 +37,9 @@ async function getReviews(
 
 // Reusable query schema for getting filtered, paged, ordered items
 const getQuerySchema = {
-    [Segments.QUERY]: {
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.PlaytestingReview.Partial),
-            ...paging(),
-            ...orderBy<IPlaytestReview>(Schemas.PlaytestingReview.Full, { updated: "desc" })
-        }
-    }
+    filter: Schemas.SingleOrArray(Schemas.PlaytestingReview.Partial),
+    ...paging(),
+    ...orderBy<IPlaytestReview>(Schemas.PlaytestingReview.Full, { updated: "desc" })
 };
 
 // Read reviews

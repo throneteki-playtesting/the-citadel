@@ -30,11 +30,9 @@ async function getSuggestions(
 
 // Reusable query schema for getting filtered, paged, ordered items
 const getQuerySchema = {
-    [Segments.QUERY]: {
-        filter: Schemas.SingleOrArray(Schemas.CardSuggestion.Partial),
-        ...paging(),
-        ...orderBy<ICardSuggestion>(Schemas.CardSuggestion.Full, { created: "desc" })
-    }
+    filter: Schemas.SingleOrArray(Schemas.CardSuggestion.Partial),
+    ...paging(),
+    ...orderBy<ICardSuggestion>(Schemas.CardSuggestion.Full, { created: "desc" })
 };
 
 // Read tags

@@ -42,11 +42,9 @@ async function getCards(
 
 // Reusable query schema for getting filtered, paged, ordered items
 const getQuerySchema = {
-    [Segments.QUERY]: {
-        filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
-        ...paging(),
-        ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
-    }
+    filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
+    ...paging(),
+    ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
 };
 
 // Read all cards
