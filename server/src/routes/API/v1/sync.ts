@@ -26,7 +26,15 @@ router.get("/events", (req, res) => {
     const clientId = randomUUID();
     sseService.addBroadcastClient(clientId, res);
 
-    req.on("close", () => sseService.removeBroadcastClient(clientId));
+    // Send a keepalive comment every 30 seconds
+    const keepalive = setInterval(() => {
+        res.write(": keepalive\n\n");
+    }, 30000);
+
+    req.on("close", () => {
+        sseService.removeBroadcastClient(clientId);
+        clearInterval(keepalive);
+    });
 });
 
 // Per-resource progress channel — opt-in per component
@@ -39,7 +47,15 @@ router.get("/progress/:type/:id", (req, res) => {
     const clientId = randomUUID();
     sseService.addProgressClient(clientId, type as SyncType, id, res);
 
-    req.on("close", () => sseService.removeProgressClient(clientId));
+    // Send a keepalive comment every 30 seconds
+    const keepalive = setInterval(() => {
+        res.write(": keepalive\n\n");
+    }, 30000);
+
+    req.on("close", () => {
+        sseService.removeBroadcastClient(clientId);
+        clearInterval(keepalive);
+    });
 });
 
 export default router;
