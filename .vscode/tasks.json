@@ -3,9 +3,7 @@
 	"tasks": [
 		{
 			"type": "eslint",
-			"problemMatcher": [
-				"$eslint-stylish"
-			],
+			"problemMatcher": ["$eslint-stylish"],
 			"label": "eslint: lint whole folder"
 		},
 		{
@@ -24,7 +22,7 @@
 				},
 				"background": {
 					"activeOnStart": true,
-					// "beginsPattern": ".*",
+					"beginsPattern": ".*",
 					"endsPattern": "ready in [0-9]+ ms"
 				}
 			}
