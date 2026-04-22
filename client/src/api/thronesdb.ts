@@ -1,5 +1,4 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import { baseUrl } from ".";
 import { Code, ILabeledCard } from "common/models/cards";
 import { buildUrl } from "common/utils";
 import { IDecklist } from "common/models/decks";
@@ -7,7 +6,7 @@ import { UUID } from "crypto";
 
 const thronesdbApi = createApi({
     reducerPath: "thronesdbApi",
-    baseQuery: fetchBaseQuery({ baseUrl: `${baseUrl}/thronesdb` }),
+    baseQuery: fetchBaseQuery({ baseUrl: "/thronesdb" }),
     endpoints: (builder) => ({
         getCard: builder.query<ILabeledCard, Code>({
             query: (code) => {

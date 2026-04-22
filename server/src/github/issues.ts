@@ -41,7 +41,7 @@ export async function syncIssues(cards: IPlaytestCard[]) {
     const toUpdate: IPlaytestCard[] = [];
     let needsUpdate = false;
     for (let card of cards) {
-        const emitter = createSyncEmitter("card", "issue", `${card.project}|${card.number}|${card.version}`);
+        const emitter = createSyncEmitter("card", "github", `${card.project}|${card.number}|${card.version}`);
         try {
             emitter.start();
             const project = projects.find((project) => project.number === card.project);

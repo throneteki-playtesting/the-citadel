@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { addToast, Avatar, Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Skeleton, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { baseUrl, useLogoutMutation } from "../../api";
+import api, { useLogoutMutation } from "../../api";
 import { useDispatch, useSelector } from "react-redux";
 import { setUser } from "../../api/authSlice";
 import { PageItem } from "../../pages";
@@ -25,7 +25,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
 
     const onLogin = async () => {
         setIsProcessing(true);
-        window.location.href = `${baseUrl}/auth/discord`;
+        window.location.href = "/auth/discord";
     };
 
     const onLogout = async () => {

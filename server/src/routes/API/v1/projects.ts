@@ -288,8 +288,8 @@ router.post("/:number/playtesting/update",
 );
 
 // Sync project card images
-router.post("/:number/sync/images",
-    validateRequest(Permission.SAVE_RENDER_FILES),
+router.post("/:number/sync/image",
+    validateRequest(Permission.SYNC_CARD_IMAGES),
     celebrate({
         [Segments.PARAMS]: numberParams,
         [Segments.QUERY]: {
@@ -307,6 +307,16 @@ router.post("/:number/sync/images",
         cards = await syncImage(cards);
 
         res.status(StatusCodes.OK).json(cards);
+    })
+);
+
+// Sync github pull reqyests
+router.post("/sync/github",
+    validateRequest(Permission.SYNC_PROJECT_GITHUB),
+    asyncHandler(async (req, res) => {
+        const playtestingUpdates = await dataService.playtestingUpdates.sync();
+
+        res.status(StatusCodes.OK).json(playtestingUpdates);
     })
 );
 

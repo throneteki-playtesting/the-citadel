@@ -8,6 +8,7 @@ import { syncImage } from "@/rendering/hosting";
 import { capitalize } from "lodash-es";
 import { getTimeLockedImageUrl } from "@/utils";
 import { User } from "common/models/auth";
+import { createSyncEmitter } from "@/services/sseService";
 
 /**
  * Creates any new threads & messages for cards which are missing their discordMessageUrl.
@@ -20,13 +21,16 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
     const toUpdate: IPlaytestCard[] = [];
     let needsUpdate = false;
     for (let card of cards) {
+        const emitter = createSyncEmitter("card", "discord", `${card.project}|${card.number}|${card.version}`);
         try {
+            emitter.start();
             if (isMessageOutdated(card)) {
                 needsUpdate = true;
                 // Drafts & Regular releases are treated differently:
                 // - Draft will send a new message to the existing thread, and can be incrementally updated (sends as new message)
                 // - Regular will send a new thread, and shouldn't ever be updated (that's what drafts are for!)
                 if (card.draft) {
+                    emitter.progress("Syncing Draft");
                     logger.info(`[Discord] Syncing draft ${card.name} (${card.version})`);
                     const draftMessageExists = !!card.discord?.messageUrl;
                     if (draftMessageExists) {
@@ -36,12 +40,14 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                     }
                     logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card.discord?.messageUrl}`);
                 } else {
+                    emitter.progress("Syncing");
                     logger.info(`[Discord] Syncing ${card.name} (${card.version})`);
                     const messageExists = !!card.discord?.messageUrl;
                     if (messageExists) {
                         // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
                         logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
                     } else {
+                        emitter.progress("Searching");
                         const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
                         if (existingThread) {
                             // For legacy reasons; if a thread exists before card.discord was created, we need to map it
@@ -50,21 +56,26 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                                 messageUrl: starter.url,
                                 lastSynced: new Date()
                             };
-                        } else if (isPreview(card)) {
-                            card = await createPreview(card, context);
-                        } else if (isInitial(card)) {
-                            card = await createInitial(card, context);
                         } else {
-                            card = await createNewLatest(card, context);
+                            emitter.progress("Syncing");
+                            if (isPreview(card)) {
+                                card = await createPreview(card, context);
+                            } else if (isInitial(card)) {
+                                card = await createInitial(card, context);
+                            } else {
+                                card = await createNewLatest(card, context);
+                            }
                         }
                         logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card.discord?.messageUrl}`);
                     }
                 }
             }
         } catch (err) {
+            emitter.error("Failure");
             logger.warn(new Error(`[Discord] Failed to sync ${card.name} (${card.version})`, { cause: err }));
         }
         toUpdate.push(card);
+        emitter.complete(card);
     }
     if (needsUpdate) {
         cards = await dataService.cards.update(toUpdate, false, false);

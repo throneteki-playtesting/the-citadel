@@ -1,22 +1,22 @@
-import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Alert, Spinner } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
-import { ReactNode, useMemo } from "react";
 import { useCardSync } from "../../api/hooks";
+import { ReactNode, useMemo } from "react";
 import { UIColor } from "../../types";
-import { useSyncCardImageMutation } from "../../api";
+import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import { useSyncCardDiscordMutation } from "../../api";
 
 type StatusData = { icon?: ReactNode, label: string, color: UIColor, onPress?: () => void, href?: string };
 
-const ImageStatus = ({ card }: ImageStatusProps) => {
-    const [syncCardImage, { isLoading: isSyncing }] = useSyncCardImageMutation();
-    const { status, step, error } = useCardSync(card).image;
+const DiscordCardStatus = ({ card }: DiscordCardStatusProps) => {
+    const [syncCardDiscord, { isLoading: isSyncing }] = useSyncCardDiscordMutation();
+    const { status, step, error } = useCardSync(card).discord;
     const data = useMemo<StatusData | null>(() => {
         if (!card) {
             return null;
         }
-
         if (status === "progress" || isSyncing) {
             return {
                 icon: <Spinner />,
@@ -25,18 +25,17 @@ const ImageStatus = ({ card }: ImageStatusProps) => {
             };
         }
 
-        const syncAsync = async () => await syncCardImage({ project: card.project, number: card.number, version: card.version }).unwrap();
+        const syncAsync = async () => await syncCardDiscord({ project: card.project, number: card.number, version: card.version }).unwrap();
 
         if (status === "error") {
             return {
-                icon: <FontAwesomeIcon icon={faRotate} size="xl"/>,
+                icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "danger",
                 label: error ?? "Failed to Sync"
             };
         }
-
-        if (!card.imageUrl) {
+        if (!card.discord?.messageUrl || (card.discord?.lastSynced && card.discord.lastSynced < card.cardUpdated)) {
             return {
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
@@ -46,16 +45,18 @@ const ImageStatus = ({ card }: ImageStatusProps) => {
         }
 
         return {
-            href: card.imageUrl,
+            icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
+            href: card.discord!.messageUrl!.replace("https://", "discord://"),
             color: "success",
             label: "Synced"
         };
-    }, [card, error, isSyncing, status, step, syncCardImage]);
+        return null;
+    }, [card, error, isSyncing, status, step, syncCardDiscord]);
 
     if (!data) {
         return null;
     }
-    const alert = <Alert icon={data.icon} color={data.color} title="Image URL" className="h-full" hideIconWrapper description={data.label}></Alert>;
+    const alert = <Alert icon={data.icon} color={data.color} title="Card Thread" className="h-full" hideIconWrapper description={data.label}></Alert>;
     if (data.onPress) {
         return <a className="cursor-pointer" onClick={data.onPress}>{alert}</a>;
     }
@@ -65,6 +66,6 @@ const ImageStatus = ({ card }: ImageStatusProps) => {
     return alert;
 };
 
-type ImageStatusProps = { card?: IPlaytestCard }
+type DiscordCardStatusProps = { card?: IPlaytestCard }
 
-export default ImageStatus;
+export default DiscordCardStatus;

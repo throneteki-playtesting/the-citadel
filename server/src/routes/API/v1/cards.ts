@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { eq, inc } from "semver";
 import { dataService } from "@/services";
-import { hasPermission, isPreview, parseCardCode, SemanticVersion } from "common/utils";
+import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
@@ -13,6 +13,9 @@ import { validateRequest } from "@/middleware/permissions";
 import { applyToFilter, generateGetResponse, NoteVersion } from "@/utils";
 import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
+import { syncImage } from "@/rendering/hosting";
+import { syncCardForum } from "@/discord/forums/cardForum";
+import { syncIssues } from "@/github/issues";
 
 const router = express.Router();
 
@@ -24,6 +27,11 @@ const ProjectParams = {
 const CardParams = {
     ...ProjectParams,
     number: Joi.number().required()
+};
+
+const CardVersionParams = {
+    ...CardParams,
+    version: Joi.string().regex(Regex.SemanticVersion)
 };
 
 // Core data-fetching logic, shared across GET routes
@@ -168,13 +176,53 @@ router.delete("/:project/:number/draft",
     celebrate({
         [Segments.PARAMS]: CardParams
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number, number: number }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number } = req.params;
         const [deleted] = await dataService.cards.destroy({ project, number, draft: true });
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Draft card for #${number} in project #${project} does not exist`);
         }
         res.status(StatusCodes.OK).json(deleted);
+    })
+);
+
+router.post("/:project/:number/:version/sync/:type",
+    celebrate({
+        [Segments.PARAMS]: {
+            ...CardVersionParams,
+            type: Joi.string().valid("image", "discord", "github")
+        }
+    }),
+    validateRequest((principal, req) => {
+        const { type } = req.params;
+        switch (type) {
+            case "image": return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
+            case "discord": return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
+            case "github": return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
+            default: return false;
+        }
+    }),
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, type: "image" | "discord" | "github" }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, number, version, type } = req.params;
+
+        let [card] = await dataService.cards.read({ project, number, version });
+
+        switch (type) {
+            case "image": {
+                card = await syncImage(card);
+                break;
+            }
+            case "discord": {
+                [card] = await syncCardForum([card]);
+                break;
+            }
+            case "github": {
+                [card] = await syncIssues([card]);
+                break;
+            }
+        }
+
+        res.status(StatusCodes.OK).json(card);
     })
 );
 

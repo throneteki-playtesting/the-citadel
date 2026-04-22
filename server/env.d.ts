@@ -3,8 +3,6 @@ declare namespace NodeJS {
         NODE_ENV: "development" | "production" | "test";
 
         VERBOSE: boolean;
-        BASIC_USERNAME: string;
-        BASIC_PASSWORD: string;
 
         SERVER_PORT: number;
         SERVER_HOST: string;

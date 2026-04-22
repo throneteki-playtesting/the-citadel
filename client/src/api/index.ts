@@ -9,21 +9,48 @@ import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards
 import { IPlaytestReview } from "common/models/reviews";
 import { Role, User } from "common/models/auth";
 
-export const baseUrl = import.meta.env.VITE_SERVER_HOST || "";
-const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "playtestingUpdate", "review"] as const;
-type ApiTag = typeof tagTypes[number];
+type TagEntity = {
+    me: User,
+    user: User,
+    role: Role,
+    card: IPlaytestCard,
+    suggestion: ICardSuggestion,
+    tag: string,
+    project: IProject,
+    playtestingUpdate: IPlaytestingUpdate,
+    review: IPlaytestReview
+}
+type ApiTag = keyof TagEntity;
+const tagTypes = ["me", "user", "role", "card", "suggestion", "tag", "project", "playtestingUpdate", "review"] as const satisfies readonly ApiTag[];
 
-const baseQuery = fetchBaseQuery({
-    baseUrl: `${baseUrl}/api/v1`,
-    credentials: "include"
-});
+const defaultIdFuncs: { [K in ApiTag]: (result: TagEntity[K]) => string | number | undefined } = {
+    me: (me) => me.discordId,
+    user: (user) => user.discordId,
+    role: (role) => role.discordId,
+    card: (card) => `${card.project}|${card.number}|${card.version}`,
+    suggestion: (suggestion) => suggestion.id,
+    tag: (tag) => tag,
+    project: (project) => project.number,
+    playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`,
+    review: (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`
+};
 
-function mapTags<T>(results: T | T[] | undefined, tag: ApiTag, idFunc: (result: T) => string | number | undefined, includeList: boolean = true) {
+function mapTags<T>(
+    results: T | T[] | undefined,
+    tag: ApiTag,
+    options?: { idFunc?: (result: T) => string | number | undefined; includeList?: boolean }
+) {
+    const resolve = (options?.idFunc ?? defaultIdFuncs[tag]) as (result: T) => string | number | undefined;
     return [
-        ...(results ? asArray(results).map((result) => ({ type: tag, id: idFunc(result) })) : []),
-        ...(includeList ? [{ type: tag, id: "LIST" }] : [])
+        ...(results ? asArray(results).map((result) => ({ type: tag, id: resolve(result) })) : []),
+        ...((options?.includeList ?? true) ? [{ type: tag, id: "LIST" }] : [])
     ];
 }
+
+const baseQuery = fetchBaseQuery({
+    baseUrl: "/api/v1",
+    credentials: "include"
+});
 
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>
     = async (args, api, extraOptions) =>
@@ -31,7 +58,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
         let result = await baseQuery(args, api, extraOptions);
         if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
             // Attempt to refresh token
-            const baseAuthQuery = fetchBaseQuery({ baseUrl: `${baseUrl}/auth`, credentials: "include" }) as BaseQueryFn<string | FetchArgs, RefreshAuthResponse, FetchBaseQueryError, unknown, FetchBaseQueryMeta>;
+            const baseAuthQuery = fetchBaseQuery({ baseUrl: "/auth", credentials: "include" }) as BaseQueryFn<string | FetchArgs, RefreshAuthResponse, FetchBaseQueryError, unknown, FetchBaseQueryMeta>;
             const refreshResult = await baseAuthQuery("/refresh", api, extraOptions);
 
             if (refreshResult.data?.status === "success") {
@@ -41,7 +68,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
                 // Expired refresh token should result in reauthentication
                 if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
                     // TODO: Move this into a more stable process, possibly it's own api slice for /login & /logout
-                    window.location.href = `${baseUrl}/auth/discord`;
+                    window.location.href = "/auth/discord";
                 }
             }
         }
@@ -81,8 +108,8 @@ const api = createApi({
             },
             transformResponse: (response: User, meta: FetchBaseQueryMeta) => (meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response),
             providesTags: (result) => [
-                ...mapTags(result, "me", (user) => user.discordId, false),
-                ...mapTags(result?.roles, "role", (role) => role.discordId, false)
+                ...mapTags(result, "me", { includeList: false }),
+                ...mapTags(result?.roles, "role", { includeList: false })
             ]
         }),
         getUsers: builder.query<IGetResponse<User>, IGetRequest<User> | void>({
@@ -90,7 +117,7 @@ const api = createApi({
                 const url = buildUrl("users", options);
                 return { url, method: "GET" };
             },
-            providesTags: (results) => mapTags(results?.items, "user", (user) => user.discordId)
+            providesTags: (results) => mapTags(results?.items, "user")
         }),
         getUser: builder.query<User, { discordId: string }>({
             query: (options) => {
@@ -98,7 +125,7 @@ const api = createApi({
                 const url = buildUrl(`users/${discordId}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "user", (user) => user.discordId, false)
+            providesTags: (result) => mapTags(result, "user", { includeList: false })
         }),
         updateUser: builder.mutation<User, User>({
             query: (user) => {
@@ -106,8 +133,8 @@ const api = createApi({
                 return { url, method: "PUT", body: user };
             },
             invalidatesTags: (result) => [
-                ...mapTags(result, "me", (user) => user.discordId, false),
-                ...mapTags(result, "user", (user) => user.discordId)
+                ...mapTags(result, "me", { includeList: false }),
+                ...mapTags(result, "user")
             ]
         }),
         // Roles API
@@ -116,14 +143,14 @@ const api = createApi({
                 const url = buildUrl("roles", options);
                 return { url, method: "GET" };
             },
-            providesTags: (results) => mapTags(results?.items, "role", (role) => role.discordId)
+            providesTags: (results) => mapTags(results?.items, "role")
         }),
         updateRole: builder.mutation<Role, Role>({
             query: (role) => {
                 const url = buildUrl(`roles/${role.discordId}`);
                 return { url, method: "PUT", body: role };
             },
-            invalidatesTags: (result) => mapTags(result, "role", (role) => role.discordId)
+            invalidatesTags: (result) => mapTags(result, "role")
         }),
         // Cards API
         getCards: builder.query<IGetResponse<IPlaytestCard>, IGetRequest<IPlaytestCard> | void>({
@@ -131,7 +158,7 @@ const api = createApi({
                 const url = buildUrl("cards", options);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => mapTags(response?.items, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            providesTags: (response) => mapTags(response?.items, "card")
         }),
         putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
@@ -139,14 +166,14 @@ const api = createApi({
                 const body = card;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            invalidatesTags: (result) => mapTags(result, "card")
         }),
         deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            invalidatesTags: (result) => mapTags(result, "card")
         }),
         // Suggestions API
         getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetRequest<ICardSuggestion> | void>({
@@ -154,14 +181,14 @@ const api = createApi({
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => mapTags(response?.items, "suggestion", (suggestion) => suggestion.id)
+            providesTags: (response) => mapTags(response?.items, "suggestion")
         }),
         getSuggestionsBy: builder.query<IGetResponse<ICardSuggestion>, { discordId: string }>({
             query: (options) => {
                 const url = buildUrl(`suggestions/${options.discordId}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result?.items, "suggestion", (suggestion) => suggestion.id)
+            providesTags: (result) => mapTags(result?.items, "suggestion")
         }),
         createSuggestion: builder.mutation<ICardSuggestion, Omit<ICardSuggestion, "created" | "updated">>({
             query: (suggestion) => {
@@ -170,8 +197,8 @@ const api = createApi({
                 return { url, method: "POST", body };
             },
             invalidatesTags: [
-                { type: "suggestion", id: "LIST" },
-                { type: "tag", id: "LIST" }
+                ...mapTags(undefined, "suggestion"),
+                ...mapTags(undefined, "tag")
             ]
         }),
         updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
@@ -181,8 +208,8 @@ const api = createApi({
                 return { url, method: "PUT", body };
             },
             invalidatesTags: (result) => [
-                ...mapTags(result, "suggestion", (suggestion) => suggestion.id),
-                ...(result ? [{ type: "tag" as ApiTag, id: "LIST" }] : [])
+                ...mapTags(result, "suggestion"),
+                ...mapTags(result?.tags, "tag")
             ]
         }),
         deleteSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
@@ -191,8 +218,8 @@ const api = createApi({
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => [
-                ...mapTags(result, "suggestion", (suggestion) => suggestion.id),
-                ...(result ? [{ type: "tag" as ApiTag, id: "LIST" }] : [])
+                ...mapTags(result, "suggestion"),
+                ...mapTags(result?.tags, "tag")
             ]
         }),
         getTags: builder.query<string[], void>({
@@ -200,7 +227,7 @@ const api = createApi({
                 const url = buildUrl("suggestions/tags");
                 return { url, method: "GET" };
             },
-            providesTags: (results) => mapTags(results, "tag", (tag) => tag)
+            providesTags: (results) => mapTags(results, "tag")
         }),
         // Render API
         renderImage: builder.mutation<string, IRenderCard>({
@@ -233,14 +260,14 @@ const api = createApi({
                 const url = buildUrl("projects", options);
                 return { url, method: "GET" };
             },
-            providesTags: (results) => mapTags(results?.items, "project", (project) => project.number)
+            providesTags: (results) => mapTags(results?.items, "project")
         }),
         getProject: builder.query<IProject, { number: number }>({
             query: (options) => {
                 const url = buildUrl(`projects/${options.number}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "project", (project) => project.number, false)
+            providesTags: (result) => mapTags(result, "project", { includeList: false })
         }),
         createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
             query: (project) => {
@@ -248,7 +275,7 @@ const api = createApi({
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: [{ type: "project", id: "LIST" }]
+            invalidatesTags: mapTags(undefined, "project")
         }),
         initialiseProject: builder.mutation<{ project: IProject, cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
@@ -256,8 +283,8 @@ const api = createApi({
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => [
-                ...mapTags(result?.project, "project", (project) => project.number),
-                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+                ...mapTags(result?.project, "project"),
+                ...mapTags(result?.cards, "card")
             ]
         }),
         updateProject: builder.mutation<IProject, IProject>({
@@ -266,14 +293,14 @@ const api = createApi({
                 const body = project;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
+            invalidatesTags: (result) => mapTags(result, "project")
         }),
         deleteProject: builder.mutation<IProject, { number: number }>({
             query: (options) => {
                 const url = buildUrl(`projects/${options.number}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => mapTags(result, "project", (project) => project.number)
+            invalidatesTags: (result) => mapTags(result, "project")
         }),
         createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
             query: (playtestingUpdate) => {
@@ -281,37 +308,78 @@ const api = createApi({
                 const body = playtestingUpdate;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => [
-                { type: "playtestingUpdate", id: "LIST" },
-                ...mapTags(result?.cards, "card", (card) => `${card.project}|${card.number}|${card.version}`),
-                ...mapTags(result?.project, "project", (project) => project.number)
-            ]
+            invalidatesTags: (result) => {
+                const projectTags = mapTags(result?.playtestingUpdate?.project, "project", { idFunc: (project) => project });
+                const cardTags = result?.playtestingUpdate ? Object.entries(result.playtestingUpdate.cardChanges).map(([number, version]) => ({ type: "card" as ApiTag, id: `${result.playtestingUpdate.project}|${number}|${version}` })) : [];
+                return [
+                    ...mapTags(result?.playtestingUpdate, "playtestingUpdate"),
+                    ...projectTags,
+                    ...cardTags
+                ];
+            }
         }),
         // Syncing API
-        syncCardImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
+        syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
             query: (options) => {
-                const url = buildUrl(`projects/${options.project}/sync/images`, { number: options.number, version: options.version, latest: options.latest });
+                const url = buildUrl(`projects/${options.project}/sync/image`, { number: options.number, version: options.version, latest: options.latest });
                 return { url, method: "POST" };
             },
-            invalidatesTags: (result) => mapTags(result, "card", (card) => `${card.project}|${card.number}|${card.version}`)
+            invalidatesTags: (result) => mapTags(result, "card")
         }),
-        // TODO: Add Sync Discord
-        // TODO: Add Sync Issues
-        // TODO: Add Sync PullRequest
+        syncCardImage: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/image`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "card")
+        }),
+        syncCardDiscord: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/discord`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "card")
+        }),
+        syncCardGithub: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/github`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "card")
+        }),
+        syncProjectsGithub: builder.mutation<IPlaytestingUpdate[], void>({
+            query: () => {
+                const url = buildUrl("projects/sync/github");
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => {
+                if (!result) {
+                    return [];
+                }
+                const tags: { type: ApiTag, id: string | number | undefined }[] = [];
+                for (const playtestingUpdate of result) {
+                    const projectTags = mapTags(playtestingUpdate.project, "project", { idFunc: (project) => project });
+                    const cardTags = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ type: "card" as ApiTag, id: `${playtestingUpdate.project}|${number}|${version}` }));
+                    tags.push(...mapTags(playtestingUpdate, "playtestingUpdate"), ...projectTags, ...cardTags);
+                }
+
+                return tags;
+            }
+        }),
         // Reviews API
         getReview: builder.query<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
                 const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+            providesTags: (result) => mapTags(result, "review")
         }),
         getReviews: builder.query<IGetResponse<IPlaytestReview>, IGetRequest<IPlaytestReview>>({
             query: (options) => {
                 const url = buildUrl("reviews", options);
                 return { url, method: "GET" };
             },
-            providesTags: (results) => mapTags(results?.items, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+            providesTags: (results) => mapTags(results?.items, "review")
         }),
         createReview: builder.mutation<IPlaytestReview, Omit<IPlaytestReview, "created" | "updated">>({
             query: (review) => {
@@ -327,14 +395,14 @@ const api = createApi({
                 const body = review;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+            invalidatesTags: (result) => mapTags(result, "review")
         }),
         deleteReview: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
                 const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => mapTags(result, "review", (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`)
+            invalidatesTags: (result) => mapTags(result, "review")
         })
     })
 });
@@ -371,7 +439,12 @@ export const {
     useInitialiseProjectMutation,
     useUpdateProjectMutation,
     useDeleteProjectMutation,
-    useSyncCardImagesMutation,
+
+    useSyncProjectImagesMutation,
+    useSyncCardImageMutation,
+    useSyncCardDiscordMutation,
+    useSyncCardGithubMutation,
+    useSyncProjectsGithubMutation,
 
     useCreatePlaytestingUpdateMutation,
 

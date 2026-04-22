@@ -37,8 +37,9 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
     }
 
     public async sync() {
+        let data: IPlaytestingUpdate[] = [];
         const syncs = [
-            () => syncPullRequests()
+            () => syncPullRequests().then(result => { data = result; })
         ];
 
         const { source } = getContext();
@@ -55,6 +56,8 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
                 }
             }
         }
+
+        return data;
     }
 
     public async for(card: IPlaytestCard) {

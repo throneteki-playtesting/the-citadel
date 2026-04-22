@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Filterable } from "common/types";
 import { SyncOperation, SyncStatus, SyncType } from "server/types";
 import { SemanticVersion } from "common/utils";
-import { baseUrl } from ".";
 
 export function useFilter<T>(filter?: Filterable<T>) {
     return useMemo(() => {
@@ -82,10 +81,10 @@ const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     card: {
         image: {},
         discord: {},
-        issue: {}
+        github: {}
     },
     playtestingUpdate: {
-        pullRequest: {}
+        github: {}
     }
 };
 
@@ -96,7 +95,7 @@ export function useSyncListener<K extends SyncType>(type: K, id?: string) {
         if (!id) {
             return;
         }
-        const es = new EventSource(`${baseUrl}/api/v1/sync/progress/${type}/${id}`, { withCredentials: true });
+        const es = new EventSource(`/api/v1/broadcast/progress/${type}/${id}`, { withCredentials: true });
 
         const update = (operation: SyncOperation<K>, partial: Partial<SyncState>) =>
             setSyncStates(s => ({

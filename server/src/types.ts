@@ -68,8 +68,8 @@ interface SyncDataMap {
     playtestingUpdate: IPlaytestingUpdate;
 }
 interface SyncOperationMap {
-    card: "image" | "discord" | "issue";
-    playtestingUpdate: "pullRequest";
+    card: "image" | "discord" | "github";
+    playtestingUpdate: "github";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
 export type SyncStatus = "start" | "progress" | "complete" | "error";

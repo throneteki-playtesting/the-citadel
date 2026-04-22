@@ -1,5 +1,5 @@
 import { store } from "./store";
-import api, { baseUrl } from ".";
+import api from ".";
 import { SyncCompleteEvent, SyncEvent, SyncType } from "server/types";
 
 type SyncHandlers = {
@@ -34,7 +34,7 @@ const syncCompleteHandlers: SyncHandlers = {
     // }
 };
 export function initSSEListener() {
-    const es = new EventSource(`${baseUrl}/api/v1/sync/events`, { withCredentials: true });
+    const es = new EventSource("/api/v1/broadcast", { withCredentials: true });
 
     es.addEventListener("message", (e) => {
         const event = JSON.parse(e.data) as SyncEvent;

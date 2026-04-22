@@ -43,8 +43,6 @@ enum Permission {
     EDIT_ROLES = "EDIT_ROLES",
     /** Can render cards to another format (eg. PDF, PNG)*/
     RENDER_CARDS = "RENDER_CARDS",
-    /** Can save render files to hosting service */
-    SAVE_RENDER_FILES = "SAVE_RENDER_FILES",
     /** Can view all card reviews */
     READ_REVIEWS = "READ_REVIEWS",
     /** Can create, edit and delete their own card reviews */
@@ -54,7 +52,15 @@ enum Permission {
     /** Can delete other users card reviews */
     DELETE_REVIEWS = "DELETE_REVIEWS",
     /** Can access & read from the card forum on discord */
-    READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM"
+    READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM",
+    /** Can sync card images */
+    SYNC_CARD_IMAGES = "SYNC_CARD_IMAGES",
+    /** Can sync card discord forum threads */
+    SYNC_CARD_DISCORD = "SYNC_CARD_DISCORD",
+    /** Can sync card github issues */
+    SYNC_CARD_GITHUB = "SYNC_CARD_GITHUB",
+    /** Can sync card github pull requests */
+    SYNC_PROJECT_GITHUB = "SYNC_PROJECT_GITHUB"
 }
 
 export default Permission;

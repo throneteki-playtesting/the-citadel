@@ -30,6 +30,7 @@ import { noteTypeIcon } from "../../utils";
 import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
 import ImplementStatus from "../../components/status/implementStatus";
+import DiscordCardStatus from "../../components/status/discordCardStatus";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -254,8 +255,11 @@ const StatusBoard = ({ latest, draft }: StatusBoardProps) => {
         <div className="py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
             <DevelopmentStatus latest={latest} draft={draft}/>
             <ImplementStatus card={draft ?? latest}/>
-            <PermissionGate requires={Permission.SAVE_RENDER_FILES}>
+            <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
                 <ImageStatus card={draft ?? latest}/>
+            </PermissionGate>
+            <PermissionGate requires={Permission.SYNC_CARD_DISCORD}>
+                <DiscordCardStatus card={draft ?? latest} />
             </PermissionGate>
         </div>
     );

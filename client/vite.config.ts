@@ -4,6 +4,8 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import react from "@vitejs/plugin-react";
 import type { AppEnv } from "./env.d.ts";
 
+const proxyPaths = ["/api/", "/auth/", "/thronesdb/"];
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), "") as unknown as AppEnv;
@@ -20,16 +22,9 @@ export default defineConfig(({ mode }) => {
             watch: {
                 usePolling: true
             },
-            proxy: {
-                "/api/v1/": {
-                    target: serverHost,
-                    changeOrigin: true
-                },
-                "/auth/": {
-                    target: serverHost,
-                    changeOrigin: true
-                }
-            },
+            proxy: Object.fromEntries(
+                proxyPaths.map((path) => [path, { target: serverHost, changeOrigin: true }])
+            ),
             fs: {
                 allow: [".."]
             }
