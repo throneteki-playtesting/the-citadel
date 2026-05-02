@@ -65,7 +65,7 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
                                 </div>
                                 <Textarea name="description" label="Description" defaultValue={project.description}/>
                             </WizardPage>
-                            {!!project.draft &&
+                            {project.draft === true &&
                                 <WizardPage data={{ cardCount: project.cardCount ?? {} }}>
                                     <CardCountEditor cardCount={project.cardCount} onChange={(cardCount) => setProject((prev) => ({ ...prev, cardCount }))}/>
                                 </WizardPage>

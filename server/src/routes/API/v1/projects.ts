@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { IPlaytestingUpdate, IProject } from "common/models/projects";
+import { IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
 import { Regex, SemanticVersion } from "common/utils";
 import Permission from "common/models/permissions";
@@ -224,66 +224,6 @@ router.delete("/:number",
         }
         await dataService.cards.destroy({ project: number });
         res.status(StatusCodes.OK).json(deleted);
-    })
-);
-
-// Process playtesting update
-router.post("/:number/playtesting/update",
-    validateRequest(Permission.GENERATE_PLAYTESTING_UPDATES),
-    celebrate({
-        [Segments.PARAMS]: numberParams,
-        [Segments.BODY]: Schemas.PlaytestingUpdate.Draft
-    }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, IPlaytestingUpdate, unknown>(async (req, res, next) => {
-        const project = res.locals.project as IProject;
-
-        if (!project.active) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Cannot create playtesting update for inactive projects");
-        }
-
-        const playtestingUpdate = req.body;
-        const draftCards = await dataService.cards.read({ project: project.number, draft: true });
-        const newCards: IPlaytestCard[] = [];
-        const missing: string[] = [];
-
-        for (const [number, version] of Object.entries(playtestingUpdate.cardChanges)) {
-            const draftCard = draftCards.find((card) => card.number === parseInt(number) && card.version === version);
-            if (!draftCard) {
-                missing.push(`${number} (v${version})`);
-            } else {
-                newCards.push(draftCard);
-            }
-        }
-
-        if (missing.length > 0) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Changes", `Some card changes do not exist as draft cards: ${missing.join(", ")}`);
-        }
-
-        res.locals.playtestingUpdate = playtestingUpdate;
-        res.locals.newCards = newCards;
-        next();
-    }),
-    asyncHandler(async (req, res) => {
-        let project = res.locals.project as IProject;
-        let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
-        let newCards = res.locals.newCards as IPlaytestCard[];
-
-        playtestingUpdate.project = project.number;
-        playtestingUpdate.version = project.version + 1;
-        playtestingUpdate = await dataService.playtestingUpdates.create(playtestingUpdate);
-
-        for (const newCard of newCards) {
-            // Cards are no longer in draft. Update process will automatically update them to latest
-            newCard.draft = false;
-        }
-        newCards = await dataService.cards.update(newCards);
-
-        project.version = project.version + 1;
-        project.updated = new Date();
-        project = await dataService.projects.update(project);
-
-        res.status(StatusCodes.OK).json({ playtestingUpdate, project, cards: newCards });
     })
 );
 

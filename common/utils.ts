@@ -144,6 +144,14 @@ export const thronesFontColors = {
     "neutral": "#ffffff"
 };
 
+export const statementColors = {
+    "statement-1": "#D9534F",
+    "statement-2": "#F0AD4E",
+    "statement-3": "#9B9B9B",
+    "statement-4": "#96c454",
+    "statement-5": "#2F9E44"
+};
+
 export function parseCardCode(isReleasable: boolean, project: number, number: number) {
     if (isReleasable) {
         return `${project}${number.toString().padStart(3, "0")}` as Cards.Code;

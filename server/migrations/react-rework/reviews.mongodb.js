@@ -20,7 +20,9 @@ allReviews.forEach(review => {
             _id: new ObjectId(),
             project: review.projectId,
             created: new Date(Number(review.epoch)),
+            createdBy: review.reviewer,
             updated: new Date(Number(review.epoch)),
+            updatedBy: review.reviewer,
             statements: {
                 boring: review.statements.boring.toLowerCase(),
                 competitive: review.statements.competitive.toLowerCase(),

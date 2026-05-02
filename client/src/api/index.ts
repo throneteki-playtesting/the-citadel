@@ -302,9 +302,17 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "project")
         }),
+        // Playtesting Update API
+        getPlaytestingUpdates: builder.query<IGetResponse<IPlaytestingUpdate>, IGetRequest<IPlaytestingUpdate> | void>({
+            query: (options) => {
+                const url = buildUrl("playtesting-updates", options);
+                return { url, method: "GET" };
+            },
+            providesTags: (results) => mapTags(results?.items, "playtestingUpdate")
+        }),
         createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
             query: (playtestingUpdate) => {
-                const url = buildUrl(`projects/${playtestingUpdate.project}/playtesting/update`);
+                const url = buildUrl(`playtesting-updates/${playtestingUpdate.project}`);
                 const body = playtestingUpdate;
                 return { url, method: "POST", body };
             },
@@ -317,6 +325,13 @@ const api = createApi({
                     ...cardTags
                 ];
             }
+        }),
+        getPlaytestingUpdateCards: builder.query<IPlaytestCard[], { project: number, version: number }>({
+            query: (options) => {
+                const url = buildUrl(`playtesting-updates/${options.project}/${options.version}/cards`);
+                return { url, method: "GET" };
+            },
+            providesTags: (results) => mapTags(results, "card")
         }),
         // Syncing API
         syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
@@ -440,13 +455,15 @@ export const {
     useUpdateProjectMutation,
     useDeleteProjectMutation,
 
+    useGetPlaytestingUpdatesQuery,
+    useCreatePlaytestingUpdateMutation,
+    useGetPlaytestingUpdateCardsQuery,
+
     useSyncProjectImagesMutation,
     useSyncCardImageMutation,
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,
     useSyncProjectsGithubMutation,
-
-    useCreatePlaytestingUpdateMutation,
 
     useGetReviewQuery,
     useLazyGetReviewQuery,

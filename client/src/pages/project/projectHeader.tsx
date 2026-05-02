@@ -104,7 +104,7 @@ const ProjectHeader = ({ className, style, project, cards, isLoading = false, on
                         value={percents.completed * 100}
                     />
                 </div>
-                <PermissionGate requires={Permission.GENERATE_PLAYTESTING_UPDATES}>
+                <PermissionGate requires={Permission.CREATE_PLAYTESTING_UPDATES}>
                     <ProjectHeaderPlaytestingUpdateNotice project={project} />
                 </PermissionGate>
                 <Divider />

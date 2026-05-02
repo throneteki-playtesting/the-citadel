@@ -11,6 +11,9 @@ console.log(`Found ${allProjects.length} projects to migrate.`);
 
 const bulkOps = [];
 
+const now = new Date();
+const userId = "120834530801221634";
+
 // 1. Transformation Loop
 console.log("Transforming project data...");
 allProjects.forEach(project => {
@@ -24,8 +27,10 @@ allProjects.forEach(project => {
             code: project.short,
             type: project.type.toLowerCase(),
             version: project.releases,
-            created: new Date(),
-            updated: new Date(),
+            created: now,
+            createdBy: userId,
+            updated: now,
+            updatedBy: userId,
             draft: !project.active,
             cardCount: {
                 baratheon: project.perFaction,

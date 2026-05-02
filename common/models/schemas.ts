@@ -226,7 +226,7 @@ export const RenderedCard = {
 
 export const CardSuggestion = {
     Full: Joi.object({
-        _id: Joi.string(),
+        id: Joi.string(),
         user: Joi.object({
             discordId: Joi.string().required(),
             displayname: Joi.string().required()
@@ -240,7 +240,7 @@ export const CardSuggestion = {
         card: Card.Full.required()
     }),
     Partial: Joi.object({
-        _id: Joi.string(),
+        id: Joi.string(),
         user: Joi.object({
             discordId: Joi.string(),
             displayname: Joi.string()
@@ -254,7 +254,7 @@ export const CardSuggestion = {
         card: Card.Partial
     }),
     Draft: Joi.object({
-        _id: Joi.string(),
+        id: Joi.string(),
         user: Joi.object({
             discordId: Joi.string(),
             displayname: Joi.string()

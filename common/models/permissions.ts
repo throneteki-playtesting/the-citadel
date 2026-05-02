@@ -12,7 +12,9 @@ enum Permission {
     /** Can initialise draft projects (eg. confirm starting lineups) */
     INITIALISE_PROJECTS = "INITIALISE_PROJECTS",
     /** Can create playtesting updates for a specific project */
-    GENERATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
+    CREATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
+    /** Can read playtesting updates for any project */
+    READ_PLAYTESTING_UPDATES = "READ_PLAYTESTING_UPDATES",
     /** Can view playtesting cards */
     READ_CARDS = "READ_CARDS",
     /** Can edit playtesting cards */

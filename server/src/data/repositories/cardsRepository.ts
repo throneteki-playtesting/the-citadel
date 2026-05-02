@@ -115,7 +115,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
     }
 
     public async forUpdate(playtestingUpdate: IPlaytestingUpdate) {
-        const filters = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ number: parseInt(number), version }));
+        const filters = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ project: playtestingUpdate.project, number: parseInt(number), version }));
         const cards = await this.read(filters);
         return cards;
     }

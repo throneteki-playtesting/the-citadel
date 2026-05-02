@@ -514,15 +514,15 @@ const ReviewSummaries = ({ project, number, reviews, cards }: ReviewSummariesPro
     const answerIcon = (answer: StatementAnswer) => {
         switch (answer) {
             case "strongly disagree":
-                return <FontAwesomeIcon icon={faThumbsDown} color={"#D9534F"}/>;
+                return <FontAwesomeIcon icon={faThumbsDown} className="text-statement-1"/>;
             case "somewhat disagree":
-                return <FontAwesomeIcon icon={faThumbsDown} color={"#F0AD4E"}/>;
+                return <FontAwesomeIcon icon={faThumbsDown} className="text-statement-2"/>;
             case "neither agree nor disagree":
-                return <FontAwesomeIcon icon={faHandFist} color={"#9B9B9B"}/>;
+                return <FontAwesomeIcon icon={faHandFist} className="text-statement-3"/>;
             case "somewhat agree":
-                return <FontAwesomeIcon icon={faThumbsUp} color={"#82C91E"}/>;
+                return <FontAwesomeIcon icon={faThumbsUp} className="text-statement-4"/>;
             case "strongly agree":
-                return <FontAwesomeIcon icon={faThumbsUp} color={"#2F9E44"}/>;
+                return <FontAwesomeIcon icon={faThumbsUp} className="text-statement-5"/>;
         }
     };
 

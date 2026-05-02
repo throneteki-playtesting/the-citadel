@@ -19,7 +19,7 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
     const isLastPage = useMemo(() => currentPage >= totalPages, [currentPage, totalPages]);
 
     useEffect(() => {
-        setInternalData((prev) => ({ ...prev, ...(initial ?? {} as DeepPartial<T>) }));
+        setInternalData(initial ?? {} as DeepPartial<T>);
     }, [initial]);
 
     const validate = useCallback((data: Record<string, any>, partial = false) => {
@@ -70,18 +70,21 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
 
         // Always validate the page first (partial)
         if (validate(pageData, true)) {
-            const newData = merge({}, internalData, pageData);
-            setInternalData(newData);
+            let submitData = initial;
+            if (submitData === undefined) {
+                submitData = merge({}, internalData, pageData);
+                setInternalData(submitData);
+            }
             if (isLastPage) {
                 // Validate full object
-                if (validate(newData)) {
-                    onSubmit(newData as T);
+                if (validate(submitData as Record<string, any>)) {
+                    onSubmit(submitData as T);
                 }
             } else {
                 setCurrentPage((prev) => Math.min(prev + 1, totalPages));
             }
         }
-    }, [validate, internalData, isLastPage, onSubmit, totalPages]);
+    }, [validate, initial, isLastPage, internalData, onSubmit, totalPages]);
 
     const onPageBack = useCallback(() => {
         setCurrentPage((prev) => Math.max(prev - 1, 0));
