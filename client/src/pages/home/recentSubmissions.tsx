@@ -8,8 +8,8 @@ import { useMemo } from "react";
 import { Faction, ICardSuggestion } from "common/models/cards";
 import { IPlaytestReview, StatementAnswer, Statements } from "common/models/reviews";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faFeatherPointed, faListCheck, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
-import { Avatar } from "@heroui/react";
+import { faCheckCircle, faCircleQuestion, faFeatherPointed, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
+import { Alert, Avatar, Skeleton } from "@heroui/react";
 import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
@@ -17,8 +17,11 @@ import Timestamp from "../../components/timestamp";
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 export default function RecentSubmissions() {
     const user = useSelector((state: RootState) => state.auth.user);
-    const { data: reviewData, isLoading: isLoadingReviews } = useGetReviewsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 10 });
-    const { data: suggestionData, isLoading: isLoadingSuggestions } = useGetSuggestionsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 10 }, { skip: !hasPermission(user, Permission.READ_SUGGESTIONS) });
+    const items = 5;
+    const { data: reviewData, isLoading: isReviewDataLoading } = useGetReviewsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 });
+    const { data: suggestionData, isLoading: isSuggestionDataLoading } = useGetSuggestionsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 }, { skip: !hasPermission(user, Permission.READ_SUGGESTIONS) });
+
+    const isLoading = useMemo(() => isReviewDataLoading || isSuggestionDataLoading, [isReviewDataLoading, isSuggestionDataLoading]);
 
     const submissions = useMemo(() => {
         const reviews = reviewData?.items;
@@ -27,19 +30,42 @@ export default function RecentSubmissions() {
             return [
                 ...reviews.map((r) => ({ key: `${r.project}|${r.number}|${r.version}|${r.reviewer}`, type: "review", ...r }) as Submission),
                 ...suggestions.map((s) => ({ key: s.id, type: "suggestion", ...s }) as Submission)
-            ].sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()).slice(0, 10);
+            ].sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()).slice(0, items);
+        } else {
+            return [];
         }
     }, [reviewData?.items, suggestionData?.items]);
 
-    // TODO Skeleton
+    const content = useMemo(() => {
+        if (isLoading) {
+            const array = Array.from({ length: items });
+            return array.map(() => (
+                <div className="relative z-10 px-4 py-2">
+                    <div className="min-w-0 space-y-1">
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                            <Skeleton className="w-32 h-4 rounded-sm"/>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                            <Skeleton className="shrink-0 size-10 sm:size-8 md:size-10 rounded-full"/>
+                            <div className="flex flex-col gap-1 min-w-0">
+                                <Skeleton className="w-42 h-4 rounded-sm" />
+                                <Skeleton className="w-32 h-4 rounded-sm" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ));
+        }
+        return submissions?.map((submission) => (
+            <SubmissionRow key={submission.key} submission={submission} />
+        ));
+    }, [isLoading, submissions]);
 
     return (
         <div className="space-y-2">
             <div className="text-xs tracking-widest text-foreground/50 uppercase">Recent Submissions</div>
             <div className="border border-content3 divide-y divide-content3">
-                {submissions?.map((submission) => (
-                    <SubmissionRow key={submission.key} submission={submission} />
-                ))}
+                {content}
             </div>
         </div>
     );
@@ -56,19 +82,45 @@ function SubmissionRow({ submission }: SubmissionRowProps) {
 type SubmissionRowProps = { submission: Submission };
 
 function ReviewRow({ review }: ReviewRowProps) {
-    const { data: user, isLoading: isLoadingUser } = useGetUserQuery({ discordId: review.reviewer });
-    const { data: cardData, isLoading: isLoadingCard } = useGetCardsQuery({ filter: { project: review.project, number: review.number, version: review.version } });
+    const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
+    const { data: cardData, isLoading: isCardLoading } = useGetCardsQuery({ filter: { project: review.project, number: review.number, version: review.version } });
+
     const card = useMemo(() => cardData?.items[0], [cardData?.items]);
+    const isLoading = useMemo(() => isUserLoading || isCardLoading, [isCardLoading, isUserLoading]);
+
+    if (isLoading) {
+        return (
+            <div className="relative z-10 px-4 py-2">
+                <div className="min-w-0 space-y-1">
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <Skeleton className="w-32 h-4 rounded-sm"/>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <Skeleton className="shrink-0 size-10 sm:size-8 md:size-10 rounded-full"/>
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <Skeleton className="w-42 h-4 rounded-sm" />
+                            <Skeleton className="w-32 h-4 rounded-sm" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (!user || !card) {
-        return null;
+        return (
+            <Alert color="danger">
+                <div className="hidden">{`Project: ${review.project}, Number: ${review.number}, Version: ${review.version}, Reviewer: ${review.reviewer}`}</div>
+                <div className="text-sm">Failed to load review. Please alert an administrator.</div>
+            </Alert>
+        );
     }
-    // TODO: Skeleton
+
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
             <Link to={`/project/${review.project}/${review.number}`}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <FontAwesomeIcon icon={faListCheck} className={classNames("ml-32 text-7xl", backgroundClasses[card.faction])}/>
+                    <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", backgroundClasses[card.faction])}/>
                 </div>
                 <div className="relative z-10 px-4 py-2">
                     <div className="min-w-0 space-y-0.5">
@@ -76,7 +128,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                             <div className="text-md font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
                             <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} isEdited={new Date(review.updated) > new Date(review.created)}/>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
                             <Avatar src={user.avatarUrl} name={user.displayname} className="shrink-0 size-10 sm:size-8 md:size-10"/>
                             <div className="flex flex-col gap-1 min-w-0">
                                 <div className="text-xs italic text-foreground/40">
@@ -117,24 +169,16 @@ const scoreBarClass: Record<StatementAnswer, string> = {
     "strongly agree": "bg-statement-5"
 };
 
-const backgroundClasses: Record<Faction, string> = {
-    baratheon: "text-baratheon opacity-30",
-    greyjoy: "text-greyjoy opacity-30",
-    lannister: "text-lannister opacity-30",
-    martell: "text-martell opacity-30",
-    thenightswatch: "text-thenightswatch opacity-30",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-200",
-    tyrell: "text-tyrell opacity-30",
-    neutral: "text-neutral opacity-30"
-};
-
 function SuggestionRow({ suggestion }: SuggestionRowProps) {
+    const isApproved = !!suggestion.approvedBy;
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
             <Link to="/suggestions">
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", backgroundClasses[suggestion.card.faction])}/>
+                    <div className="relative ml-32">
+                        <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", backgroundClasses[suggestion.card.faction])}/>
+                        <FontAwesomeIcon icon={isApproved ? faCheckCircle : faCircleQuestion} className="absolute right-0 bottom-0 text-2xl opacity-20"/>
+                    </div>
                 </div>
                 <div className="relative z-10 px-4 py-2 space-y-1">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -142,7 +186,7 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
                             <div className="flex items-center gap-2 flex-wrap">
                                 <ThronesIcon name={suggestion.card.type} />
                                 <div className="text-md font-semibold text-foreground truncate">{suggestion.card.name}</div>
-                                {!!suggestion.approvedBy && (
+                                {isApproved && (
                                     <span className="text-xxs tracking-wide uppercase px-2 py-0.5 border text-success-700 border-success-300 bg-success-100 shrink-0">
                                         Approved
                                     </span>
@@ -166,6 +210,9 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
         </div>
     );
 }
+type SuggestionRowProps = {
+  suggestion: ICardSuggestion;
+};
 
 function TagList({ tags }: { tags: string[] }) {
     const visible = tags.slice(0, 3);
@@ -188,6 +235,15 @@ function TagList({ tags }: { tags: string[] }) {
         </div>
     );
 }
-export type SuggestionRowProps = {
-  suggestion: ICardSuggestion;
+
+const backgroundClasses: Record<Faction, string> = {
+    baratheon: "text-baratheon opacity-30",
+    greyjoy: "text-greyjoy opacity-30",
+    lannister: "text-lannister opacity-30",
+    martell: "text-martell opacity-30",
+    thenightswatch: "text-thenightswatch opacity-30",
+    stark: "text-stark opacity-20",
+    targaryen: "text-targaryen brightness-200",
+    tyrell: "text-tyrell opacity-30",
+    neutral: "text-neutral opacity-30"
 };

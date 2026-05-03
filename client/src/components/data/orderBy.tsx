@@ -1,7 +1,7 @@
 import { faArrowDown, faArrowUp } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Chip, Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
-import { EntriesOf, Sortable } from "common/types";
+import { EntriesOf, Sort } from "common/types";
 import { flatten } from "flat";
 import { useCallback, useMemo, useState } from "react";
 
@@ -16,7 +16,7 @@ const OrderBySelector = function<T>({ label = "Order By", orderBy = {}, setOrder
     }, [options]);
 
     const handleSelectionChange = useCallback((keys: SharedSelection) => {
-        const parseOrderBy = (sort: Record<string, SortDir>): Sortable<T> | undefined => {
+        const parseOrderBy = (sort: Record<string, SortDir>): Sort<T> | undefined => {
             const entries = Object.entries(sort) as [string, SortDir][];
             if (entries.length === 0) {
                 return undefined;
@@ -40,7 +40,7 @@ const OrderBySelector = function<T>({ label = "Order By", orderBy = {}, setOrder
                 current[finalKey] = direction;
             }
 
-            return result as Sortable<T>;
+            return result as Sort<T>;
         };
 
         let selected = keys.currentKey;
@@ -107,6 +107,6 @@ const OrderBySelector = function<T>({ label = "Order By", orderBy = {}, setOrder
     );
 };
 
-type OrderByProps<T> = { label?: string, orderBy?: Sortable<T>, setOrderBy: (orderBys?: Sortable<T>) => void, options: EntriesOf<T, string> } & Omit<SelectProps, "children">;
+type OrderByProps<T> = { label?: string, orderBy?: Sort<T>, setOrderBy: (orderBys?: Sort<T>) => void, options: EntriesOf<T, string> } & Omit<SelectProps, "children">;
 
 export default OrderBySelector;

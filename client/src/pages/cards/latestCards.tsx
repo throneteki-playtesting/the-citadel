@@ -1,5 +1,5 @@
 import { IPlaytestCard } from "common/models/cards";
-import { DeepPartial, SingleOrArray } from "common/types";
+import { Filter, SingleOrArray } from "common/types";
 import { BaseElementProps } from "../../types";
 import { useGetCardsQuery } from "../../api";
 import { renderPlaytestingCard } from "common/utils";
@@ -23,6 +23,6 @@ const LatestCards = ({ className, style, filter }: LatestCardsProps) => {
     );
 };
 
-type LatestCardsProps = Omit<BaseElementProps, "children"> & { filter?: SingleOrArray<DeepPartial<IPlaytestCard>> };
+type LatestCardsProps = Omit<BaseElementProps, "children"> & { filter?: SingleOrArray<Filter<IPlaytestCard>> };
 
 export default LatestCards;

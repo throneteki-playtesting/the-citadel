@@ -3,7 +3,7 @@ import { MongoClient } from "mongodb";
 import { logger } from "@/services";
 import { IPlaytestReview } from "common/models/reviews";
 import { asArray } from "common/utils";
-import { DeepPartial, SingleOrArray } from "common/types";
+import { Filter, SingleOrArray } from "common/types";
 import { BasicAuditableRepository } from "./shared";
 import { deleteInitial, syncPlaytestingReviews } from "@/discord/forums/playtestingReviews";
 
@@ -34,7 +34,7 @@ export default class ReviewsRepository extends BasicAuditableRepository<IPlaytes
         return Array.isArray(updating) ? data : data[0];
     }
 
-    public override async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestReview>>) {
+    public override async destroy(destroying: SingleOrArray<Filter<IPlaytestReview>>) {
         let data = await this.database.destroy(destroying);
         data = await this.desync(data);
         return data;

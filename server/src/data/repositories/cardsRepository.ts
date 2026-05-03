@@ -2,7 +2,7 @@ import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
 import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
-import { DeepPartial, SingleOrArray } from "common/types";
+import { Filter, SingleOrArray } from "common/types";
 import { flatten } from "flat";
 import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
@@ -41,7 +41,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         return Array.isArray(updating) ? data : data[0];
     }
 
-    public override async destroy(destroying: SingleOrArray<DeepPartial<IPlaytestCard>>) {
+    public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>) {
         let data = await this.database.destroy(destroying);
         data = await this.desync(data);
         return data;
@@ -175,7 +175,7 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         return await this.syncLatest(result);
     }
 
-    public override async destroy(deleting: SingleOrArray<DeepPartial<IPlaytestCard>>, options?: DeleteOptions) {
+    public override async destroy(deleting: SingleOrArray<Filter<IPlaytestCard>>, options?: DeleteOptions) {
         const deleted = await super.destroy(deleting, options);
         // We must check if "latest" need to be reassigned.
         if (deleted.some((card) => card.latest)) {

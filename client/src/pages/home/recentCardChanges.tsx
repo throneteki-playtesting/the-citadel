@@ -5,21 +5,49 @@ import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import { IProject } from "common/models/projects";
 import Timestamp from "../../components/timestamp";
-import NoteTypeChip from "./noteTypeChip";
+import ChangeTypeChip from "./changeTypeChip";
+import { useMemo } from "react";
+import { Skeleton } from "@heroui/react";
 
 export default function RecentCardChanges() {
-    const { data: cardData, isLoading: isLoadingCards } = useGetCardsQuery({ filter: [{ note: { type: "updated" } }, { note: { type: "reworked" } }, { note: { type: "replaced" } }], orderBy: { updated: "desc" }, page: 1, perPage: 10 });
-    const { data: projectData, isLoading: isLoadingProjects } = useGetProjectsQuery({ filter: cardData?.items.map((card) => ({ number: card.project })) }, { skip: !cardData });
+    const items = 5;
+    const { data: projectsData, isLoading: isProjectsDataLoading } = useGetProjectsQuery({ filter: { active: true } });
+    const { data: cardsData, isLoading: isCardsDataLoading } = useGetCardsQuery({
+        filter: projectsData?.items.map((project) => [{ project: project.number, latest: true }]).flat(),
+        orderBy: { cardUpdated: "desc" },
+        page: 1,
+        perPage: items
+    }, { skip: !projectsData });
 
-    // TODO skeleton
+    const isLoading = useMemo(() => isProjectsDataLoading || isCardsDataLoading, [isCardsDataLoading, isProjectsDataLoading]);
+
+    const content = useMemo(() => {
+        if (isLoading) {
+            const array = Array.from({ length: items });
+            return array.map(() => (
+                <div className="relative overflow-hidden bg-content1 hover:bg-content3">
+                    <div className="relative z-10">
+                        <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
+                            <Skeleton className="w-16 h-6 rounded-sm"/>
+                            <div className="min-w-0 space-y-1">
+                                <Skeleton className="w-32 h-4 rounded-sm"/>
+                                <Skeleton className="w-20 h-4 rounded-sm"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ));
+        }
+        return cardsData?.items.map((card) => (
+            <ChangeRow key={`${card.project}|${card.number}|${card.version}`} card={card} projects={projectsData?.items} />
+        ));
+    }, [cardsData?.items, isLoading, projectsData?.items]);
 
     return (
         <div className="space-y-2">
             <div className="text-xs tracking-widest text-foreground/50 uppercase">Recent Card Changes</div>
             <div className="border border-content3 divide-y divide-content3">
-                {cardData?.items.map((card) => (
-                    <ChangeRow key={`${card.project}|${card.number}|${card.version}`} card={card} projects={projectData?.items} />
-                ))}
+                {content}
             </div>
         </div>
     );
@@ -27,6 +55,7 @@ export default function RecentCardChanges() {
 
 function ChangeRow({ card, projects }: ChangeRowProps) {
     const project = projects?.find((project) => project.number === card.project);
+
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
             <Link to={`/project/${project?.number}/${card.number}`}>
@@ -35,13 +64,13 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                 </div>
                 <div className="relative z-10">
                     <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
-                        <NoteTypeChip className="text-xs sm:text-[0.5rem]" noteType={card.note!.type} />
+                        <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
                         <div className="min-w-0">
-                            <p className="text-[15px] font-semibold text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</p>
-                            <p className="flex text-xs italic text-foreground/40 mt-0.5 truncate leading-none">
+                            <div className="text-[15px] font-semibold text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
+                            <div className="flex text-xs italic text-foreground/40 mt-0.5 truncate leading-none">
                                 <span>{project?.code} #{card.number} · v{card.version}</span>
                                 <Timestamp className="grow text-right" date={card.updated}/>
-                            </p>
+                            </div>
                         </div>
                     </div>
                 </div>

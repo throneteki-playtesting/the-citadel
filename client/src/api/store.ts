@@ -16,7 +16,12 @@ const errorLoggerMiddleware: Middleware = () => (next) => (action) => {
     if (typeof action === "object" && action !== null && "type" in action) {
         if ((action as { type: string }).type.endsWith("/rejected")) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const errorAction = action as { error?: { message?: string }; payload?: any };
+            const errorAction = action as { error?: { name?: string; message?: string }; payload?: any };
+
+            if (errorAction.error?.name === "ConditionError") {
+                return next(action);
+            }
+
             const message = errorAction.payload?.message || errorAction.error?.message || "Unknown Error";
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any

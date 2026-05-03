@@ -1,11 +1,12 @@
 import { ILabeledCard, IPlaytestCard, NoteType } from "common/models/cards";
-import { IGetRequest, IGetResponse } from "./types";
+import { IGetResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "./errors";
 import { dataService } from "./services";
 import asyncHandler from "express-async-handler";
+import { SingleOrArray } from "common/types";
 
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     "replaced": "major",
@@ -106,12 +107,12 @@ export const loadProjectByParam = asyncHandler<{ project: number }, unknown, unk
 
 // Applies extra filter fields to a single filter or each filter in an array,
 // without mutating the original value
-export function applyToFilter<T>(
-    filter: IGetRequest<T>["filter"],
-    extra: Partial<T>
-): IGetRequest<T>["filter"] {
+export function applyToFilter<TFilter extends SingleOrArray<object> | undefined>(
+    filter: TFilter,
+    extra: object
+): TFilter {
     if (Array.isArray(filter)) {
-        return filter.map((f) => ({ ...f, ...extra } as typeof f));
+        return filter.map((f) => ({ ...f, ...extra })) as TFilter;
     }
-    return { ...(filter ?? {}), ...extra } as typeof filter;
+    return { ...(filter ?? {}), ...extra } as TFilter;
 }

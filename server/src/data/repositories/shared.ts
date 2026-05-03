@@ -1,9 +1,9 @@
 import { IAuditable } from "common/models/shared";
 import MongoDataSource from "./dataSources/mongoDataSource";
-import { DeepPartial, SingleOrArray, Sortable } from "common/types";
+import { Filter, SingleOrArray, Sort } from "common/types";
 import { asArray } from "common/utils";
 import { flatten } from "flat";
-import { Sort } from "mongodb";
+import { Sort as MongoSort } from "mongodb";
 import { getContext } from "@/middleware/context";
 import { IRepository } from "@/types";
 
@@ -40,14 +40,14 @@ export class BasicAuditableRepository<T extends IAuditable> extends IAuditableDa
         return Array.isArray(creating) ? result : result[0];
     }
 
-    public async read(reading?: SingleOrArray<DeepPartial<T>>, orderBy?: Sortable<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as Sort : undefined;
+    public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
+        const sort = orderBy ? flatten(orderBy) as MongoSort : undefined;
         const limit = perPage;
         const skip = (page - 1) * perPage;
         return await this.database.read(reading, { sort, limit, skip });
     }
 
-    public async count(counting?: SingleOrArray<DeepPartial<T>>) {
+    public async count(counting?: SingleOrArray<Filter<T>>) {
         return this.database.count(counting);
     }
 
@@ -59,7 +59,7 @@ export class BasicAuditableRepository<T extends IAuditable> extends IAuditableDa
         return Array.isArray(updating) ? result : result[0];
     }
 
-    public async destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<T[]> {
+    public async destroy(destroying: SingleOrArray<Filter<T>>): Promise<T[]> {
         return await this.database.destroy(destroying);
     }
 }
@@ -72,14 +72,14 @@ export class BasicRepository<T> extends Database<T> implements IRepository<T> {
         return Array.isArray(creating) ? result : result[0];
     }
 
-    public async read(reading?: SingleOrArray<DeepPartial<T>>, orderBy?: Sortable<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as Sort : undefined;
+    public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
+        const sort = orderBy ? flatten(orderBy) as MongoSort : undefined;
         const limit = perPage;
         const skip = (page - 1) * perPage;
         return await this.database.read(reading, { sort, limit, skip });
     }
 
-    public async count(counting?: SingleOrArray<DeepPartial<T>>) {
+    public async count(counting?: SingleOrArray<Filter<T>>) {
         return this.database.count(counting);
     }
 
@@ -90,7 +90,7 @@ export class BasicRepository<T> extends Database<T> implements IRepository<T> {
         return Array.isArray(updating) ? result : result[0];
     }
 
-    public async destroy(destroying: SingleOrArray<DeepPartial<T>>): Promise<T[]> {
+    public async destroy(destroying: SingleOrArray<Filter<T>>): Promise<T[]> {
         return await this.database.destroy(destroying);
     }
 }

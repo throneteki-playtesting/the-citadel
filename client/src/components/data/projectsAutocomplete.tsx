@@ -1,5 +1,5 @@
 import { Autocomplete, AutocompleteItem, AutocompleteProps } from "@heroui/react";
-import { Filterable, Sortable } from "common/types";
+import { Filterable, Sort } from "common/types";
 import { Key, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useGetProjectsQuery } from "../../api";
 import { useFilter } from "../../api/hooks";
@@ -52,6 +52,6 @@ const ProjectsAutocomplete = ({ filter: initialFilter, orderBy, children = (proj
     );
 };
 
-type ProjectsAutocompleteProps = Omit<AutocompleteProps<IProject>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IProject>, orderBy?: Sortable<IProject>, children?: (project: IProject) => ReactNode, isLoading?: boolean, selectedKey?: Key, onSelectionChange?: (project?: IProject) => void };
+type ProjectsAutocompleteProps = Omit<AutocompleteProps<IProject>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IProject>, orderBy?: Sort<IProject>, children?: (project: IProject) => ReactNode, isLoading?: boolean, selectedKey?: Key, onSelectionChange?: (project?: IProject) => void };
 
 export default ProjectsAutocomplete;

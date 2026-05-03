@@ -10,8 +10,8 @@ import { validateRequest } from "@/middleware/permissions";
 import { IGetRequest, IGetResponse } from "@/types";
 import { StatusCodes } from "http-status-codes";
 import { generateGetResponse, applyToFilter } from "@/utils";
-import { orderBy, paging } from "@/schemas";
 import { ApiErrorResponse } from "@/errors";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -28,12 +28,10 @@ async function getSuggestions(
     return generateGetResponse(result, count);
 }
 
-// Reusable query schema for getting filtered, paged, ordered items
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.CardSuggestion.Partial),
-    ...paging(),
-    ...orderBy<ICardSuggestion>(Schemas.CardSuggestion.Full, { created: "desc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.CardSuggestion.Full,
+    { created: "desc" }
+);
 
 // Read tags
 router.get("/tags",

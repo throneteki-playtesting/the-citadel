@@ -1,6 +1,6 @@
 import { BulkWriteOptions, Collection, DeleteOptions, Filter as MongoFilter, FindOptions, IndexSpecification, MongoClient, OptionalUnlessRequiredId, WithId } from "mongodb";
 import { flatten } from "flat";
-import { DeepPartial, SingleOrArray } from "common/types";
+import { Filter, isOperatorObject, SingleOrArray } from "common/types";
 import { logger } from "@/services";
 import { asArray } from "common/utils";
 
@@ -17,29 +17,47 @@ export default class MongoDataSource<T> {
             this.primaryKeys.push("_id");
         }
     }
-    protected buildFilterQuery(values?: SingleOrArray<DeepPartial<T>>): MongoFilter<T> {
-        let query = {};
+    protected buildFilterQuery(values?: SingleOrArray<Filter<T>>): MongoFilter<T> {
+        let query: Record<string, unknown> = {};
 
         if (values) {
+            const flattenFilter = (value: Filter<T>): Record<string, unknown> => {
+                const operators: Record<string, unknown> = {};
+                const plain: Record<string, unknown> = {};
+
+                for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+                    if (isOperatorObject(val)) {
+                        operators[key] = val;
+                    } else {
+                        plain[key] = val;
+                    }
+                }
+
+                return {
+                    ...flatten(plain),
+                    ...operators
+                };
+            };
+
             if (!Array.isArray(values)) {
-                query = flatten(values);
+                query = flattenFilter(values);
             } else if (values.length > 0) {
                 query = values.length === 1
-                    ? flatten(values[0])
-                    : { "$or": values.map(v => flatten(v)) };
+                    ? flattenFilter(values[0])
+                    : { "$or": values.map(v => flattenFilter(v)) };
             }
         }
 
-        // By default, MongoDB treats "undefined" as value not existing.
-        // This converts any "undefined" to count as any value for existing
-        // and "null" to count as the value not existing
         for (const [key, value] of Object.entries(query)) {
-            if (value === undefined) {
+            if (isOperatorObject(value)) {
+                continue;
+            } else if (value === undefined) {
                 query[key] = { $exists: true };
             } else if (value === null) {
                 query[key] = { $exists: false };
             }
         }
+
         return query as MongoFilter<T>;
     }
 
@@ -62,19 +80,19 @@ export default class MongoDataSource<T> {
         return result;
     }
 
-    public async read(reading?: SingleOrArray<DeepPartial<T>>, options?: FindOptions) {
+    public async read(reading?: SingleOrArray<Filter<T>>, options?: FindOptions) {
         const query = this.buildFilterQuery(reading);
         const result = await this.find(query, options);
         return result;
     }
 
-    public async readOne(reading?: DeepPartial<T>, options?: FindOptions) {
+    public async readOne(reading?: Filter<T>, options?: FindOptions) {
         const query = this.buildFilterQuery(reading);
         const result = await this.findOne(query, options);
         return result;
     }
 
-    public async count(counting?: SingleOrArray<DeepPartial<T>>) {
+    public async count(counting?: SingleOrArray<Filter<T>>) {
         const query = this.buildFilterQuery(counting);
         const result = await this.total(query);
         return result;
@@ -86,7 +104,7 @@ export default class MongoDataSource<T> {
         return result;
 
     }
-    public async destroy(deleting: SingleOrArray<DeepPartial<T>>, options?: DeleteOptions) {
+    public async destroy(deleting: SingleOrArray<Filter<T>>, options?: DeleteOptions) {
         const query = this.buildFilterQuery(deleting);
         const result = await this.deleteMany(query, options);
         return result;

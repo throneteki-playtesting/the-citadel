@@ -1,6 +1,6 @@
 import { Autocomplete, AutocompleteItem, AutocompleteProps } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
-import { Filterable, Sortable } from "common/types";
+import { Filterable, Sort } from "common/types";
 import { Key, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useGetCardsQuery } from "../../api";
 import { useFilter } from "../../api/hooks";
@@ -57,6 +57,6 @@ const CardsAutocomplete = ({ filter: initialFilter, orderBy, children = (card) =
     );
 };
 
-type CardsAutocompleteProps = Omit<AutocompleteProps<IPlaytestCard>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IPlaytestCard>, orderBy?: Sortable<IPlaytestCard>, children?: (card: IPlaytestCard) => ReactNode, isLoading?: boolean, mapKey?: (card: IPlaytestCard) => Key, selectedKey?: Key, onSelectionChange?: (card?: IPlaytestCard) => void };
+type CardsAutocompleteProps = Omit<AutocompleteProps<IPlaytestCard>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IPlaytestCard>, orderBy?: Sort<IPlaytestCard>, children?: (card: IPlaytestCard) => ReactNode, isLoading?: boolean, mapKey?: (card: IPlaytestCard) => Key, selectedKey?: Key, onSelectionChange?: (card?: IPlaytestCard) => void };
 
 export default CardsAutocomplete;

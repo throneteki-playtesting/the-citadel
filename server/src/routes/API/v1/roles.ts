@@ -6,10 +6,10 @@ import asyncHandler from "express-async-handler";
 import Permission from "common/models/permissions";
 import { validateRequest } from "@/middleware/permissions";
 import { StatusCodes } from "http-status-codes";
-import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
 import { Role } from "common/models/auth";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -26,14 +26,15 @@ async function getRoles(
     return generateGetResponse(result, count);
 }
 
+const getQuerySchema = getRequestSchema(
+    Schemas.Role.Full,
+    { name: "desc" }
+);
+
 const validateGetRoles = [
     validateRequest(Permission.READ_ROLES),
     celebrate({
-        [Segments.QUERY]: {
-            filter: Schemas.SingleOrArray(Schemas.Role.Partial),
-            ...paging(),
-            ...orderBy<Role>(Schemas.Role.Full, { name: "asc" })
-        }
+        [Segments.QUERY]: getQuerySchema
     })
 ];
 

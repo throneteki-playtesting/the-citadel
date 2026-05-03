@@ -6,11 +6,11 @@ import asyncHandler from "express-async-handler";
 import Permission from "common/models/permissions";
 import { validateRequest } from "@/middleware/permissions";
 import { IGetRequest, IGetResponse } from "@/types";
-import { orderBy, paging } from "@/schemas";
 import { generateGetResponse } from "@/utils";
 import { StatusCodes } from "http-status-codes";
 import { getContext } from "@/middleware/context";
 import { User } from "common/models/auth";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -27,12 +27,10 @@ async function getUsers(
     return generateGetResponse(result, count);
 }
 
-// Reusable query schema for getting filtered, paged, ordered items
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.User.Partial),
-    ...paging(),
-    ...orderBy<User>(Schemas.User.Full, { displayname: "asc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.User.Full,
+    { displayname: "asc" }
+);
 
 // Fetch current user (for client)
 router.get("/me",

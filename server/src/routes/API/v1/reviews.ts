@@ -8,10 +8,10 @@ import { hasPermission, Regex, SemanticVersion, validate } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
-import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter } from "@/utils";
 import { ApiErrorResponse } from "@/errors";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -35,12 +35,10 @@ async function getReviews(
     return generateGetResponse(result, count);
 }
 
-// Reusable query schema for getting filtered, paged, ordered items
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.PlaytestingReview.Partial),
-    ...paging(),
-    ...orderBy<IPlaytestReview>(Schemas.PlaytestingReview.Full, { updated: "desc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.PlaytestingReview.Full,
+    { updated: "desc" }
+);
 
 // Read reviews
 router.get("/",

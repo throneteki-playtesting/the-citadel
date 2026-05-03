@@ -9,9 +9,9 @@ import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { IGetRequest, IGetResponse } from "@/types";
-import { orderBy, paging } from "@/schemas";
 import { generateGetResponse, loadProjectByParam } from "@/utils";
 import { IPlaytestCard } from "common/models/cards";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -28,11 +28,10 @@ async function getPlaytestingUpdates(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.PlaytestingUpdate.Partial),
-    ...paging(),
-    ...orderBy<IPlaytestingUpdate>(Schemas.PlaytestingUpdate.Full, { created: "desc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.PlaytestingUpdate.Full,
+    { created: "desc" }
+);
 
 // Read playtesting updates
 router.get("/",

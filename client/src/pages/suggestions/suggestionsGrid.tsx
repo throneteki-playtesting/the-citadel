@@ -2,7 +2,7 @@ import { ReactElement, useState } from "react";
 import { Faction, ICardSuggestion, Type } from "common/models/cards";
 import { useGetSuggestionsQuery } from "../../api";
 import { useFilter } from "../../api/hooks";
-import { Sortable } from "common/types";
+import { Sort } from "common/types";
 import CardGrid from "../../components/cardGrid";
 import { BaseElementProps } from "../../types";
 import OrderBySelector from "../../components/data/orderBy";
@@ -30,7 +30,7 @@ const SuggestionsGrid = ({ className, style, size, filter: initialFilter, hideFi
     const [users, setUsers] = useState(initialFilter?.user ?? []);
     const [tags, setTags] = useState(initialFilter?.tags ?? []);
     const filter = useFilter<ICardSuggestion>({ archivedReason: undefined, card: { faction: factions, type: types }, user: { discordId: users.map((user) => user.discordId) }, tags });
-    const [orderBy, setOrderBy] = useState<Sortable<ICardSuggestion> | undefined>();
+    const [orderBy, setOrderBy] = useState<Sort<ICardSuggestion> | undefined>();
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState<number>(24);
 

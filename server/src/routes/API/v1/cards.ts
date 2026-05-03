@@ -11,11 +11,11 @@ import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { validateRequest } from "@/middleware/permissions";
 import { applyToFilter, generateGetResponse, NoteVersion } from "@/utils";
-import { orderBy, paging } from "@/schemas";
 import { IGetRequest, IGetResponse } from "@/types";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
 import { syncIssues } from "@/github/issues";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -48,12 +48,10 @@ async function getCards(
     return generateGetResponse(result, count);
 }
 
-// Reusable query schema for getting filtered, paged, ordered items
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.PlaytestingCard.Partial),
-    ...paging(),
-    ...orderBy(Schemas.PlaytestingCard.Full, { project: "asc", number: "asc", version: "asc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.PlaytestingCard.Full,
+    { project: "asc", number: "asc", version: "asc" }
+);
 
 // Read all cards
 router.get("/",

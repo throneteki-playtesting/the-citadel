@@ -12,9 +12,9 @@ import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, isEqual } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
-import { orderBy, paging } from "@/schemas";
 import { generateGetResponse, applyToFilter, loadProjectByNumber } from "@/utils";
 import { syncImage } from "@/rendering/hosting";
+import { getRequestSchema } from "@/schemas";
 
 const router = express.Router();
 
@@ -35,12 +35,10 @@ async function getProjects(
     return generateGetResponse(result, count);
 }
 
-// Reusable query schema for getting filtered, paged, ordered items
-const getQuerySchema = {
-    filter: Schemas.SingleOrArray(Schemas.Project.Partial),
-    ...paging(),
-    ...orderBy<IProject>(Schemas.Project.Full, { created: "desc" })
-};
+const getQuerySchema = getRequestSchema(
+    Schemas.Project.Full,
+    { created: "desc" }
+);
 
 // Read projects
 router.get("/",

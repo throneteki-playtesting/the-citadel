@@ -14,8 +14,49 @@ export type DeepPartial<T> =
         : T extends object
             ? { [P in keyof T]?: DeepPartial<T[P]> }
             : T;
+
+type Primitive = string | number | boolean;
+
+type ComparableOperators<T> =
+    [NonNullable<T>] extends [string]
+        ? { $gt?: T; $gte?: T; $lt?: T; $lte?: T; $ne?: T; $in?: T[]; $nin?: T[]; $regex?: string; $exists?: boolean }
+        : [NonNullable<T>] extends [number]
+            ? { $gt?: T; $gte?: T; $lt?: T; $lte?: T; $ne?: T; $in?: T[]; $nin?: T[]; $exists?: boolean }
+            : [NonNullable<T>] extends [Date]
+                ? {
+                    $gt?: string | Date; $gte?: string | Date;
+                    $lt?: string | Date; $lte?: string | Date;
+                    $ne?: string | Date;
+                    $in?: (string | Date)[]; $nin?: (string | Date)[];
+                    $exists?: boolean;
+                  }
+                : { $exists?: boolean };
+
+export type Filter<T> =
+    [NonNullable<T>] extends [Date]
+        ? T | ComparableOperators<T>
+        : [NonNullable<T>] extends [Primitive]
+            ? T | ComparableOperators<T>
+            : NonNullable<T> extends (infer U)[]
+                ? Filter<U>[] | undefined
+                : NonNullable<T> extends object
+                    ? { [P in keyof NonNullable<T>]?: Filter<NonNullable<T>[P]> | ComparableOperators<NonNullable<T>[P]> }
+                    : T | ComparableOperators<T>;
+
+const OPERATOR_KEYS = new Set(["$gt", "$gte", "$lt", "$lte", "$ne", "$in", "$nin", "$regex", "$exists"]);
+export function isOperatorObject(value: unknown): value is Record<string, unknown> {
+    return (
+        value !== null &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        !(value instanceof Date) &&
+        Object.keys(value).every(k => OPERATOR_KEYS.has(k))
+    );
+}
+
 export type SortDirection = "asc" | "desc";
-export type Sortable<T> = EntriesOf<T, SortDirection>;
+export type Sort<T> = EntriesOf<T, SortDirection>;
+
 export type Filterable<T> = {
     [K in keyof T]?: T[K] extends Array<infer U>
         ? Iterable<U> | U | undefined
