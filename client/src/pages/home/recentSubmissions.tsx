@@ -39,8 +39,8 @@ export default function RecentSubmissions() {
     const content = useMemo(() => {
         if (isLoading) {
             const array = Array.from({ length: items });
-            return array.map(() => (
-                <div className="relative z-10 px-4 py-2">
+            return array.map((_, index) => (
+                <div key={index} className="relative z-10 px-4 py-2">
                     <div className="min-w-0 space-y-1">
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                             <Skeleton className="w-32 h-4 rounded-sm"/>

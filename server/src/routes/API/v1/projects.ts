@@ -150,7 +150,7 @@ router.put("/:number",
     validateRequest(Permission.EDIT_PROJECTS),
     celebrate({
         [Segments.PARAMS]: numberParams,
-        [Segments.BODY]: Schemas.Project.Full
+        [Segments.BODY]: Schemas.Project.Draft
     }),
     asyncHandler<{ number: number }, unknown, IProject, unknown>(async (req, res) => {
         const { number } = req.params;

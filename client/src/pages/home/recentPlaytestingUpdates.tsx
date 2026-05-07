@@ -18,8 +18,8 @@ export default function RecentPlaytestingUpdates() {
     const content = useMemo(() => {
         if (isLoading) {
             const array = Array.from({ length: items });
-            return array.map(() => (
-                <div className="p-4 space-y-1 transition-colors">
+            return array.map((_, index) => (
+                <div key={index} className="p-4 space-y-1 transition-colors">
                     <div className="flex gap-3">
                         <div className="min-w-0 space-y-1">
                             <Skeleton className="w-32 h-6 rounded-sm"/>

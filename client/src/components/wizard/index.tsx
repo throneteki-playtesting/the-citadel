@@ -70,11 +70,9 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
 
         // Always validate the page first (partial)
         if (validate(pageData, true)) {
-            let submitData = initial;
-            if (submitData === undefined) {
-                submitData = merge({}, internalData, pageData);
-                setInternalData(submitData);
-            }
+            let submitData = initial ?? {} as DeepPartial<T>;
+            submitData = merge({}, submitData, internalData, pageData);
+            setInternalData(submitData);
             if (isLastPage) {
                 // Validate full object
                 if (validate(submitData as Record<string, any>)) {

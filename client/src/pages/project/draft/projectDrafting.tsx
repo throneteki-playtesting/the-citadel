@@ -11,7 +11,7 @@ import PreviewCardSlot from "./previewCardSlot";
 import LoadingCard from "../../../components/loadingCard";
 import { addToast } from "@heroui/react";
 
-const ProjectContentDraft = ({ project, cards, isLoading = false }: ProjectContentDraftProps) => {
+const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingProps) => {
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
     const [suggesting, setSuggesting] = useState<{ faction: Faction, number: number }>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
@@ -84,6 +84,6 @@ const ProjectContentDraft = ({ project, cards, isLoading = false }: ProjectConte
     );
 };
 
-type ProjectContentDraftProps = { project: IProject, cards?: IPlaytestCard[], isLoading?: boolean }
+type ProjectDraftingProps = { project: IProject, cards?: IPlaytestCard[], isLoading?: boolean }
 
-export default ProjectContentDraft;
+export default ProjectDrafting;

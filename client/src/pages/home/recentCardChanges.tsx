@@ -24,8 +24,8 @@ export default function RecentCardChanges() {
     const content = useMemo(() => {
         if (isLoading) {
             const array = Array.from({ length: items });
-            return array.map(() => (
-                <div className="relative overflow-hidden bg-content1 hover:bg-content3">
+            return array.map((_, index) => (
+                <div key={index} className="relative overflow-hidden bg-content1 hover:bg-content3">
                     <div className="relative z-10">
                         <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
                             <Skeleton className="w-16 h-6 rounded-sm"/>

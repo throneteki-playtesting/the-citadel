@@ -102,10 +102,9 @@ function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCar
                 <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
                     <div className="flex-1">
                         <div className="text-xxs tracking-widest uppercase text-foreground/40">
-                            #{project.number} · <span className="uppercase">{project.type} · version {project.version}</span>
+                            #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>
                         </div>
                         <h2 className="text-xl sm:text-2xl font-semibold text-foreground">{project.name}</h2>
-                        <div className="text-sm italic text-foreground/50 mt-1">{project.description}</div>
                     </div>
                     <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
                         {statusChip}
