@@ -1,4 +1,4 @@
-import { Faction, IPlaytestCard } from "common/models/cards";
+import { IPlaytestCard } from "common/models/cards";
 import { Link } from "react-router-dom";
 import { useGetCardsQuery, useGetProjectsQuery } from "../../api";
 import ThronesIcon from "../../components/thronesIcon";
@@ -8,6 +8,7 @@ import Timestamp from "../../components/timestamp";
 import ChangeTypeChip from "./changeTypeChip";
 import { useMemo } from "react";
 import { Skeleton } from "@heroui/react";
+import { watermarkClasses } from "../../constants";
 
 export default function RecentCardChanges() {
     const items = 5;
@@ -60,7 +61,7 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
             <Link to={`/project/${project?.number}/${card.number}`}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", backgroundClasses[card.faction])}/>
+                    <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
                 <div className="relative z-10">
                     <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
@@ -80,14 +81,3 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
 }
 type ChangeRowProps = { card: IPlaytestCard, projects?: IProject[] };
 
-const backgroundClasses: Record<Faction, string> = {
-    baratheon: "text-baratheon opacity-30",
-    greyjoy: "text-greyjoy opacity-30",
-    lannister: "text-lannister opacity-30",
-    martell: "text-martell opacity-30",
-    thenightswatch: "text-thenightswatch opacity-30",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-200",
-    tyrell: "text-tyrell opacity-30",
-    neutral: "text-neutral opacity-30"
-};

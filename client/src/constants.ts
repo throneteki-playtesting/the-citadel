@@ -1,4 +1,39 @@
 import Permission from "common/models/permissions";
 import { enumToArray } from "./utils";
+import { Faction } from "common/models/cards";
+import { ChangeType } from "common/types";
 
 export const availablePermissions = enumToArray(Permission);
+
+export const factionBorderClasses: Record<Faction, string> = {
+    baratheon: "border-baratheon/30",
+    greyjoy: "border-greyjoy/30",
+    lannister: "border-lannister/30",
+    martell: "border-martell/30",
+    thenightswatch: "border-thenightswatch/30",
+    stark: "border-stark/20",
+    targaryen: "border-targaryen",
+    tyrell: "border-tyrell/30",
+    neutral: "border-neutral/30"
+};
+
+export const watermarkClasses: Record<string, string> = {
+    baratheon: "text-baratheon opacity-30",
+    greyjoy: "text-greyjoy opacity-30",
+    lannister: "text-lannister opacity-30",
+    martell: "text-martell opacity-30",
+    thenightswatch: "text-thenightswatch opacity-30",
+    stark: "text-stark opacity-20",
+    targaryen: "text-targaryen brightness-200",
+    tyrell: "text-tyrell opacity-30",
+    neutral: "text-neutral opacity-30"
+};
+
+export const changeTypeClasses: Record<ChangeType, string> = {
+    new: "border-success-300 bg-success-100 text-success-700",
+    draft: "border-secondary-300 bg-secondary-100 text-secondary-700",
+    preview: "border-secondary-300 bg-secondary-100 text-secondary-700",
+    updated: "border-secondary-300 bg-secondary-100 text-secondary-700",
+    reworked: "border-warning-300 bg-warning-100 text-warning-700",
+    replaced: "border-danger-300 bg-danger-100 text-danger-700"
+};

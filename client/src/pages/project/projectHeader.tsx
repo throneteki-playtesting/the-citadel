@@ -24,7 +24,10 @@ const ProjectHeader = ({ className, style, project, cards, isLoading = false, on
     }
 
     return (
-        <>
+        <div className="relative">
+            <div className="absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none">
+                <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>
+            </div>
             <div className={classNames("space-y-2 md:space-y-4", className)} style={style}>
                 <ButtonGroup className="absolute top-0 right-0 p-2">
                     <PermissionGate requires={Permission.EDIT_PROJECTS}>
@@ -36,9 +39,6 @@ const ProjectHeader = ({ className, style, project, cards, isLoading = false, on
                     {project.draft}
                 </ButtonGroup>
                 <div className="flex flex-col gap-2">
-                    <div className="absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none">
-                        <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>
-                    </div>
                     <div className="text-xxs tracking-widest uppercase text-foreground/40">
                         #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>{project.mandateUrl && (<> · <Link href={project.mandateUrl} className="cursor-pointer text-xxs">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link></>)}
                     </div>
@@ -50,7 +50,7 @@ const ProjectHeader = ({ className, style, project, cards, isLoading = false, on
                     <ProjectPlaytestingUpdates project={project} />
                 </div>
             </div>
-        </>
+        </div>
     );
 };
 

@@ -1,4 +1,4 @@
-import { Faction, IPlaytestCard } from "common/models/cards";
+import { IPlaytestCard } from "common/models/cards";
 import Timestamp from "../../components/timestamp";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdatesQuery, useGetProjectQuery } from "../../api";
 import { useMemo } from "react";
@@ -10,6 +10,7 @@ import classNames from "classnames";
 import { Link } from "react-router-dom";
 import ChangeTypeChip from "./changeTypeChip";
 import { Alert, Skeleton } from "@heroui/react";
+import { watermarkClasses } from "../../constants";
 
 export default function RecentPlaytestingUpdates() {
     const items = 3;
@@ -77,7 +78,7 @@ function PlaytestingUpdateCard({ playtestingUpdate }: PlaytestingUpdateCardProps
     const isImplemented = playtestingUpdate.github?.status === "closed" && !!playtestingUpdate.github?.mergedAt;
 
     return (
-        <Link to={`/project/update/${playtestingUpdate.version}`}>
+        <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>
             <div className="p-4 space-y-1 hover:bg-content2 transition-colors">
                 <div className="flex gap-3">
                     <div className="min-w-0">
@@ -114,7 +115,7 @@ function CardChangeList({ cards }: CardChangeListProps) {
             {cards.map((card) => (
                 <div key={`${card.project}|${card.number}|${card.version}`} className='relative overflow-hidden transition-colors'>
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                        <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", backgroundClasses[card.faction])}/>
+                        <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", watermarkClasses[card.faction])}/>
                     </div>
                     <div
                         key={`${card.project}|${card.number}|${card.version}`}
@@ -131,15 +132,3 @@ function CardChangeList({ cards }: CardChangeListProps) {
 type CardChangeListProps = {
     cards: IPlaytestCard[]
 }
-
-const backgroundClasses: Record<Faction, string> = {
-    baratheon: "text-baratheon opacity-20",
-    greyjoy: "text-greyjoy opacity-20",
-    lannister: "text-lannister opacity-20",
-    martell: "text-martell opacity-20",
-    thenightswatch: "text-thenightswatch opacity-20",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-100",
-    tyrell: "text-tyrell opacity-20",
-    neutral: "text-neutral opacity-20"
-};

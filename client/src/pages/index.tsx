@@ -12,6 +12,7 @@ import Project from "./project";
 import Card from "./card";
 import SubmitReview from "./review/submitReview";
 import { User } from "common/models/auth";
+import PlaytestingUpdate from "./project/playtestingUpdate";
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & { path: string, element?: ReactElement };
@@ -32,6 +33,11 @@ export const navItems: NavItem[] = [
         path: "/project/:number",
         permission: Permission.READ_PROJECTS,
         element: <Project />
+    },
+    {
+        path: "/project/:project/update/:version",
+        permission: Permission.READ_PLAYTESTING_UPDATES,
+        element: <PlaytestingUpdate />
     },
     {
         path: "/project/:project/:number",

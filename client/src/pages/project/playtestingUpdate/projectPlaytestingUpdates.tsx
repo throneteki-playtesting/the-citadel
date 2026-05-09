@@ -6,13 +6,13 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Link, useNavigate } from "react-router-dom";
 import Timestamp from "../../../components/timestamp";
 import classNames from "classnames";
-import { Faction } from "common/models/cards";
 import ThronesIcon from "../../../components/thronesIcon";
 import ChangeTypeChip from "../../home/changeTypeChip";
 import { addToast, Alert, Button, ButtonGroup, ButtonProps, Skeleton } from "@heroui/react";
 import CreatePlaytestingUpdateModal from "./createPlaytestingUpdateModal";
 import PermissionGate from "../../../components/permissionGate";
 import Permission from "common/models/permissions";
+import { watermarkClasses } from "../../../constants";
 
 export default function ProjectPlaytestingUpdates({ project }: ProjectPlaytestingUpdatesProps) {
     const { data, isLoading } = useGetPlaytestingUpdatesQuery({ filter: { project: project.number }, page: 1, perPage: 1, orderBy: { version: "desc" } });
@@ -48,7 +48,7 @@ type ProjectPlaytestingUpdatesProps = {
 function PlaytestingUpdateSummary({ playtestingUpdate }: PlaytestingUpdateSummaryProps) {
     const isImplemented = playtestingUpdate.github?.status === "closed" && !!playtestingUpdate.github?.mergedAt;
     return (
-        <Link to={`/project/update/${playtestingUpdate.version}`}>
+        <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>
             <div className="p-4 space-y-1 bg-content1 border border-content3 hover:bg-content2 transition-colors">
                 <div className="flex gap-3">
                     <div className="min-w-0">
@@ -110,7 +110,7 @@ function CardChangeList({ project, version }: CardChangeListProps) {
                 return (
                     <div key={`${card.project}|${card.number}|${card.version}`} className='relative overflow-hidden transition-colors'>
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                            <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", backgroundClasses[card.faction])}/>
+                            <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", watermarkClasses[card.faction])}/>
                         </div>
                         <div
                             key={`${card.project}|${card.number}|${card.version}`}
@@ -149,15 +149,3 @@ const CreateButton = ({ project, children, ...props }: CreateButtonProps) => {
     );
 };
 type CreateButtonProps = Omit<ButtonProps, "onPress"> & { project: IProject }
-
-const backgroundClasses: Record<Faction, string> = {
-    baratheon: "text-baratheon opacity-20",
-    greyjoy: "text-greyjoy opacity-20",
-    lannister: "text-lannister opacity-20",
-    martell: "text-martell opacity-20",
-    thenightswatch: "text-thenightswatch opacity-20",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-100",
-    tyrell: "text-tyrell opacity-20",
-    neutral: "text-neutral opacity-20"
-};

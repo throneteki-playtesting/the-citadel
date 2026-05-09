@@ -9,7 +9,7 @@ import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { IGetRequest, IGetResponse } from "@/types";
-import { generateGetResponse, loadProjectByParam } from "@/utils";
+import { applyToFilter, generateGetResponse, loadProjectByParam } from "@/utils";
 import { IPlaytestCard } from "common/models/cards";
 import { getRequestSchema } from "@/schemas";
 
@@ -43,6 +43,22 @@ router.get("/",
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getPlaytestingUpdates(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
+    })
+);
+
+// Read playtesting update by project/version
+router.get("/:project/:version",
+    validateRequest(Permission.READ_PLAYTESTING_UPDATES),
+    celebrate({
+        [Segments.PARAMS]: { project: Joi.number().required(), version: Joi.number().required() },
+        [Segments.QUERY]: getQuerySchema
+    }),
+    asyncHandler<{ project: number, version: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
+        const { project, version } = req.params;
+        const { filter, orderBy, page, perPage } = req.query;
+        const response = await getPlaytestingUpdates(applyToFilter(filter, { project, version }), orderBy, page, perPage);
+        const [playtestingUpdate] = response.items;
+        res.status(StatusCodes.OK).json(playtestingUpdate);
     })
 );
 

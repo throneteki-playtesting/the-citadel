@@ -94,6 +94,32 @@ router.get("/:project/:number",
     })
 );
 
+// Read specific version of a card
+router.get("/:project/:number/:version",
+    celebrate({ [Segments.PARAMS]: CardVersionParams }),
+    validateRequest(Permission.READ_CARDS),
+    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
+        const { project, number, version } = req.params;
+
+        const filter = { project, number, version };
+        const [response] = await dataService.cards.read(filter);
+        res.status(StatusCodes.OK).json(response);
+    })
+);
+
+// Read previous version of a specific card
+router.get("/:project/:number/:version/previous",
+    celebrate({ [Segments.PARAMS]: CardVersionParams }),
+    validateRequest(Permission.READ_CARDS),
+    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
+        const { project, number, version } = req.params;
+
+        const filter = { project, number, version };
+        const response = await dataService.cards.previous(filter);
+        res.status(StatusCodes.OK).json(response);
+    })
+);
+
 // Upsert draft card
 router.put("/:project/:number/draft",
     celebrate({

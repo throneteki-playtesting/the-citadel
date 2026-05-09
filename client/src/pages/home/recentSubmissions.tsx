@@ -5,7 +5,7 @@ import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
-import { Faction, ICardSuggestion } from "common/models/cards";
+import { ICardSuggestion } from "common/models/cards";
 import { IPlaytestReview, StatementAnswer, Statements } from "common/models/reviews";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheckCircle, faCircleQuestion, faFeatherPointed, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
@@ -13,6 +13,7 @@ import { Alert, Avatar, Skeleton } from "@heroui/react";
 import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
+import { watermarkClasses } from "../../constants";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 export default function RecentSubmissions() {
@@ -120,7 +121,7 @@ function ReviewRow({ review }: ReviewRowProps) {
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
             <Link to={`/project/${review.project}/${review.number}`}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", backgroundClasses[card.faction])}/>
+                    <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
                 <div className="relative z-10 px-4 py-2">
                     <div className="min-w-0 space-y-0.5">
@@ -176,7 +177,7 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
             <Link to="/suggestions">
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <div className="relative ml-32">
-                        <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", backgroundClasses[suggestion.card.faction])}/>
+                        <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}/>
                         <FontAwesomeIcon icon={isApproved ? faCheckCircle : faCircleQuestion} className="absolute right-0 bottom-0 text-2xl opacity-20"/>
                     </div>
                 </div>
@@ -235,15 +236,3 @@ function TagList({ tags }: { tags: string[] }) {
         </div>
     );
 }
-
-const backgroundClasses: Record<Faction, string> = {
-    baratheon: "text-baratheon opacity-30",
-    greyjoy: "text-greyjoy opacity-30",
-    lannister: "text-lannister opacity-30",
-    martell: "text-martell opacity-30",
-    thenightswatch: "text-thenightswatch opacity-30",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-200",
-    tyrell: "text-tyrell opacity-30",
-    neutral: "text-neutral opacity-30"
-};

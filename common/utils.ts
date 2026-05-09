@@ -123,7 +123,7 @@ export const thronesColors = {
     "martell": "#e89521",
     "thenightswatch": "#7a7a7a",
     "stark": "#cfcfcf",
-    "targaryen": "#1c1c1c",
+    "targaryen": "#141414",
     "tyrell": "#509f16",
     "neutral": "#a99560",
     "income": "#ffd240",
@@ -263,18 +263,18 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
     };
 }
 
-export function renderPlaytestingCard(card: Cards.IPlaytestCard): Cards.IRenderCard
-export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>): DeepPartial<Cards.IRenderCard>
-export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>) {
+export function renderPlaytestingCard(card: Cards.IPlaytestCard, watermark?: Cards.Watermark): Cards.IRenderCard
+export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>, watermark?: Cards.Watermark): DeepPartial<Cards.IRenderCard>
+export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>, watermark?: Cards.Watermark) {
     const versionText = !card.version || isPreview(card) ? "Preview" : `v${card.version}`;
     const codeText = card.code ?? (card.project && card.number ? parseCardCode(false, card.project, card.number) : undefined) ?? "Unknown Code";
     return {
         ...getBaseCardValues(card),
         key: `${card.code}@${card.version}`,
         watermark: {
-            top: codeText,
-            middle: versionText,
-            bottom: "Work In Progress"
+            top: watermark?.top ?? codeText,
+            middle: watermark?.middle ?? versionText,
+            bottom: watermark?.bottom ?? "Work In Progress"
         }
     } as DeepPartial<Cards.IRenderCard>;
 }

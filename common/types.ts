@@ -1,5 +1,6 @@
 import { UUID } from "crypto";
 import { Regex } from "./utils";
+import { NoteType } from "./models/cards";
 
 export type EntriesOf<T, V = unknown> = {
     [K in keyof T]?: T[K] extends (infer U)[]
@@ -81,3 +82,5 @@ export function isThronesDbLink(url: string): url is DeckLink | DecklistLink {
 }
 
 export type ISO8601String = `${number}-${number}-${number}T${number}:${number}:${number}.${number}Z`;
+
+export type ChangeType = NoteType | "new" | "draft" | "preview";

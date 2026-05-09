@@ -160,6 +160,20 @@ const api = createApi({
             },
             providesTags: (response) => mapTags(response?.items, "card")
         }),
+        getCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
+                return { url, method: "GET" };
+            },
+            providesTags: (response) => mapTags(response, "card", { includeList: false })
+        }),
+        getPreviousCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/previous`);
+                return { url, method: "GET" };
+            },
+            providesTags: (response) => mapTags(response, "card", { includeList: false })
+        }),
         putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft`);
@@ -310,6 +324,13 @@ const api = createApi({
             },
             providesTags: (results) => mapTags(results?.items, "playtestingUpdate")
         }),
+        getPlaytestingUpdate: builder.query<IPlaytestingUpdate, { project: number, version: number }>({
+            query: (options) => {
+                const url = buildUrl(`playtesting-updates/${options.project}/${options.version}`);
+                return { url, method: "GET" };
+            },
+            providesTags: (result) => mapTags(result, "playtestingUpdate", { includeList: false })
+        }),
         createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
             query: (playtestingUpdate) => {
                 const url = buildUrl(`playtesting-updates/${playtestingUpdate.project}`);
@@ -434,6 +455,8 @@ export const {
     useUpdateRoleMutation,
 
     useGetCardsQuery,
+    useGetCardQuery,
+    useGetPreviousCardQuery,
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
     useDeleteDraftMutation,
@@ -456,6 +479,7 @@ export const {
     useDeleteProjectMutation,
 
     useGetPlaytestingUpdatesQuery,
+    useGetPlaytestingUpdateQuery,
     useCreatePlaytestingUpdateMutation,
     useGetPlaytestingUpdateCardsQuery,
 
