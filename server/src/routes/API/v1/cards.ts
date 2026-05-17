@@ -16,6 +16,7 @@ import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
+import { IProject } from "common/models/projects";
 
 const router = express.Router();
 
@@ -159,12 +160,13 @@ router.put("/:project/:number/draft",
         return hasPermission(principal, draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS);
     }),
     asyncHandler<{ project: number, number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
-        const { project, number } = req.params;
+        const { number } = req.params;
+        const project = res.locals.project as IProject;
         const latest = res.locals.latest as IPlaytestCard | undefined;
         const existing = res.locals.draft as IPlaytestCard | undefined;
 
         let card = req.body;
-        const code = parseCardCode(false, project, number);
+        const code = parseCardCode(false, project.number, number);
 
         let version = "0.0.0" as SemanticVersion;
         if (latest) {
@@ -172,7 +174,7 @@ router.put("/:project/:number/draft",
         }
 
         if (existing && existing.version !== version) {
-            await dataService.cards.destroy({ project, number, version: existing.version });
+            await dataService.cards.destroy({ project: project.number, number, version: existing.version });
         }
 
         card.code = code;
@@ -185,9 +187,9 @@ router.put("/:project/:number/draft",
         delete card.release;
 
         if (existing && existing.version === version) {
-            card = await dataService.cards.update(card, false);
+            card = await dataService.cards.update(card, false, !project.draft);
         } else {
-            card = await dataService.cards.create(card);
+            card = await dataService.cards.create(card, !project.draft);
         }
 
         res.status(StatusCodes.OK).json(card);

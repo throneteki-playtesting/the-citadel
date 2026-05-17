@@ -6,6 +6,7 @@ import { emojis } from "./utils";
 import { parseCardCode } from "common/utils";
 import { sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
+import { createSyncEmitter, SyncEmitter } from "@/services/sseService";
 
 type PullRequest = Endpoints["GET /repos/{owner}/{repo}/pulls"]["response"]["data"][number];
 
@@ -14,13 +15,17 @@ export async function syncPullRequests() {
     const newlyImplemented = await dataService.cards.read({ github: { status: "closed" }, implemented: false });
     const context = githubService.getContext();
 
-    const needsPullRequest = playtestingUpdates.length > 0 || newlyImplemented.length > 0;
+    const emitters: Map<IPlaytestingUpdate, SyncEmitter<"playtestingUpdate">> = new Map(playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github", `${pt.project}|${pt.version}`)]));
+    emitters.forEach((e) => e.start());
+
     const canCreatePullRequest = await isPlaytestingBranchBehind(context);
     if (!canCreatePullRequest) {
         // Skip pull request sync as no commits can be merged
+        emitters.forEach((e) => e.error("No Mergable Changes"));
         return playtestingUpdates;
     }
     try {
+        emitters.forEach((e) => e.progress("Searching"));
         const { data: [existingPR] } = await context.client.rest.pulls.list({
             owner: context.owner,
             repo: context.repo,
@@ -28,8 +33,11 @@ export async function syncPullRequests() {
             base: "playtesting",
             state: "open"
         });
+
+        const needsPullRequest = playtestingUpdates.length > 0 || newlyImplemented.length > 0;
         if (needsPullRequest) {
             if (isPROutdated(existingPR, playtestingUpdates, newlyImplemented)) {
+                emitters.forEach((e) => e.progress("Syncing"));
                 const { syncedAt, url, status, mergedAt } = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
                 const toUpdate: IPlaytestingUpdate[] = [];
                 for (const playtestingUpdate of playtestingUpdates) {
@@ -52,7 +60,9 @@ export async function syncPullRequests() {
                 state: "closed"
             });
         }
+        emitters.forEach((e, pt) => e.complete(pt));
     } catch (err) {
+        emitters.forEach((e) => e.error("Failure"));
         logger.warn(new Error("[Github] Failed to sync playtesting pull request", { cause: err }));
     }
     return playtestingUpdates;

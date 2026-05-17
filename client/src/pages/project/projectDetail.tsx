@@ -8,6 +8,8 @@ import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectContent from "./projectContent";
 import ProjectDrafting from "./draft/projectDrafting";
+import dismoji from "../../emojis";
+import classNames from "classnames";
 
 const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: number! });
@@ -16,13 +18,18 @@ const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps
     const [isDeleting, setIsDeleting] = useState(false);
     const navigate = useNavigate();
 
-    return <div className={className} style={style}>
-        <ProjectHeader project={project} cards={cardsData?.items} isLoading={isProjectLoading} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
-        {
-            project?.draft
-                ? <ProjectDrafting project={project} cards={cardsData?.items} isLoading={isCardsLoading}/>
-                : <ProjectContent cards={cardsData?.items} />
-        }
+    return <div className={classNames("relative", className)} style={style}>
+        <div className={classNames("absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}>
+            {project && <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
+        </div>
+        <div className="space-y-2">
+            <ProjectHeader project={project} cards={cardsData?.items} isLoading={isProjectLoading} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
+            {
+                project?.draft
+                    ? <ProjectDrafting project={project} cards={cardsData?.items} isLoading={isCardsLoading}/>
+                    : <ProjectContent cards={cardsData?.items} />
+            }
+        </div>
         <EditProjectModal isOpen={isEditing} project={project} onClose={() => setIsEditing(false)} onSave={(project) => addToast({ title: "Successfully saved", color: "success", description: `${project.name} has been updated` })}/>
         {project && <DeleteProjectModal isOpen={isDeleting} project={project} onClose={() => setIsDeleting(false)} onDelete={(project) => {
             navigate("/");

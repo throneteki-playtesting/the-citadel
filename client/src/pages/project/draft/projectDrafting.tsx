@@ -9,7 +9,7 @@ import EmptyCardSlot from "./emptyCardSlot";
 import SelectSuggestionModal from "./selectSuggestionModal";
 import PreviewCardSlot from "./previewCardSlot";
 import LoadingCard from "../../../components/loadingCard";
-import { addToast } from "@heroui/react";
+import { addToast, Card } from "@heroui/react";
 
 const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingProps) => {
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
@@ -66,9 +66,9 @@ const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingP
 
     return (
         <>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1 p-1">
+            <Card className="bg-content1/10 grid grid-cols-3 sm:grid-cols-4 gap-1">
                 {cardSlots}
-            </div>
+            </Card>
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `Slot #${card.number} has been saved` })}/>
             <SelectSuggestionModal
                 isOpen={!!suggesting}

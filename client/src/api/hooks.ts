@@ -124,3 +124,7 @@ export function useCardSync(card?: { project: number, number: number, version: S
     const id = card ? `${card.project}|${card.number}|${card.version}` : undefined;
     return useSyncListener("card", id);
 }
+export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number, version: number }) {
+    const id = playtestingUpdate ? `${playtestingUpdate.project}|${playtestingUpdate?.version}` : undefined;
+    return useSyncListener("playtestingUpdate", id);
+}

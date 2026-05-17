@@ -24,6 +24,7 @@
     "@tiptap/extension-bold": "^3.0.9",
     "@tiptap/extension-document": "^3.0.9",
     "@tiptap/extension-hard-break": "^3.0.9",
+    "@tiptap/extension-history": "^3.23.1",
     "@tiptap/extension-italic": "^3.0.9",
     "@tiptap/extension-paragraph": "^3.0.9",
     "@tiptap/extension-text": "^3.0.9",

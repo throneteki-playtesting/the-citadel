@@ -1,8 +1,9 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import Document from "@tiptap/extension-document";
 import Text from "@tiptap/extension-text";
+import History from "@tiptap/extension-history";
 import { BaseElementProps } from "../../../types";
-import { Dispatch, SetStateAction, useEffect } from "react";
+import { type Dispatch, type SetStateAction, useEffect } from "react";
 import { Button } from "@heroui/react";
 import ThronesIcon, { Icon } from "../../thronesIcon";
 import { AbilityIcon, AutoTextConversions, NewLine, Trait, TriggeredAbility } from "./abilityEditorExtensions";
@@ -24,7 +25,7 @@ export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, erro
     });
 
     const editor = useEditor({
-        extensions: [TextDocument, Text, TriggeredAbility, AutoTextConversions, Trait, AbilityIcon, NewLine],
+        extensions: [TextDocument, Text, TriggeredAbility, AutoTextConversions, Trait, AbilityIcon, NewLine, History],
         content: convertIncomingText(text),
         onUpdate({ editor }) {
             const html = convertOutgoingHtml(editor.getHTML()) || undefined;
@@ -81,6 +82,5 @@ export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, erro
 };
 
 type AbilityTextEditorProps<T> = Omit<BaseElementProps, "children"> & { value?: T, setValue: Dispatch<SetStateAction<T | undefined>>, isDisabled?: boolean, errorMessage?: string };
-
 
 export default AbilityEditor;

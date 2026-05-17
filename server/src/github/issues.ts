@@ -88,12 +88,12 @@ export async function syncIssues(cards: IPlaytestCard[]) {
                     }
                 }
             }
+            toUpdate.push(card);
+            emitter.complete(card);
         } catch (err) {
             emitter.error("Failure");
             logger.warn(new Error(`[Github] Failed to sync ${card.name} (${card.version})`, { cause: err }));
         }
-        toUpdate.push(card);
-        emitter.complete(card);
     }
 
     if (needsUpdate) {

@@ -41,7 +41,7 @@ const DevelopmentStatus = ({ draft, latest }: DevelopmentStatusProps) => {
     }
     const alert = <Alert icon={data.icon} color={data.color} title="Development" className="h-full" hideIconWrapper description={data.label}></Alert>;
     if (data.href) {
-        return <a href={data.href} target="_blank">{alert}</a>;
+        return <a className="hover:brightness-125 transition duration-300 ease-in-out" href={data.href} target="_blank">{alert}</a>;
     }
     return alert;
 };

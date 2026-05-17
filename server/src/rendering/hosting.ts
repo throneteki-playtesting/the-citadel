@@ -56,28 +56,28 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
         return all;
     }, {});
 
-    const promises = packages.map(async (pkg) => {
+    const promises = packages.map(async ({ key, card, emitter }) => {
         try {
-            if (pkg.card.release) {
-                pkg.card.imageUrl = generateReleaseImageUrl(pkg.card.release.short, pkg.card.release.number, pkg.card.name);
-                const response = await fetch(pkg.card.imageUrl, { method: "HEAD" });
+            if (card.release) {
+                card.imageUrl = generateReleaseImageUrl(card.release.short, card.release.number, card.name);
+                const response = await fetch(card.imageUrl, { method: "HEAD" });
                 if (!response.ok) {
-                    pkg.emitter.error("Release Image Missing");
+                    emitter.error("Release Image Missing");
                     return;
                 }
             } else {
-                const fileKey = `${pkg.card.project}/${createImgFilenameFor(pkg.card)}`;
-                const buffer = buffers[pkg.key];
+                const fileKey = `${card.project}/${createImgFilenameFor(card)}`;
+                const buffer = buffers[key];
                 if (buffer) {
-                    pkg.emitter.progress("Uploading");
+                    emitter.progress("Uploading");
                     const imageUrl = await uploadS3File(buffer, fileKey, "PNG");
                     uploaded.push(fileKey);
-                    pkg.card.imageUrl = imageUrl;
+                    card.imageUrl = imageUrl;
                 }
             }
-            pkg.emitter.complete(pkg.card);
+            emitter.complete(card);
         } catch (err) {
-            pkg.emitter.error("Unexpected Error");
+            emitter.error("Unexpected Error");
             throw err;
         }
     });

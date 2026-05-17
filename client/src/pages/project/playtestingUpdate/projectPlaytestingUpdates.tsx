@@ -64,7 +64,7 @@ function PlaytestingUpdateSummary({ playtestingUpdate }: PlaytestingUpdateSummar
                             </p>
                         )}
                     </div>
-                    <Timestamp className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none" date={new Date(playtestingUpdate.updated)} isEdited={new Date(playtestingUpdate.updated) > new Date(playtestingUpdate.created)} />
+                    <Timestamp className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none" date={new Date(playtestingUpdate.updated)} />
                 </div>
                 <CardChangeList project={playtestingUpdate.project} version={playtestingUpdate.version} />
             </div>

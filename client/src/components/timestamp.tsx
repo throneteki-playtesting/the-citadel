@@ -1,7 +1,8 @@
 import TimeAgo, { Formatter } from "react-timeago";
 import { CSSProperties } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPencilSquare } from "@fortawesome/free-solid-svg-icons";
+import { TouchTooltip } from "./touchTooltip";
+import { useTimezone } from "../api/hooks";
+import classNames from "classnames";
 
 const shortFormatter: Formatter = (value, unit) => {
     if (unit === "second") return value < 10 ? "just now" : `${value}s`;
@@ -14,22 +15,21 @@ const shortFormatter: Formatter = (value, unit) => {
     return `${value} ${unit}`;
 };
 
-export default function Timestamp({ date, isEdited, className, style }: TimestampProps) {
+export default function Timestamp({ date, className, style }: TimestampProps) {
+    const { format } = useTimezone();
     return (
-        <span
-            style={style}
-            className={className}
-        >
-            {isEdited && (
-                <FontAwesomeIcon icon={faPencilSquare}/>
-            )}
-            <TimeAgo date={date} formatter={shortFormatter} />
-        </span>
+        <TouchTooltip content={format(new Date(date))}>
+            <div
+                style={style}
+                className={classNames("space-x-0.5", className)}
+            >
+                <TimeAgo date={date} formatter={shortFormatter} />
+            </div>
+        </TouchTooltip>
     );
 }
 type TimestampProps = {
   date: Date;
-  isEdited?: boolean;
   className?: string;
   style?: CSSProperties;
 };

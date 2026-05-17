@@ -127,7 +127,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                     <div className="min-w-0 space-y-0.5">
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                             <div className="text-md font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
-                            <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} isEdited={new Date(review.updated) > new Date(review.created)}/>
+                            <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
                         </div>
                         <div className="flex gap-2 items-center">
                             <Avatar src={user.avatarUrl} name={user.displayname} className="shrink-0 size-10 sm:size-8 md:size-10"/>
@@ -202,7 +202,7 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
                                 <FontAwesomeIcon icon={faThumbsUp} />
                                 <span>{suggestion.likedBy.length}</span>
                             </div>
-                            <Timestamp date={new Date(suggestion.updated)} isEdited={new Date(suggestion.updated) > new Date(suggestion.created)} className="text-xs italic text-foreground/40"/>
+                            <Timestamp date={new Date(suggestion.updated)} className="text-xs italic text-foreground/40"/>
                         </div>
                     </div>
                     {suggestion.tags.length > 0 && <TagList tags={suggestion.tags} />}

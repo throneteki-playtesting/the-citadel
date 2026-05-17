@@ -18,10 +18,10 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
         if (!card) {
             return null;
         }
-        if (status === "progress" || isSyncing) {
+        if (status === "start" || status === "progress" || isSyncing) {
             return {
                 icon: <Spinner />,
-                label: step ?? status ?? "Processing",
+                label: step ?? "Processing",
                 color: "secondary"
             };
         }
@@ -88,10 +88,10 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
     }
     const alert = <Alert icon={data.icon} color={data.color} title="Online Platform" className="h-full" hideIconWrapper description={data.label}></Alert>;
     if (data.onPress) {
-        return <a className="cursor-pointer" onClick={data.onPress}>{alert}</a>;
+        return <a className="cursor-pointer hover:brightness-125 transition duration-300 ease-in-out" onClick={data.onPress}>{alert}</a>;
     }
     if (data.href) {
-        return <a href={data.href} target={"_blank"}>{alert}</a>;
+        return <a className="hover:brightness-125 transition duration-300 ease-in-out" href={data.href} target={"_blank"}>{alert}</a>;
     }
     return alert;
 };

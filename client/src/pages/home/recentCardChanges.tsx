@@ -70,7 +70,7 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                             <div className="text-[15px] font-semibold text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
                             <div className="flex text-xs italic text-foreground/40 mt-0.5 truncate leading-none">
                                 <span>{project?.code} #{card.number} · v{card.version}</span>
-                                <Timestamp className="grow text-right" date={card.updated}/>
+                                <Timestamp className="ml-auto text-right" date={card.updated}/>
                             </div>
                         </div>
                     </div>

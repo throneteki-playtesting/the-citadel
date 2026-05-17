@@ -1,6 +1,6 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Link, Tooltip } from "@heroui/react";
+import { Card, Link, Tooltip } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -19,9 +19,9 @@ const ProjectContent = ({ cards = [] }: ProjectContentProps) => {
     }, new Map<Faction, IPlaytestCard[]>), [cards]);
 
     return (
-        <div>
+        <Card className="bg-content1/10">
             {[...cardsByFaction.entries()].map(([faction, cards]) => <FactionCarousel key={faction} faction={faction} cards={cards} />)}
-        </div>
+        </Card>
     );
 };
 
@@ -52,13 +52,13 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
             <div className={classNames("text-xl tracking-widest w-full p-4 flex items-center gap-2")}><ThronesIcon name={faction} className="text-3xl"/> {factionNames[faction]}</div>
             <div className="relative">
                 <button
-                    onClick={() => scroll("left")}
+                    onPointerDown={() => scroll("left")}
                     className={classNames(
-                        "absolute left-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
+                        "cursor-pointer absolute left-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
                         canScrollLeft ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
                     )}
                 >
-                    <FontAwesomeIcon icon={faChevronLeft} className="text-black drop-shadow text-xl" />
+                    <FontAwesomeIcon icon={faChevronLeft} className="text-black drop-shadow text-3xl" />
                 </button>
                 <div ref={containerRef} onScroll={updateScrollButtons} className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden">
                     {cards.map((card) => (
@@ -69,9 +69,9 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
                         </Link>))}
                 </div>
                 <button
-                    onClick={() => scroll("right")}
+                    onPointerDown={() => scroll("right")}
                     className={classNames(
-                        "absolute right-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
+                        "cursor-pointer absolute right-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
                         canScrollRight ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
                     )}
                 >
