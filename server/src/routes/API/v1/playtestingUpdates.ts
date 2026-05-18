@@ -12,6 +12,8 @@ import { IGetRequest, IGetResponse } from "@/types";
 import { applyToFilter, generateGetResponse, loadProjectByParam } from "@/utils";
 import { IPlaytestCard } from "common/models/cards";
 import { getRequestSchema } from "@/schemas";
+import { asPDF } from "@/rendering";
+import { renderPlaytestingCard } from "common/utils";
 
 const router = express.Router();
 
@@ -142,6 +144,35 @@ router.get("/:project/:version/cards",
 
         const cards = await dataService.cards.forUpdate(playtestingUpdate);
         res.status(StatusCodes.OK).json(cards);
+    })
+);
+
+// Get print sheet for playtesting update
+router.get("/:project/:version/print-sheet",
+    validateRequest(Permission.READ_PLAYTESTING_UPDATES),
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required(),
+            version: Joi.number().required()
+        }
+    }),
+    loadProjectByParam,
+    asyncHandler<{ project: number, version: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { version } = req.params;
+        const project = res.locals.project as IProject;
+
+        const [playtestingUpdate] = await dataService.playtestingUpdates.read({ project: project.number, version });
+        if (!playtestingUpdate) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Playtesting update v${version} for project #${project.number} does not exist`);
+        }
+
+        const cards = await dataService.cards.forUpdate(playtestingUpdate);
+        const pdf = await asPDF(cards.map((card) => renderPlaytestingCard(card)));
+
+        res.status(StatusCodes.OK)
+            .contentType("application/pdf")
+            .setHeader("Content-Disposition", `attachment; filename="${project.code}-v${version}-changes.pdf"`)
+            .send(pdf);
     })
 );
 

@@ -13,7 +13,7 @@ const Render = () => {
     const { data: job, isLoading, isError, error } = useGetRenderJobQuery({ id });
 
     if (isError) {
-        return <div>{JSON.stringify(error)}</div>;
+        return <div id="render-error">{JSON.stringify(error)}</div>;
     }
     if (isLoading || job?.data.length === 0) {
         return <div/>;

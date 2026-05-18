@@ -1,5 +1,5 @@
-import puppeteer, { Viewport } from "puppeteer";
-import { dataService } from "@/services";
+import puppeteer, { Page, Viewport } from "puppeteer";
+import { dataService, logger } from "@/services";
 import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { randomUUID, UUID } from "crypto";
@@ -18,16 +18,19 @@ export async function asPNG(data: SingleOrArray<IRenderCard>, options?: SingleRe
     if (cards.length === 0) {
         return [];
     }
-    const browser = await launchPuppeteer();
+    const browser = await launchPuppeteer({
+        width: 1920,
+        height: 1080,
+        deviceScaleFactor: 1.25
+    });
     const page = (await browser.pages())[0] ?? await browser.newPage();
     const job = await createJob("single", cards, options);
     try {
-        const token = await dataService.integrations.fetchInternalToken();
-        await page.setExtraHTTPHeaders({ "Authorization": `Bearer ${token}` });
-        await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "domcontentloaded" });
+        await applyInternalAuthHeaders(page);
+        await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "networkidle0" });
         await page.evaluate(() => document.fonts.ready);
-        // TODO: Handle error handling, but checking a "status" div on rendered page.
-        //       That div should contain either "OK" or a stringified object of the error
+        await checkRenderError(page);
+
         const responses: PNGResponse[] = [];
         for (const { id, card } of job.data) {
             const element = await page.$(`[data-card-id="${id}"]`);
@@ -56,18 +59,41 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
     const page = (await browser.pages())[0] ?? await browser.newPage();
 
     try {
-        // TODO: Create integration authorization
-        await page.setExtraHTTPHeaders({ "Authorization": `Basic ${Buffer.from(`${process.env.BASIC_USERNAME}:${process.env.BASIC_PASSWORD}`).toString("base64")}` });
+        await applyInternalAuthHeaders(page);
         await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "networkidle0" });
+        await page.evaluate(() => document.fonts.ready);
+        await checkRenderError(page);
 
-        // TODO: Handle error handling, but checking a "status" div on rendered page.
-        //       That div should contain either "OK" or a stringified object of the error
         const buffer = await page.pdf({ printBackground: true, format: "A4" });
 
         return buffer;
     } finally {
         await page.close();
         await browser.close();
+    }
+}
+async function applyInternalAuthHeaders(page: Page) {
+    const token = await dataService.integrations.fetchInternalToken();
+    await page.setRequestInterception(true);
+    page.on("request", (request) => {
+        const url = new URL(request.url());
+        const isInternal = url.origin === process.env.CLIENT_HOST;
+
+        const headers = {
+            ...request.headers(),
+            ...(isInternal ? { Authorization: `Bearer ${token}` } : {})
+        };
+
+        request.continue({ headers });
+    });
+}
+
+async function checkRenderError(page: Page): Promise<void> {
+    const errorEl = await page.$("#render-error");
+    if (errorEl) {
+        const errorJson = await errorEl.evaluate((el) => el.textContent);
+        logger.error("[Render] Page error:", errorJson);
+        throw new Error("Render page returned an error");
     }
 }
 
@@ -96,43 +122,20 @@ async function launchPuppeteer(defaultViewport?: Viewport) {
         ...(defaultViewport ? { defaultViewport } : {}),
         headless: true,
         args: [
-            "--disable-features=IsolateOrigins",
-            "--disable-site-isolation-trials",
-            "--autoplay-policy=user-gesture-required",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-extensions",
+            "--hide-scrollbars",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--no-zygote",
+            "--mute-audio",
+            "--use-gl=swiftshader",
             "--disable-background-networking",
             "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-breakpad",
-            "--disable-client-side-phishing-detection",
-            "--disable-component-update",
-            "--disable-default-apps",
-            "--disable-dev-shm-usage",
-            "--disable-domain-reliability",
-            "--disable-extensions",
-            "--disable-features=AudioServiceOutOfProcess",
-            "--disable-hang-monitor",
-            "--disable-ipc-flooding-protection",
-            "--disable-notifications",
-            "--disable-offer-store-unmasked-wallet-cards",
-            "--disable-popup-blocking",
-            "--disable-print-preview",
-            "--disable-prompt-on-repost",
             "--disable-renderer-backgrounding",
-            "--disable-setuid-sandbox",
-            "--disable-speech-api",
-            "--disable-sync",
-            "--hide-scrollbars",
-            "--ignore-gpu-blacklist",
-            "--metrics-recording-only",
-            "--mute-audio",
-            "--no-default-browser-check",
-            "--no-first-run",
-            "--no-pings",
-            "--no-sandbox",
-            "--no-zygote",
-            "--password-store=basic",
-            "--use-gl=swiftshader",
-            "--use-mock-keychain"
+            "--disable-backgrounding-occluded-windows"
         ]
     });
 }

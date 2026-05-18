@@ -13,7 +13,9 @@ export function enumToArray<T extends { [key: string]: string | number }>(
         }));
 }
 
-export function download(url: string, filename: string) {
+export function downloadBlob(blob: Blob, fallbackFilename?: string): void {
+    const filename = fallbackFilename ?? crypto.randomUUID();
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = filename;

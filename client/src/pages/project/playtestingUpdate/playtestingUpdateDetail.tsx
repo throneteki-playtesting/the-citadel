@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { useGetCardsQuery, useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery } from "../../../api";
+import { useGetCardsQuery, useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../../api";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { Alert, Button, Card, Chip, Link, Skeleton } from "@heroui/react";
+import { addToast, Alert, Button, Card, Chip, Link, Skeleton } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import { renderPlaytestingCard } from "common/utils";
-import { noteTypeIcon } from "../../../utils";
+import { downloadBlob, noteTypeIcon } from "../../../utils";
 import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../../components/thronesIcon";
 import { changeTypeClasses, factionBorderClasses, watermarkClasses } from "../../../constants";
@@ -53,8 +53,19 @@ type PlaytestingUpdateDetailProps = {
 }
 
 function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpdateHeaderProps) {
+    const [renderPrintSheet, { isLoading: isRenderingPrintSheet }] = usePlaytestingUpdatePrintSheetMutation();
     const { format } = useTimezone();
     const bugReportUrl = import.meta.env.VITE_BUG_REPORT_URL;
+
+    const onExportPNG = async () => {
+        try {
+            const blob = await renderPrintSheet(playtestingUpdate).unwrap();
+            downloadBlob(blob, `${project.code}_v${playtestingUpdate.version}_changes.pdf`);
+        } catch (err) {
+            // TODO: Better error handling from redux (eg. use ApiError.message for description)
+            addToast({ title: "Failed to download", color: "danger", description: "An unknown error has occurred" });
+        }
+    };
     return (
         <Card className="relative space-y-1 p-4 pt-2 bg-content1/10">
             <div className="absolute bottom-0 right-0 pr-4 text-xxs tracking-wider text-foreground/40">{format(new Date(playtestingUpdate.created))}</div>
@@ -76,8 +87,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                 <div className="shrink-0 grid grid-cols-3 gap-1">
                     <WebsiteUpdateStatus playtestingUpdate={playtestingUpdate} isIconOnly/>
                     <TouchTooltip content="Download Print PDF Sheet" placement="top">
-                        <Button isIconOnly color="secondary" isDisabled>
-                            {/* TODO: Add changes pdf print */}
+                        <Button isIconOnly color="secondary" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
                             <FontAwesomeIcon icon={faPrint} />
                         </Button>
                     </TouchTooltip>

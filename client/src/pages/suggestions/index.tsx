@@ -10,10 +10,10 @@ import { hasPermission, renderCardSuggestion, ValidationStep } from "common/util
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileExport, faFileImage, faFileImport, faPencil, faX } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { download } from "../../utils";
 import { CardPreview } from "@agot/card-preview";
 import SuggestionsGrid from "./suggestionsGrid";
 import { User } from "common/models/auth";
+import { downloadBlob } from "../../utils";
 
 
 const Suggestions = () => {
@@ -45,9 +45,8 @@ const Suggestions = () => {
     const onExportPNG = async (suggestion: ICardSuggestion) => {
         try {
             const cardRender = renderCardSuggestion(suggestion);
-            const result = await renderImage(cardRender).unwrap();
-            const filename = `${suggestion.id || crypto.randomUUID()}.png`;
-            download(result, filename);
+            const blob = await renderImage(cardRender).unwrap();
+            downloadBlob(blob, `${suggestion.id ?? crypto.randomUUID()}.png`);
         } catch (err) {
             // TODO: Better error handling from redux (eg. use ApiError.message for description)
             addToast({ title: "Failed to download", color: "danger", description: "An unknown error has occurred" });

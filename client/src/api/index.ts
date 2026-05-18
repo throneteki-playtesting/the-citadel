@@ -244,22 +244,30 @@ const api = createApi({
             providesTags: (results) => mapTags(results, "tag")
         }),
         // Render API
-        renderImage: builder.mutation<string, IRenderCard>({
-            query: (card) => {
-                const body = card;
-                const url = buildUrl("render", { format: "PNG", rounded: true });
-                return {
-                    url,
-                    body,
+        renderImage: builder.mutation<Blob, IRenderCard>({
+            queryFn: async (card, _api, _extraOptions, baseQuery) => {
+                const result = await baseQuery({
+                    url: buildUrl("render", { format: "PNG", rounded: true }),
+                    body: card,
                     method: "POST",
-                    responseHandler: async (response) => {
-                        if (response.status === StatusCodes.OK) {
-                            const blob = await response.blob();
-                            return URL.createObjectURL(blob);
-                        }
-                        return response;
-                    }
-                };
+                    responseHandler: (response) => response.blob()
+                });
+                return result.error
+                    ? { error: result.error }
+                    : { data: result.data as Blob };
+            }
+        }),
+        renderPrintSheet: builder.mutation<Blob, IRenderCard | IRenderCard[]>({
+            queryFn: async (cards, _api, _extraOptions, baseQuery) => {
+                const result = await baseQuery({
+                    url: buildUrl("render", { format: "PDF", rounded: true }),
+                    body: cards,
+                    method: "POST",
+                    responseHandler: (response) => response.blob()
+                });
+                return result.error
+                    ? { error: result.error }
+                    : { data: result.data as Blob };
             }
         }),
         getRenderJob: builder.query<SingleRenderJob|BatchRenderJob, { id: UUID }>({
@@ -353,6 +361,18 @@ const api = createApi({
                 return { url, method: "GET" };
             },
             providesTags: (results) => mapTags(results, "card")
+        }),
+        playtestingUpdatePrintSheet: builder.mutation<Blob, { project: number, version: number }>({
+            queryFn: async ({ project, version }, _api, _extraOptions, baseQuery) => {
+                const result = await baseQuery({
+                    url: `playtesting-updates/${project}/${version}/print-sheet`,
+                    method: "GET",
+                    responseHandler: (response) => response.blob()
+                });
+                return result.error
+                    ? { error: result.error }
+                    : { data: result.data as Blob };
+            }
         }),
         // Syncing API
         syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
@@ -469,6 +489,7 @@ export const {
     useGetTagsQuery,
 
     useRenderImageMutation,
+    useRenderPrintSheetMutation,
     useGetRenderJobQuery,
 
     useGetProjectsQuery,
@@ -482,6 +503,7 @@ export const {
     useGetPlaytestingUpdateQuery,
     useCreatePlaytestingUpdateMutation,
     useGetPlaytestingUpdateCardsQuery,
+    usePlaytestingUpdatePrintSheetMutation,
 
     useSyncProjectImagesMutation,
     useSyncCardImageMutation,
