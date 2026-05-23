@@ -82,6 +82,7 @@ export interface IPlaytestCard extends ICard, IAuditable {
     github?: {
         status?: typeof githubStatuses[number],
         issueUrl?: string,
+        closedAt?: Date,
         lastSynced?: Date
     },
     discord?: {

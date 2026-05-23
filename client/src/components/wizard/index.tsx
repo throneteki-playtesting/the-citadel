@@ -233,9 +233,9 @@ export const WizardPage = ({ className, style, children, data, pageNo, allowEmpt
                 return acc;
             }, {});
         }
-        // Prioritise controlled data, if provided, merged with form data
+        // Prioritise controlled data, if provided
         if (data) {
-            pageData = { ...pageData, ...data };
+            pageData = data;
         }
         onPageSubmit(pageData);
     }, [allowEmptyValues, data, onPageSubmit]);

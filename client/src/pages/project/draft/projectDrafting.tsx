@@ -10,18 +10,21 @@ import SelectSuggestionModal from "./selectSuggestionModal";
 import PreviewCardSlot from "./previewCardSlot";
 import LoadingCard from "../../../components/loadingCard";
 import { addToast, Card } from "@heroui/react";
+import { useGetCardsQuery } from "../../../api";
 
-const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingProps) => {
+const ProjectDrafting = ({ project }: ProjectDraftingProps) => {
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, draft: true } });
+
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
     const [suggesting, setSuggesting] = useState<{ faction: Faction, number: number }>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
 
     const cardMap = useMemo(() => {
-        return cards?.reduce<Record<number, IPlaytestCard>>((map, card) => {
+        return data?.items.reduce<Record<number, IPlaytestCard>>((map, card) => {
             map[card.number] = card;
             return map;
         }, {}) ?? {};
-    }, [cards]);
+    }, [data?.items]);
 
     const cardSlots = useMemo(() => {
         if (!project || !project.draft) {
@@ -75,7 +78,7 @@ const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingP
                 project={project.number}
                 number={suggesting?.number ?? 0}
                 faction={suggesting?.faction}
-                unselectable={cards?.filter((card) => card.faction === suggesting?.faction && card.suggestionId).map((card) => card.suggestionId!)}
+                unselectable={data?.items.filter((card) => card.faction === suggesting?.faction && card.suggestionId).map((card) => card.suggestionId!)}
                 onClose={() => setSuggesting(undefined)}
                 onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `Slot #${card.number} has been saved` })}
             />
@@ -84,6 +87,6 @@ const ProjectDrafting = ({ project, cards, isLoading = false }: ProjectDraftingP
     );
 };
 
-type ProjectDraftingProps = { project: IProject, cards?: IPlaytestCard[], isLoading?: boolean }
+type ProjectDraftingProps = { project: IProject }
 
 export default ProjectDrafting;

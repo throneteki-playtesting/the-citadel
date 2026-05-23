@@ -110,22 +110,36 @@ type PlaytestingUpdateCardProps = {
 }
 
 function CardChangeList({ cards }: CardChangeListProps) {
+    const maxShowCards = 3;
+
+    const slice = cards.slice(0, maxShowCards);
+
     return (
         <div className="flex flex-col border border-content3 divide-y divide-content3">
-            {cards.map((card) => (
-                <div key={`${card.project}|${card.number}|${card.version}`} className='relative overflow-hidden transition-colors'>
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                        <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", watermarkClasses[card.faction])}/>
+            {slice.map((card, index) => {
+                if (cards.length > slice.length && index === slice.length - 1) {
+                    const remaining = cards.length - slice.length + 1;
+                    return (
+                        <div key="more" className='relative overflow-hidden transition-colors pl-4 p-2 text-sm text-foreground truncate italic'>
+                            {`+ ${remaining} more changes`}
+                        </div>
+                    );
+                }
+                return (
+                    <div key={`${card.project}|${card.number}|${card.version}`} className='relative overflow-hidden transition-colors'>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+                            <ThronesIcon name={card.faction} className={classNames("ml-32 text-6xl", watermarkClasses[card.faction])}/>
+                        </div>
+                        <div
+                            key={`${card.project}|${card.number}|${card.version}`}
+                            className="grid grid-cols-[3.5rem_1fr] items-center gap-2 p-2"
+                        >
+                            <ChangeTypeChip className="text-[0.5rem]" card={card} />
+                            <div className="text-sm font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
+                        </div>
                     </div>
-                    <div
-                        key={`${card.project}|${card.number}|${card.version}`}
-                        className="grid grid-cols-[3.5rem_1fr] items-center gap-2 p-2 "
-                    >
-                        {card.note && <ChangeTypeChip className="text-[0.5rem]" card={card} />}
-                        <div className="text-sm font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
-                    </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 }

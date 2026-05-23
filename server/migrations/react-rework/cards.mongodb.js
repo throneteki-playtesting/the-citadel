@@ -72,6 +72,9 @@ allCards.forEach(card => {
             if (newDoc.github.status === "complete") {
                 newDoc.github.status = "closed";
             }
+            if (newDoc.github.status === "closed") {
+                newDoc.github.closedAt = now;
+            }
             newDoc.github.lastSynced = now;
         }
 

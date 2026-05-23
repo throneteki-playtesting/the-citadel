@@ -49,114 +49,95 @@ function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCar
         return <Chip radius="sm" color="success" variant="bordered">Active</Chip>;
     }, [project.active, project.draft]);
 
-    if (isLoading) {
-        return (
-            <div className="bg-content1 border border-content3 transition-colors">
-                <div className="bg-content1 border border-content3">
-                    <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2 space-y-2">
-                        <div className="flex-1 space-y-2">
-                            <Skeleton className="h-4 w-20 rounded-sm"/>
-                            <Skeleton className="h-8 w-56 rounded-sm"/>
-                            <Skeleton className="h-4 w-42 rounded-sm"/>
-                        </div>
-                        <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
-                            <Skeleton className="h-8 w-18 rounded-sm"/>
-                            <Skeleton className="h-8 w-64 rounded-sm"/>
-                        </div>
-                    </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
-                    <div className="px-6 py-4 space-y-1">
-                        <Skeleton className="h-4 w-32 rounded-sm"/>
-                        <Skeleton className="h-12 w-16 rounded-sm"/>
-                        <Skeleton className="h-4 w-28 rounded-sm" />
-                    </div>
-                    <div className="px-6 py-4 space-y-1">
-                        <Skeleton className="h-4 w-32 rounded-sm"/>
-                        <Skeleton className="h-12 w-16 rounded-sm"/>
-                        <Skeleton className="h-4 w-28 rounded-sm" />
-                    </div>
-                    <div className="px-6 py-4 space-y-1">
-                        <Skeleton className="h-4 w-32 rounded-sm"/>
-                        <Skeleton className="h-12 w-16 rounded-sm"/>
-                        <Skeleton className="h-4 w-28 rounded-sm" />
-                    </div>
-                    <div className="px-6 py-4 space-y-1">
-                        <Skeleton className="h-4 w-32 rounded-sm"/>
-                        <Skeleton className="h-12 w-16 rounded-sm"/>
-                        <Skeleton className="h-4 w-28 rounded-sm" />
-                    </div>
-                </div>
-            </div>
-        );
-    }
     return (
         <div
-            onClick={() => navigate(`/project/${project.number}`)}
+            onClick={() => !isLoading && navigate(`/project/${project.number}`)}
             className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors"
         >
-            <div className="relative overflow-hidden">
-                <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
-                    <span className="ml-16 text-9xl opacity-20">{project.emoji && dismoji[project.emoji]}</span>
-                </div>
-                <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
-                    <div className="flex-1">
-                        <div className="text-xxs tracking-widest uppercase text-foreground/40">
-                            #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>
+            {isLoading
+                ? (
+                    <div className="bg-content1 border border-content3">
+                        <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2 space-y-2">
+                            <div className="flex-1 space-y-2">
+                                <Skeleton className="h-4 w-20 rounded-sm"/>
+                                <Skeleton className="h-8 w-56 rounded-sm"/>
+                                <Skeleton className="h-4 w-42 rounded-sm"/>
+                            </div>
+                            <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                                <Skeleton className="h-8 w-18 rounded-sm"/>
+                                <Skeleton className="h-8 w-64 rounded-sm"/>
+                            </div>
                         </div>
-                        <h2 className="text-xl sm:text-2xl font-semibold text-foreground">{project.name}</h2>
                     </div>
-                    <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
-                        {statusChip}
-                        <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
+                )
+                : (
+                    <div className="relative overflow-hidden">
+                        <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
+                            <span className="ml-16 text-9xl opacity-20">{project.emoji && dismoji[project.emoji]}</span>
+                        </div>
+                        <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
+                            <div className="flex-1">
+                                <div className="text-xxs tracking-widest uppercase text-foreground/40">
+                            #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>
+                                </div>
+                                <h2 className="text-xl sm:text-2xl font-semibold text-foreground">{project.name}</h2>
+                            </div>
+                            <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                                {statusChip}
+                                <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
+                )
+            }
             <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
-                <ReviewsStat reviews={reviewsData?.items} />
-                <CardChangesStat latest={cardsData?.items} />
-                <ActiveDecksStat reviews={reviewsData?.items} />
-                <PacksStat latest={cardsData?.items} />
+                <ReviewsStat reviews={reviewsData?.items} isLoading={isLoading} />
+                <CardChangesStat latest={cardsData?.items} isLoading={isLoading} />
+                <ActiveDecksStat reviews={reviewsData?.items} isLoading={isLoading} />
+                <PacksStat latest={cardsData?.items} isLoading={isLoading} />
             </div>
         </div>
     );
 }
 type ProjectCardProps = {
-  project: IProject;
-  isLoading?: boolean;
+    project: IProject;
+    isLoading?: boolean;
 };
 
-function ReviewsStat({ reviews = [] }: ReviewsStatProps) {
+function ReviewsStat({ reviews = [], isLoading }: ReviewsStatProps) {
     const amount = useMemo(() => reviews.length, [reviews.length]);
     const reviewers = useMemo(() => new Set(reviews.map((review) => review.reviewer)), [reviews]);
 
-    return <ProjectStat label="Reviews this cycle" value={amount} footer={`from ${reviewers.size} playtesters`} />;
+    return <ProjectStat label="Reviews this cycle" value={amount} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
 }
 type ReviewsStatProps = {
-    reviews?: IPlaytestReview[]
+    reviews?: IPlaytestReview[];
+    isLoading?: boolean;
 }
 
-function CardChangesStat({ latest = [] }: CardChangesStatProps) {
+function CardChangesStat({ latest = [], isLoading }: CardChangesStatProps) {
     const dayRange = 7;
     const cards = useMemo(() => latest.filter((card) => new Date(card.updated) >= daysFromNow(-dayRange)), [latest]);
     const factions = useMemo(() => new Set(cards.map((card) => card.faction)), [cards]);
 
-    return <ProjectStat label={`Changes · ${dayRange} days`} value={cards.length} footer={`accross ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} />;
+    return <ProjectStat label={`Changes · ${dayRange} days`} value={cards.length} footer={`accross ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
 }
 type CardChangesStatProps = {
-    latest?: IPlaytestCard[]
+    latest?: IPlaytestCard[];
+    isLoading?: boolean;
 }
 
-function ActiveDecksStat({ reviews = [] }: ActiveDecksStatProps) {
+function ActiveDecksStat({ reviews = [], isLoading }: ActiveDecksStatProps) {
     const decks = useMemo(() => new Set(reviews.reduce<string[]>((decks, review) => [...decks, ...review.decks], [])), [reviews]);
 
-    return <ProjectStat label="Submitted Decks" value={decks.size} footer="from ThronesDB" />;
+    return <ProjectStat label="Submitted Decks" value={decks.size} footer="from ThronesDB" isLoading={isLoading}/>;
 }
 type ActiveDecksStatProps = {
-    reviews?: IPlaytestReview[]
+    reviews?: IPlaytestReview[];
+    isLoading?: boolean;
 }
 
-function PacksStat({ latest = [] }: PacksStatProps) {
+function PacksStat({ latest = [], isLoading }: PacksStatProps) {
     // TODO: Improve this when we have WIP packs implemented
     const packs = useMemo(() => [...new Set(latest.filter((card) => !!card.release).map((card) => card.release!.short))], [latest]);
     const packChips = packs.length > 0 ? (
@@ -164,13 +145,23 @@ function PacksStat({ latest = [] }: PacksStatProps) {
             {packs.map((pack) => <Chip key={pack} size="sm" variant="bordered">{pack}</Chip>)}
         </div>) : <span className="text-lg italic">None</span>;
 
-    return <ProjectStat label="Released Packs" value={packChips} />;
+    return <ProjectStat label="Released Packs" value={packChips} isLoading={isLoading} />;
 }
 type PacksStatProps = {
-    latest?: IPlaytestCard[]
+    latest?: IPlaytestCard[];
+    isLoading?: boolean;
 }
 
-function ProjectStat({ label, value, footer }: ProjectStatProps) {
+function ProjectStat({ label, value, footer, isLoading = false }: ProjectStatProps) {
+    if (isLoading) {
+        return (
+            <div className="px-6 py-4 space-y-1">
+                <Skeleton className="h-4 w-32 rounded-sm"/>
+                <Skeleton className="h-12 w-16 rounded-sm"/>
+                <Skeleton className="h-4 w-28 rounded-sm" />
+            </div>
+        );
+    }
     return (
         <div className="px-6 py-4">
             <div className="text-xxs tracking-wide uppercase text-foreground/40 mb-2">
@@ -185,4 +176,5 @@ type ProjectStatProps = {
     label: string;
     value: ReactNode;
     footer?: ReactNode;
+    isLoading?: boolean;
 }

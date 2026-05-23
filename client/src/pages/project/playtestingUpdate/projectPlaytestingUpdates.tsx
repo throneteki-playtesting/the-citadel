@@ -1,78 +1,137 @@
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { useGetCardsQuery, useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdatesQuery } from "../../../api";
-import { useMemo, useState } from "react";
-import { faCheckSquare } from "@fortawesome/free-solid-svg-icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { faCheckSquare, faChevronLeft, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Timestamp from "../../../components/timestamp";
 import classNames from "classnames";
 import ThronesIcon from "../../../components/thronesIcon";
 import ChangeTypeChip from "../../home/changeTypeChip";
-import { addToast, Alert, Button, ButtonGroup, ButtonProps, Skeleton } from "@heroui/react";
+import { addToast, Alert, Button, ButtonProps, Skeleton } from "@heroui/react";
 import CreatePlaytestingUpdateModal from "./createPlaytestingUpdateModal";
 import PermissionGate from "../../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { watermarkClasses } from "../../../constants";
 
 export default function ProjectPlaytestingUpdates({ project }: ProjectPlaytestingUpdatesProps) {
-    const { data, isLoading } = useGetPlaytestingUpdatesQuery({ filter: { project: project.number }, page: 1, perPage: 1, orderBy: { version: "desc" } });
-    const navigate = useNavigate();
-    const latest = useMemo(() => data?.items[0], [data?.items]);
-
-    const content = useMemo(() => {
-        if (!latest) {
-            return <div className="w-full h-full">None</div>;
-        }
-        return <PlaytestingUpdateSummary playtestingUpdate={latest}/>;
-    }, [latest]);
+    const { data, isLoading } = useGetPlaytestingUpdatesQuery({ filter: { project: project.number }, orderBy: { version: "asc" } });
 
     if (isLoading) {
+        // TODO: Improve this
         return <Skeleton className="w-full h-full rounded-sm" />;
     }
 
     return (
-        <div className="">
-            <div className="text-md tracking-wide text-foreground/50 uppercase">Playtesting Updates</div>
-            {content}
-            <ButtonGroup radius="none" fullWidth variant="light">
-                <CreateButton size="sm" color="primary" className="border border-content3" project={project}>Create New</CreateButton>
-                <Button size="sm" color="secondary" className="border border-content3" onPress={() => navigate(`project/${project.number}/updates`)}>View All</Button>
-            </ButtonGroup>
+        <div className="h-full flex flex-col min-h-64 space-y-2">
+            <div className="flex items-center">
+                <div className="text-md tracking-wide text-foreground/50 uppercase">Playtesting Updates</div>
+                <CreateButton size="sm" color="primary" className="border border-content3 ml-auto" project={project}>Create New</CreateButton>
+            </div>
+            {data?.items && <PlaytestingUpdateCarousel items={data.items}/>}
         </div>
     );
 }
 type ProjectPlaytestingUpdatesProps = {
     project: IProject;
 }
+function PlaytestingUpdateCarousel({ items }: PlaytestingUpdateCarouselProps) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
 
+    const updateScrollButtons = () => {
+        const el = containerRef.current;
+        if (!el) return;
+        setCanScrollLeft(el.scrollLeft > 0);
+        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth);
+    };
+
+    useEffect(() => {
+        const el = containerRef.current;
+        if (!el) return;
+        // Scroll to end on mount
+        el.scrollLeft = el.scrollWidth;
+        updateScrollButtons();
+    }, [items]);
+
+    const scroll = (direction: "left" | "right") => {
+        containerRef.current?.scrollBy({ left: direction === "left" ? -containerRef.current.clientWidth : containerRef.current.clientWidth, behavior: "smooth" });
+    };
+
+    return (
+        <div className="relative">
+            <button
+                onPointerDown={() => scroll("left")}
+                className={classNames(
+                    "cursor-pointer absolute left-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
+                    canScrollLeft ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                )}
+            >
+                <FontAwesomeIcon icon={faChevronLeft} className="text-black drop-shadow text-3xl" />
+            </button>
+            <div
+                ref={containerRef}
+                onScroll={updateScrollButtons}
+                className="flex overflow-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+            >
+                {items.map((playtestingUpdate) => (
+                    <div key={playtestingUpdate.version} className="shrink-0 w-full snap-start">
+                        <PlaytestingUpdateSummary playtestingUpdate={playtestingUpdate} />
+                    </div>
+                ))}
+            </div>
+            <button
+                onPointerDown={() => scroll("right")}
+                className={classNames(
+                    "cursor-pointer absolute right-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
+                    canScrollRight ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+                )}
+            >
+                <FontAwesomeIcon icon={faChevronRight} className="text-black drop-shadow text-3xl" />
+            </button>
+        </div>
+    );
+}
+
+type PlaytestingUpdateCarouselProps = { items: IPlaytestingUpdate[] };
 function PlaytestingUpdateSummary({ playtestingUpdate }: PlaytestingUpdateSummaryProps) {
+    if (!playtestingUpdate) {
+        return (
+            <div className="p-4 space-y-1 bg-content1/50 border border-content3 hover:bg-content2/50 transition-colors flex-1">
+                No Updates
+            </div>
+        );
+    }
     const isImplemented = playtestingUpdate.github?.status === "closed" && !!playtestingUpdate.github?.mergedAt;
     return (
-        <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>
-            <div className="p-4 space-y-1 bg-content1 border border-content3 hover:bg-content2 transition-colors">
-                <div className="flex gap-3">
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap opacity-50">
-                            <span className="text-primary text-md font-semibold">Update #{playtestingUpdate.version}</span>
-                            {isImplemented && (
-                                <FontAwesomeIcon icon={faCheckSquare} className="text-success/80"/>
+        <div className="w-full">
+            <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>
+                <div className="p-4 space-y-1 bg-content1/50 border border-content3 hover:bg-content2/50 transition-colors">
+                    <div className="flex gap-3">
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap opacity-50">
+                                <span className="text-primary text-md font-semibold">Update #{playtestingUpdate.version}</span>
+                                {isImplemented && (
+                                    <FontAwesomeIcon icon={faCheckSquare} className="text-success/80"/>
+                                )}
+                            </div>
+                            {playtestingUpdate.description && (
+                                <p className="text-xs italic text-foreground/40 leading-snug truncate">
+                                    {playtestingUpdate.description}
+                                </p>
                             )}
                         </div>
-                        {playtestingUpdate.description && (
-                            <p className="text-xs italic text-foreground/40 leading-snug truncate">
-                                {playtestingUpdate.description}
-                            </p>
-                        )}
+                        <Timestamp className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none" date={new Date(playtestingUpdate.updated)} />
                     </div>
-                    <Timestamp className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none" date={new Date(playtestingUpdate.updated)} />
+                    <CardChangeList project={playtestingUpdate.project} version={playtestingUpdate.version} />
                 </div>
-                <CardChangeList project={playtestingUpdate.project} version={playtestingUpdate.version} />
-            </div>
-        </Link>
+            </Link>
+        </div>
     );
 }
 type PlaytestingUpdateSummaryProps = {
-    playtestingUpdate: IPlaytestingUpdate;
+    playtestingUpdate?: IPlaytestingUpdate;
 }
 
 function CardChangeList({ project, version }: CardChangeListProps) {
@@ -116,7 +175,7 @@ function CardChangeList({ project, version }: CardChangeListProps) {
                             key={`${card.project}|${card.number}|${card.version}`}
                             className="grid grid-cols-[3.5rem_1fr] items-center gap-2 p-2"
                         >
-                            {card.note && <ChangeTypeChip className="text-[0.5rem]" card={card} />}
+                            <ChangeTypeChip className="text-[0.5rem]" card={card} />
                             <div className="text-sm font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
                         </div>
                     </div>

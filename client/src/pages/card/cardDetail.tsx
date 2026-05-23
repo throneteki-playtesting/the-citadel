@@ -579,7 +579,7 @@ const ReviewSummaries = ({ project, number, reviews, cards }: ReviewSummariesPro
                                 </div>
                                 <Divider />
                                 <div className="italic text-small sm:text-medium text-gray-500 flex flex-col">
-                                    {review.decks.map((deck) => <ReviewSummaryDeck src={deck}/>)}
+                                    {review.decks.map((deck) => <ReviewSummaryDeck key={deck} src={deck}/>)}
                                 </div>
                                 <Divider />
                                 <div className="italic text-small sm:text-medium text-gray-500">

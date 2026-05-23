@@ -1,22 +1,40 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Card, Link, Tooltip } from "@heroui/react";
+import { Card, Divider, Link, Skeleton, Tooltip } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faChevronRight, faStar } from "@fortawesome/free-solid-svg-icons";
-import { useGetCardsQuery } from "../../api";
+import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
+import { IProject } from "common/models/projects";
 
-const ProjectContent = ({ cards = [] }: ProjectContentProps) => {
-    const cardsByFaction = useMemo(() => cards.reduce<Map<Faction, IPlaytestCard[]>>((map, card) => {
+const ProjectContent = ({ project }: ProjectContentProps) => {
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
+
+    const cardsByFaction = useMemo(() => data?.items.reduce<Map<Faction, IPlaytestCard[]>>((map, card) => {
         const array = map.get(card.faction) ?? [];
         array.push(card);
         map.set(card.faction, array);
         return map;
-    }, new Map<Faction, IPlaytestCard[]>), [cards]);
+    }, new Map<Faction, IPlaytestCard[]>) ?? new Map<Faction, IPlaytestCard[]>, [data?.items]);
+
+    if (isLoading) {
+        return (
+            <div className="space-y-2">
+                {Object.keys(project.cardCount).map(() => <Skeleton className="w-full h-64 rounded-md"/>)}
+            </div>
+        );
+    }
+
+    if (!data) {
+        // TODO: Improve
+        return (
+            <div>Error</div>
+        );
+    }
 
     return (
         <Card className="bg-content1/10">
@@ -25,12 +43,20 @@ const ProjectContent = ({ cards = [] }: ProjectContentProps) => {
     );
 };
 
-type ProjectContentProps = { cards?: IPlaytestCard[]}
+type ProjectContentProps = { project: IProject }
 
 function FactionCarousel({ faction, cards }: FactionCarouselProps) {
+    const { data: reviewsData, isLoading: isLoadingReviewsData } = useGetReviewsQuery({ filter: cards.map((card) => ({ project: card.project, number: card.number })) });
     const containerRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
+
+    const { reviews, decks } = useMemo(() => {
+        const reviews = reviewsData?.total ?? 0;
+        const decks = new Set(reviewsData?.items.reduce<string[]>((decks, review) => [...decks, ...review.decks], [])).size ?? 0;
+
+        return { reviews, decks };
+    }, [reviewsData?.items, reviewsData?.total]);
 
     const updateScrollButtons = () => {
         const el = containerRef.current;
@@ -49,7 +75,16 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
 
     return (
         <div className={factionClasses[faction]}>
-            <div className={classNames("text-xl tracking-widest w-full p-4 flex items-center gap-2")}><ThronesIcon name={faction} className="text-3xl"/> {factionNames[faction]}</div>
+            <div className="flex">
+                <div className={classNames("text-xl tracking-widest p-4 flex items-center gap-2 grow")}>
+                    <ThronesIcon name={faction} className="text-3xl"/> {factionNames[faction]}
+                </div>
+                <div className="flex items-center gap-2 text-lg py-4 px-2 text-foreground">
+                    {isLoadingReviewsData ? <Skeleton className="h-full w-32 rounded-sm" /> : <div>{reviews} Reviews</div>}
+                    <Divider orientation="vertical"/>
+                    {isLoadingReviewsData ? <Skeleton className="h-full w-32 rounded-sm" /> : <div>{decks} Decks</div>}
+                </div>
+            </div>
             <div className="relative">
                 <button
                     onPointerDown={() => scroll("left")}

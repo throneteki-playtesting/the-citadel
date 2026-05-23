@@ -12,7 +12,7 @@ import Project from "./project";
 import Card from "./card";
 import SubmitReview from "./review/submitReview";
 import { User } from "common/models/auth";
-import PlaytestingUpdate from "./project/playtestingUpdate";
+import PlaytestingUpdate from "./playtestingUpdate";
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & { path: string, element?: ReactElement };

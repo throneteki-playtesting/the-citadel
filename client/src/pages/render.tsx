@@ -23,7 +23,7 @@ const Render = () => {
         const orientation = job.options?.orientation;
         const rounded = job.options?.rounded;
         return job.data.map(({ id, card }) =>
-            <div data-card-id={id} className="w-[240px] h-[333px]">
+            <div key={id} data-card-id={id} className="w-[240px] h-[333px]">
                 <CardPreview card={card} rounded={rounded ?? false} orientation={orientation}/>
             </div>
         );
@@ -42,7 +42,7 @@ const Render = () => {
             const sheet = Array.from({ length: perPage }).map((_, index) => {
                 const data = pageData[index];
                 return (
-                    <div data-card-id={data?.id} className="w-[240px] h-[333px] m-[0.5px]">
+                    <div key={data?.id ?? index} data-card-id={data?.id} className="w-[240px] h-[333px] m-[0.5px]">
                         {data?.card !== undefined && <CardPreview card={data.card} rounded={false} orientation="vertical"/>}
                     </div>
                 );

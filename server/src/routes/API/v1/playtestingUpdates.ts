@@ -176,4 +176,33 @@ router.get("/:project/:version/print-sheet",
     })
 );
 
+// Get all implemented cards for this update
+router.get("/:project/:version/implemented",
+    validateRequest(Permission.READ_PLAYTESTING_UPDATES),
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required(),
+            version: Joi.number().required()
+        }
+    }),
+    loadProjectByParam,
+    asyncHandler<{ project: number, version: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { version } = req.params;
+        const project = res.locals.project as IProject;
+
+        const [playtestingUpdate] = await dataService.playtestingUpdates.read({ project: project.number, version });
+        if (!playtestingUpdate) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Playtesting update v${version} for project #${project.number} does not exist`);
+        }
+        const [previous] = await dataService.playtestingUpdates.read([{ project: project.number, version: version - 1 }]);
+        const fromDate = previous?.github.mergedAt ?? new Date(-8640000000000000);
+        const [next] = await dataService.playtestingUpdates.read([{ project: project.number, version: version + 1 }]);
+        const toDate = next?.github.mergedAt ?? new Date(8640000000000000);
+
+        const cards = await dataService.cards.read([{ github: { closedAt: { $gt: fromDate } } }, { github: { closedAt: { $lt: toDate } } }]);
+
+        res.status(StatusCodes.OK).json(cards);
+    })
+);
+
 export default router;

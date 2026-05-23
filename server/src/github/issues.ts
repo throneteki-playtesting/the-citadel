@@ -57,6 +57,9 @@ export async function syncIssues(cards: IPlaytestCard[]) {
                     card.github = card.github ?? {};
                     card.github.issueUrl = existingIssue.html_url;
                     card.github.status = existingIssue.state as "open" | "closed";
+                    if (existingIssue.closed_at) {
+                        card.github.closedAt = new Date(existingIssue.closed_at);
+                    }
                     card.github.lastSynced = new Date(existingIssue.updated_at);
 
                     isMissing = false;
@@ -232,6 +235,9 @@ async function internalSync(card: IPlaytestCard, details: { title: string, body:
         const { data: issue } = await context.client.rest.issues.update({ issue_number: issueNumber, ...details });
         logger.info(`[Github] Updated issue #${issue.number} for ${card.name} (${card.version})`);
         card.github.status = issue.state as "open" | "closed";
+        if (issue.closed_at) {
+            card.github.closedAt = new Date(issue.closed_at);
+        }
         card.github.lastSynced = new Date();
     }
     return card;

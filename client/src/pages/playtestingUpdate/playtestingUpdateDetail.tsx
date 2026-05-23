@@ -1,21 +1,21 @@
 import { useMemo, useState } from "react";
-import { useGetCardsQuery, useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../../api";
+import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateImplementedQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../api";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { addToast, Alert, Button, Card, Chip, Link, Skeleton } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import { renderPlaytestingCard } from "common/utils";
-import { downloadBlob, noteTypeIcon } from "../../../utils";
+import { downloadBlob, noteTypeIcon } from "../../utils";
 import { IPlaytestCard } from "common/models/cards";
-import ThronesIcon from "../../../components/thronesIcon";
-import { changeTypeClasses, factionBorderClasses, watermarkClasses } from "../../../constants";
+import ThronesIcon from "../../components/thronesIcon";
+import { changeTypeClasses, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { faArrowLeft, faBug, faCheck, faInfoCircle, faPenRuler, faPrint } from "@fortawesome/free-solid-svg-icons";
-import dismoji from "../../../emojis";
-import WebsiteUpdateStatus from "../../../components/status/websiteUpdateStatus";
-import { TouchTooltip } from "../../../components/touchTooltip";
-import { useTimezone } from "../../../api/hooks";
+import dismoji from "../../emojis";
+import WebsiteUpdateStatus from "../../components/status/websiteUpdateStatus";
+import { TouchTooltip } from "../../components/touchTooltip";
+import { useTimezone } from "../../api/hooks";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -113,9 +113,6 @@ type PlaytestingUpdateHeaderProps = {
 
 function PlaytestingUpdateChangeNotes({ project, version }: PlaytestingUpdateChangeNotesProps) {
     const { data: cards, isLoading } = useGetPlaytestingUpdateCardsQuery({ project, version });
-    const { data: newlyImplemented } = useGetCardsQuery({ filter: { project, github: { status: "closed" }, implemented: false } });
-
-    const standaloneImplemented = useMemo(() => newlyImplemented?.items.filter((ni) => !cards?.some((card) => card.project === ni.project && card.number === ni.number && card.version === ni.version)) ?? [], [cards, newlyImplemented?.items]);
 
     if (isLoading) {
         // TODO: Improve
@@ -138,35 +135,8 @@ function PlaytestingUpdateChangeNotes({ project, version }: PlaytestingUpdateCha
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
                 </div>
+                <ImplementedCards project={project} version={version}/>
             </Card>
-            {standaloneImplemented.length > 0 &&
-                (
-                    <Card className="p-4 bg-content1-10 space-y-2">
-                        <div className="text-2xl text-primary"><FontAwesomeIcon icon={faCheck}/> Other Cards Implemented</div>
-                        <div className="text-medium text-foreground">
-                            <p>Some other cards have been implemented, and will be pushed to the Online Platform alongside this update.</p>
-                            <p className="italic"><FontAwesomeIcon icon={faInfoCircle}/> Click to view their closed <FontAwesomeIcon icon={faGithub}/> issue.</p>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
-                            {standaloneImplemented.map((ni) =>
-                                <a key={`${ni.project}|${ni.number}|${ni.version}`} href={ni.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none", factionBorderClasses[ni.faction])}>
-                                    <div className="relative size-full">
-                                        <div className="absolute right-0 flex items-center justify-center pointer-events-none select-none">
-                                            <ThronesIcon name={ni.faction} className={classNames("mr-8 text-5xl", watermarkClasses[ni.faction])}/>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <FontAwesomeIcon icon={faCheck} className="m-2 text-success" size="lg"/>
-                                            <div className="flex flex-col overflow-hidden">
-                                                <span className="text-medium tracking-wide text-foreground truncate">{ni.name}</span>
-                                                <span className="tracking-wider text-foreground/40">v{ni.version}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </a>)}
-                        </div>
-                    </Card>
-                )
-            }
         </>
     );
 }
@@ -221,4 +191,43 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
 }
 type PlaytestingUpdateChangeNoteProps = {
     card: IPlaytestCard
+}
+
+function ImplementedCards({ project, version }: ImplementedCardsProps) {
+    const { data } = useGetPlaytestingUpdateImplementedQuery({ project, version });
+
+    if (!data || data.length === 0) {
+        return null;
+    }
+
+    return (
+        <Card className="p-4 bg-content1-10 space-y-2">
+            <div className="text-2xl text-primary"><FontAwesomeIcon icon={faCheck}/> Other Cards Implemented</div>
+            <div className="text-medium text-foreground">
+                <p>Some other cards have been implemented, and will be pushed to the Online Platform alongside this update.</p>
+                <p className="italic"><FontAwesomeIcon icon={faInfoCircle}/> Click to view their closed <FontAwesomeIcon icon={faGithub}/> issue.</p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
+                {data.map((card) =>
+                    <a key={`${card.project}|${card.number}|${card.version}`} href={card.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none", factionBorderClasses[card.faction])}>
+                        <div className="relative size-full">
+                            <div className="absolute right-0 flex items-center justify-center pointer-events-none select-none">
+                                <ThronesIcon name={card.faction} className={classNames("mr-8 text-5xl", watermarkClasses[card.faction])}/>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <FontAwesomeIcon icon={faCheck} className="m-2 text-success" size="lg"/>
+                                <div className="flex flex-col overflow-hidden">
+                                    <span className="text-medium tracking-wide text-foreground truncate">{card.name}</span>
+                                    <span className="tracking-wider text-foreground/40">v{card.version}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </a>)}
+            </div>
+        </Card>
+    );
+}
+type ImplementedCardsProps = {
+    project: number,
+    version: number
 }

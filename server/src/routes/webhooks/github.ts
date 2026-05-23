@@ -37,10 +37,12 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
         const lastSynced = new Date();
         for (const card of cards) {
             card.github.status = issue.state;
+            if (issue.closed_at) {
+                card.github.closedAt = new Date(issue.closed_at);
+            }
             card.github.lastSynced = lastSynced;
         }
         cards = await dataService.cards.update(cards, false);
-        // TODO: Trigger SSE to client
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -58,10 +60,10 @@ async function onIssueReopened({ issue }: IssuesReopenedEvent) {
         const lastSynced = new Date();
         for (const card of cards) {
             card.github.status = issue.state;
+            delete card.github.closedAt;
             card.github.lastSynced = lastSynced;
         }
         cards = await dataService.cards.update(cards, false);
-        // TODO: Trigger SSE to client
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -78,7 +80,6 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
             delete card.github;
         }
         cards = await dataService.cards.update(cards, false);
-        // TODO: Trigger SSE to client
 
         logger.info(`[Github] Deleted github data for ${cards.length} cards`);
     }
@@ -114,7 +115,6 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
                 }
             }
             playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false);
-            // TODO: Trigger SSE to client
 
             logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github data for ${playtestingUpdates.length} playtesting updates`);
         }

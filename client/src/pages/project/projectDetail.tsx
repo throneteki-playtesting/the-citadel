@@ -1,6 +1,6 @@
-import { useGetCardsQuery, useGetProjectQuery } from "../../api";
+import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
-import { addToast } from "@heroui/react";
+import { addToast, Skeleton } from "@heroui/react";
 import { useState } from "react";
 import EditProjectModal from "./editProjectModal";
 import { useNavigate } from "react-router-dom";
@@ -12,22 +12,38 @@ import dismoji from "../../emojis";
 import classNames from "classnames";
 
 const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
-    const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: number! });
-    const { data: cardsData, isLoading: isCardsLoading } = useGetCardsQuery({ filter: { project: number, latest: true } });
+    const { data: project, isLoading } = useGetProjectQuery({ number: number! });
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const navigate = useNavigate();
+
+    if (isLoading) {
+        return (
+            <div>
+                <Skeleton className="w-full h-98 rounded-md"/>
+            </div>
+        );
+    }
+
+    if (!project) {
+        // TODO: Improve
+        return (
+            <div>
+                Error
+            </div>
+        );
+    }
 
     return <div className={classNames("relative", className)} style={style}>
         <div className={classNames("absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}>
             {project && <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
         </div>
         <div className="space-y-2">
-            <ProjectHeader project={project} cards={cardsData?.items} isLoading={isProjectLoading} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
+            <ProjectHeader project={project} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
             {
                 project?.draft
-                    ? <ProjectDrafting project={project} cards={cardsData?.items} isLoading={isCardsLoading}/>
-                    : <ProjectContent cards={cardsData?.items} />
+                    ? <ProjectDrafting project={project} />
+                    : <ProjectContent project={project} />
             }
         </div>
         <EditProjectModal isOpen={isEditing} project={project} onClose={() => setIsEditing(false)} onSave={(project) => addToast({ title: "Successfully saved", color: "success", description: `${project.name} has been updated` })}/>

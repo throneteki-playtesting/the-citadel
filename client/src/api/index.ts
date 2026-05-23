@@ -374,6 +374,13 @@ const api = createApi({
                     : { data: result.data as Blob };
             }
         }),
+        getPlaytestingUpdateImplemented: builder.query<IPlaytestCard[], { project: number, version: number }>({
+            query: (options) => {
+                const url = buildUrl(`playtesting-updates/${options.project}/${options.version}/implemented`);
+                return { url, method: "GET" };
+            },
+            providesTags: (results) => mapTags(results, "card")
+        }),
         // Syncing API
         syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
             query: (options) => {
@@ -504,6 +511,7 @@ export const {
     useCreatePlaytestingUpdateMutation,
     useGetPlaytestingUpdateCardsQuery,
     usePlaytestingUpdatePrintSheetMutation,
+    useGetPlaytestingUpdateImplementedQuery,
 
     useSyncProjectImagesMutation,
     useSyncCardImageMutation,

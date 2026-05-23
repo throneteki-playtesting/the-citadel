@@ -1,5 +1,5 @@
 import { Navigate, useParams } from "react-router-dom";
-import { parseParamNumber } from "../../../utils";
+import { parseParamNumber } from "../../utils";
 import PlaytestingUpdateDetail from "./playtestingUpdateDetail";
 
 export default function PlaytestingUpdate() {
