@@ -67,7 +67,7 @@ class DataService {
     }
 
     private async connectRedis(): Promise<boolean> {
-        const url = process.env.REDIS_HOST ?? "redis://redis:6379";
+        const url = process.env.REDIS_HOST || "redis://redis:6379";
         try {
             this.redis = createClient({ url }) as RedisClientType;
             await this.redis.connect();
