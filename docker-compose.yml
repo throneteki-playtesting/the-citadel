@@ -14,6 +14,7 @@ services:
       - ${CLIENT_PORT}:${CLIENT_PORT}
     environment:
       - SERVER_HOST=${SERVER_HOST}
+      - SERVER_INTERNAL_HOST=http://server:8080
   server:
     build:
       dockerfile: server/Dockerfile
