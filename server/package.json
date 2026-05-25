@@ -47,6 +47,7 @@
     "semver": "^7.6.2",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
+    "tsx": "^4.22.3",
     "uuid": "^13.0.0",
     "winston": "^3.17.0",
     "zod": "^4.3.6"
@@ -84,7 +85,6 @@
     "eslint-plugin-n": "^16.6.2",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-promise": "^6.1.1",
-    "tsx": "^4.20.3",
     "typescript": "^5.5.3"
   }
 }
