@@ -12,6 +12,8 @@ services:
     container_name: got_client
     ports:
       - ${CLIENT_PORT}:${CLIENT_PORT}
+    environment:
+      - SERVER_HOST=${SERVER_HOST}
   server:
     build:
       dockerfile: server/Dockerfile
