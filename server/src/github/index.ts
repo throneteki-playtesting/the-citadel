@@ -44,7 +44,7 @@ class GithubService {
 
     private async initialiseWebhooks() {
         const { client, owner, repo } = this.getContext();
-        const baseUrl = process.env.WEBHOOK_URL ?? process.env.SERVER_HOST;
+        const baseUrl = process.env.WEBHOOK_URL || process.env.SERVER_HOST;
         const { data: webhooks } = await client.rest.repos.listWebhooks({ owner, repo });
 
         const configs = [
