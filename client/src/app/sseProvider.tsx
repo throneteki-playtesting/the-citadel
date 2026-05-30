@@ -3,6 +3,10 @@ import { SyncCompleteEvent, SyncEvent, SyncType } from "server/types";
 import api from "../api";
 import { store } from "../api/store";
 import { SSEContext } from "./sseContext";
+import { merge } from "lodash-es";
+import { IPlaytestCard } from "common/models/cards";
+import { IPlaytestingUpdate } from "common/models/projects";
+import { DeepPartial } from "common/types";
 
 type SyncHandlers = {
     [K in SyncType]?: (event: SyncCompleteEvent<K>) => void;
@@ -15,60 +19,74 @@ type SyncHandlers = {
  */
 const syncCompleteHandlers: SyncHandlers = {
     card: (event) => {
-        const [project, number, version] = event.id.split("|");
-        const cardId = { project: Number(project), number: Number(number), version };
+        if (!event.data || Object.keys(event.data).length === 0) return;
 
         const state = store.getState();
-        const cachedArgs = api.util.selectCachedArgsForQuery(state, "getCards");
+        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "card", id: event.id }]);
+        const [project, number, version] = event.id.split("|");
 
-        cachedArgs.forEach((args) => {
-            store.dispatch(
-                api.util.updateQueryData("getCards", args, (draft) => {
-                    const index = draft.items.findIndex(c =>
-                        c.project === cardId.project &&
-                        c.number === cardId.number &&
-                        c.version === cardId.version
-                    );
-                    if (index !== -1) {
-                        draft.items[index] = event.data;
-                    }
-                })
-            );
+        invalidated.forEach(({ endpointName, originalArgs }) => {
+            try {
+                store.dispatch(
+                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
+                        updateCachedEntity<IPlaytestCard>(
+                            draft,
+                            (c) => c.project === Number(project) && c.number === Number(number) && c.version === version,
+                            event.data
+                        );
+                    })
+                );
+            } catch (error) {
+                console.error(
+                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
+                    error
+                );
+            }
         });
     },
     playtestingUpdate: (event) => {
-        const [project, version] = event.id.split("|");
-        const updateId = { project: Number(project), version: Number(version) };
+        if (!event.data || Object.keys(event.data).length === 0) return;
 
         const state = store.getState();
+        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "playtestingUpdate", id: event.id }]);
+        const [project, version] = event.id.split("|");
 
-        // Update paginated list
-        const cachedListArgs = api.util.selectCachedArgsForQuery(state, "getPlaytestingUpdates");
-        cachedListArgs.forEach((args) => {
-            store.dispatch(
-                api.util.updateQueryData("getPlaytestingUpdates", args, (draft) => {
-                    const index = draft.items.findIndex(u =>
-                        u.project === updateId.project &&
-                        u.version === updateId.version
-                    );
-                    if (index !== -1) {
-                        draft.items[index] = event.data;
-                    }
-                })
-            );
+        invalidated.forEach(({ endpointName, originalArgs }) => {
+            try {
+                store.dispatch(
+                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
+                        updateCachedEntity<IPlaytestingUpdate>(
+                            draft,
+                            (u) => u.project === Number(project) && u.version === Number(version),
+                            event.data
+                        );
+                    })
+                );
+            } catch (error) {
+                console.error(
+                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
+                    error
+                );
+            }
         });
+    }
+};
+// Generic helper to update a matching entity across any cache draft shape
+const updateCachedEntity = <T extends object>(
+    draft: unknown,
+    matchFn: (entity: T) => boolean,
+    data: DeepPartial<T>
+) => {
+    const update = (entity: T) => merge(entity, data);
 
-        // Update singular cached query if it matches
-        const cachedSingleArgs = api.util.selectCachedArgsForQuery(state, "getPlaytestingUpdate");
-        cachedSingleArgs.forEach((args) => {
-            store.dispatch(
-                api.util.updateQueryData("getPlaytestingUpdate", args, (draft) => {
-                    if (draft.project === updateId.project && draft.version === updateId.version) {
-                        return event.data;
-                    }
-                })
-            );
-        });
+    if (Array.isArray(draft)) {
+        const entity = (draft as T[]).find(matchFn);
+        if (entity) update(entity);
+    } else if (draft !== null && typeof draft === "object" && "items" in draft) {
+        const entity = (draft as { items: T[] }).items.find(matchFn);
+        if (entity) update(entity);
+    } else {
+        update(draft as unknown as T);
     }
 };
 

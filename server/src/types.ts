@@ -1,4 +1,4 @@
-import { Filter, SingleOrArray, Sort } from "common/types";
+import { DeepPartial, Filter, SingleOrArray, Sort } from "common/types";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
 import { IPlaytestCard, IRenderCard } from "common/models/cards";
@@ -63,7 +63,7 @@ export interface IDeleteResponse<T> { total: number, deleted: T[] }
 
 
 export type SyncType = "card" | "playtestingUpdate";
-interface SyncDataMap {
+export interface SyncDataMap {
     card: IPlaytestCard;
     playtestingUpdate: IPlaytestingUpdate;
 }
@@ -92,7 +92,7 @@ export interface SyncProgressEvent<K extends SyncType> extends BaseSyncEvent<K> 
 
 export interface SyncCompleteEvent<K extends SyncType> extends BaseSyncEvent<K> {
     status: "complete";
-    data: SyncDataMap[K];
+    data: DeepPartial<SyncDataMap[K]>;
 }
 
 export interface SyncErrorEvent<K extends SyncType> extends BaseSyncEvent<K> {

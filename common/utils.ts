@@ -3,6 +3,7 @@ import * as Cards from "./models/cards";
 import Permission from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
+import { isEqual } from "lodash-es";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -206,7 +207,7 @@ export function hasPermission<T extends Principal>(principal?: T, ...permissions
     }
 
     const includesPermission = (ps: Permission[]) => {
-        return permissions.some((a) => ps.some((b) => a === b));
+        return permissions.every((a) => ps.some((b) => a === b));
     };
 
     if (includesPermission(principal.permissions)) {
@@ -350,6 +351,10 @@ export function extractDeckIdentifier(url: DeckLink | DecklistLink) {
     const pattern = /https:\/\/thronesdb\.com\/(?:deck|decklist)\/view\/(?<target>[^/]+)/;
     const match = url.match(pattern);
     // If url is confirmed to be DeckLink or DecklistLink, this should guaranteed not be null
+    // Still need to account for scenarios where that fails though
+    if (!match) {
+        return undefined;
+    }
     const value = match!.groups!.target;
 
     return /^\d+$/.test(value) ? Number(value) : (value as UUID);
@@ -362,4 +367,27 @@ export function generatePlaytestingImageUrl(card: { project: number, number: num
 export function generateReleaseImageUrl(short: string, number: number, name: string) {
     const safeName = name.replace(/[<>:"/\\|?*']/g, "").replace(/\s/g, "_");
     return encodeURI(`https://throneteki.ams3.cdn.digitaloceanspaces.com/packs/${short}/${number}_${safeName}.png`);
+}
+
+/**
+ * Recursively compares two objects of the same type, returning only the fields
+ * from `updated` that differ from `original`. Nested objects are diffed deeply;
+ * arrays and dates are treated as atomic values.
+ */
+export function getDiff<T extends object>(original: T, updated: T): DeepPartial<T> {
+    const isPlainObject = (val: unknown): val is object => val !== null && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date);
+    return (Object.keys(updated) as (keyof T)[]).reduce((diff, key) => {
+        const a = original[key];
+        const b = updated[key];
+
+        // Skip unchanged values
+        if (isEqual(a, b)) return diff;
+
+        // Recurse into plain objects; treat arrays, dates, and primitives as atomic
+        diff[key] = (isPlainObject(a) && isPlainObject(b)
+            ? getDiff(a, b)
+            : b) as DeepPartial<T[keyof T]>;
+
+        return diff;
+    }, {} as Record<keyof T, DeepPartial<T[keyof T]>>) as DeepPartial<T>;
 }

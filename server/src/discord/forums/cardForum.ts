@@ -21,7 +21,7 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
     const toUpdate: IPlaytestCard[] = [];
     let needsUpdate = false;
     for (let card of cards) {
-        const emitter = createSyncEmitter("card", "discord", `${card.project}|${card.number}|${card.version}`);
+        const emitter = createSyncEmitter("card", "discord", card);
         try {
             emitter.start();
             if (isMessageOutdated(card)) {

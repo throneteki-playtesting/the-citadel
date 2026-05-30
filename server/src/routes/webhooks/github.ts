@@ -4,6 +4,7 @@ import { StatusCodes } from "http-status-codes";
 import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent } from "@octokit/webhooks-types";
 import { dataService, githubService, logger } from "@/services";
 import { githubWebhookMiddleware } from "@/middleware/auth";
+import { createSyncEmitter } from "@/services/sseService";
 
 const router = express.Router();
 
@@ -36,13 +37,16 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
     if (cards.length > 0) {
         const lastSynced = new Date();
         for (const card of cards) {
+            const emitter = createSyncEmitter("card", "github", card);
+            emitter.start();
             card.github.status = issue.state;
             if (issue.closed_at) {
                 card.github.closedAt = new Date(issue.closed_at);
             }
             card.github.lastSynced = lastSynced;
+            emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false);
+        cards = await dataService.cards.update(cards, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -59,11 +63,14 @@ async function onIssueReopened({ issue }: IssuesReopenedEvent) {
     if (cards.length > 0) {
         const lastSynced = new Date();
         for (const card of cards) {
+            const emitter = createSyncEmitter("card", "github", card);
+            emitter.start();
             card.github.status = issue.state;
             delete card.github.closedAt;
             card.github.lastSynced = lastSynced;
+            emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false);
+        cards = await dataService.cards.update(cards, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -77,9 +84,12 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
     let cards = await dataService.cards.read({ github: { issueUrl: issue.html_url } });
     if (cards.length > 0) {
         for (const card of cards) {
+            const emitter = createSyncEmitter("card", "github", card);
+            emitter.start();
             delete card.github;
+            emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false);
+        cards = await dataService.cards.update(cards, false, false);
 
         logger.info(`[Github] Deleted github data for ${cards.length} cards`);
     }
@@ -106,6 +116,8 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
         if (playtestingUpdates.length > 0) {
             const lastSynced = new Date();
             for (const playtestingUpdate of playtestingUpdates) {
+                const emitter = createSyncEmitter("playtestingUpdate", "github", playtestingUpdate);
+                emitter.start();
                 if (isMerged) {
                     playtestingUpdate.github.status = pullRequest.state;
                     playtestingUpdate.github.mergedAt = new Date(pullRequest.merged_at);
@@ -113,8 +125,9 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
                 } else {
                     delete playtestingUpdate.github;
                 }
+                emitter.complete(playtestingUpdate);
             }
-            playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false);
+            playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
 
             logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github data for ${playtestingUpdates.length} playtesting updates`);
         }

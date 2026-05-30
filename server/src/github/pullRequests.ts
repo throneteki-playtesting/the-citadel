@@ -15,7 +15,7 @@ export async function syncPullRequests() {
     const newlyImplemented = await dataService.cards.read({ github: { status: "closed" }, implemented: false });
     const context = githubService.getContext();
 
-    const emitters: Map<IPlaytestingUpdate, SyncEmitter<"playtestingUpdate">> = new Map(playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github", `${pt.project}|${pt.version}`)]));
+    const emitters: Map<IPlaytestingUpdate, SyncEmitter<"playtestingUpdate">> = new Map(playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github", pt)]));
     emitters.forEach((e) => e.start());
 
     const canCreatePullRequest = await isPlaytestingBranchBehind(context);

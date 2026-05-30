@@ -1,5 +1,7 @@
 import { Response } from "express";
-import { SyncCompleteEvent, SyncEvent, SyncOperation, SyncType } from "@/types";
+import { SyncDataMap, SyncEvent, SyncOperation, SyncType } from "@/types";
+import { getDiff } from "common/utils";
+import { cloneDeep } from "lodash-es";
 
 interface SseClient {
     id: string;
@@ -51,11 +53,18 @@ export const sseService = {
 export interface SyncEmitter<K extends SyncType> {
     start: () => void,
     progress: (step: string) => void,
-    complete: (data: SyncCompleteEvent<K>["data"]) => void,
+    complete: (data: SyncDataMap[K]) => void,
     error: (error: string) => void,
 }
 
-export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOperation<K>, resourceId: string): SyncEmitter<K> {
+const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = {
+    card: (card) => `${card.project}|${card.number}|${card.version}`,
+    playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`
+};
+
+export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOperation<K>, resource: SyncDataMap[K]): SyncEmitter<K> {
+    const initialResource = cloneDeep(resource);
+    const resourceId = resourceIdFunc[type](initialResource);
     const emit = (event: SyncEvent<K>) => {
         sseService.sendProgress(type, resourceId, event);
         if (event.status === "complete" || event.status === "error") {
@@ -68,8 +77,8 @@ export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOp
             emit({ type, id: resourceId, operation, status: "start" }),
         progress: (step: string) =>
             emit({ type, id: resourceId, operation, status: "progress", step }),
-        complete: (data: SyncCompleteEvent<K>["data"]) =>
-            emit({ type, id: resourceId, operation, status: "complete", data }),
+        complete: (data: SyncDataMap[K]) =>
+            emit({ type, id: resourceId, operation, status: "complete", data: getDiff(initialResource, data) }),
         error: (error: string) =>
             emit({ type, id: resourceId, operation, status: "error", error })
     };

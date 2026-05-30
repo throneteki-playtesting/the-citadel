@@ -27,7 +27,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
 
     const packages = await Promise.all(
         cards.map(async (card) => {
-            const emitter = createSyncEmitter("card", "image", `${card.project}|${card.number}|${card.version}`);
+            const emitter = createSyncEmitter("card", "image", card);
             try {
                 emitter.start();
                 emitter.progress("Checking");
