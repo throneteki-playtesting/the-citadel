@@ -69,6 +69,13 @@ export const useTimezone = () => {
     return { timezone, format };
 };
 
+export function usePageTitle(title?: string) {
+    useEffect(() => {
+        document.title = title ? `The Citadel - ${title}` : "The Citadel";
+        return () => { document.title = "The Citadel"; }; // reset on unmount
+    }, [title]);
+}
+
 interface SyncState {
     status?: SyncStatus;
     step?: string;

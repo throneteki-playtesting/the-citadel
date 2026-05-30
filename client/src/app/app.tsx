@@ -8,10 +8,10 @@ function App() {
 
     return (
         <SSEProvider>
-            <HeroUIProvider navigate={navigate} useHref={useHref} className="h-full bg-background">
+            <HeroUIProvider navigate={navigate} useHref={useHref}>
                 <NavigationBar />
                 <ToastProvider placement="top-right"/>
-                <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl bg-content1">
+                <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">
                     <Outlet />
                 </div>
             </HeroUIProvider>

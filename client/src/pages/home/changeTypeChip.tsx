@@ -23,7 +23,7 @@ const ChangeTypeChip = ({ card, className, style }: ChangeTypeChipProps) => {
         <span
             style={style}
             className={classNames(
-                "tracking-wide uppercase border p-1 text-center block min-w-fit",
+                "tracking-wide uppercase font-sans border p-1 text-center block min-w-fit",
                 changeTypeClasses[changeType],
                 className
             )}

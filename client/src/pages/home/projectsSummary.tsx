@@ -4,9 +4,9 @@ import { useNavigate } from "react-router-dom";
 import dismoji from "../../emojis";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
-import { IPlaytestReview } from "common/models/reviews";
-import { IPlaytestCard } from "common/models/cards";
 import { daysFromNow } from "../../utils";
+import Permission from "common/models/permissions";
+import PermissionGate from "../../components/permissionGate";
 
 export const ProjectsSummary = () => {
     const { data, isLoading } = useGetProjectsQuery({ filter: [{ active: true }] });
@@ -21,11 +21,8 @@ export const ProjectsSummary = () => {
     );
 };
 
-function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCardProps) {
-    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
-    const { data: reviewsData, isLoading: isLoadingProjectsData } = useGetReviewsQuery({ filter: { project: project.number } });
-
-    const isLoading = useMemo(() => forcedIsLoading || isLoadingCardsData || isLoadingProjectsData, [forcedIsLoading, isLoadingCardsData, isLoadingProjectsData]);
+function ProjectCard({ project }: ProjectCardProps) {
+    const { data: releasedData, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, release: { $exists: true } } });
 
     const navigate = useNavigate();
     const progress = useMemo(() => {
@@ -34,25 +31,28 @@ function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCar
         }
         // TODO: Improve this once we have better tracking metrics (eg. wording, art, etc.)
         const total = Object.values(project.cardCount).reduce((total, faction) => total + faction);
-        const released = cardsData?.items.filter((card) => !!card.release).length ?? 0;
+        const released = releasedData?.total ?? 0;
 
         return (released / total) * 100;
-    }, [cardsData?.items, project]);
+    }, [project, releasedData?.total]);
 
     const statusChip = useMemo(() => {
         if (!project.active) {
-            return <Chip radius="sm" color="success" variant="bordered">Complete</Chip>;
+            return <Chip radius="sm" color="success" variant="bordered">Archived</Chip>;
         }
         if (project.draft) {
             return <Chip radius="sm" color="secondary" variant="bordered">Draft</Chip>;
         }
+        if (progress === 100) {
+            return <Chip radius="sm" color="success" variant="bordered">Completed</Chip>;
+        }
         return <Chip radius="sm" color="success" variant="bordered">Active</Chip>;
-    }, [project.active, project.draft]);
+    }, [progress, project.active, project.draft]);
 
     return (
         <div
             onClick={() => !isLoading && navigate(`/project/${project.number}`)}
-            className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors"
+            className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors drop-shadow-lg"
         >
             {isLoading
                 ? (
@@ -73,16 +73,16 @@ function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCar
                 : (
                     <div className="relative overflow-hidden">
                         <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
-                            <span className="ml-16 text-9xl opacity-20">{project.emoji && dismoji[project.emoji]}</span>
+                            <span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>
                         </div>
                         <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
                             <div className="flex-1">
-                                <div className="text-xxs tracking-widest uppercase text-foreground/40">
-                            #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>
+                                <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
+                                    #{project.number} · <span className="uppercase">{project.type} · Version {project.version}</span>
                                 </div>
-                                <h2 className="text-xl sm:text-2xl font-semibold text-foreground">{project.name}</h2>
+                                <h2 className="text-xl sm:text-2xl tracking-widest font-cinzel text-foreground">{project.name}</h2>
                             </div>
-                            <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                            <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
                                 {statusChip}
                                 <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
                             </div>
@@ -91,68 +91,58 @@ function ProjectCard({ project, isLoading: forcedIsLoading = false }: ProjectCar
                 )
             }
             <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
-                <ReviewsStat reviews={reviewsData?.items} isLoading={isLoading} />
-                <CardChangesStat latest={cardsData?.items} isLoading={isLoading} />
-                <ActiveDecksStat reviews={reviewsData?.items} isLoading={isLoading} />
-                <PacksStat latest={cardsData?.items} isLoading={isLoading} />
+                <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_CARDS}><PacksStat project={project} /></PermissionGate>
             </div>
         </div>
     );
 }
 type ProjectCardProps = {
     project: IProject;
-    isLoading?: boolean;
 };
 
-function ReviewsStat({ reviews = [], isLoading }: ReviewsStatProps) {
-    const amount = useMemo(() => reviews.length, [reviews.length]);
-    const reviewers = useMemo(() => new Set(reviews.map((review) => review.reviewer)), [reviews]);
-
-    return <ProjectStat label="Reviews this cycle" value={amount} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
-}
-type ReviewsStatProps = {
-    reviews?: IPlaytestReview[];
-    isLoading?: boolean;
-}
-
-function CardChangesStat({ latest = [], isLoading }: CardChangesStatProps) {
+function CardChangesStat({ project }: ProjectStatProps) {
     const dayRange = 7;
-    const cards = useMemo(() => latest.filter((card) => new Date(card.updated) >= daysFromNow(-dayRange)), [latest]);
-    const factions = useMemo(() => new Set(cards.map((card) => card.faction)), [cards]);
+    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, updated: { $gte: since }, note: { $exists: true } } });
 
-    return <ProjectStat label={`Changes · ${dayRange} days`} value={cards.length} footer={`accross ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
-}
-type CardChangesStatProps = {
-    latest?: IPlaytestCard[];
-    isLoading?: boolean;
+    const factions = useMemo(() => new Set(data?.items.map((card) => card.faction)), [data?.items]);
+
+    return <StatCard label={`Changes · ${dayRange} days`} value={data?.total} footer={`across ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
 }
 
-function ActiveDecksStat({ reviews = [], isLoading }: ActiveDecksStatProps) {
-    const decks = useMemo(() => new Set(reviews.reduce<string[]>((decks, review) => [...decks, ...review.decks], [])), [reviews]);
+function ReviewsStat({ project }: ProjectStatProps) {
+    const { data, isLoading } = useGetReviewsQuery({ filter: { project: project.number } });
+    const reviewers = useMemo(() => new Set(data?.items.map((review) => review.reviewer)), [data?.items]);
 
-    return <ProjectStat label="Submitted Decks" value={decks.size} footer="from ThronesDB" isLoading={isLoading}/>;
-}
-type ActiveDecksStatProps = {
-    reviews?: IPlaytestReview[];
-    isLoading?: boolean;
+    return <StatCard label="Reviews this cycle" value={data?.total} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
 }
 
-function PacksStat({ latest = [], isLoading }: PacksStatProps) {
+function ActiveDecksStat({ project }: ProjectStatProps) {
+    const { data, isLoading } = useGetReviewsQuery({ filter: { project: project.number } });
+    const decks = useMemo(() => new Set(data?.items.reduce<string[]>((decks, review) => [...decks, ...review.decks], [])), [data?.items]);
+
+    return <StatCard label="Submitted Decks" value={decks.size} footer="through reviews" isLoading={isLoading}/>;
+}
+
+function PacksStat({ project }: ProjectStatProps) {
     // TODO: Improve this when we have WIP packs implemented
-    const packs = useMemo(() => [...new Set(latest.filter((card) => !!card.release).map((card) => card.release!.short))], [latest]);
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, release: { $exists: true } } });
+    const packs = useMemo(() => [...new Set(data?.items.map((card) => card.release!.short))], [data?.items]);
     const packChips = packs.length > 0 ? (
         <div className="flex flex-wrap gap-1">
             {packs.map((pack) => <Chip key={pack} size="sm" variant="bordered">{pack}</Chip>)}
-        </div>) : <span className="text-lg italic">None</span>;
+        </div>) : <span className="text-lg font-crimson tracking-wider">None</span>;
 
-    return <ProjectStat label="Released Packs" value={packChips} isLoading={isLoading} />;
+    return <StatCard label="Released Packs" value={packChips} isLoading={isLoading} />;
 }
-type PacksStatProps = {
-    latest?: IPlaytestCard[];
-    isLoading?: boolean;
+type ProjectStatProps = {
+    project: IProject;
 }
 
-function ProjectStat({ label, value, footer, isLoading = false }: ProjectStatProps) {
+function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="px-6 py-4 space-y-1">
@@ -164,17 +154,17 @@ function ProjectStat({ label, value, footer, isLoading = false }: ProjectStatPro
     }
     return (
         <div className="px-6 py-4">
-            <div className="text-xxs tracking-wide uppercase text-foreground/40 mb-2">
+            <div className="text-xxs font-cinzel tracking-wide uppercase text-foreground/40">
                 {label}
             </div>
-            <div className="text-3xl font-light text-foreground leading-none">{value}</div>
-            {footer && <div className="text-xs italic text-foreground/40 mt-1.5">{footer}</div>}
+            <div className="text-3xl font-sans text-foreground leading-none">{value ?? "-"}</div>
+            {footer && <div className="text-xs font-serif italic text-foreground/40 mt-1.5">{footer}</div>}
         </div>
     );
 }
-type ProjectStatProps = {
+type StatCardProps = {
     label: string;
-    value: ReactNode;
+    value?: ReactNode;
     footer?: ReactNode;
     isLoading?: boolean;
 }

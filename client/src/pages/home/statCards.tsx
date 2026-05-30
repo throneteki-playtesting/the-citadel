@@ -1,112 +1,117 @@
-import classNames from "classnames";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery, useGetUsersQuery } from "../../api";
-import { useMemo } from "react";
-import { IPlaytestCard, NoteType } from "common/models/cards";
+import { ReactNode, useMemo } from "react";
+import { NoteType } from "common/models/cards";
 import { daysFromNow } from "../../utils";
 import { Skeleton } from "@heroui/react";
-import { IProject } from "common/models/projects";
+import PermissionGate from "../../components/permissionGate";
+import Permission from "common/models/permissions";
+import { changeTypeClasses } from "../../constants";
+import { ChangeType } from "common/types";
+import classNames from "classnames";
+
+// TODO: Create a "statistics" endpoint in server, and call that rather than gathering data on front-end. For now, this is sufficient
+// Should also include new "statistics" related permissions, as a user could see total stats, but not the data creating those stats
+// Note: Also add scoped statistics, like project stats & card stats
 
 export default function StatCards() {
-    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true })) }, { skip: !projectsData });
-
-    const isLoading = useMemo(() => isLoadingProjectsData || isLoadingCardsData, [isLoadingProjectsData, isLoadingCardsData]);
-
     return (
-        <div className="grid grid-cols-2 md:grid-cols-4">
-            <CardChangesStat latest={cardsData?.items ?? []} isLoading={isLoading}/>
-            <ActivePlaytestersStat />
-            <CardsInTestingStat projects={projectsData?.items ?? []} latest={cardsData?.items ?? []} isLoading={isLoading}/>
-            <ReviewsStat projects={projectsData?.items ?? []} isLoading={isLoading} />
+        <div className="grid grid-cols-2 md:grid-cols-4 border border-content3 divide-x divide-content3 drop-shadow-lg">
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}><CardChangesStat /></PermissionGate>
+            <PermissionGate requires={Permission.READ_USERS}><ActivePlaytestersStat /></PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}><CardsInTestingStat /></PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}><ReviewsStat /></PermissionGate>
         </div>
     );
 }
 
-function CardChangesStat({ latest, isLoading = false }: CardChangesStatProps) {
+function CardChangesStat() {
     const dayRange = 7;
-    const cards = latest.filter((card) => new Date(card.updated) >= daysFromNow(-dayRange));
+    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
+
+    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
+    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, updated: { $gte: since }, note: { $exists: true } })) }, { skip: !projectsData });
+
+    const isLoading = isLoadingProjectsData || isLoadingCardsData;
 
     const footer = useMemo(() => {
-        const noteMap = cards.reduce<Record<NoteType, number>>((map, card) => {
+        const noteMap = cardsData?.items.reduce<Record<NoteType, number>>((map, card) => {
             if (card.note) map[card.note.type]++;
             return map;
-        }, { updated: 0, reworked: 0, replaced: 0 });
+        }, { updated: 0, reworked: 0, replaced: 0 }) ?? {};
 
-        return Object.entries(noteMap).map(([type, count]) => `${count} ${type}`).join(" · ");
-    }, [cards]);
+        return (
+            <div className="flex gap-0.5 flex-wrap">
+                {Object.entries(noteMap).map(([type, count]) => (<div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50", changeTypeClasses[type as ChangeType])}>{String(count)} {type}</div>))}
+            </div>
+        );
+    }, [cardsData?.items]);
 
     return (
         <StatCard
             label={`Card Changes · ${dayRange} days`}
-            value={cards.length}
+            value={cardsData?.total}
             footer={footer}
             isLoading={isLoading}
         />
     );
 }
-type CardChangesStatProps = {
-    latest: IPlaytestCard[],
-    isLoading?: boolean
-}
 
 function ActivePlaytestersStat() {
     const dayRange = 14;
-    const date = useMemo(() => daysFromNow(-dayRange).toISOString(), []);
-    const { data, isLoading } = useGetUsersQuery({ filter: { lastLogin: { $gte: date } } });
+    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
+    const { data, isLoading } = useGetUsersQuery({ filter: { lastLogin: { $gte: since } } });
 
     return (
         <StatCard
             label="Active Playtesters"
-            value={data?.total ?? 0}
-            accent="secondary"
+            value={data?.total}
             footer={`in the last ${dayRange} days`}
             isLoading={isLoading}
         />
     );
 }
 
-function CardsInTestingStat({ projects, latest, isLoading = false }: CardsInTestingStatProps) {
-    const cards = latest.filter((card) => !card.release);
+function CardsInTestingStat() {
+    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
+    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, release: { $exists: false } })) }, { skip: !projectsData });
+
+    const isLoading = isLoadingProjectsData || isLoadingCardsData;
+
+    const acrossProjects = useMemo(() => new Set(cardsData?.items.map((card) => card.project)), [cardsData?.items]);
+
     return (
         <StatCard
             label="Cards in testing"
-            value={cards.length}
-            accent="warning"
-            footer={`accross ${projects.length} project${projects.length !== 1 ? "s" : ""}`}
+            value={cardsData?.total}
+            footer={`across ${acrossProjects.size} project${acrossProjects.size !== 1 ? "s" : ""}`}
             isLoading={isLoading}
         />
     );
 }
-type CardsInTestingStatProps = {
-    projects: IProject[],
-    latest: IPlaytestCard[],
-    isLoading?: boolean
-}
 
 
-function ReviewsStat({ projects, isLoading = false }: ReviewsStatProps) {
-    const { data, isLoading: isLoadingReviewsData } = useGetReviewsQuery({ filter: projects.map((project) => ({ project: project.number })) });
-    const numPlaytesters = new Set(data?.items.map((review) => review.reviewer)).size;
+function ReviewsStat() {
+    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
+    const { data: reviewsData, isLoading: isLoadingReviewsData } = useGetReviewsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number })) });
+
+    const isLoading = isLoadingProjectsData || isLoadingReviewsData;
+
+    const numPlaytesters = new Set(reviewsData?.items.map((review) => review.reviewer)).size;
     return (
         <StatCard
             label="Reviews"
-            value={data?.total ?? 0}
-            accent="danger"
-            footer={`accross ${numPlaytesters} playtesters`}
-            isLoading={isLoadingReviewsData || isLoading}
+            value={reviewsData?.total}
+            footer={`across ${numPlaytesters} playtesters`}
+            isLoading={isLoading}
         />
     );
 }
-type ReviewsStatProps = {
-    projects: IProject[],
-    isLoading?: boolean
-}
 
 
-function StatCard({ label, value, footer, accent = "primary", isLoading = false }: StatCardProps) {
+function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
     if (isLoading) {
         return (
-            <div className={classNames("bg-content2 px-5 py-5 border-t-2 space-y-2", accentBorder[accent])}>
+            <div className="bg-content2 px-5 py-5 border-b-2 space-y-2">
                 <Skeleton className="h-4 w-32 rounded-sm"/>
                 <Skeleton className="h-12 w-28 rounded-sm"/>
                 <Skeleton className="h-4 w-42 rounded-sm" />
@@ -114,33 +119,18 @@ function StatCard({ label, value, footer, accent = "primary", isLoading = false 
         );
     }
     return (
-        <div className={classNames("bg-content2 px-5 py-5 border-t-2", accentBorder[accent])}>
-            <p className="text-xxs tracking-wide uppercase text-foreground/50">
+        <div className="bg-content2 px-5 py-5">
+            <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">
                 {label}
-            </p>
-            <p className="text-5xl font-light text-foreground mt-2 leading-none">
-                {value}
-            </p>
-            {footer && (
-                <p className="text-sm italic text-foreground/50 mt-2">
-                    {footer}
-                </p>
-            )}
+            </div>
+            <div className="text-5xl font-sans text-foreground mt-2 leading-none">{value ?? "-"}</div>
+            {footer && <div className="text-sm font-serif italic text-foreground/50 mt-2">{footer}</div>}
         </div>
     );
 }
 type StatCardProps = {
   label: string;
-  value: number | string;
-  footer?: React.ReactNode;
-  accent?: keyof typeof accentBorder;
+  value?: ReactNode;
+  footer?: ReactNode;
   isLoading?: boolean;
 };
-
-const accentBorder = {
-    primary: "border-primary",
-    success: "border-success",
-    danger: "border-danger",
-    warning: "border-warning",
-    secondary: "border-secondary"
-} as const;

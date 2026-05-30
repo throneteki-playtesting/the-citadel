@@ -11,11 +11,12 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                serif: ["'Noto Serif'", "serif"],
-                sans: ["'Inter'", "sans-serif"],
+                serif: ["'EB Garamond'", "serif"],
+                sans: ["'Raleway'", "sans-serif"],
                 crimson: ["'Crimson Text'", "serif"],
                 opensans: ["'Open Sans'", "sans-serif"],
-                thronesdb: ["'thronesdb'", "serif"]
+                thronesdb: ["'thronesdb'", "serif"],
+                cinzel: ["'Cinzel'", "serif"]
             },
             colors: {
                 ...thronesColors,
@@ -78,23 +79,17 @@ export default {
             themes: {
                 light: {
                     colors: {
-                        // Page & surface hierarchy
-                        background: "#F9F7F2",
-                        foreground: "#111316",
+                        background: "#F9F5EE",
+                        foreground: "#2C2416",
 
-                        // content1 = cards, panels, stat cards
-                        // content2 = recessed surfaces (table headers, section bg)
-                        // content3 = borders, dividers
-                        // content4 = muted borders, subtle rules
-                        content1: "#FFFFFF",
-                        content2: "#F4F1EB",
-                        content3: "#E2E0DA",
-                        content4: "#CCCAC4",
+                        content1: "#F1EBE0",
+                        content2: "#E6DDD0",
+                        content3: "#D6CDB8",
+                        content4: "#C4B89E",
 
-                        // Primary = gold, used for accents, active states, links
                         primary: {
                             DEFAULT: "#C5A059",
-                            foreground: "#111316",
+                            foreground: "#2C2416",
                             50:  "#FAF5E8",
                             100: "#F5EBD1",
                             200: "#EAD4A0",
@@ -107,23 +102,21 @@ export default {
                             900: "#4F2E00"
                         },
 
-                        // Secondary = iron (neutral UI chrome)
                         secondary: {
-                            DEFAULT: "#505F70",
-                            foreground: "#FFFFFF",
-                            50:  "#ECF0F4",
-                            100: "#D9E0E8",
-                            200: "#B3C1D1",
-                            300: "#8DA2BA",
-                            400: "#6783A3",
-                            500: "#505F70",
-                            600: "#3F4E5D",
-                            700: "#2F3D4A",
-                            800: "#1F2C37",
-                            900: "#101B24"
+                            DEFAULT: "#7A6E5A",
+                            foreground: "#F9F5EE",
+                            50:  "#F4F0E8",
+                            100: "#E8E0D0",
+                            200: "#D0C4A8",
+                            300: "#B8A880",
+                            400: "#A09060",
+                            500: "#7A6E5A",
+                            600: "#625848",
+                            700: "#4A4236",
+                            800: "#322C24",
+                            900: "#1A1612"
                         },
 
-                        // Success = valor (buff, active, ready)
                         success: {
                             DEFAULT: "#22663C",
                             foreground: "#FFFFFF",
@@ -139,7 +132,6 @@ export default {
                             900: "#07160C"
                         },
 
-                        // Danger = blood (nerf, error, critical)
                         danger: {
                             DEFAULT: "#8A262E",
                             foreground: "#FFFFFF",
@@ -155,7 +147,6 @@ export default {
                             900: "#1C0709"
                         },
 
-                        // Warning = ember (caution, pending)
                         warning: {
                             DEFAULT: "#B45A1E",
                             foreground: "#FFFFFF",
@@ -172,24 +163,23 @@ export default {
                         },
 
                         focus: "#C5A059",
-
-                        divider: "#E2E0DA"
+                        divider: "#D6CDB8"
                     }
                 },
 
                 dark: {
                     colors: {
-                        background: "#111316",
-                        foreground: "#E8E6E1",
+                        background: "#0A0A0C",
+                        foreground: "#ECECEC",
 
-                        content1: "#1A1C1F",
-                        content2: "#212329",
-                        content3: "#2E3038",
-                        content4: "#3D3F48",
+                        content1: "#121218",
+                        content2: "#1C1C24",
+                        content3: "#2C2C38",
+                        content4: "#3A3A48",
 
                         primary: {
                             DEFAULT: "#C5A059",
-                            foreground: "#111316",
+                            foreground: "#0A0A0C",
                             50:  "#4F2E00",
                             100: "#6D4A0A",
                             200: "#8A6620",
@@ -203,23 +193,23 @@ export default {
                         },
 
                         secondary: {
-                            DEFAULT: "#8DA2BA",
-                            foreground: "#111316",
-                            50:  "#101B24",
-                            100: "#1F2C37",
-                            200: "#2F3D4A",
-                            300: "#3F4E5D",
-                            400: "#505F70",
-                            500: "#6783A3",
-                            600: "#8DA2BA",
-                            700: "#B3C1D1",
-                            800: "#D9E0E8",
-                            900: "#ECF0F4"
+                            DEFAULT: "#8A8A9A",
+                            foreground: "#0A0A0C",
+                            50:  "#101018",
+                            100: "#1A1A28",
+                            200: "#2A2A3A",
+                            300: "#3A3A4E",
+                            400: "#505062",
+                            500: "#6A6A7A",
+                            600: "#8A8A9A",
+                            700: "#AAAAB8",
+                            800: "#C8C8D4",
+                            900: "#E6E6EE"
                         },
 
                         success: {
                             DEFAULT: "#5BAF77",
-                            foreground: "#111316",
+                            foreground: "#0A0A0C",
                             50:  "#07160C",
                             100: "#0E2A18",
                             200: "#143E24",
@@ -234,7 +224,7 @@ export default {
 
                         danger: {
                             DEFAULT: "#C7676F",
-                            foreground: "#111316",
+                            foreground: "#0A0A0C",
                             50:  "#1C0709",
                             100: "#370F13",
                             200: "#53161C",
@@ -249,7 +239,7 @@ export default {
 
                         warning: {
                             DEFAULT: "#EB9F37",
-                            foreground: "#111316",
+                            foreground: "#0A0A0C",
                             50:  "#241206",
                             100: "#48240C",
                             200: "#6C3612",
@@ -263,8 +253,7 @@ export default {
                         },
 
                         focus: "#C5A059",
-
-                        divider: "#2E3038"
+                        divider: "#2C2C38"
                     }
                 }
             }

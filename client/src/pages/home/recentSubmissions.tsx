@@ -64,7 +64,11 @@ export default function RecentSubmissions() {
 
     return (
         <div className="space-y-2">
-            <div className="text-xs tracking-widest text-foreground/50 uppercase">Recent Submissions</div>
+            <div className="flex items-center gap-4">
+                <div className="h-px w-4 bg-primary/30" />
+                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Recent Submissions</span>
+                <div className="h-px flex-1 bg-primary/30" />
+            </div>
             <div className="border border-content3 divide-y divide-content3">
                 {content}
             </div>
@@ -126,17 +130,17 @@ function ReviewRow({ review }: ReviewRowProps) {
                 <div className="relative z-10 px-4 py-2">
                     <div className="min-w-0 space-y-0.5">
                         <div className="grid grid-cols-[1fr_auto] gap-2">
-                            <div className="text-md font-semibold text-foreground truncate">{card.name} <span className="opacity-50">{card.version}</span></div>
+                            <div className="text-md font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
                             <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
                         </div>
                         <div className="flex gap-2 items-center">
                             <Avatar src={user.avatarUrl} name={user.displayname} className="shrink-0 size-10 sm:size-8 md:size-10"/>
                             <div className="flex flex-col gap-1 min-w-0">
-                                <div className="text-xs italic text-foreground/40">
+                                <div className="text-xs font-crimson italic text-foreground/40">
                                     Review by {user.displayname}
                                 </div>
                                 <StatementBars statements={review.statements} />
-                                <div className="text-xxs italic truncate text-foreground/40">
+                                <div className="text-xxs font-crimson italic truncate text-foreground/40">
                                     {review.played} {review.played !== 1 ? "games" : "game"} played
                                 </div>
                             </div>
@@ -181,28 +185,27 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
                         <FontAwesomeIcon icon={isApproved ? faCheckCircle : faCircleQuestion} className="absolute right-0 bottom-0 text-2xl opacity-20"/>
                     </div>
                 </div>
-                <div className="relative z-10 px-4 py-2 space-y-1">
+                <div className="relative z-10 px-4 py-3 space-y-1">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
                         <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <ThronesIcon name={suggestion.card.type} />
-                                <div className="text-md font-semibold text-foreground truncate">{suggestion.card.name}</div>
+                            <div className="flex gap-2 flex-wrap">
+                                <div className="text-sm font-cinzel text-foreground truncate"><ThronesIcon name={suggestion.card.type} /> {suggestion.card.name}</div>
                                 {isApproved && (
-                                    <span className="text-xxs tracking-wide uppercase px-2 py-0.5 border text-success-700 border-success-300 bg-success-100 shrink-0">
+                                    <span className="text-xxs tracking-wide font-sans uppercase px-2 py-0.5 border text-success-700 border-success-300 bg-success-100 shrink-0">
                                         Approved
                                     </span>
                                 )}
                             </div>
-                            <div className="text-xs italic text-foreground/40">
+                            <div className="text-xs font-crimson italic text-foreground/40">
                                 Suggestion by {suggestion.user.displayname}
                             </div>
                         </div>
                         <div className="ml-auto flex flex-col items-end gap-1 shrink-0">
-                            <div className="flex items-center gap-1 text-foreground/40 shrink-0 text-xs">
+                            <div className="flex items-center gap-1 font-sans text-foreground/40 shrink-0 text-xs">
                                 <FontAwesomeIcon icon={faThumbsUp} />
                                 <span>{suggestion.likedBy.length}</span>
                             </div>
-                            <Timestamp date={new Date(suggestion.updated)} className="text-xs italic text-foreground/40"/>
+                            <Timestamp date={new Date(suggestion.updated)} className="text-xs font-sans italic text-foreground/40"/>
                         </div>
                     </div>
                     {suggestion.tags.length > 0 && <TagList tags={suggestion.tags} />}

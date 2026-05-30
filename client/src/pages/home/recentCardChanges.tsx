@@ -46,7 +46,11 @@ export default function RecentCardChanges() {
 
     return (
         <div className="space-y-2">
-            <div className="text-xs tracking-widest text-foreground/50 uppercase">Recent Card Changes</div>
+            <div className="flex items-center gap-4">
+                <div className="h-px w-4 bg-primary/30" />
+                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Recent Card Changes</span>
+                <div className="h-px flex-1 bg-primary/30" />
+            </div>
             <div className="border border-content3 divide-y divide-content3">
                 {content}
             </div>
@@ -67,8 +71,8 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                     <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
                         <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
                         <div className="min-w-0">
-                            <div className="text-[15px] font-semibold text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
-                            <div className="flex text-xs italic text-foreground/40 mt-0.5 truncate leading-none">
+                            <div className="text-sm font-cinzel text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
+                            <div className="flex text-xs font-crimson text-foreground/40 mt-0.5 truncate leading-none">
                                 <span>{project?.code} #{card.number} · v{card.version}</span>
                                 <Timestamp className="ml-auto text-right" date={card.updated}/>
                             </div>

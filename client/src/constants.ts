@@ -24,7 +24,7 @@ export const watermarkClasses: Record<string, string> = {
     martell: "text-martell opacity-30",
     thenightswatch: "text-thenightswatch opacity-30",
     stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-200",
+    targaryen: "text-targaryen brightness-200 -z-10",
     tyrell: "text-tyrell opacity-30",
     neutral: "text-neutral opacity-30"
 };
