@@ -12,7 +12,7 @@ import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 import { noteTypeIcon } from "../../../utils";
-import { sortBy } from "lodash";
+import { sortBy } from "lodash-es";
 import ImplementStatus from "../../../components/status/implementStatus";
 
 const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose = () => true, onSave = () => true }: CreatePlaytestingUpdateModalProps) => {
