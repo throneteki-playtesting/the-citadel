@@ -21,7 +21,7 @@ router.post("/issue",
             await onIssueDeleted(event);
         }
 
-        res.status(StatusCodes.OK);
+        res.sendStatus(StatusCodes.OK);
     })
 );
 
@@ -93,7 +93,7 @@ router.post("/pull-request",
             onPullRequestClosed(event);
         }
 
-        res.status(StatusCodes.OK);
+        res.sendStatus(StatusCodes.OK);
     })
 );
 
