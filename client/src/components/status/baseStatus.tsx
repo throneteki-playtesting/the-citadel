@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 import { BaseElementProps, UIColor } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 
-export function BaseStatus({ data, isIconOnly, className, style }: BaseStatusProps) {
+export function BaseStatus({ data, isIconOnly = false, className, style }: BaseStatusProps) {
     const interactiveClass = "hover:brightness-125 transition duration-300 ease-in-out";
 
     if (isIconOnly) {

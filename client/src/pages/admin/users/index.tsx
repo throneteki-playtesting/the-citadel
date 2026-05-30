@@ -8,8 +8,10 @@ import EditUserModal from "./editUserModal";
 import { hasPermission } from "common/utils";
 import Loading from "../../../components/loading";
 import { User } from "common/models/auth";
+import { usePageTitle } from "../../../api/hooks";
 
 const Users = () => {
+    usePageTitle("Users");
     const [page, setPage] = useState(1);
     const perPage = 10;
     const { data: usersData, isLoading, isFetching } = useGetUsersQuery({ page, perPage });

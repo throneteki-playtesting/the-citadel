@@ -1,17 +1,16 @@
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Alert, Spinner } from "@heroui/react";
+import { Spinner } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
 import { useCardSync } from "../../api/hooks";
-import { ReactNode, useMemo } from "react";
-import { UIColor } from "../../types";
+import { useMemo } from "react";
 import ThronesIcon from "../thronesIcon";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { useSyncCardGithubMutation } from "../../api";
+import { BaseStatus, StatusData } from "./baseStatus";
+import { BaseElementProps } from "../../types";
 
-type StatusData = { icon?: ReactNode, label: string, color: UIColor, onPress?: () => void, href?: string };
-
-const ImplementStatus = ({ card }: ImplementStatusProps) => {
+const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatusProps) => {
     const [syncCardGithub, { isLoading: isSyncing }] = useSyncCardGithubMutation();
     const { status, step, error } = useCardSync(card).github;
     const data = useMemo<StatusData | null>(() => {
@@ -21,7 +20,7 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
         if (status === "start" || status === "progress" || isSyncing) {
             return {
                 icon: <Spinner />,
-                label: step ?? "Processing",
+                description: step ?? "Processing",
                 color: "secondary"
             };
         }
@@ -33,13 +32,13 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "danger",
-                label: error ?? "Failed to Sync"
+                description: error ?? "Failed to Sync"
             };
         }
         if (card.release) {
             return {
                 icon: <ThronesIcon name="power"/>,
-                label: "Implemented (Live)",
+                description: "Implemented (Live)",
                 color: "success",
                 href: "https://theironthrone.net"
             };
@@ -49,13 +48,13 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "secondary",
-                label: "Requires Syncing"
+                description: "Requires Syncing"
             };
         }
         if (card.implemented) {
             return {
                 icon: <ThronesIcon name="power"/>,
-                label: "Implemented",
+                description: "Implemented",
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
             };
@@ -66,7 +65,7 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
             case "open": {
                 return {
                     icon,
-                    label: "Github Issue Open",
+                    description: "Github Issue Open",
                     color: "warning",
                     href
                 };
@@ -74,7 +73,7 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
             case "closed": {
                 return {
                     icon,
-                    label: "Github Issue Closed",
+                    description: "Github Issue Closed",
                     color: "success",
                     href
                 };
@@ -86,16 +85,13 @@ const ImplementStatus = ({ card }: ImplementStatusProps) => {
     if (!data) {
         return null;
     }
-    const alert = <Alert icon={data.icon} color={data.color} title="Online Platform" className="h-full" hideIconWrapper description={data.label}></Alert>;
-    if (data.onPress) {
-        return <a className="cursor-pointer hover:brightness-125 transition duration-300 ease-in-out" onClick={data.onPress}>{alert}</a>;
-    }
-    if (data.href) {
-        return <a className="hover:brightness-125 transition duration-300 ease-in-out" href={data.href} target={"_blank"}>{alert}</a>;
-    }
-    return alert;
+
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Online Platform", ...data }} />;
 };
 
-type ImplementStatusProps = { card?: IPlaytestCard }
+type ImplementStatusProps = Omit<BaseElementProps, "children"> & {
+    card?: IPlaytestCard,
+    isIconOnly?: boolean
+}
 
 export default ImplementStatus;

@@ -10,9 +10,11 @@ import ProjectContent from "./projectContent";
 import ProjectDrafting from "./draft/projectDrafting";
 import dismoji from "../../emojis";
 import classNames from "classnames";
+import { usePageTitle } from "../../api/hooks";
 
 const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
     const { data: project, isLoading } = useGetProjectQuery({ number: number! });
+    usePageTitle(project ? project.code : undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const navigate = useNavigate();

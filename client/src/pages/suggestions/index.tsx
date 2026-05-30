@@ -14,9 +14,11 @@ import { CardPreview } from "@agot/card-preview";
 import SuggestionsGrid from "./suggestionsGrid";
 import { User } from "common/models/auth";
 import { downloadBlob } from "../../utils";
+import { usePageTitle } from "../../api/hooks";
 
 
 const Suggestions = () => {
+    usePageTitle("Suggestions");
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
     const [deleteSuggestion, { isLoading: isDeleting, originalArgs: deleting }] = useDeleteSuggestionMutation();
     const [renderImage, { isLoading: isRenderingImage, originalArgs: renderingImage }] = useRenderImageMutation();

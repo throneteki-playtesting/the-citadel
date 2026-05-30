@@ -1,34 +1,32 @@
 import { faStar } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Alert } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
 import { isPreview, parseCardCode } from "common/utils";
-import { ReactNode, useMemo } from "react";
-import { UIColor } from "../../types";
+import { useMemo } from "react";
+import { BaseStatus, StatusData } from "./baseStatus";
+import { BaseElementProps } from "../../types";
 
-type StatusData = { icon?: ReactNode, label: string, color: UIColor, href?: string };
-
-const DevelopmentStatus = ({ draft, latest }: DevelopmentStatusProps) => {
+const DevelopmentStatus = ({ className, style, isIconOnly, draft, latest }: DevelopmentStatusProps) => {
     const data = useMemo<StatusData | null>(() => {
         if (draft) {
-            const label = isPreview(draft) ? "Preview" : "Drafting Changes";
+            const description = isPreview(draft) ? "Preview" : "Drafting Changes";
             return {
                 icon: <FontAwesomeIcon icon={faStar} size="2xl"/>,
                 color: "secondary",
-                label
+                description
             };
         }
         if (latest) {
             if (latest.release) {
                 const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.release.number)}`;
                 return {
-                    label: `Released (${latest.release.short})`,
+                    description: `Released (${latest.release.short})`,
                     color: "success",
                     href
                 };
             } else {
                 return {
-                    label: "Playtesting Latest",
+                    description: "Playtesting Latest",
                     color: "success"
                 };
             }
@@ -39,13 +37,14 @@ const DevelopmentStatus = ({ draft, latest }: DevelopmentStatusProps) => {
     if (!data) {
         return null;
     }
-    const alert = <Alert icon={data.icon} color={data.color} title="Development" className="h-full" hideIconWrapper description={data.label}></Alert>;
-    if (data.href) {
-        return <a className="hover:brightness-125 transition duration-300 ease-in-out" href={data.href} target="_blank">{alert}</a>;
-    }
-    return alert;
+
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Development", ...data }} />;
 };
 
-type DevelopmentStatusProps = { draft?: IPlaytestCard, latest?: IPlaytestCard }
+type DevelopmentStatusProps = Omit<BaseElementProps, "children"> & {
+    draft?: IPlaytestCard,
+    latest?: IPlaytestCard,
+    isIconOnly?: boolean
+}
 
 export default DevelopmentStatus;

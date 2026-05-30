@@ -5,7 +5,7 @@ import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 
 import { FormContext, FormContextProps } from "./context";
 import { FormProps as HeroFormProps, Form as HeroForm } from "@heroui/react";
 import { unflatten } from "flat";
-import { merge } from "lodash";
+import { merge } from "lodash-es";
 
 const Form = function<T>({ schema, data: initial, onSubmit: onFormSubmit = () => true, onValidationError = () => true, allowEmptyValues = false, children, ...props }: FormProps<T>) {
     const [internalData, setInternalData] = useState({} as DeepPartial<T>);

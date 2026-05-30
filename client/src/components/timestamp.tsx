@@ -21,7 +21,7 @@ export default function Timestamp({ date, className, style }: TimestampProps) {
         <TouchTooltip content={format(new Date(date))}>
             <div
                 style={style}
-                className={classNames("space-x-0.5", className)}
+                className={classNames("space-x-0.5 font-sans", className)}
             >
                 <TimeAgo date={date} formatter={shortFormatter} />
             </div>

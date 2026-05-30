@@ -5,7 +5,7 @@ import { Button, ButtonProps, Form } from "@heroui/react";
 import Joi from "joi";
 import { DeepPartial } from "common/types";
 import { unflatten } from "flat";
-import { merge } from "lodash";
+import { merge } from "lodash-es";
 import { BaseElementProps } from "../../types";
 import { useWizard, WizardContext, WizardContextProps } from "./context";
 
@@ -259,7 +259,7 @@ export const WizardNext = ({ children, nextContent = "Next", submitContent = "Su
     const { id, currentPage, isLastPage } = useWizard();
 
     return (
-        <Button type="submit" form={`${id}_page_${currentPage}`} {...buttonProps}>
+        <Button type="submit" className="font-sans" form={`${id}_page_${currentPage}`} {...buttonProps}>
             {children || (isLastPage ? submitContent : nextContent)}
         </Button>
     );
@@ -279,7 +279,7 @@ export const WizardBack = ({ children, backContent = "Back", cancelContent = "Ca
 
     return (
         (!isFirstPage || onCancel) &&
-        <Button type="submit" onPress={onPress} {...buttonProps}>
+        <Button type="submit" className="font-sans" onPress={onPress} {...buttonProps}>
             {children || (isFirstPage ? cancelContent : backContent)}
         </Button>
     );

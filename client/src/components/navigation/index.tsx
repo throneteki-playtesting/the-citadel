@@ -9,7 +9,6 @@ import { useSelector } from "react-redux";
 import { RootState } from "../../api/store";
 import { useGetProjectsQuery } from "../../api";
 import Permission from "common/models/permissions";
-import dismoji from "../../emojis";
 import { useLocation } from "react-router-dom";
 import { hasPermission } from "common/utils";
 
@@ -41,12 +40,11 @@ const NavigationBar = () => {
         }
         const projectsPageItems = projectData.items
             .slice()
-            .sort((a, b) => b.number - a.number)
+            .sort((a, b) => a.number - b.number)
             .map((project) => {
-                const label = project.emoji ? `${dismoji[project.emoji.replaceAll(":", "")]} ${project.name}` : project.name;
                 return {
                     path: `/project/${project.number}`,
-                    label,
+                    label: `${project.number}. ${project.name}`,
                     permission: [
                         ...(!project.active ? [Permission.READ_ALL_PROJECTS] : []),
                         Permission.READ_PROJECTS
@@ -75,7 +73,7 @@ const NavigationBar = () => {
     }, [createItem, projectsItem, user]);
 
     return (
-        <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen} >
+        <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen} className="font-cinzel" >
             <NavbarContent className="sm:hidden">
                 <NavbarMenuToggle
                     aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -84,7 +82,7 @@ const NavigationBar = () => {
             <NavbarContent className="hidden sm:flex">
                 {items.map((navItem, index) => <NavbarItem key={index}>{navItem}</NavbarItem>)}
             </NavbarContent>
-            <span>{"The Red Keep"}</span>
+            <span className="font-cinzel text-primary font-semibold">The Citadel</span>
             <ProfileSection>
                 {profileItems}
             </ProfileSection>
@@ -105,11 +103,11 @@ const MenuItem = ({ item, parents = [] }: MenuItemProps) => {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
-        <Dropdown onOpenChange={setIsOpen}>
+        <Dropdown onOpenChange={setIsOpen} className="font-cinzel">
             <DropdownTrigger className="cursor-pointer">
                 <Link className="text-large flex gap-1">
                     <span>{item.label}</span>
-                    <FontAwesomeIcon size="xs" className={classNames("transition-transform", { "rotate-180": isOpen })} icon={faChevronUp}/>
+                    <FontAwesomeIcon size="xs" className={classNames("duration-300", { "scale-y-[-1]": isOpen })} icon={faChevronUp}/>
                 </Link>
             </DropdownTrigger>
             <DropdownMenu>

@@ -6,8 +6,10 @@ import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import EditRoleModal from "./editRoleModal";
 import Loading from "../../../components/loading";
 import { Role } from "common/models/auth";
+import { usePageTitle } from "../../../api/hooks";
 
 const Roles = () => {
+    usePageTitle("Roles");
     const [page, setPage] = useState(1);
     const perPage = 10;
     const { data: rolesData, isLoading, isFetching } = useGetRolesQuery({ page, perPage });

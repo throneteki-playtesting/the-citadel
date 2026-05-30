@@ -14,7 +14,7 @@ import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
 import { BaseStatus, StatusData } from "./baseStatus";
 
-const WebsiteUpdateStatus = ({ className, style, isIconOnly = false, playtestingUpdate }: WebsiteUpdateStatusProps) => {
+const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }: WebsiteUpdateStatusProps) => {
     const { data: cards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
     const [syncProjectsGithub, { isLoading: isSyncing }] = useSyncProjectsGithubMutation();
     const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github;
@@ -95,7 +95,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly = false, playtesting
         return null;
     }
 
-    return <BaseStatus className={className} style={style} data={{ title: "Online Platform", ...data }} isIconOnly={isIconOnly} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Online Platform", ...data }} />;
 };
 
 type WebsiteUpdateStatusProps = Omit<BaseElementProps, "children"> & {

@@ -18,7 +18,7 @@ import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
 import Form from "../../components/form";
 import { useForm } from "../../components/form/context";
-import { sortBy } from "lodash";
+import { sortBy } from "lodash-es";
 import CardImage from "../../components/cardImage";
 import LoadingCard from "../../components/loadingCard";
 import Loading from "../../components/loading";
@@ -214,6 +214,9 @@ const DecksQuestion = ({ value: decks, onValueChange: onDecksChange }: DecksQues
         } else {
             const deckIdentifier = extractDeckIdentifier(deckUrlInput);
             try {
+                if (!deckIdentifier) {
+                    throw new Error("Deck Identifier could not be extracted");
+                }
                 await fetchDeck(deckIdentifier).unwrap();
 
                 // Deck is valid
@@ -291,7 +294,8 @@ const DecksQuestion = ({ value: decks, onValueChange: onDecksChange }: DecksQues
 type DecksQuestionProps = { value: (DeckLink | DecklistLink)[], onValueChange: (value: (DeckLink | DecklistLink)[]) => void }
 
 const DeckSummary = ({ src, onDelete, onBroken = () => true }: DeckSummaryProps) => {
-    const { data: deck, isLoading } = useGetDeckQuery(extractDeckIdentifier(src));
+    const identifier = extractDeckIdentifier(src);
+    const { data: deck, isLoading } = useGetDeckQuery(identifier!, { skip: !identifier });
     const [fetchCard] = useLazyGetCardQuery();
     const [playtestedCards, setPlaytestedCards] = useState<(ILabeledCard | Code)[] | undefined>();
 

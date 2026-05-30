@@ -5,7 +5,7 @@ import { availablePermissions } from "../../../constants";
 import { useUpdateUserMutation } from "../../../api";
 import { useCallback, useEffect, useState } from "react";
 import { User } from "common/models/auth";
-import { cloneDeep } from "lodash";
+import { cloneDeep } from "lodash-es";
 
 const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModalProps) => {
     const [updateUser, { isLoading }] = useUpdateUserMutation();

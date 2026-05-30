@@ -3,7 +3,7 @@ import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGetCardsQuery, useGetProjectQuery, useGetReviewsQuery } from "../../api";
 import { Code, ILabeledCard, IPlaytestCard } from "common/models/cards";
-import { cloneDeep, sortBy } from "lodash";
+import { cloneDeep, sortBy } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { extractDeckIdentifier, hasPermission, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -280,6 +280,9 @@ const DeckSummaries = ({ isLoading = false, cards, reviews, safe = true }: DeckS
         const loadDeck = async (review: IPlaytestReview, card: IPlaytestCard, url: DeckLink | DecklistLink) => {
             try {
                 const identifier = extractDeckIdentifier(url);
+                if (!identifier) {
+                    throw new Error("Deck Identifier could not be extracted");
+                }
                 const deck = await fetchDeck(identifier).unwrap();
 
                 const newDeckGroups = deckGroups ?? new Map();
@@ -627,7 +630,8 @@ const ReviewSummaries = ({ project, number, reviews, cards }: ReviewSummariesPro
 type ReviewSummariesProps = { project: number, number: number, reviews?: IPlaytestReview[], cards?: IPlaytestCard[] }
 
 const ReviewSummaryDeck = ({ src }: ReviewSummaryDeckProps) => {
-    const { data: deck, isLoading: isDeckLoading } = useGetDeckQuery(extractDeckIdentifier(src));
+    const identifier = extractDeckIdentifier(src);
+    const { data: deck, isLoading: isDeckLoading } = useGetDeckQuery(identifier!, { skip: !identifier });
     const [fetchCard, { isLoading: isCardLoading }] = useLazyGetCardQuery();
     const [primaryAgenda, setPrimaryAgenda] = useState<ILabeledCard | Code>();
 

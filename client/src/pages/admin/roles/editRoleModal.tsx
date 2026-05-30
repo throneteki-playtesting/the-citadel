@@ -4,7 +4,7 @@ import Permission from "common/models/permissions";
 import { availablePermissions } from "../../../constants";
 import { useUpdateRoleMutation } from "../../../api";
 import { useCallback, useEffect, useState } from "react";
-import { cloneDeep } from "lodash";
+import { cloneDeep } from "lodash-es";
 import { Role } from "common/models/auth";
 
 const EditRoleModal = ({ role, onOpenChange, onSave: onRoleSave }: EditRoleModalProps) => {
