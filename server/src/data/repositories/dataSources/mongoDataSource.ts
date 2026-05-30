@@ -22,21 +22,23 @@ export default class MongoDataSource<T> {
 
         if (values) {
             const flattenFilter = (value: Filter<T>): Record<string, unknown> => {
-                const operators: Record<string, unknown> = {};
-                const plain: Record<string, unknown> = {};
+                const result: Record<string, unknown> = {};
 
-                for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-                    if (isOperatorObject(val)) {
-                        operators[key] = val;
-                    } else {
-                        plain[key] = val;
+                const traverse = (obj: Record<string, unknown>, prefix: string) => {
+                    for (const [key, val] of Object.entries(obj)) {
+                        const fullKey = prefix ? `${prefix}.${key}` : key;
+                        if (isOperatorObject(val)) {
+                            result[fullKey] = val;
+                        } else if (val !== null && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
+                            traverse(val as Record<string, unknown>, fullKey);
+                        } else {
+                            result[fullKey] = val;
+                        }
                     }
-                }
-
-                return {
-                    ...flatten(plain),
-                    ...operators
                 };
+
+                traverse(value as Record<string, unknown>, "");
+                return result;
             };
 
             if (!Array.isArray(values)) {

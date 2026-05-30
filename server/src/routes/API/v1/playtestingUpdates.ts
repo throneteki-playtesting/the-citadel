@@ -194,12 +194,11 @@ router.get("/:project/:version/implemented",
         if (!playtestingUpdate) {
             throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Playtesting update v${version} for project #${project.number} does not exist`);
         }
-        const [previous] = await dataService.playtestingUpdates.read([{ project: project.number, version: version - 1 }]);
-        const fromDate = previous?.github.mergedAt ?? new Date(-8640000000000000);
-        const [next] = await dataService.playtestingUpdates.read([{ project: project.number, version: version + 1 }]);
-        const toDate = next?.github.mergedAt ?? new Date(8640000000000000);
+        const [previous] = await dataService.playtestingUpdates.read([{ project: project.number, version: { $lt: version } }], { version: "desc" }, 1, 1);
+        const fromDate = previous?.github?.mergedAt;
+        const toDate = playtestingUpdate.github?.mergedAt ?? playtestingUpdate.updated;
 
-        const cards = await dataService.cards.read([{ github: { closedAt: { $gt: fromDate } } }, { github: { closedAt: { $lt: toDate } } }]);
+        const cards = await dataService.cards.read([{ github: { closedAt: { $gt: fromDate, $lte: toDate } } }]);
 
         res.status(StatusCodes.OK).json(cards);
     })
