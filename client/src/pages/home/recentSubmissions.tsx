@@ -1,5 +1,5 @@
 import { hasPermission } from "common/utils";
-import { useGetCardsQuery, useGetReviewsQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../api";
+import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../api";
 import { RootState } from "../../api/store";
 import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
@@ -88,10 +88,9 @@ type SubmissionRowProps = { submission: Submission };
 
 function ReviewRow({ review }: ReviewRowProps) {
     const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
-    const { data: cardData, isLoading: isCardLoading } = useGetCardsQuery({ filter: { project: review.project, number: review.number, version: review.version } });
+    const { data: card, isLoading: isCardLoading } = useGetCardQuery({ project: review.project, number: review.number, version: review.version });
 
-    const card = useMemo(() => cardData?.items[0], [cardData?.items]);
-    const isLoading = useMemo(() => isUserLoading || isCardLoading, [isCardLoading, isUserLoading]);
+    const isLoading = isUserLoading || isCardLoading;
 
     if (isLoading) {
         return (
@@ -112,7 +111,7 @@ function ReviewRow({ review }: ReviewRowProps) {
         );
     }
 
-    if (!user || !card) {
+    if (!card) {
         return (
             <Alert color="danger">
                 <div className="hidden">{`Project: ${review.project}, Number: ${review.number}, Version: ${review.version}, Reviewer: ${review.reviewer}`}</div>
@@ -134,10 +133,10 @@ function ReviewRow({ review }: ReviewRowProps) {
                             <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
                         </div>
                         <div className="flex gap-2 items-center">
-                            <Avatar src={user.avatarUrl} name={user.displayname} className="shrink-0 size-10 sm:size-8 md:size-10"/>
+                            <Avatar src={user?.avatarUrl} name={user?.displayname ?? "Unknown"} className="shrink-0 size-10 sm:size-8 md:size-10"/>
                             <div className="flex flex-col gap-1 min-w-0">
                                 <div className="text-xs font-crimson italic text-foreground/40">
-                                    Review by {user.displayname}
+                                    Review by {user?.displayname ?? "Unknown Playtester"}
                                 </div>
                                 <StatementBars statements={review.statements} />
                                 <div className="text-xxs font-crimson italic truncate text-foreground/40">

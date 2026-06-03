@@ -41,7 +41,7 @@ function CardChangesStat() {
 
         return (
             <div className="flex gap-0.5 flex-wrap">
-                {Object.entries(noteMap).map(([type, count]) => (<div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50", changeTypeClasses[type as ChangeType])}>{String(count)} {type}</div>))}
+                {Object.entries(noteMap).filter(([, count]) => Number(count) > 0).map(([type, count]) => (<div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50", changeTypeClasses[type as ChangeType])}>{String(count)} {type}</div>))}
             </div>
         );
     }, [cardsData?.items]);

@@ -1,11 +1,15 @@
-import { Button, Alert } from "@heroui/react";
+import { Button, Alert, Spinner } from "@heroui/react";
 import classNames from "classnames";
 import { ReactNode } from "react";
 import { BaseElementProps, UIColor } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 
-export function BaseStatus({ data, isIconOnly = false, className, style }: BaseStatusProps) {
+export function BaseStatus({ isLoading = false, data, isIconOnly = false, className, style }: BaseStatusProps) {
     const interactiveClass = "hover:brightness-125 transition duration-300 ease-in-out";
+
+    if (!data) {
+        return null;
+    }
 
     if (isIconOnly) {
         return (
@@ -16,6 +20,7 @@ export function BaseStatus({ data, isIconOnly = false, className, style }: BaseS
                 </div>
             }>
                 <Button
+                    isLoading={isLoading}
                     isIconOnly
                     color={data.color}
                     style={style}
@@ -36,12 +41,12 @@ export function BaseStatus({ data, isIconOnly = false, className, style }: BaseS
 
     const alert = (
         <Alert
-            icon={data.icon}
+            icon={isLoading ? <Spinner /> : data.icon}
             color={data.color}
             title={data.title}
             className="h-full opacity-75"
             hideIconWrapper
-            description={data.description}
+            description={isLoading ? "Loading..." : data.description}
         />
     );
 
@@ -65,8 +70,9 @@ export function BaseStatus({ data, isIconOnly = false, className, style }: BaseS
 }
 
 type BaseStatusProps = Omit<BaseElementProps, "children"> & {
-  data: StatusData;
-  isIconOnly?: boolean;
+    isLoading?: boolean;
+    data?: StatusData | null;
+    isIconOnly?: boolean;
 };
 
 export type StatusData = {

@@ -1,23 +1,32 @@
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { IPlaytestCard } from "common/models/cards";
 import { useMemo } from "react";
 import { useCardSync } from "../../api/hooks";
-import { useSyncCardImageMutation } from "../../api";
+import { useGetCardsQuery, useSyncCardImageMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
+import { getMostRecent, SemanticVersion } from "common/utils";
 
-const ImageStatus = ({ className, style, isIconOnly, card }: ImageStatusProps) => {
+const ImageStatus = ({ className, style, project, number, isIconOnly }: ImageStatusProps) => {
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
+    const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
+
     const [syncCardImage, { isLoading: isSyncing }] = useSyncCardImageMutation();
     const { status, step, error } = useCardSync(card).image;
     const data = useMemo<StatusData | null>(() => {
+        const title = "Image URL";
         if (!card) {
-            return null;
+            return {
+                title,
+                description: "Unknown",
+                color: "default"
+            };
         }
 
         if (status === "start" || status === "progress" || isSyncing) {
             return {
+                title,
                 icon: <Spinner />,
                 description: step ?? "Processing",
                 color: "secondary"
@@ -28,6 +37,7 @@ const ImageStatus = ({ className, style, isIconOnly, card }: ImageStatusProps) =
 
         if (status === "error") {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl"/>,
                 onPress: syncAsync,
                 color: "danger",
@@ -37,6 +47,7 @@ const ImageStatus = ({ className, style, isIconOnly, card }: ImageStatusProps) =
 
         if (!card.imageUrl) {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "secondary",
@@ -45,22 +56,21 @@ const ImageStatus = ({ className, style, isIconOnly, card }: ImageStatusProps) =
         }
 
         return {
+            title,
             href: card.imageUrl,
             color: "success",
             description: "Synced"
         };
     }, [card, error, isSyncing, status, step, syncCardImage]);
 
-    if (!data) {
-        return null;
-    }
-
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Image URL", ...data }} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
 type ImageStatusProps = Omit<BaseElementProps, "children"> & {
-    card?: IPlaytestCard,
-    isIconOnly?: boolean
+    project: number;
+    number: number;
+    version?: SemanticVersion;
+    isIconOnly?: boolean;
 }
 
 export default ImageStatus;

@@ -24,7 +24,7 @@ const ProjectContent = ({ project }: ProjectContentProps) => {
     if (isLoading) {
         return (
             <div className="space-y-2">
-                {Object.keys(project.cardCount).map(() => <Skeleton className="w-full h-64 rounded-md"/>)}
+                {Object.keys(project.cardCount).map((faction) => <Skeleton key={faction} className="w-full h-64 rounded-md"/>)}
             </div>
         );
     }
@@ -76,7 +76,7 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
     return (
         <div className={factionClasses[faction]}>
             <div className="flex">
-                <div className={classNames("text-xl tracking-widest p-4 flex items-center gap-2 grow")}>
+                <div className={classNames("text-2xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow")}>
                     <ThronesIcon name={faction} className="text-3xl"/> {factionNames[faction]}
                 </div>
                 <div className="flex items-center gap-2 text-lg py-4 px-2 text-foreground">
@@ -95,7 +95,7 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
                 >
                     <FontAwesomeIcon icon={faChevronLeft} className="text-black drop-shadow text-3xl" />
                 </button>
-                <div ref={containerRef} onScroll={updateScrollButtons} className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden">
+                <div ref={containerRef} onScroll={updateScrollButtons} className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-0.5">
                     {cards.map((card) => (
                         <Link key={parseCardCode(false, card.project, card.number)} href={`/project/${card.project}/${card.number}`}>
                             <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
@@ -137,11 +137,11 @@ const ProjectContentCard = ({ card }: ProjectContentCardProps) => {
     if (card.release) {
         return <CardImage card={card} />;
     }
-    return <div className="w-full flex justify-center items-center">
+    return <div className="w-full flex justify-center items-center drop-shadow-xl">
         <div className="relative w-full">
             <CardPreview
                 card={renderPlaytestingCard(card)}
-                rounded={false}
+                rounded
                 className="transition-all"
             />
             <Tooltip placement="bottom" content="New version being drafted" className={classNames("transition-opacity duration-500", { "opacity-0": !hasDraft })}>

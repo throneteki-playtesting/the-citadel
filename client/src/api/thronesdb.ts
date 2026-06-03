@@ -8,13 +8,13 @@ const thronesdbApi = createApi({
     reducerPath: "thronesdbApi",
     baseQuery: fetchBaseQuery({ baseUrl: "/thronesdb" }),
     endpoints: (builder) => ({
-        getCard: builder.query<ILabeledCard, Code>({
+        getTDBCard: builder.query<ILabeledCard, Code>({
             query: (code) => {
                 const url = buildUrl(`card/${code}`);
                 return { url, method: "GET" };
             }
         }),
-        getDeck: builder.query<IDecklist, number | UUID>({
+        getTDBDeck: builder.query<IDecklist | undefined, number | UUID>({
             query: (identifier) => {
                 const url = buildUrl(`deck/${identifier}`);
                 return { url, method: "GET" };
@@ -24,10 +24,10 @@ const thronesdbApi = createApi({
 });
 
 export const {
-    useGetCardQuery,
-    useLazyGetCardQuery,
-    useGetDeckQuery,
-    useLazyGetDeckQuery
+    useGetTDBCardQuery,
+    useLazyGetTDBCardQuery,
+    useGetTDBDeckQuery,
+    useLazyGetTDBDeckQuery
 } = thronesdbApi;
 
 export default thronesdbApi;

@@ -4,8 +4,9 @@ import classNames from "classnames";
 export default function CardStack<T>({
     cards,
     children: renderCard,
-    selectedIndex = 0,
+    selectedIndex = cards.length - 1,
     tilt,
+    shadow,
     className,
     ...props
 }: CardStackProps<T>) {
@@ -20,6 +21,7 @@ export default function CardStack<T>({
                         selectedIndex={selectedIndex}
                         index={index}
                         tilt={tilt}
+                        shadow={shadow}
                     />
                 )
             }
@@ -29,30 +31,36 @@ export default function CardStack<T>({
 
 type CardStackProps<T> = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
     cards: T[];
-    children: (card: T) => React.ReactNode;
+    children: (card: T, index: number) => React.ReactNode;
     selectedIndex?: number;
     tilt?: TiltOptions;
+    shadow?: boolean;
 };
 
-function StackedCard<T>({ card, renderCard, selectedIndex, index, tilt = 0 }: StackedCardProps<T>) {
+function StackedCard<T>({
+    card,
+    renderCard,
+    selectedIndex,
+    index,
+    tilt = 0,
+    shadow = true
+}: StackedCardProps<T>) {
     const isTop = index === selectedIndex;
     const isDismissed = index > selectedIndex;
     const isBase = index === 0;
-    const depth = selectedIndex - index;
 
     const cardTilt = useMemo(() => {
         if (typeof tilt === "number") {
             return tilt;
         }
-        const amount = tilt.amount;
-        if (amount === 0) {
-            return amount;
-        }
+        const amount = tilt.amount ?? 0;
         const variance = tilt.variance ? (Math.random() * 2 - 1) * tilt.variance : 0;
         const alternate = !tilt.alternate || index % 2 !== 0 ? 1 : -1;
 
-        return (amount + variance) * alternate * depth;
-    }, [depth, index, tilt]);
+        return (amount + variance) * alternate;
+    }, [index, tilt]);
+
+    const depth = useMemo(() => typeof tilt === "object" && tilt?.depth ? (selectedIndex - index) * -tilt.depth : 1, [index, selectedIndex, tilt]);
 
     return (
         <div
@@ -62,22 +70,28 @@ function StackedCard<T>({ card, renderCard, selectedIndex, index, tilt = 0 }: St
                 {
                     "absolute inset-0": !isBase,
                     "translate-x-[150%] rotate-10 opacity-0": isDismissed && !isBase,
-                    "brightness-50 -translate-x-2 overflow-hidden": !isDismissed && !isTop
+                    "brightness-50": shadow && !isDismissed && !isTop
                 }
             )}
-            style={!isDismissed && !isTop ? { rotate: `${cardTilt}deg` } : undefined}
+            style={!isDismissed && !isTop ? { rotate: `${cardTilt * depth}deg`, transform: `translateX(${-depth / 4}rem)` } : undefined}
         >
-            {renderCard(card)}
+            {renderCard(card, index)}
         </div>
     );
 }
 
 type StackedCardProps<T> = {
     card: T;
-    renderCard: (card: T) => React.ReactNode;
+    renderCard: (card: T, index: number) => React.ReactNode;
     selectedIndex: number;
     index: number;
     tilt?: TiltOptions;
+    shadow?: boolean;
 }
 
-type TiltOptions = number | { amount: number, variance?: number, alternate?: boolean };
+type TiltOptions = number | {
+    amount?: number;
+    variance?: number;
+    alternate?: boolean;
+    depth?: number;
+};

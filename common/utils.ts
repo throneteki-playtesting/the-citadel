@@ -4,6 +4,7 @@ import Permission from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
+import { rcompare } from "semver";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -149,7 +150,7 @@ export const statementColors = {
     "statement-1": "#D9534F",
     "statement-2": "#F0AD4E",
     "statement-3": "#9B9B9B",
-    "statement-4": "#96c454",
+    "statement-4": "#93bf54",
     "statement-5": "#2F9E44"
 };
 
@@ -391,3 +392,9 @@ export function getDiff<T extends object>(original: T, updated: T): DeepPartial<
         return diff;
     }, {} as Record<keyof T, DeepPartial<T[keyof T]>>) as DeepPartial<T>;
 }
+
+export function getMostRecent(cards: Cards.IPlaytestCard[]): Cards.IPlaytestCard | undefined {
+    return [...cards].sort((a, b) => rcompare(a.version, b.version))[0];
+}
+
+export const isFaction = (code: Cards.Code | Cards.Faction): code is Cards.Faction => Cards.factions.includes(code as Cards.Faction);

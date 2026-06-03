@@ -1,23 +1,32 @@
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { IPlaytestCard } from "common/models/cards";
 import { useCardSync } from "../../api/hooks";
 import { useMemo } from "react";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useSyncCardDiscordMutation } from "../../api";
+import { useGetCardsQuery, useSyncCardDiscordMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
+import { getMostRecent, SemanticVersion } from "common/utils";
 
-const DiscordCardStatus = ({ className, style, isIconOnly, card }: DiscordCardStatusProps) => {
+const DiscordCardStatus = ({ className, style, project, number, version, isIconOnly }: DiscordCardStatusProps) => {
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
+    const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
+
     const [syncCardDiscord, { isLoading: isSyncing }] = useSyncCardDiscordMutation();
     const { status, step, error } = useCardSync(card).discord;
     const data = useMemo<StatusData | null>(() => {
+        const title = "Card Thread";
         if (!card) {
-            return null;
+            return {
+                title,
+                description: "Unknown",
+                color: "default"
+            };
         }
         if (status === "start" || status === "progress" || isSyncing) {
             return {
+                title,
                 icon: <Spinner />,
                 description: step ?? "Processing",
                 color: "secondary"
@@ -28,6 +37,7 @@ const DiscordCardStatus = ({ className, style, isIconOnly, card }: DiscordCardSt
 
         if (status === "error") {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "danger",
@@ -36,6 +46,7 @@ const DiscordCardStatus = ({ className, style, isIconOnly, card }: DiscordCardSt
         }
         if (!card.discord?.messageUrl || (card.discord?.lastSynced && card.discord.lastSynced < card.cardUpdated)) {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "secondary",
@@ -44,6 +55,7 @@ const DiscordCardStatus = ({ className, style, isIconOnly, card }: DiscordCardSt
         }
 
         return {
+            title,
             icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
             href: card.discord!.messageUrl!.replace("https://", "discord://"),
             color: "success",
@@ -51,16 +63,15 @@ const DiscordCardStatus = ({ className, style, isIconOnly, card }: DiscordCardSt
         };
     }, [card, error, isSyncing, status, step, syncCardDiscord]);
 
-    if (!data) {
-        return null;
-    }
-
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Card Thread", ...data }} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
 type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
-    card?: IPlaytestCard,
-    isIconOnly?: boolean
+    project: number;
+    number: number;
+    version?: SemanticVersion;
+    isIconOnly?: boolean;
 }
+
 
 export default DiscordCardStatus;

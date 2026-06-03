@@ -1,11 +1,11 @@
 import { CardPreview } from "@agot/card-preview";
-import { Accordion, AccordionItem, addToast, Alert, Card, Checkbox, Divider, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton, Textarea } from "@heroui/react";
+import { Accordion, AccordionItem, addToast, Alert, Card, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton, Textarea } from "@heroui/react";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../../components/wizard";
 import { PlaytestingUpdate } from "common/models/schemas";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCreatePlaytestingUpdateMutation, useGetCardsQuery } from "../../../api";
+import { useCreatePlaytestingUpdateMutation, useGetCardsQuery, useGetPreviousCardQuery } from "../../../api";
 import { renderPlaytestingCard, SemanticVersion, thronesColors } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
@@ -14,8 +14,11 @@ import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 import { noteTypeIcon } from "../../../utils";
 import { sortBy } from "lodash-es";
 import ImplementStatus from "../../../components/status/implementStatus";
+import { changeTypeClasses } from "../../../constants";
+import CardStack from "../../../components/cardStack";
+import LoadingCard from "../../../components/loadingCard";
 
-const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose = () => true, onSave = () => true }: CreatePlaytestingUpdateModalProps) => {
+export default function CreatePlaytestingUpdateModal({ isOpen, project, onClose: onModalClose = () => true, onSave = () => true }: CreatePlaytestingUpdateModalProps) {
     const { data: draftsData, isLoading: isDraftsLoading } = useGetCardsQuery({ filter: { project: project?.number, draft: true } });
     const [createPlaytestingUpdate, { isLoading }] = useCreatePlaytestingUpdateMutation();
     const [playtestingUpdate, setPlaytestingUpdate] = useState<DeepPartial<IPlaytestingUpdate>>({ project: project.number });
@@ -75,46 +78,7 @@ const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose =
 
         return sortBy(draftsData?.items, ["faction", "type"]).map((card) => {
             const isSelected = selectedCards.some((selected) => selected.number === card.number && selected.version === card.version);
-            return (
-                <Card className={classNames("w-full p-2 border-2", { "brightness-50": !isSelected })} style={{ borderColor: thronesColors[card.faction] }}>
-                    <div className="grow flex flex-col">
-                        <Accordion>
-                            <AccordionItem
-                                textValue={card.name}
-                                classNames={{ trigger: "p-0" }}
-                                title={
-                                    <div className="flex gap-2 items-center">
-                                        <Checkbox className="p-0" isSelected={isSelected} onValueChange={() => toggleCard(card)}/>
-                                        <div className="text-large font-semibold">
-                                            {card.name} (v{card.version})
-                                        </div>
-                                    </div>
-                                }
-                            >
-                                <Divider className="mb-3"/>
-                                <div className="w-full flex justify-center">
-                                    <div className="w-2/3">
-                                        <CardPreview card={renderPlaytestingCard(card)} rounded />
-                                    </div>
-                                </div>
-                            </AccordionItem>
-                        </Accordion>
-                        <Divider className="my-1"/>
-                        <div className="px-1">
-                            {card.note ? (
-                                <>
-                                    <div className="text-medium capitalize font-semibold"><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
-                                    <div className="text-small">{card.note.text}</div>
-                                </>
-                            ) : <Alert color="danger" className="text-small" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
-                        </div>
-                        <Divider className="my-1"/>
-                        <div className="flex flex-col gap-1">
-                            <ImplementStatus card={card}/>
-                        </div>
-                    </div>
-                </Card>
-            );
+            return <SelectableDraftCard card={card} isSelected={isSelected} onToggle={toggleCard} />;
         });
     }, [draftsData?.items, isDraftsLoading, selectedCards, toggleCard]);
 
@@ -127,21 +91,21 @@ const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose =
                         onSubmit={onSubmit}
                         data={playtestingUpdate}
                     >
-                        <ModalHeader>{`Create ${project.code} Playtesting Update #${project.version + 1}`}</ModalHeader>
+                        <ModalHeader className="font-cinzel">{`Create PT Update - ${project.code} #${project.version + 1}`}</ModalHeader>
                         <ModalBody>
                             <WizardPages>
-                                <WizardPage className="flex flex-col p-2 gap-2">
-                                    <div className="text-medium font-semibold">Select Drafted Cards</div>
-                                    <div className="text-small">Expand the card name to view the changed version.</div>
-                                    <div className="text-tiny"><FontAwesomeIcon icon={faInfoCircle}/> Any cards which are not implemented will need to be manually playtested online until they are implemented.</div>
+                                <WizardPage className="flex flex-col p-2 gap-2 font-crimson">
+                                    <div className="text-md font-cinzel">Select Drafted Cards</div>
+                                    <div className="text-sm font-sans">Expand the card name to view the changed version.</div>
+                                    <div className="text-xs font-sans"><FontAwesomeIcon icon={faInfoCircle}/> Any cards which are not implemented will need to be manually playtested online until they are implemented.</div>
                                     <div className="flex flex-col gap-2 w-full">
                                         {draftCardSelectors}
                                     </div>
                                 </WizardPage>
                                 <WizardPage>
-                                    <div className="text-medium font-semibold">Describe the update</div>
-                                    <div className="text-small">This is optional, but helps tell playtesters any broad details about this update.</div>
-                                    <Textarea label="Description"/>
+                                    <div className="text-md font-cinzel">Describe the update</div>
+                                    <div className="text-sm font-sans">This is optional, but helps tell playtesters any broad details about this update.</div>
+                                    <Textarea label="Description" name="description"/>
                                 </WizardPage>
                             </WizardPages>
                         </ModalBody>
@@ -158,4 +122,46 @@ const CreatePlaytestingUpdateModal = ({ isOpen, project, onClose: onModalClose =
 
 type CreatePlaytestingUpdateModalProps = { isOpen: boolean, project: IProject, onClose?: () => void, onSave?: (project: IPlaytestingUpdate) => void };
 
-export default CreatePlaytestingUpdateModal;
+function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCardProps) {
+    const [showNew, setShowNew] = useState(true);
+    const { data: previousCard } = useGetPreviousCardQuery({ project: card.project, number: card.number, version: card.version });
+    return (
+        <Card className={classNames("w-full border-2", { "brightness-50": !isSelected })} style={{ borderColor: thronesColors[card.faction] }}>
+            <div className="grow flex flex-col">
+                <Accordion>
+                    <AccordionItem
+                        textValue={card.name}
+                        classNames={{ trigger: "p-0" }}
+                        title={
+                            <div className="flex gap-2 items-center p-2">
+                                <Checkbox className="p-0" isSelected={isSelected} onValueChange={() => onToggle(card)}/>
+                                <div className="text-xl font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50 font-semibold">{card.version}</span></div>
+                            </div>
+                        }
+                    >
+                        <div className="w-full flex justify-center">
+                            <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className="w-2/3" onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
+                                {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
+                            </CardStack>
+                        </div>
+                    </AccordionItem>
+                </Accordion>
+                <div>
+                    {card.note ? (
+                        <>
+                            <div className={classNames("text-lg tracking-wider font-cinzel uppercase pl-4 pr-10 py-0.5 w-full", changeTypeClasses[card.note.type])}><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
+                            <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">{card.note.text}</div>
+                        </>
+                    ) : <Alert color="danger" className="text-sm" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
+                </div>
+                <ImplementStatus project={card.project} number={card.number} version={card.version} className="m-2"/>
+            </div>
+        </Card>
+    );
+}
+
+type SelectableDraftCardProps = {
+    card: IPlaytestCard;
+    isSelected: boolean;
+    onToggle: (card: IPlaytestCard) => void;
+}

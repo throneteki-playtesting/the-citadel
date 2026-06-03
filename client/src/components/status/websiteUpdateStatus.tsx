@@ -6,26 +6,35 @@ import { useMemo } from "react";
 import { BaseElementProps } from "../../types";
 import ThronesIcon from "../thronesIcon";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useGetPlaytestingUpdateCardsQuery, useSyncProjectsGithubMutation } from "../../api";
-import { IPlaytestingUpdate } from "common/models/projects";
+import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncProjectsGithubMutation } from "../../api";
 import { hasPermission } from "common/utils";
 import { RootState } from "../../api/store";
 import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
 import { BaseStatus, StatusData } from "./baseStatus";
 
-const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }: WebsiteUpdateStatusProps) => {
-    const { data: cards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
+const WebsiteUpdateStatus = ({ className, style, project, version, isIconOnly }: WebsiteUpdateStatusProps) => {
+    const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({ project, version });
+    const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
+
+    const isLoading = isLoadingPlaytestingUpdate || isLoadingCards;
+
     const [syncProjectsGithub, { isLoading: isSyncing }] = useSyncProjectsGithubMutation();
     const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github;
     const user = useSelector((state: RootState) => state.auth.user);
 
     const data = useMemo<StatusData | null>(() => {
+        const title = "Online Platform";
         if (!playtestingUpdate) {
-            return null;
+            return {
+                title,
+                description: "Unknown",
+                color: "default"
+            };
         }
         if (status === "start" || status === "progress" || isSyncing) {
             return {
+                title,
                 icon: <Spinner />,
                 description: step ?? "Processing",
                 color: "secondary"
@@ -38,6 +47,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
 
         if (status === "error") {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "danger",
@@ -46,6 +56,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
         }
         if (!playtestingUpdate.github || (playtestingUpdate.github.lastSynced && playtestingUpdate.github.lastSynced < playtestingUpdate.updated)) {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "secondary",
@@ -55,6 +66,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
         if (playtestingUpdate.github?.mergedAt) {
             if (cards && cards.some((card) => !card.implemented)) {
                 return {
+                    title,
                     icon: <ThronesIcon name="power"/>,
                     description: "Partially Implemented",
                     color: "success",
@@ -62,6 +74,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
                 };
             }
             return {
+                title,
                 icon: <ThronesIcon name="power"/>,
                 description: "Implemented",
                 color: "success",
@@ -73,6 +86,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
         switch (playtestingUpdate.github!.status) {
             case "open": {
                 return {
+                    title,
                     icon,
                     description: "Github PR Open",
                     color: "warning",
@@ -81,6 +95,7 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
             }
             case "closed": {
                 return {
+                    title,
                     icon,
                     description: "Github PR Closed",
                     color: "success",
@@ -91,16 +106,13 @@ const WebsiteUpdateStatus = ({ className, style, isIconOnly, playtestingUpdate }
         return null;
     }, [cards, error, isSyncing, playtestingUpdate, status, step, syncProjectsGithub, user]);
 
-    if (!data) {
-        return null;
-    }
-
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Online Platform", ...data }} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
 type WebsiteUpdateStatusProps = Omit<BaseElementProps, "children"> & {
-    playtestingUpdate?: IPlaytestingUpdate,
-    isIconOnly?: boolean
+    project: number;
+    version: number;
+    isIconOnly?: boolean;
 }
 
 export default WebsiteUpdateStatus;

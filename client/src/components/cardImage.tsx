@@ -1,18 +1,18 @@
-import { Code, Faction, factions, IPlaytestCard } from "common/models/cards";
-import { useLazyGetCardQuery } from "../api/thronesdb";
+import { Code, Faction, IPlaytestCard } from "common/models/cards";
+import { useLazyGetTDBCardQuery } from "../api/thronesdb";
 import { Alert, Skeleton } from "@heroui/react";
 import { getFactionCardImage } from "../utils";
 import { useEffect, useMemo, useState } from "react";
 import classNames from "classnames";
-import { generateReleaseImageUrl } from "common/utils";
+import { generateReleaseImageUrl, isFaction } from "common/utils";
 import { BaseElementProps } from "../types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faWarning } from "@fortawesome/free-solid-svg-icons";
+import { faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
 
 const CardImage = ({ className, style, card: identifier, orientation }: CardImageProps) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isError, setIsError] = useState(false);
-    const [fetchCard] = useLazyGetCardQuery();
+    const [fetchCard] = useLazyGetTDBCardQuery();
 
     const [imageUrl, setImageUrl] = useState<string>();
     const [defaultOrientation, setDefaultOrientation] = useState<"vertical" | "horizontal" | undefined>(typeof identifier !== "string" ? (identifier.type === "plot" ? "horizontal" : "vertical") : undefined);
@@ -20,9 +20,6 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
 
     const actualOrientation = useMemo(() => orientation ?? defaultOrientation ?? "vertical", [defaultOrientation, orientation]);
     const rotate = useMemo(() => actualOrientation !== defaultOrientation, [actualOrientation, defaultOrientation]);
-
-    const isFaction = (code: Code | Faction): code is Faction =>
-        factions.includes(code as Faction);
 
     useEffect(() => {
         const fetchCardAsync = async (code: Code) => {
@@ -61,10 +58,11 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
                 <Skeleton className="absolute inset-0 z-10 block w-full h-full" />
             )}
             {isError && (
-                <Alert color="danger" hideIcon className="absolute inset-0 z-10 block w-full h-full">
-                    <div className="w-full h-full flex flex-col justify-center">
-                        <div className="text-medium"><FontAwesomeIcon icon={faWarning}/> Failed to load</div>
-                        <div className="text-2xl">{alt}</div>
+                <Alert color="danger" hideIcon className="absolute inset-0 z-10 flex w-full h-full p-0">
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center">
+                        <FontAwesomeIcon icon={faCircleExclamation} className="text-3xl opacity-80" />
+                        <div className="text-sm font-semibold uppercase tracking-widest opacity-70">Failed to load image</div>
+                        <div className="text-xl font-cinzel">{alt}</div>
                     </div>
                 </Alert>
             )}

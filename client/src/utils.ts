@@ -1,6 +1,8 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
+import { SemanticVersion } from "common/utils";
+import { valid } from "semver";
 
 export function enumToArray<T extends { [key: string]: string | number }>(
     e: T
@@ -31,6 +33,12 @@ export function parseParamNumber(param?: string) {
     }
     const parsed = parseInt(param);
     return isNaN(parsed) ? undefined : parsed;
+}
+export function parseParamSemanticVersion(param?: string) {
+    if (!param) {
+        return undefined;
+    }
+    return (valid(param) ?? undefined) as SemanticVersion| undefined;
 }
 
 export function getFactionCardImage(faction: Faction) {

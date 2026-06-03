@@ -1,4 +1,3 @@
-import { ApiErrorResponse } from "@/errors";
 import { dataService } from "@/services";
 import { OAuthTokenResponse } from "@/types";
 import { convertTDBCard, convertTDBDeck } from "@/utils";
@@ -39,7 +38,8 @@ router.get("/deck/:identifier",
         }
         if (!response.ok) {
             if (response.status === 404) {
-                throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Deck Not Found", `Deck with uuid "${identifier}" does not exist or is not available publicly`);
+                // If deck cannot be found, it should simply return nothing rather than error
+                res.status(StatusCodes.OK).json(undefined);
             }
             const text = await response.text();
             throw new Error(`Failed to fetch deck with uuid "${identifier}": ${text}`);

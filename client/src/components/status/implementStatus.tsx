@@ -1,24 +1,33 @@
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { IPlaytestCard } from "common/models/cards";
 import { useCardSync } from "../../api/hooks";
 import { useMemo } from "react";
 import ThronesIcon from "../thronesIcon";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useSyncCardGithubMutation } from "../../api";
+import { useGetCardsQuery, useSyncCardGithubMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
+import { getMostRecent, SemanticVersion } from "common/utils";
 
-const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatusProps) => {
+const ImplementStatus = ({ className, style, project, number, version, isIconOnly }: ImplementStatusProps) => {
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
+    const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
+
     const [syncCardGithub, { isLoading: isSyncing }] = useSyncCardGithubMutation();
     const { status, step, error } = useCardSync(card).github;
     const data = useMemo<StatusData | null>(() => {
+        const title = "Online Platform";
         if (!card) {
-            return null;
+            return {
+                title,
+                description: "Unknown",
+                color: "default"
+            };
         }
         if (status === "start" || status === "progress" || isSyncing) {
             return {
+                title,
                 icon: <Spinner />,
                 description: step ?? "Processing",
                 color: "secondary"
@@ -29,6 +38,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
 
         if (status === "error") {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "danger",
@@ -37,6 +47,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
         }
         if (card.release) {
             return {
+                title,
                 icon: <ThronesIcon name="power"/>,
                 description: "Implemented (Live)",
                 color: "success",
@@ -45,6 +56,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
         }
         if (!card.github && !card.implemented) {
             return {
+                title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress: syncAsync,
                 color: "secondary",
@@ -53,6 +65,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
         }
         if (card.implemented) {
             return {
+                title,
                 icon: <ThronesIcon name="power"/>,
                 description: "Implemented",
                 color: "success",
@@ -64,6 +77,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
         switch (card.github!.status) {
             case "open": {
                 return {
+                    title,
                     icon,
                     description: "Github Issue Open",
                     color: "warning",
@@ -72,6 +86,7 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
             }
             case "closed": {
                 return {
+                    title,
                     icon,
                     description: "Github Issue Closed",
                     color: "success",
@@ -82,16 +97,14 @@ const ImplementStatus = ({ className, style, isIconOnly, card }: ImplementStatus
         return null;
     }, [card, error, isSyncing, status, step, syncCardGithub]);
 
-    if (!data) {
-        return null;
-    }
-
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={{ title: "Online Platform", ...data }} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
 type ImplementStatusProps = Omit<BaseElementProps, "children"> & {
-    card?: IPlaytestCard,
-    isIconOnly?: boolean
+    project: number;
+    number: number;
+    version?: SemanticVersion;
+    isIconOnly?: boolean;
 }
 
 export default ImplementStatus;

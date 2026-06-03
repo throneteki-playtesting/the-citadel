@@ -11,17 +11,20 @@ import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
-import { faArrowLeft, faBug, faCheck, faInfoCircle, faPenRuler, faPrint } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faBug, faCheck, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
 import dismoji from "../../emojis";
 import WebsiteUpdateStatus from "../../components/status/websiteUpdateStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { useTimezone } from "../../api/hooks";
+import { usePageTitle, useTimezone } from "../../api/hooks";
+import CardStack from "../../components/cardStack";
+import LoadingCard from "../../components/loadingCard";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
+    usePageTitle(project ? `${project.code} #${version}` : undefined);
 
-    const isLoading = useMemo(() => isPlaytestingUpdateLoading || isProjectLoading, [isPlaytestingUpdateLoading, isProjectLoading]);
+    const isLoading = isPlaytestingUpdateLoading || isProjectLoading;
 
     if (isLoading) {
         // TODO: Improve once structure is confirmed
@@ -40,9 +43,10 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
             <div className="absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none">
                 <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-4">
                 <PlaytestingUpdateHeader project={project} playtestingUpdate={playtestingUpdate}/>
-                <PlaytestingUpdateChangeNotes project={projectNumber} version={version} />
+                <PlaytestingUpdateChangeNotes playtestingUpdate={playtestingUpdate} />
+                <ImplementedCards playtestingUpdate={playtestingUpdate}/>
             </div>
         </div>
     );
@@ -67,43 +71,41 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
         }
     };
     return (
-        <Card className="relative space-y-1 p-4 pt-2 bg-content1/10">
-            <div className="absolute bottom-0 right-0 pr-4 text-xxs tracking-wider text-foreground/40">{format(new Date(playtestingUpdate.created))}</div>
+        <div className="relative space-y-1">
             <div className="flex">
-                <div className="grow flex flex-col">
-                    <div className="flex gap-5 items-center">
-                        <Link href={`/project/${project.number}`} className="flex gap-1 items-center text-foreground/40">
-                            <FontAwesomeIcon icon={faArrowLeft}/> Back to project
+                <div className="flex-1 flex items-center">
+                    <div className="flex flex-col">
+                        <Link href={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150">
+                            <FontAwesomeIcon icon={faAngleLeft}/> {project.name}
                         </Link>
-
-                    </div>
-                    <div className="flex-1 flex items-center">
-                        <div className="flex flex-col">
-                            <div><span className="text-3xl tracking-wider text-primary">{project.name}</span> <span className="text-2xl tracking-wider text-foreground/40">· Playesting Update #{playtestingUpdate.version}</span></div>
-
+                        <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
+                                Playesting Update #{playtestingUpdate.version}
                         </div>
                     </div>
                 </div>
-                <div className="shrink-0 grid grid-cols-3 gap-1">
-                    <WebsiteUpdateStatus playtestingUpdate={playtestingUpdate} isIconOnly/>
-                    <TouchTooltip content="Download Print PDF Sheet" placement="top">
-                        <Button isIconOnly color="secondary" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
-                            <FontAwesomeIcon icon={faPrint} />
-                        </Button>
-                    </TouchTooltip>
-                    <TouchTooltip content="Report a bug">
-                        <Button isIconOnly color="secondary" href={bugReportUrl}>
-                            <FontAwesomeIcon icon={faBug} />
-                        </Button>
-                    </TouchTooltip>
+                <div className="flex flex-col">
+                    <div className="w-fit shrink-0 grid grid-cols-3 gap-1 self-end">
+                        <WebsiteUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
+                        <TouchTooltip content="Download Print PDF Sheet" placement="top">
+                            <Button isIconOnly color="secondary" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
+                                <FontAwesomeIcon icon={faPrint} />
+                            </Button>
+                        </TouchTooltip>
+                        <TouchTooltip content="Report a bug">
+                            <Button isIconOnly color="secondary" href={bugReportUrl}>
+                                <FontAwesomeIcon icon={faBug} />
+                            </Button>
+                        </TouchTooltip>
+                    </div>
+                    <div className="justify-self-end self-end py-1 flex-1 mt-auto text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
                 </div>
             </div>
             {playtestingUpdate.description && (
-                <div className="text-sm md:text-medium">
+                <div className="text-md sm:text-lg font-sans leading-tight">
                     {playtestingUpdate.description}
                 </div>
             )}
-        </Card>
+        </div>
     );
 }
 type PlaytestingUpdateHeaderProps = {
@@ -111,8 +113,8 @@ type PlaytestingUpdateHeaderProps = {
     playtestingUpdate: IPlaytestingUpdate
 }
 
-function PlaytestingUpdateChangeNotes({ project, version }: PlaytestingUpdateChangeNotesProps) {
-    const { data: cards, isLoading } = useGetPlaytestingUpdateCardsQuery({ project, version });
+function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateChangeNotesProps) {
+    const { data: cards, isLoading } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate.project, version: playtestingUpdate.version });
 
     if (isLoading) {
         // TODO: Improve
@@ -125,24 +127,24 @@ function PlaytestingUpdateChangeNotes({ project, version }: PlaytestingUpdateCha
     }
 
     return (
-        <>
-            <Card className="p-4 bg-content1-10 space-y-2">
-                <div className="text-2xl text-primary"><FontAwesomeIcon icon={faPenRuler}/> Card Changes</div>
-                <div className="text-medium text-foreground">
-                    <p>Cards have changes to review, and will be applied together in this update.</p>
-                    <p className="italic"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
-                </div>
-                <ImplementedCards project={project} version={version}/>
-            </Card>
-        </>
+        <div className="space-y-2">
+            <div className="flex items-center gap-4">
+                <div className="h-px w-8 bg-primary/30" />
+                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">Card Changes</span>
+                <div className="h-px flex-1 bg-primary/30" />
+            </div>
+            <div className="text-base text-foreground space-y-1">
+                <p>Cards have changes to review, and will be applied together in this update.</p>
+                <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
+            </div>
+        </div>
     );
 }
 type PlaytestingUpdateChangeNotesProps = {
-    project: number,
-    version: number
+    playtestingUpdate: IPlaytestingUpdate;
 }
 
 function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps) {
@@ -157,19 +159,17 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                         <ThronesIcon name={card.faction} className={classNames("ml-8 mb-12 text-9xl", watermarkClasses[card.faction])}/>
                     </div>
                     <div className="flex flex-col h-full pb-2">
-                        <div className="text-xxs ml-4 mt-1 leading-none text-foreground/40">Card #{card.number}</div>
-                        <div className="font-semibold text-lg px-4">
-                            <span className="tracking-wide text-foreground">{card.name}</span> <span className="tracking-wider text-foreground/40">· v{card.version}</span>
-                        </div>
+                        <div className="text-xxs font-cinzel ml-4 mt-1 leading-none text-foreground/40">Card #{card.number}</div>
+                        <div className="text-lg font-cinzel text-foreground font-semibold px-4 py-2 leading-tight">{card.name} <span className="text-foreground/50 font-semibold">{card.version}</span></div>
                         <div className="flex-1 space-y-1">
                             {card.note ? (
                                 <>
-                                    <div className={classNames("text-lg tracking-wider uppercase pl-4 pr-10 py-0.5 w-full", changeTypeClasses[card.note.type])}><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
-                                    <div className="text-sm tracking-wide text-foreground px-4 py-1">{card.note.text}</div>
+                                    <div className={classNames("text-lg tracking-wider font-cinzel uppercase pl-4 pr-10 py-0.5 w-full", changeTypeClasses[card.note.type])}><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
+                                    <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">{card.note.text}</div>
                                 </>
                             ) : <Alert color="danger" className="text-sm" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
                         </div>
-                        <a href={card.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 px-2">
+                        <a href={card.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 px-2 font-sans">
                             {card.github?.status === "closed"
                                 ? <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
                                 : <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
@@ -177,14 +177,9 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                         </a>
                     </div>
                 </div>
-                <div className="relative select-none cursor-pointer" onClick={() => setShowNew((prev) => !prev)}>
-                    <div className={classNames("h-72 md:h-52 lg:h-72 transition-all duration-400 ease-in-out", { "brightness-50 -translate-x-2 -rotate-2 overflow-hidden": showNew })}>
-                        {previousCard && <CardPreview card={renderPlaytestingCard(previousCard, { bottom: "Previous" })} />}
-                    </div>
-                    <div className={classNames("h-72 md:h-52 lg:h-72 absolute inset-0 transition-all duration-400 ease-in-out", !showNew ? "translate-x-[150%] rotate-10" : "translate-x-0")}>
-                        <CardPreview card={renderPlaytestingCard(card, { bottom: "New" })} />
-                    </div>
-                </div>
+                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className="h-72 md:h-52 lg:h-72 cursor-pointer" onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
+                    {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
+                </CardStack>
             </div>
         </Card>
     );
@@ -193,41 +188,46 @@ type PlaytestingUpdateChangeNoteProps = {
     card: IPlaytestCard
 }
 
-function ImplementedCards({ project, version }: ImplementedCardsProps) {
-    const { data } = useGetPlaytestingUpdateImplementedQuery({ project, version });
+function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
+    const { data } = useGetPlaytestingUpdateImplementedQuery({ project: playtestingUpdate.project, version: playtestingUpdate.version });
 
-    if (!data || data.length === 0) {
+    const otherImplemented = useMemo(() => {
+        const changes = Object.entries(playtestingUpdate.cardChanges);
+        return data?.filter((card) => !changes.some(([number, version]) => card.number === Number(number) && card.version === version));
+    }, [data, playtestingUpdate.cardChanges]);
+
+    if (!otherImplemented || otherImplemented.length === 0) {
         return null;
     }
 
     return (
-        <Card className="p-4 bg-content1-10 space-y-2">
-            <div className="text-2xl text-primary"><FontAwesomeIcon icon={faCheck}/> Other Cards Implemented</div>
-            <div className="text-medium text-foreground">
+        <div className="space-y-2">
+            <div className="flex items-center gap-4">
+                <div className="h-px w-8 bg-primary/30" />
+                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">Other Cards Implemented</span>
+                <div className="h-px flex-1 bg-primary/30" />
+            </div>
+            <div className="text-base text-foreground space-y-1">
                 <p>Some other cards have been implemented, and will be pushed to the Online Platform alongside this update.</p>
-                <p className="italic"><FontAwesomeIcon icon={faInfoCircle}/> Click to view their closed <FontAwesomeIcon icon={faGithub}/> issue.</p>
+                <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click to view their closed <FontAwesomeIcon icon={faGithub}/> issue.</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
-                {data.map((card) =>
-                    <a key={`${card.project}|${card.number}|${card.version}`} href={card.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none", factionBorderClasses[card.faction])}>
+                {otherImplemented.map((card) =>
+                    <a key={`${card.project}|${card.number}|${card.version}`} href={card.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none overflow-hidden", factionBorderClasses[card.faction])}>
                         <div className="relative size-full">
                             <div className="absolute right-0 flex items-center justify-center pointer-events-none select-none">
                                 <ThronesIcon name={card.faction} className={classNames("mr-8 text-5xl", watermarkClasses[card.faction])}/>
                             </div>
                             <div className="flex items-center gap-2">
                                 <FontAwesomeIcon icon={faCheck} className="m-2 text-success" size="lg"/>
-                                <div className="flex flex-col overflow-hidden">
-                                    <span className="text-medium tracking-wide text-foreground truncate">{card.name}</span>
-                                    <span className="tracking-wider text-foreground/40">v{card.version}</span>
-                                </div>
+                                <div className="text-base font-cinzel text-foreground">{card.name} <span className="text-foreground font-semibold">{card.version}</span></div>
                             </div>
                         </div>
                     </a>)}
             </div>
-        </Card>
+        </div>
     );
 }
 type ImplementedCardsProps = {
-    project: number,
-    version: number
+    playtestingUpdate: IPlaytestingUpdate;
 }

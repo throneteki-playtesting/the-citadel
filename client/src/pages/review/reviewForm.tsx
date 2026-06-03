@@ -10,7 +10,7 @@ import { addToast, Alert, Button, Card, Link, NumberInput, Skeleton, Slider, Tex
 import { IPlaytestReview, StatementAnswer, statementAnswers } from "common/models/reviews";
 import { DeckLink, DecklistLink, DeepPartial, isThronesDbLink } from "common/types";
 import { PlaytestingReview } from "common/models/schemas";
-import { useGetDeckQuery, useLazyGetCardQuery, useLazyGetDeckQuery } from "../../api/thronesdb";
+import { useGetTDBDeckQuery, useLazyGetTDBCardQuery, useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import { useSelector } from "react-redux";
 import { RootState } from "../../api/store";
 import { useCreateReviewMutation, useLazyGetReviewQuery, useUpdateReviewMutation } from "../../api";
@@ -199,7 +199,7 @@ type CardSelectionProps = { filter: { project?: number, number?: number }, value
 const DecksQuestion = ({ value: decks, onValueChange: onDecksChange }: DecksQuestionProps) => {
     const [deckUrlInput, setDeckUrlInput] = useState("");
     const [deckUrlInputError, setDeckUrlInputError] = useState<string | undefined>();
-    const [fetchDeck] = useLazyGetDeckQuery();
+    const [fetchDeck] = useLazyGetTDBDeckQuery();
     const [isValidatingDeckUrl, setIsValidatingDeckUrl] = useState(false);
     const [missingDecks, setMissingDecks] = useState<(DeckLink|DecklistLink)[]>([]);
 
@@ -207,29 +207,35 @@ const DecksQuestion = ({ value: decks, onValueChange: onDecksChange }: DecksQues
 
     const onAddDeck = useCallback(async () => {
         setIsValidatingDeckUrl(true);
-        if (!isThronesDbLink(deckUrlInput)) {
-            setDeckUrlInputError("Invalid ThronesDB deck URL");
-        } else if (decks.includes(deckUrlInput)) {
-            setDeckUrlInputError("Deck has already been added");
-        } else {
-            const deckIdentifier = extractDeckIdentifier(deckUrlInput);
-            try {
-                if (!deckIdentifier) {
-                    throw new Error("Deck Identifier could not be extracted");
-                }
-                await fetchDeck(deckIdentifier).unwrap();
-
-                // Deck is valid
-                setDeckUrlInput("");
-                setDeckUrlInputError(undefined);
-
-                const newDecks = [...decks, deckUrlInput];
-                onDecksChange(newDecks);
-            } catch (err) {
-                setDeckUrlInputError("ThronesDB deck does not exist or is not public");
+        try {
+            if (!isThronesDbLink(deckUrlInput)) {
+                setDeckUrlInputError("ThronesDB link is invalid");
+                return;
             }
+            if (decks.includes(deckUrlInput)) {
+                setDeckUrlInputError("ThronesDB deck already added");
+                return;
+            }
+            const deckIdentifier = extractDeckIdentifier(deckUrlInput);
+            if (!deckIdentifier) {
+                setDeckUrlInputError("ThronesDB link is invalid");
+                return;
+            }
+            const deck = await fetchDeck(deckIdentifier).unwrap();
+
+            if (!deck) {
+                setDeckUrlInputError("ThronesDB deck does not exist or is not public");
+                return;
+            }
+            // Deck is valid
+            setDeckUrlInput("");
+            setDeckUrlInputError(undefined);
+
+            const newDecks = [...decks, deckUrlInput];
+            onDecksChange(newDecks);
+        } finally {
+            setIsValidatingDeckUrl(false);
         }
-        setIsValidatingDeckUrl(false);
     }, [deckUrlInput, fetchDeck, onDecksChange, decks]);
 
     const onRemoveDeck = useCallback((deck: DeckLink | DecklistLink) => {
@@ -295,8 +301,8 @@ type DecksQuestionProps = { value: (DeckLink | DecklistLink)[], onValueChange: (
 
 const DeckSummary = ({ src, onDelete, onBroken = () => true }: DeckSummaryProps) => {
     const identifier = extractDeckIdentifier(src);
-    const { data: deck, isLoading } = useGetDeckQuery(identifier!, { skip: !identifier });
-    const [fetchCard] = useLazyGetCardQuery();
+    const { data: deck, isLoading } = useGetTDBDeckQuery(identifier!, { skip: !identifier });
+    const [fetchCard] = useLazyGetTDBCardQuery();
     const [playtestedCards, setPlaytestedCards] = useState<(ILabeledCard | Code)[] | undefined>();
 
     useEffect(() => {
