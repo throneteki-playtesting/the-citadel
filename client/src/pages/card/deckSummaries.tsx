@@ -158,24 +158,29 @@ function DeckSummary({ review, card, deck, url }: DeckSummaryProps) {
     return (
         <Link key={url} href={url} target="_blank">
             <Card className="p-0 w-full hover:ring-2 ring-content3 transition-shadow duration-200">
-                <div className="font-cinzel text-xl px-3 py-1 flex items-center min-w-0">
+                <div className="sm:hidden font-cinzel text-xl px-3 py-1 flex items-center min-w-0">
                     <span className='truncate'>{deck.name}</span>
                     <div className="ml-auto"><FontAwesomeIcon icon={faExternalLink}/></div>
                 </div>
-                <div className="bg-content2 text-base px-2 py-1">Crafted for <span className="font-bold">{card.name} v{card.version}</span></div>
+                <div className="sm:hidden bg-content2 text-base px-2 py-1">Crafted for <span className="font-bold">{card.name} v{card.version}</span></div>
                 <div className="flex items-center py-1">
                     <CardStack cards={[...agendas, faction]} tilt={{ amount: -0.2, depth: (14 / agendas.length) }} className="w-24 lg:w-32" shadow={false}>
                         {(card, index) => <CardImage key={index} card={card} className="rounded-lg"/>}
                     </CardStack>
-                    <div className="ml-16 flex-1 flex flex-col px-2 gap-1">
+                    <div className="flex-1 flex flex-col px-2 gap-1 min-w-0">
+                        <div className="max-sm:hidden pl-16 font-cinzel text-xl px-3 py-1 flex items-center min-w-0">
+                            <span className='truncate'>{deck.name}</span>
+                            <div className="ml-auto"><FontAwesomeIcon icon={faExternalLink}/></div>
+                        </div>
+                        <div className="max-sm:hidden pl-16 bg-content2 text-base px-2 py-1">Crafted for <span className="font-bold">{card.name} v{card.version}</span></div>
                         {card.latest ?
                             (
-                                <div className="text-sm text-success-500"><FontAwesomeIcon icon={faCheckCircle}/> The Citadel's records confirm this card is current — take this deck to the table with confidence.</div>
+                                <div className="pl-16 text-sm text-success-500"><FontAwesomeIcon icon={faCheckCircle}/> The Citadel's records confirm this card is current — take this deck to the table with confidence.</div>
                             ) : (
-                                <div className="text-sm text-warning-500"><FontAwesomeIcon icon={faExclamationCircle}/> Consult the Citadel's records before taking this deck to the table — the card may have changed since these scrolls were last updated.</div>
+                                <div className="pl-16 text-sm text-warning-500"><FontAwesomeIcon icon={faExclamationCircle}/> Consult the Citadel's records before taking this deck to the table — the card may have changed since these scrolls were last updated.</div>
                             )
                         }
-                        <div className="flex flex-col md:flex-row text-xs mt-auto text-foreground/50 space-x-4">
+                        <div className="pl-16 flex flex-col md:flex-row text-xs mt-auto text-foreground/50 space-x-4">
                             <div className="flex gap-1">
                                 <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} className="shrink-0 size-4"/>
                                 <span>{user?.displayname ?? "Unknown Playtester"}</span>
