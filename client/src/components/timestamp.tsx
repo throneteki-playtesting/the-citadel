@@ -3,6 +3,7 @@ import { CSSProperties } from "react";
 import { TouchTooltip } from "./touchTooltip";
 import { useTimezone } from "../api/hooks";
 import classNames from "classnames";
+import { ISO8601String } from "common/types";
 
 const shortFormatter: Formatter = (value, unit) => {
     if (unit === "second") return value < 10 ? "just now" : `${value}s`;
@@ -29,7 +30,7 @@ export default function Timestamp({ date, className, style }: TimestampProps) {
     );
 }
 type TimestampProps = {
-  date: Date;
+  date: Date | ISO8601String;
   className?: string;
   style?: CSSProperties;
 };

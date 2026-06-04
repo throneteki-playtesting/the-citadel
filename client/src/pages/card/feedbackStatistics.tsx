@@ -378,7 +378,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                 </div>
                 <div className="flex gap-2">
                     <div className="flex gap-2 items-center">
-                        <Avatar src={user?.avatarUrl} name={user?.displayname ?? "Unknown"} className="shrink-0 size-12"/>
+                        <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} classNames={{ name: "text-2xl" }}className="shrink-0 size-12"/>
                         <div className="flex flex-col min-w-0">
                             <div className="text-lg font-crimson italic">
                                 Review by {user?.displayname ?? "Unknown Playtester"}
@@ -389,8 +389,8 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                         </div>
                     </div>
                 </div>
-                <div className="flex divide-x divide-content3 py-2">
-                    <div className="shrink-0 flex flex-col gap-1 text-sm px-2">
+                <div className="flex flex-col sm:flex-row max-sm:divide-y sm:divide-x divide-content3 py-2">
+                    <div className="shrink-0 flex flex-wrap sm:flex-col gap-2 text-sm px-2 pb-2">
                         <span>Boring: {statementAnswerIcon(review.statements.boring)}</span>
                         <span>Competitive: {statementAnswerIcon(review.statements.competitive)}</span>
                         <span>Creative: {statementAnswerIcon(review.statements.creative)}</span>
@@ -419,7 +419,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                     </div>
                 </div>
                 <Accordion>
-                    <AccordionItem title={<span className="font-crimson italic text-lg">Reveal Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="View Submitted Decks" keepContentMounted>
+                    <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="View Submitted Decks" keepContentMounted>
                         <div className="overflow-hidden min-w-0">
                             {review.decks.map((deck) => <ReviewSummaryDeck key={deck} url={deck} className="p-1" />)}
                         </div>

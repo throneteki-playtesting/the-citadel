@@ -47,7 +47,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
                 <ButtonSection project={projectNumber} number={number} className="ml-auto"/>
             </div>
             <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-2 w-full">
+                <div className="flex flex-col md:flex-row gap-2 w-full overflow-x-hidden">
                     <CardVersions project={projectNumber} number={number} className="z-10" />
                     <div className="flex flex-col gap-2 flex-1">
                         <StatusBoard project={projectNumber} number={number} />
@@ -138,9 +138,9 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
 
     const swipeHandlers = useSwipe((direction) => {
         setSelectedIndex((prev) => {
-            if (prev !== undefined && direction === "left") {
+            if (prev !== undefined && direction === "right") {
                 return prev > 0 ? prev - 1 : sortedCards.length - 1;
-            } else if (prev !== undefined && direction === "right") {
+            } else if (prev !== undefined && direction === "left") {
                 return prev < sortedCards.length - 1 ? prev + 1 : 0;
             }
             return prev;
