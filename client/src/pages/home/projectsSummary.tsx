@@ -1,12 +1,12 @@
 import { IProject } from "common/models/projects";
 import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import dismoji from "../../emojis";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
 import { daysFromNow } from "../../utils";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
+import { dismoji } from "../../constants";
 
 export const ProjectsSummary = () => {
     const { data, isLoading } = useGetProjectsQuery({ filter: [{ active: true }] });

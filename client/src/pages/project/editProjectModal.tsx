@@ -6,7 +6,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { Project } from "common/models/schemas";
 import CardCountEditor from "./cardCountEditor";
-import { useCreateProjectMutation, useUpdateProjectMutation } from "../../api";
+import { useCreateProjectMutation, useLazyGetProjectQuery, useLazyGetProjectsQuery, useUpdateProjectMutation } from "../../api";
+import { EmojiSelect } from "../../components/emojiSelect";
 
 const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
@@ -14,10 +15,11 @@ const DefaultProjectValues: DeepPartial<IProject> = {
     version: 0
 };
 
-const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = () => true, onSave = () => true }: EditProjectModalProps) => {
+export default function EditProjectModal({ isOpen, project: initial, onClose: onModalClose = () => true, onSave = () => true }: EditProjectModalProps) {
     const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
     const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
     const [project, setProject] = useState<DeepPartial<IProject>>(DefaultProjectValues);
+
     useEffect(() => {
         setProject(initial ?? DefaultProjectValues);
     }, [initial]);
@@ -37,7 +39,7 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
         }
     }, [createProject, isNew, onModalClose, onSave, updateProject]);
 
-    return <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose() } hideCloseButton={isNew}>
+    return <Modal isOpen={isOpen} placement="center" onOpenChange={(isOpen) => !isOpen && onModalClose() } >
         <ModalContent>
             {(onClose) => (
                 <Wizard
@@ -49,9 +51,9 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
                     <ModalBody>
                         <WizardPages>
                             <WizardPage>
-                                <Input name="name" label="Name" defaultValue={project.name}/>
+                                <ProjectNameInput name={project.name} />
                                 <div className="grid grid-cols-2 gap-2 w-full">
-                                    <NumberInput name="number" label="Number" defaultValue={project.number} minValue={0}/>
+                                    <ProjectNumberInput number={project.number} />
                                     <Select
                                         name="type"
                                         label="Type"
@@ -60,8 +62,8 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
                                     >
                                         {types.map((type) => <SelectItem key={type} className="capitalize">{type}</SelectItem>)}
                                     </Select>
-                                    <Input name="code" label="Code" defaultValue={project.code} description="Eg. SoS"/>
-                                    <Input name="emoji" label="Emoji" defaultValue={project.emoji} description="Must match a discord emoji"/>
+                                    <ProjectCodeInput code={project.code}/>
+                                    <EmojiSelect label="Discord Emoji" defaultValue={project.emoji}/>
                                 </div>
                                 <Textarea name="description" label="Description" defaultValue={project.description}/>
                             </WizardPage>
@@ -80,7 +82,7 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
                         </WizardPages>
                     </ModalBody>
                     <ModalFooter>
-                        <WizardBack onCancel={!isNew ? onClose : undefined}/>
+                        <WizardBack onCancel={onClose}/>
                         <WizardNext isLoading={isCreating || isUpdating} color={"primary"}/>
                     </ModalFooter>
                 </Wizard>
@@ -89,6 +91,118 @@ const EditProjectModal = ({ isOpen, project: initial, onClose: onModalClose = ()
     </Modal>;
 };
 
-type EditProjectModalProps = Omit<BaseElementProps, "children"> & { isOpen: boolean, project?: DeepPartial<IProject>, onClose?: () => void, onSave?: (project: IProject) => void }
+type EditProjectModalProps = Omit<BaseElementProps, "children"> & {
+    isOpen: boolean;
+    project?: DeepPartial<IProject>;
+    onClose?: () => void;
+    onSave?: (project: IProject) => void;
+}
 
-export default EditProjectModal;
+function ProjectNameInput({ className, style, name: initial }: ProjectNameInputProps) {
+    const [name, setName] = useState(initial);
+
+    const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
+
+    useEffect(() => {
+        if (!name) {
+            reset();
+            return;
+        }
+        if (name === initial) return;
+        triggerFetchProjects({ filter: { name } });
+    }, [name, initial, reset, triggerFetchProjects]);
+
+    const errorMessage = !isFetching && existingProjects && existingProjects.total > 0
+        ? "Project already exists with that name"
+        : undefined;
+
+    return (
+        <Input
+            className={className}
+            style={style}
+            name="name"
+            label="Name"
+            defaultValue={initial}
+            onValueChange={setName}
+            isInvalid={!!errorMessage}
+            errorMessage={errorMessage}
+        />
+    );
+}
+
+type ProjectNameInputProps = Omit<BaseElementProps, "children"> & {
+    name?: string;
+}
+
+function ProjectNumberInput({ className, style, number: initial }: ProjectNumberInputProps) {
+    const [number, setNumber] = useState(initial);
+
+    const [triggerFetchProject, { data: existingProject, isFetching, reset }] = useLazyGetProjectQuery();
+
+
+    useEffect(() => {
+        if (!number) {
+            reset();
+            return;
+        }
+        if (number === initial) return;
+        triggerFetchProject({ number });
+    }, [number, initial, reset, triggerFetchProject]);
+
+    const errorMessage = !isFetching && existingProject
+        ? `Project ${existingProject.code} already exists with that number`
+        : undefined;
+    return (
+        <NumberInput
+            className={className}
+            style={style}
+            name="number"
+            label="Number"
+            defaultValue={initial}
+            minValue={0}
+            onValueChange={setNumber}
+            isInvalid={!!errorMessage}
+            errorMessage={errorMessage}
+        />
+    );
+}
+
+type ProjectNumberInputProps = Omit<BaseElementProps, "children"> & {
+    number?: number;
+}
+
+function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputProps) {
+    const [code, setCode] = useState(initial);
+
+    const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
+
+    useEffect(() => {
+        if (!code) {
+            reset();
+            return;
+        }
+        if (code === initial) return;
+        triggerFetchProjects({ filter: { code } });
+    }, [code, initial, reset, triggerFetchProjects]);
+
+    const errorMessage = !isFetching && existingProjects && existingProjects.total > 0
+        ? "Project already exists with that code"
+        : undefined;
+
+    return (
+        <Input
+            className={className}
+            style={style}
+            name="code"
+            label="Code"
+            defaultValue={initial}
+            onValueChange={setCode}
+            isInvalid={!!errorMessage}
+            errorMessage={errorMessage}
+        />
+    );
+}
+
+type ProjectCodeInputProps = Omit<BaseElementProps, "children"> & {
+    code?: string;
+}

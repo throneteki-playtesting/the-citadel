@@ -11,10 +11,16 @@ const Project = ({ isCreating = false }: ProjectProps) => {
     const project = parseParamNumber(number);
 
     if (isCreating) {
-        return <EditProjectModal isOpen={true} onSave={(project) => {
-            navigate(`/project/${project.number}`);
-            addToast({ title: "Successfully created", color: "success", description: `${project.name} has been created` });
-        }}/>;
+        return <EditProjectModal
+            isOpen={true}
+            onSave={(project) => {
+                navigate(`/project/${project.number}`);
+                addToast({ title: "Successfully created", color: "success", description: `${project.name} has been created` });
+            }}
+            onClose={() => {
+                navigate("/");
+            }}
+        />;
     } else if (!project) {
         return <Navigate to="/" />;
     }

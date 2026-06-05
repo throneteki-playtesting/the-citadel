@@ -2,6 +2,7 @@ import Permission from "common/models/permissions";
 import { enumToArray } from "./utils";
 import { Faction } from "common/models/cards";
 import { ChangeType } from "common/types";
+import * as discordEmojis from "discord-emoji";
 
 export const availablePermissions = enumToArray(Permission);
 
@@ -37,3 +38,28 @@ export const changeTypeClasses: Record<ChangeType, string> = {
     reworked: "border-warning-300 bg-warning-100 text-warning-700",
     replaced: "border-danger-300 bg-danger-100 text-danger-700"
 };
+
+
+export const dismoji: { [emoji: string]: string } = {};
+
+for (const categoryName in discordEmojis) {
+    const categoryEmojis = (discordEmojis as { [category: string]: { [emoji: string]: string }})[categoryName];
+    if (typeof categoryEmojis == "object" && categoryEmojis !== null && !Array.isArray(categoryEmojis)) {
+        Object.assign(dismoji, categoryEmojis);
+    }
+}
+
+export const emojis = {
+    playtesting: "dart",
+    physicalplaytesting: "flower_playing_cards",
+    digitalplaytesting: "computer",
+    changeLog: "memo",
+    changeNotes: "card_file_box",
+    implemented: "white_check_mark",
+    notimplemented: "no_entry_sign",
+    replaced: "twisted_rightwards_arrows",
+    reworked: "arrows_clockwise",
+    updated: "arrow_double_up",
+    bugfixed: "wrench",
+    other: "eight_spoked_asterisk"
+} as { [emoji: string]: string };

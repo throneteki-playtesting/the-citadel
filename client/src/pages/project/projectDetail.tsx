@@ -8,9 +8,9 @@ import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectContent from "./projectContent";
 import ProjectDrafting from "./draft/projectDrafting";
-import dismoji from "../../emojis";
 import classNames from "classnames";
 import { usePageTitle } from "../../api/hooks";
+import { dismoji } from "../../constants";
 
 const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
     const { data: project, isLoading } = useGetProjectQuery({ number: number! });
