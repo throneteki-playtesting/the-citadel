@@ -334,7 +334,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
 
     return (
         <>
-            <div className={classNames("bg-content1 p-2 flex flex-col", className)} style={style}>
+            <div className={classNames("bg-content1 p-4 flex flex-col", className)} style={style}>
                 <div className="flex gap-2 items-center">
                     <div className="flex-1 text-lg font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
                     <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
