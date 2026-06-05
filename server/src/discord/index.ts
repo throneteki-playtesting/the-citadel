@@ -1,7 +1,7 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { dataService, logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember } from "discord.js";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser } from "discord.js";
 import { discordCommandMiddleware } from "@/middleware/auth";
 
 class DiscordService {
@@ -149,30 +149,38 @@ class DiscordService {
         return result || null;
     }
 
-    static async getUserFromMember(member: APIGuildMember | GuildMember) {
-        const discordUser = member.user;
+    static async getUserFromMember(member: APIGuildMember | GuildMember | APIUser) {
+        const isUser = "username" in member && !("user" in member);
+        const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;
+
+        const nickname = !isUser
+            ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
+            : null;
+
+        const displayname = nickname ?? discordUser.username;
+        const avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
 
         let [user] = await dataService.users.read({ discordId: discordUser.id });
-        const nickname = discordUser["nick"] ?? discordUser["nickname"];
+
         if (!user) {
             user = {
                 id: discordUser.id,
                 discordId: discordUser.id,
                 username: discordUser.username,
-                displayname: nickname ?? discordUser.username,
-                avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+                displayname,
+                avatarUrl,
                 permissions: [],
                 roles: [],
                 lastLogin: new Date()
             };
         } else {
             user.username = discordUser.username;
-            user.displayname = nickname ?? discordUser.username;
-            user.avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
+            user.displayname = displayname;
+            user.avatarUrl = avatarUrl;
             user.lastLogin = new Date();
         }
-        await dataService.users.update(user);
 
+        await dataService.users.update(user);
         return user;
     }
 

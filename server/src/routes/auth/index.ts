@@ -2,7 +2,7 @@ import { celebrate, Joi, Segments } from "celebrate";
 import express, { Response } from "express";
 import asyncHandler from "express-async-handler";
 import { dataService, discordService, logger } from "@/services";
-import { APIGuildMember, RESTPostOAuth2AccessTokenResult } from "discord.js";
+import { APIGuildMember, APIUser, RESTPostOAuth2AccessTokenResult } from "discord.js";
 import jwt from "jsonwebtoken";
 import { buildUrl } from "common/utils";
 import { createHash, randomUUID } from "crypto";
@@ -47,10 +47,18 @@ router.get("/discord/callback",
 
             // 2. Fetch discord user & member info
             const guild = await discordService.getGuild();
-            const discordMember = await get<APIGuildMember>(`users/@me/guilds/${guild.id}/member`, authToken);
 
-            // 3. Authenticate discord member to user
-            const user = await DiscordService.getUserFromMember(discordMember);
+            let discordDetails: APIGuildMember | APIUser | null = null;
+
+            try {
+                discordDetails = await get<APIGuildMember>(`users/@me/guilds/${guild.id}/member`, authToken);
+            } catch {
+                // Not in the guild — fall back to basic profile
+                discordDetails = await get<APIUser>("users/@me", authToken);
+            }
+
+            // 3. Authenticate discord member/user to user
+            const user = await DiscordService.getUserFromMember(discordDetails);
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             await applyTokensToResponse(res, user.discordId);

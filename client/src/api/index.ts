@@ -8,6 +8,7 @@ import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, Si
 import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestReview } from "common/models/reviews";
 import { Role, User } from "common/models/auth";
+import { Mutex } from "async-mutex";
 
 type TagEntity = {
     me: User,
@@ -52,28 +53,51 @@ const baseQuery = fetchBaseQuery({
     credentials: "include"
 });
 
-const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError>
-    = async (args, api, extraOptions) =>
-    {
-        let result = await baseQuery(args, api, extraOptions);
-        if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
-            // Attempt to refresh token
-            const baseAuthQuery = fetchBaseQuery({ baseUrl: "/auth", credentials: "include" }) as BaseQueryFn<string | FetchArgs, RefreshAuthResponse, FetchBaseQueryError, unknown, FetchBaseQueryMeta>;
-            const refreshResult = await baseAuthQuery("/refresh", api, extraOptions);
+const mutex = new Mutex();
+const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
+    args,
+    api,
+    extraOptions
+) => {
+    // Wait if a refresh is already in progress, but don't lock yet
+    await mutex.waitForUnlock();
 
-            if (refreshResult.data?.status === "success") {
-                result = await baseQuery(args, api, extraOptions);
-            } else {
-                api.dispatch(clearUser());
-                // Expired refresh token should result in reauthentication
-                if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
-                    // TODO: Move this into a more stable process, possibly it's own api slice for /login & /logout
-                    window.location.href = "/auth/discord";
+    let result = await baseQuery(args, api, extraOptions);
+
+    if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
+        if (!mutex.isLocked()) {
+            // We're the first 401 — acquire the lock and do the refresh
+            const release = await mutex.acquire();
+            try {
+                const baseAuthQuery = fetchBaseQuery({ baseUrl: "/auth", credentials: "include" }) as BaseQueryFn<
+                    string | FetchArgs,
+                    RefreshAuthResponse,
+                    FetchBaseQueryError,
+                    unknown,
+                    FetchBaseQueryMeta
+                >;
+                const refreshResult = await baseAuthQuery("/refresh", api, extraOptions);
+
+                if (refreshResult.data?.status === "success") {
+                    result = await baseQuery(args, api, extraOptions);
+                } else {
+                    api.dispatch(clearUser());
+                    if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
+                        window.location.href = "/auth/discord";
+                    }
                 }
+            } finally {
+                release(); // Always release, even if refresh throws
             }
+        } else {
+            // Another request is already refreshing — wait for it to finish, then retry
+            await mutex.waitForUnlock();
+            result = await baseQuery(args, api, extraOptions);
         }
-        return result;
-    };
+    }
+
+    return result;
+};
 
 const api = createApi({
     reducerPath: "api",
@@ -500,7 +524,9 @@ export const {
     useGetRenderJobQuery,
 
     useGetProjectsQuery,
+    useLazyGetProjectsQuery,
     useGetProjectQuery,
+    useLazyGetProjectQuery,
     useCreateProjectMutation,
     useInitialiseProjectMutation,
     useUpdateProjectMutation,
