@@ -48,7 +48,8 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     if (!user && !isAuthenticating) {
         const startContent = isLoggingIn ? <Spinner size="sm"/> : <FontAwesomeIcon icon={faDiscord} />;
         return <Button startContent={startContent} isDisabled={isLoggingIn} onPress={onLogin} variant="flat">
-            Log in with Discord
+            <span className="max-sm:hidden">Log in with Discord</span>
+            <span className="sm:hidden">Log in</span>
         </Button>;
     }
 
