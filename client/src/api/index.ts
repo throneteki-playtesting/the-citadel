@@ -36,16 +36,42 @@ const defaultIdFuncs: { [K in ApiTag]: (result: TagEntity[K]) => string | number
     review: (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`
 };
 
+/**
+ * Maps results and/or query args to RTK Query cache tags.
+ * Ensures cache entries are always tagged even when the result is empty (e.g. 404/no content),
+ * so mutations can correctly invalidate them.
+ */
 function mapTags<T>(
     results: T | T[] | undefined,
     tag: ApiTag,
-    options?: { idFunc?: (result: T) => string | number | undefined; includeList?: boolean }
+    options?: {
+        idFunc?: (result: T) => string | number | undefined;
+        includeList?: boolean;
+        args?: unknown;
+    }
 ) {
     const resolve = (options?.idFunc ?? defaultIdFuncs[tag]) as (result: T) => string | number | undefined;
-    return [
-        ...(results ? asArray(results).map((result) => ({ type: tag, id: resolve(result) })) : []),
-        ...((options?.includeList ?? true) ? [{ type: tag, id: "LIST" }] : [])
-    ];
+
+    // Tag each result entity by its resolved ID
+    const resultTags = results
+        ? asArray(results).map((result) => ({ type: tag, id: resolve(result) }))
+        : [];
+
+    // Optionally include a LIST tag for cache-wide invalidation
+    const listTag = (options?.includeList ?? true)
+        ? [{ type: tag, id: "LIST" }]
+        : [];
+
+    // Tag by query args in case result is empty — reuses defaultIdFuncs since args
+    // fields overlap with entity fields (e.g. args.number === project.number)
+    const argId = options?.args !== undefined
+        ? (defaultIdFuncs[tag] as (args: unknown) => string | number | undefined)(options.args)
+        : undefined;
+    const argTag = argId !== undefined && !resultTags.some(t => t.id === argId)
+        ? [{ type: tag, id: argId }]
+        : [];
+
+    return [...resultTags, ...listTag, ...argTag];
 }
 
 const baseQuery = fetchBaseQuery({
@@ -149,7 +175,7 @@ const api = createApi({
                 const url = buildUrl(`users/${discordId}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "user", { includeList: false })
+            providesTags: (result, _error, args) => mapTags(result, "user", { includeList: false, args })
         }),
         updateUser: builder.mutation<User, User>({
             query: (user) => {
@@ -189,14 +215,14 @@ const api = createApi({
                 const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => mapTags(response, "card", { includeList: false })
+            providesTags: (response, _error, args) => mapTags(response, "card", { includeList: false, args })
         }),
         getPreviousCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
             query: (options) => {
                 const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/previous`);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => mapTags(response, "card", { includeList: false })
+            providesTags: (response, _error, args) => mapTags(response, "card", { includeList: false, args })
         }),
         putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
@@ -234,9 +260,9 @@ const api = createApi({
                 const body = suggestion;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: [
-                ...mapTags(undefined, "suggestion"),
-                ...mapTags(undefined, "tag")
+            invalidatesTags: (result) => [
+                ...mapTags(result, "suggestion"),
+                ...mapTags(result?.tags, "tag")
             ]
         }),
         updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
@@ -313,7 +339,7 @@ const api = createApi({
                 const url = buildUrl(`projects/${options.number}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "project", { includeList: false })
+            providesTags: (result, _error, args) => mapTags(result, "project", { includeList: false, args })
         }),
         createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
             query: (project) => {
@@ -321,7 +347,7 @@ const api = createApi({
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: mapTags(undefined, "project")
+            invalidatesTags: (result) => mapTags(result, "project")
         }),
         initialiseProject: builder.mutation<{ project: IProject, cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
@@ -361,7 +387,7 @@ const api = createApi({
                 const url = buildUrl(`playtesting-updates/${options.project}/${options.version}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "playtestingUpdate", { includeList: false })
+            providesTags: (result, _error, args) => mapTags(result, "playtestingUpdate", { includeList: false, args })
         }),
         createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
             query: (playtestingUpdate) => {
@@ -459,7 +485,7 @@ const api = createApi({
                 const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => mapTags(result, "review")
+            providesTags: (result, _error, args) => mapTags(result, "review", { args })
         }),
         getReviews: builder.query<IGetResponse<IPlaytestReview>, IGetRequest<IPlaytestReview>>({
             query: (options) => {
