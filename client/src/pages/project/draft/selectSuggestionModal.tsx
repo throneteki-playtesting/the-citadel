@@ -66,7 +66,7 @@ const SelectSuggestionModal = ({ isOpen, project, number, faction, unselectable 
                                         )}
                                     </SuggestionsGrid>
                                 </WizardPage>
-                                <WizardPage data={card}>
+                                <WizardPage controlledData={card}>
                                     <div className="flex flex-col md:flex-row gap-2">
                                         <CardPreview card={renderPlaytestingCard(card ?? {})} className="self-center md:self-start shrink-0 max-w-64"/>
                                         <CardEditor card={card} onUpdate={setCard} inputOptions={{ faction: "disabled" }}/>

@@ -13,12 +13,14 @@ const Project = ({ isCreating = false }: ProjectProps) => {
     if (isCreating) {
         return <EditProjectModal
             isOpen={true}
-            onSave={(project) => {
+            onSave={async (project) => {
                 navigate(`/project/${project.number}`);
                 addToast({ title: "Successfully created", color: "success", description: `${project.name} has been created` });
             }}
-            onClose={() => {
-                navigate("/");
+            onClose={(isSaving) => {
+                if (!isSaving) {
+                    navigate("/");
+                }
             }}
         />;
     } else if (!project) {

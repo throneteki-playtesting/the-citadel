@@ -9,8 +9,8 @@ import { merge } from "lodash-es";
 import { BaseElementProps } from "../../types";
 import { useWizard, WizardContext, WizardContextProps } from "./context";
 
-export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true, onValidationError = () => true, children }: WizardProps<T>) {
-    const [internalData, setInternalData] = useState({} as DeepPartial<T>);
+export function Wizard<T>({ schema, data: initial, onSubmit = () => true, onValidationError = () => true, children }: WizardProps<T>) {
+    const [internalData, setInternalData] = useState(initial ?? {} as DeepPartial<T>);
     const [currentPage, setCurrentPage] = useState(1);
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
     const [totalPages, setTotalPages] = useState(0);
@@ -32,8 +32,6 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
             const inputErrors: Record<string, string> = {};
             error.details.forEach((detail) => {
                 if (partial) {
-                    // Partial validation should ignore errors for values which do not exist in provided data
-                    // This allows for validation for data on a single page, whilst using a full schema
                     try {
                         let currentLevel = data;
                         for (const path of detail.path) {
@@ -47,7 +45,6 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
                         return;
                     }
                 }
-                // Needs to match input ids on page
                 const inputId = detail.path.join(".");
                 const message = detail.message.replace(new RegExp(`^"${inputId}"\\s+`), () => "").replace(/^\w/, (c) => c.toUpperCase());
                 inputErrors[inputId] = message;
@@ -65,16 +62,17 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
         return true;
     }, [onValidationError, schema]);
 
-    const onPageSubmit = useCallback((inputData: Record<string, any>) => {
-        const pageData = unflatten<Record<string, any>, Record<string, any>>(inputData);
+    const onPageSubmit = useCallback((formData: Record<string, any>, controlledData?: Record<string, any>) => {
+        const pageData = merge(
+            {},
+            unflatten<Record<string, any>, Record<string, any>>(formData),
+            controlledData // already nested, merged on top after unflattening
+        );
 
-        // Always validate the page first (partial)
         if (validate(pageData, true)) {
-            let submitData = initial ?? {} as DeepPartial<T>;
-            submitData = merge({}, submitData, internalData, pageData);
+            const submitData = merge({}, internalData, pageData);
             setInternalData(submitData);
             if (isLastPage) {
-                // Validate full object
                 if (validate(submitData as Record<string, any>)) {
                     onSubmit(submitData as T);
                 }
@@ -82,7 +80,7 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
                 setCurrentPage((prev) => Math.min(prev + 1, totalPages));
             }
         }
-    }, [validate, initial, isLastPage, internalData, onSubmit, totalPages]);
+    }, [validate, isLastPage, internalData, onSubmit, totalPages]);
 
     const onPageBack = useCallback(() => {
         setCurrentPage((prev) => Math.max(prev - 1, 0));
@@ -90,7 +88,7 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
     }, [setCurrentPage, setValidationErrors]);
 
     const contextValue = useMemo<WizardContextProps<T>>(() => ({
-        id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(), // crypto not available on http
+        id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
         currentPage,
         totalPages,
         setTotalPages,
@@ -122,14 +120,14 @@ export const Wizard = function<T>({ schema, data: initial, onSubmit = () => true
 };
 
 type WizardProps<T> = {
-    schema: Joi.Schema,
-    data?: DeepPartial<T>,
-    onSubmit?: (data: T) => void,
-    onValidationError?: (errors: Record<string, string>, partial: boolean) => void,
-    children: ReactNode | ReactNode[]
+    schema: Joi.Schema;
+    data?: DeepPartial<T>;
+    onSubmit?: (data: T) => void;
+    onValidationError?: (errors: Record<string, string>, partial: boolean) => void;
+    children: ReactNode | ReactNode[];
 }
 
-export const WizardPages = ({ className, style, children: pages }: WizardPagesProps) => {
+export function WizardPages({ className, style, children: pages }: WizardPagesProps) {
     const { currentPage, setTotalPages } = useWizard();
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -213,32 +211,33 @@ export const WizardPages = ({ className, style, children: pages }: WizardPagesPr
 };
 
 type WizardPageComponent = React.ReactElement<React.ComponentProps<typeof WizardPage>> | false;
-type WizardPagesProps = Omit<BaseElementProps, "children"> & { children: WizardPageComponent | WizardPageComponent[] };
+type WizardPagesProps = Omit<BaseElementProps, "children"> & {
+    children: WizardPageComponent | WizardPageComponent[];
+};
 
-export const WizardPage = ({ className, style, children, data, pageNo, allowEmptyValues = false }: WizardPageProps) => {
+export function WizardPage({ className, style, children, controlledData, pageNo }: WizardPageProps) {
     const { id, validationErrors, onPageSubmit } = useWizard();
 
     const onSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        let pageData: Record<string, any> = {};
 
-        // Gather all form data
+        // Collect natural (named) inputs via FormData
         const formData = new FormData(e.target as HTMLFormElement);
-        pageData = Object.fromEntries(formData.entries());
-        if (!allowEmptyValues) {
-            // Sanitises "" values into undefined. Usually helps with validation
-            pageData = Object.keys(pageData).reduce<Record<string, any>>((acc, key) => {
-                const value = pageData[key];
-                acc[key] = value === "" ? undefined : value;
-                return acc;
-            }, {});
+        const pageData: Record<string, any> = Object.fromEntries(
+            // Sanitise empty strings to undefined
+            [...formData.entries()].map(([k, v]) => [k, v === "" ? undefined : v])
+        );
+
+        if (process.env.NODE_ENV === "development") {
+            // Warn if nothing was collected by either path — likely a misconfigured page
+            const formDataEmpty = Object.keys(pageData).length === 0;
+            if (formDataEmpty && !controlledData) {
+                console.warn(`WizardPage ${pageNo}: No FormData collected and no controlledData provided. Check that inputs have name props, or pass controlledData for controlled inputs.`);
+            }
         }
-        // Prioritise controlled data, if provided
-        if (data) {
-            pageData = data;
-        }
-        onPageSubmit(pageData);
-    }, [allowEmptyValues, data, onPageSubmit]);
+
+        onPageSubmit(pageData, controlledData);
+    }, [controlledData, onPageSubmit, pageNo]);
 
     return (
         <Form
@@ -253,9 +252,12 @@ export const WizardPage = ({ className, style, children, data, pageNo, allowEmpt
     );
 };
 
-type WizardPageProps = BaseElementProps & { data?: Record<string, any>, pageNo?: number, allowEmptyValues?: boolean }
+type WizardPageProps = BaseElementProps & {
+    controlledData?: Record<string, any>;
+    pageNo?: number;
+}
 
-export const WizardNext = ({ children, nextContent = "Next", submitContent = "Submit", ...buttonProps }: WizardNextButtonProps) => {
+export function WizardNext({ children, nextContent = "Next", submitContent = "Submit", ...buttonProps }: WizardNextButtonProps) {
     const { id, currentPage, isLastPage } = useWizard();
 
     return (
@@ -265,9 +267,12 @@ export const WizardNext = ({ children, nextContent = "Next", submitContent = "Su
     );
 };
 
-type WizardNextButtonProps = Omit<ButtonProps, "onPress"> & { nextContent?: ReactNode, submitContent?: ReactNode };
+type WizardNextButtonProps = Omit<ButtonProps, "onPress"> & {
+    nextContent?: ReactNode;
+    submitContent?: ReactNode;
+};
 
-export const WizardBack = ({ children, backContent = "Back", cancelContent = "Cancel", onCancel, ...buttonProps }: WizardBackButtonProps) => {
+export function WizardBack({ children, backContent = "Back", cancelContent = "Cancel", onCancel, ...buttonProps }: WizardBackButtonProps) {
     const { onPageBack, isFirstPage } = useWizard();
 
     const onPress = useCallback(() => {
@@ -285,4 +290,8 @@ export const WizardBack = ({ children, backContent = "Back", cancelContent = "Ca
     );
 };
 
-type WizardBackButtonProps = Omit<ButtonProps, "onPress"> & { backContent?: ReactNode, cancelContent?: ReactNode, onCancel?: () => void };
+type WizardBackButtonProps = Omit<ButtonProps, "onPress"> & {
+    backContent?: ReactNode;
+    cancelContent?: ReactNode;
+    onCancel?: () => void;
+};

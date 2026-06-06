@@ -193,7 +193,7 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         const syncingArray = asArray(syncing);
         const filter = syncingArray.map(({ project, number }) => ({ project, number, draft: false }));
         if (filter.length === 0) {
-            return;
+            return syncing;
         }
         // Do not consider draft cards in latest sync, as they cannot be latest
         const previous = await this.find({ $or: filter });

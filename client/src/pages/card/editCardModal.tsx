@@ -53,11 +53,11 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
                         <div className="flex flex-col md:flex-row gap-2">
                             <CardPreview card={renderDraftCard} className="self-center md:self-start shrink-0 max-w-64"/>
                             <WizardPages>
-                                <WizardPage data={getBaseCardValues(card)}>
+                                <WizardPage controlledData={getBaseCardValues(card)}>
                                     <CardEditor card={card} onUpdate={setCard} inputOptions={{ faction: "disabled", designer: "hidden" }}/>
                                 </WizardPage>
                                 {!isPreview(card) &&
-                                    <WizardPage data={{ note: card.note ?? {} }}>
+                                    <WizardPage controlledData={{ note: card.note ?? {} }}>
                                         <NoteEditor note={card.note} onChange={(note) => setCard((prev) => ({ ...prev, note }))}/>
                                     </WizardPage>
                                 }

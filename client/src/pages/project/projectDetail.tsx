@@ -11,9 +11,10 @@ import ProjectDrafting from "./draft/projectDrafting";
 import classNames from "classnames";
 import { usePageTitle } from "../../api/hooks";
 import { dismoji } from "../../constants";
+import Error from "../../components/error";
 
-const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps) => {
-    const { data: project, isLoading } = useGetProjectQuery({ number: number! });
+export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
+    const { data: project, isLoading } = useGetProjectQuery({ number });
     usePageTitle(project ? project.code : undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
@@ -28,12 +29,7 @@ const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps
     }
 
     if (!project) {
-        // TODO: Improve
-        return (
-            <div>
-                Error
-            </div>
-        );
+        return <Error label="No such project exists in the Citadel's archives..." content="This project could not be found. It may have been removed, or you may have followed an incorrect link." />;
     }
 
     return <div className={classNames("relative", className)} style={style}>
@@ -56,6 +52,6 @@ const ProjectDetail = ({ className, style, project: number }: ProjectDetailProps
     </div>;
 };
 
-type ProjectDetailProps = Omit<BaseElementProps, "children"> & { project: number };
-
-export default ProjectDetail;
+type ProjectDetailProps = Omit<BaseElementProps, "children"> & {
+    project: number;
+};

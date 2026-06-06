@@ -5,7 +5,7 @@ import { useCallback } from "react";
 import { IProject } from "common/models/projects";
 import ConfirmModal from "../../components/confirmModal";
 
-const DeleteProjectModal = ({ isOpen, project, onClose: onModalClose = () => true, onDelete = () => true }: DeleteProjectModalProps) => {
+export default function DeleteProjectModal({ isOpen, project, onClose: onModalClose = () => true, onDelete = () => true }: DeleteProjectModalProps) {
     const [deleteProject, { isLoading: isDeleting }] = useDeleteProjectMutation();
 
     const onSubmit = useCallback(async () => {
@@ -23,15 +23,18 @@ const DeleteProjectModal = ({ isOpen, project, onClose: onModalClose = () => tru
     return <ConfirmModal
         isOpen={isOpen}
         isLoading={isDeleting}
-        title={`Delete ${project.name}?`}
-        content={"This is permanent and cannot be undone."}
-        confirmContent="Delete"
-        cancelContent="Back"
+        title={`Burn ${project.name} from the archives?`}
+        content="This scroll cannot be restored once cast into the flames. This action is permanent and cannot be undone."
+        confirmContent="Consign to the Flames"
+        cancelContent="Turn Back"
         onConfirm={onSubmit}
         onClose={onModalClose}
     />;
 };
 
-type DeleteProjectModalProps = Omit<BaseElementProps, "children"> & { isOpen: boolean, project: IProject, onClose?: () => void, onDelete?: (project: IProject) => void }
-
-export default DeleteProjectModal;
+type DeleteProjectModalProps = Omit<BaseElementProps, "children"> & {
+    isOpen: boolean;
+    project: IProject;
+    onClose?: () => void;
+    onDelete?: (project: IProject) => void;
+}

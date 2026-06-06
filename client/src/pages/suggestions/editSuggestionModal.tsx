@@ -52,10 +52,10 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
                         <div className="flex flex-col md:flex-row gap-2">
                             <CardPreview card={renderCardSuggestion(suggestion)} className="self-center md:self-start shrink-0 max-w-64"/>
                             <WizardPages>
-                                <WizardPage data={{ card: suggestion.card }}>
+                                <WizardPage controlledData={{ card: suggestion.card }}>
                                     <CardEditor className="w-full" card={suggestion.card} onUpdate={(card) => setSuggestion((prev) => ({ ...prev, card }))} inputOptions={{ designer: "hidden" }}/>
                                 </WizardPage>
-                                <WizardPage data={{ tags: suggestion.tags }}>
+                                <WizardPage controlledData={{ tags: suggestion.tags }}>
                                     <ComboBox label="Tags" values={suggestion.tags ?? []} onChange={(tags) => setSuggestion((prev) => ({ ...prev, tags }))} chip={{ color: "primary", size: "sm" }}/>
                                 </WizardPage>
                             </WizardPages>

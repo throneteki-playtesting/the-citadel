@@ -2,7 +2,7 @@ declare namespace NodeJS {
     interface ProcessEnv {
         NODE_ENV: "development" | "production" | "test";
 
-        VERBOSE: boolean;
+        VERBOSE: string;
 
         SERVER_PORT: number;
         SERVER_HOST: string;

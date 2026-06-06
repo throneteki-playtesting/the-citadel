@@ -26,7 +26,7 @@ export default class LoggerService {
                 new winston.transports.Console({
                     forceConsole: true,
                     format: winston.format.combine(...(process.env.NODE_ENV === "production" ? [] : [winston.format.colorize({ level: true })]), ...baseFormat),
-                    level: process.env.VERBOSE ? "verbose" : "info"
+                    level: process.env.VERBOSE?.toLowerCase() === "true" ? "verbose" : "info"
                 }),
                 ...(process.env.NODE_ENV === "production" ? [
                     new winston.transports.File({ filename: "logs\\error.log", level: "error", handleExceptions: true }),
