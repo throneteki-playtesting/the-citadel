@@ -208,7 +208,7 @@ const api = createApi({
         }),
         deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
-                const url = buildUrl(`cards/${card.project}/${card.number}/draft`);
+                const url = buildUrl(`cards/${card.project}/${card.number}/draft/${card.version}`);
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => mapTags(result, "card")

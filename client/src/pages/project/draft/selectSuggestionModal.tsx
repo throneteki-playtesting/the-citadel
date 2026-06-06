@@ -55,7 +55,7 @@ const SelectSuggestionModal = ({ isOpen, project, number, faction, unselectable 
                                                 card={renderCardSuggestion(suggestion)}
                                                 orientation="vertical"
                                                 rounded={true}
-                                                className={classNames("cursor-pointer select-none", { "ring-5 ring-blue-500": selected === suggestion }, { "opacity-50 grayscale pointer-events-none": unselectable.includes(suggestion.id!) })}
+                                                className={classNames("cursor-pointer select-none", { "ring-4 ring-primary-500": selected === suggestion }, { "opacity-50 grayscale pointer-events-none": unselectable.includes(suggestion.id!) })}
                                                 onClick={() => {
                                                     const newSelected = selected === suggestion ? undefined : suggestion;
                                                     setSelected(newSelected);
@@ -69,14 +69,14 @@ const SelectSuggestionModal = ({ isOpen, project, number, faction, unselectable 
                                 <WizardPage data={card}>
                                     <div className="flex flex-col md:flex-row gap-2">
                                         <CardPreview card={renderPlaytestingCard(card ?? {})} className="self-center md:self-start shrink-0 max-w-64"/>
-                                        <CardEditor card={card} onUpdate={setCard}/>
+                                        <CardEditor card={card} onUpdate={setCard} inputOptions={{ faction: "disabled" }}/>
                                     </div>
                                 </WizardPage>
                             </WizardPages>
                         </ModalBody>
                         <ModalFooter>
                             <WizardBack onCancel={onClose}/>
-                            <WizardNext isDisabled={!selected} isLoading={isPuttingDraft}/>
+                            <WizardNext isDisabled={!selected} isLoading={isPuttingDraft} color="primary"/>
                         </ModalFooter>
                     </Wizard>
                 )}

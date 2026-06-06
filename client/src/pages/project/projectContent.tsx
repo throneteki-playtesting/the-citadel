@@ -1,17 +1,19 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Card, Divider, Link, Skeleton, Tooltip } from "@heroui/react";
+import { Divider, Link, Skeleton, Tooltip } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronLeft, faChevronRight, faStar } from "@fortawesome/free-solid-svg-icons";
+import { faStar } from "@fortawesome/free-solid-svg-icons";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
 import { IProject } from "common/models/projects";
+import { watermarkClasses } from "../../constants";
+import Error from "../../components/error";
 
-const ProjectContent = ({ project }: ProjectContentProps) => {
+export default function ProjectContent({ project }: ProjectContentProps) {
     const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
 
     const cardsByFaction = useMemo(() => data?.items.reduce<Map<Faction, IPlaytestCard[]>>((map, card) => {
@@ -24,22 +26,19 @@ const ProjectContent = ({ project }: ProjectContentProps) => {
     if (isLoading) {
         return (
             <div className="space-y-2">
-                {Object.keys(project.cardCount).map((faction) => <Skeleton key={faction} className="w-full h-64 rounded-md"/>)}
+                {Object.keys(project.cardCount).map((faction) => <Skeleton key={faction} className="w-full h-64 sm:h-72 rounded-md"/>)}
             </div>
         );
     }
 
     if (!data) {
-        // TODO: Improve
-        return (
-            <div>Error</div>
-        );
+        return <Error label="The Citadel's records could not be retrieved..." content="Something went wrong loading the cards for this project. Please try again or alert an administrator." />;
     }
 
     return (
-        <Card className="bg-content1/10">
+        <div className="flex flex-col gap-2">
             {[...cardsByFaction.entries()].map(([faction, cards]) => <FactionCarousel key={faction} faction={faction} cards={cards} />)}
-        </Card>
+        </div>
     );
 };
 
@@ -47,9 +46,6 @@ type ProjectContentProps = { project: IProject }
 
 function FactionCarousel({ faction, cards }: FactionCarouselProps) {
     const { data: reviewsData, isLoading: isLoadingReviewsData } = useGetReviewsQuery({ filter: cards.map((card) => ({ project: card.project, number: card.number })) });
-    const containerRef = useRef<HTMLDivElement>(null);
-    const [canScrollLeft, setCanScrollLeft] = useState(false);
-    const [canScrollRight, setCanScrollRight] = useState(true);
 
     const { reviews, decks } = useMemo(() => {
         const reviews = reviewsData?.total ?? 0;
@@ -58,26 +54,14 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
         return { reviews, decks };
     }, [reviewsData?.items, reviewsData?.total]);
 
-    const updateScrollButtons = () => {
-        const el = containerRef.current;
-        if (!el) return;
-        setCanScrollLeft(el.scrollLeft > 0);
-        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth);
-    };
-
-    useEffect(() => {
-        updateScrollButtons();
-    }, [cards]);
-
-    const scroll = (direction: "left" | "right") => {
-        containerRef.current?.scrollBy({ left: direction === "left" ? -300 : 300, behavior: "smooth" });
-    };
-
     return (
-        <div className={factionClasses[faction]}>
-            <div className="flex">
-                <div className={classNames("text-2xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow")}>
-                    <ThronesIcon name={faction} className="text-3xl"/> {factionNames[faction]}
+        <div className={classNames("relative border border-content3 overflow-hidden")}>
+            <div className="absolute -top-8 right-48 flex items-center justify-center pointer-events-none select-none">
+                <ThronesIcon name={faction} className={classNames("text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>
+            </div>
+            <div className="flex h-20">
+                <div className={classNames("text-2xl sm:text-3xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow")}>
+                    {factionNames[faction]}
                 </div>
                 <div className="flex items-center gap-2 text-lg py-4 px-2 text-foreground">
                     {isLoadingReviewsData ? <Skeleton className="h-full w-32 rounded-sm" /> : <div>{reviews} Reviews</div>}
@@ -86,51 +70,26 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
                 </div>
             </div>
             <div className="relative">
-                <button
-                    onPointerDown={() => scroll("left")}
-                    className={classNames(
-                        "cursor-pointer absolute left-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
-                        canScrollLeft ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-                    )}
-                >
-                    <FontAwesomeIcon icon={faChevronLeft} className="text-black drop-shadow text-3xl" />
-                </button>
-                <div ref={containerRef} onScroll={updateScrollButtons} className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-0.5">
-                    {cards.map((card) => (
-                        <Link key={parseCardCode(false, card.project, card.number)} href={`/project/${card.project}/${card.number}`}>
-                            <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
-                                <ProjectContentCard card={card} />
-                            </div>
-                        </Link>))}
+                <div className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-2 p-2">
+                    {
+                        cards.map((card) => (
+                            <Link key={parseCardCode(false, card.project, card.number)} href={`/project/${card.project}/${card.number}`}>
+                                <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
+                                    <ProjectContentCard card={card} />
+                                </div>
+                            </Link>))
+                    }
                 </div>
-                <button
-                    onPointerDown={() => scroll("right")}
-                    className={classNames(
-                        "cursor-pointer absolute right-0 top-0 h-full w-10 z-10 flex items-center justify-center bg-black/10 hover:bg-black/25 active:bg-black/40 transition-all duration-300",
-                        canScrollRight ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-                    )}
-                >
-                    <FontAwesomeIcon icon={faChevronRight} className="text-black drop-shadow text-3xl" />
-                </button>
             </div>
         </div>
     );
 }
-type FactionCarouselProps = { faction: Faction, cards: IPlaytestCard[] }
+type FactionCarouselProps = {
+    faction: Faction;
+    cards: IPlaytestCard[];
+}
 
-const factionClasses: Record<Faction, string> = {
-    baratheon: "bg-baratheon/5",
-    greyjoy: "bg-greyjoy/5",
-    lannister: "bg-lannister/5",
-    martell: "bg-martell/5",
-    thenightswatch: "bg-thenightswatch/5",
-    stark: "bg-stark/5",
-    targaryen: "bg-targaryen/5",
-    tyrell: "bg-tyrell/5",
-    neutral: "bg-neutral/5"
-};
-
-const ProjectContentCard = ({ card }: ProjectContentCardProps) => {
+function ProjectContentCard({ card }: ProjectContentCardProps) {
     const { data: draftData } = useGetCardsQuery({ filter: { project: card.project, number: card.number, draft: true } });
     const hasDraft = useMemo(() => draftData && draftData.total > 0, [draftData]);
 
@@ -151,6 +110,6 @@ const ProjectContentCard = ({ card }: ProjectContentCardProps) => {
     </div>;
 };
 
-type ProjectContentCardProps = { card: IPlaytestCard }
-
-export default ProjectContent;
+type ProjectContentCardProps = {
+    card: IPlaytestCard
+}

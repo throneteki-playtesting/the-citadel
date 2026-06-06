@@ -178,7 +178,7 @@ export const PlaytestingCard = {
                 is: Joi.not("implemented"),
                 then: Joi.required()
             })
-        }).when("version", { not: Joi.string().valid("0.0.0"), then: Joi.required() }),
+        }).when("version", { not: Joi.string().pattern(/^0\.0\.\d+$/), then: Joi.required() }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean(),
         release: Joi.object({

@@ -1,15 +1,12 @@
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { usePlaytestingUpdateSync } from "../../api/hooks";
+import { usePermission, usePlaytestingUpdateSync } from "../../api/hooks";
 import { useMemo } from "react";
 import { BaseElementProps } from "../../types";
 import ThronesIcon from "../thronesIcon";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncProjectsGithubMutation } from "../../api";
-import { hasPermission } from "common/utils";
-import { RootState } from "../../api/store";
-import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
 import { BaseStatus, StatusData } from "./baseStatus";
 
@@ -21,7 +18,7 @@ const WebsiteUpdateStatus = ({ className, style, project, version, isIconOnly }:
 
     const [syncProjectsGithub, { isLoading: isSyncing }] = useSyncProjectsGithubMutation();
     const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github;
-    const user = useSelector((state: RootState) => state.auth.user);
+    const hasSyncPermission = usePermission(Permission.SYNC_PROJECT_GITHUB);
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Online Platform";
@@ -41,7 +38,7 @@ const WebsiteUpdateStatus = ({ className, style, project, version, isIconOnly }:
             };
         }
 
-        const syncAsync = hasPermission(user, Permission.SYNC_PROJECT_GITHUB)
+        const syncAsync = hasSyncPermission
             ? async () => await syncProjectsGithub().unwrap()
             : undefined;
 
@@ -104,7 +101,7 @@ const WebsiteUpdateStatus = ({ className, style, project, version, isIconOnly }:
             }
         }
         return null;
-    }, [cards, error, isSyncing, playtestingUpdate, status, step, syncProjectsGithub, user]);
+    }, [cards, error, hasSyncPermission, isSyncing, playtestingUpdate, status, step, syncProjectsGithub]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

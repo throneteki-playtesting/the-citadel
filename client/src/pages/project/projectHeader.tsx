@@ -2,7 +2,7 @@ import { BaseElementProps } from "../../types";
 import { Button, ButtonGroup, Chip, Link, Skeleton } from "@heroui/react";
 import { IProject } from "common/models/projects";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUpRightFromSquare, faPencil, faX } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUpRightFromSquare, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import classNames from "classnames";
@@ -10,36 +10,72 @@ import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
 import { useMemo, ReactNode } from "react";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
+import { TouchTooltip } from "../../components/touchTooltip";
 
 const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
+    const headerComponents = useMemo(() => {
+        const components: ReactNode[] = [
+            <span>#{project.number}</span>,
+            <span className="uppercase">{project.type}</span>
+        ];
+
+        if (project.draft) {
+            components.push(<span>In Draft</span>);
+        } else {
+            components.push(<span>{project.version} updates</span>);
+        }
+
+        if (project.mandateUrl) {
+            components.push(<Link href={project.mandateUrl} className="cursor-pointer">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link>);
+        }
+
+        return (
+            <>
+                {components.flatMap((node, i) =>
+                    i === 0 ? [node] : [<span key={`sep-${i}`} className="mx-1">·</span>, node]
+                )}
+            </>
+        );
+    }, [project.draft, project.mandateUrl, project.number, project.type, project.version]);
+
     return (
         <div className={classNames("space-y-2 md:space-y-4", className)} style={style}>
             <ButtonGroup className="absolute top-0 right-0 p-2">
                 <PermissionGate requires={Permission.EDIT_PROJECTS}>
-                    <Button isIconOnly variant="flat" size="sm" onPress={onEdit}><FontAwesomeIcon icon={faPencil}/></Button>
+                    <TouchTooltip content="Edit Project">
+                        <Button isIconOnly onPress={onEdit}>
+                            <FontAwesomeIcon icon={faPencil}/>
+                        </Button>
+                    </TouchTooltip>
                 </PermissionGate>
                 <PermissionGate requires={Permission.DELETE_PROJECTS}>
-                    <Button isIconOnly variant="flat" size="sm" color="danger" onPress={onDelete}><FontAwesomeIcon icon={faX}/></Button>
+                    <TouchTooltip content="Delete Project">
+                        <Button isIconOnly color="danger" onPress={onDelete}>
+                            <FontAwesomeIcon icon={faTrash}/>
+                        </Button>
+                    </TouchTooltip>
                 </PermissionGate>
-                {project.draft}
             </ButtonGroup>
             <div className="flex flex-col gap-2">
-                <div className="text-xxs tracking-widest font-crimson uppercase text-foreground/40">
-                        #{project.number} · <span className="uppercase">{project.type} · {project.version} updates</span>{project.mandateUrl && (<> · <Link href={project.mandateUrl} className="cursor-pointer text-xxs">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link></>)}
+                <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
+                    {headerComponents}
                 </div>
                 <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
             </div>
-            {project.draft && <ProjectHeaderDraftNotice project={project} className="w-1/2"/>}
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
-            <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
-                <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_CARDS}><PacksStat project={project} /></PermissionGate>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {project.draft && <ProjectHeaderDraftNotice project={project} />}
+            {!project.draft && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
+                    <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
+                    <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
+                    <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
+                    <PermissionGate requires={Permission.READ_CARDS}><PacksStat project={project} /></PermissionGate>
+                </div>
+            )}
+            {!project.draft && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <ProjectPlaytestingUpdates project={project} />
             </div>
+            )}
         </div>
     );
 };

@@ -1,7 +1,4 @@
-import { hasPermission } from "common/utils";
 import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../api";
-import { RootState } from "../../api/store";
-import { useSelector } from "react-redux";
 import Permission from "common/models/permissions";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
@@ -14,13 +11,16 @@ import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
 import { watermarkClasses } from "../../constants";
+import { usePermission } from "../../api/hooks";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
+
 export default function RecentSubmissions() {
-    const user = useSelector((state: RootState) => state.auth.user);
     const items = 5;
-    const { data: reviewData, isLoading: isReviewDataLoading } = useGetReviewsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 });
-    const { data: suggestionData, isLoading: isSuggestionDataLoading } = useGetSuggestionsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 }, { skip: !hasPermission(user, Permission.READ_SUGGESTIONS) });
+    const hasReviewReadPermission = usePermission(Permission.READ_REVIEWS);
+    const hasSuggestionReadPermission = usePermission(Permission.READ_SUGGESTIONS);
+    const { data: reviewData, isLoading: isReviewDataLoading } = useGetReviewsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 }, { skip: !hasReviewReadPermission });
+    const { data: suggestionData, isLoading: isSuggestionDataLoading } = useGetSuggestionsQuery({ orderBy: { updated: "desc" }, page: 1, perPage: 5 }, { skip: !hasSuggestionReadPermission });
 
     const isLoading = useMemo(() => isReviewDataLoading || isSuggestionDataLoading, [isReviewDataLoading, isSuggestionDataLoading]);
 

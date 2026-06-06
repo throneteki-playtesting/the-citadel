@@ -4,7 +4,7 @@ import Permission from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
-import { rcompare } from "semver";
+import { major, minor, patch, rcompare, valid } from "semver";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -47,16 +47,6 @@ export function cleanObject<T>(object: T) {
     }
 
     return object;
-}
-
-export function groupBy<T, V>(objects: T[], groupFunc: (object: T) => V) {
-    return objects.reduce((groups, object) => {
-        const value = groupFunc(object);
-        const group = groups.get(value) || [];
-        group.push(object);
-        groups.set(value, group);
-        return groups;
-    }, new Map<V, T[]>());
 }
 
 export function distinct<T>(values: T[]) {
@@ -332,10 +322,10 @@ export const thronesIcons: { [key: string]: string } = {
 };
 
 export function isPreview(card: { version?: SemanticVersion }) {
-    return card.version === "0.0.0";
+    return card.version && !!valid(card.version) && major(card.version) === 0 && minor(card.version) === 0;
 }
 export function isInitial(card: { version?: SemanticVersion }) {
-    return card.version === "1.0.0";
+    return card.version && !!valid(card.version) && major(card.version) === 1 && minor(card.version) === 0 && patch(card.version) === 0;
 }
 
 export function fuzzyMatch(expression: string, ...tests: string[]) {

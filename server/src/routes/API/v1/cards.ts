@@ -1,7 +1,7 @@
 import express from "express";
 import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
-import { eq, inc } from "semver";
+import { inc } from "semver";
 import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
@@ -137,7 +137,8 @@ router.put("/:project/:number/draft",
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} does not exist`);
         }
 
-        const [[latest], [draft]] = await Promise.all([
+        // Note: Can only have multiple drafts per number when project is in draft
+        const [[latest], draft] = await Promise.all([
             dataService.cards.read({ project: projectNumber, number, latest: true }),
             dataService.cards.read({ project: projectNumber, number, draft: true })
         ]);
@@ -145,13 +146,13 @@ router.put("/:project/:number/draft",
         if (!project.draft && !(latest || draft)) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Card #${number} does not exist for project #${projectNumber}`);
         }
-        if (project.draft && !eq(version, "0.0.0")) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.0 version`);
+        if (project.draft && !/^0\.0\.\d+$/.test(version)) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.x version`);
         }
 
         res.locals.project = project;
         res.locals.latest = latest as IPlaytestCard | undefined;
-        res.locals.draft = draft as IPlaytestCard | undefined;
+        res.locals.draft = draft as IPlaytestCard[] | undefined;
         next();
     }),
     // Permission check now uses already-loaded entities from res.locals
@@ -163,22 +164,16 @@ router.put("/:project/:number/draft",
         const { number } = req.params;
         const project = res.locals.project as IProject;
         const latest = res.locals.latest as IPlaytestCard | undefined;
-        const existing = res.locals.draft as IPlaytestCard | undefined;
+        const drafts = res.locals.draft as IPlaytestCard[] | undefined;
 
-        let card = req.body;
+        const card = req.body;
         const code = parseCardCode(false, project.number, number);
 
-        let version = "0.0.0" as SemanticVersion;
         if (latest) {
-            version = isPreview(latest) ? latest.version : inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion;
-        }
-
-        if (existing && existing.version !== version) {
-            await dataService.cards.destroy({ project: project.number, number, version: existing.version });
+            card.version = isPreview(latest) ? latest.version : inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion;
         }
 
         card.code = code;
-        card.version = version;
         card.draft = true;
         card.latest = false;
         card.implemented = false;
@@ -186,10 +181,39 @@ router.put("/:project/:number/draft",
         delete card.github;
         delete card.release;
 
-        if (existing && existing.version === version) {
-            card = await dataService.cards.update(card, false, !project.draft);
+        const process = async (action: "create" | "update") => {
+            switch (action) {
+                case "create":
+                    return dataService.cards.create(card, !project.draft);
+                case "update":
+                    return dataService.cards.update(card, !project.draft);
+            }
+        };
+
+        if (project.draft) {
+            // If version is 0.0.0, then it is being added as an option for that slot/number.
+            // We distinct card options by incrementing the patch to the next available number
+            if (card.version === "0.0.0") {
+                const usedVersions = new Set(drafts.map(d => d.version));
+                const newVersion = Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
+                card.version = newVersion;
+                await process("create");
+            } else {
+                await process("update");
+            }
         } else {
-            card = await dataService.cards.create(card, !project.draft);
+            // When project is not in draft, can only be one (or none) existing drafts
+            const existing = drafts[0];
+            if (existing) {
+                if (existing.version !== card.version) {
+                    await dataService.cards.destroy({ project: project.number, number, version: existing.version });
+                    await process("create");
+                } else {
+                    await process("update");
+                }
+            } else {
+                await process("create");
+            }
         }
 
         res.status(StatusCodes.OK).json(card);
@@ -197,14 +221,17 @@ router.put("/:project/:number/draft",
 );
 
 // Delete draft card
-router.delete("/:project/:number/draft",
+router.delete("/:project/:number/draft/:version?",
     validateRequest(Permission.DELETE_CARDS),
     celebrate({
-        [Segments.PARAMS]: CardParams
+        [Segments.PARAMS]: {
+            ...CardParams,
+            version: Joi.string().optional().regex(Regex.SemanticVersion)
+        }
     }),
-    asyncHandler<{ project: number, number: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { project, number } = req.params;
-        const [deleted] = await dataService.cards.destroy({ project, number, draft: true });
+    asyncHandler<{ project: number, number: number, version?: SemanticVersion }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, number, version } = req.params;
+        const [deleted] = await dataService.cards.destroy({ project, number, version, draft: true });
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Draft card for #${number} in project #${project} does not exist`);
         }

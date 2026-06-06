@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Filterable } from "common/types";
 import { SyncOperation, SyncStatus, SyncType } from "server/types";
-import { SemanticVersion } from "common/utils";
+import { SemanticVersion, validate, ValidationStep } from "common/utils";
+import { User } from "common/models/auth";
+import { useSelector } from "react-redux";
+import { RootState } from "./store";
 
 export function useFilter<T>(filter?: Filterable<T>) {
     return useMemo(() => {
@@ -48,6 +51,11 @@ export function useFilter<T>(filter?: Filterable<T>) {
 
         return cartesianProduct(filter);
     }, [filter]);
+}
+
+export function usePermission(...requires: ValidationStep<User>[]) {
+    const user = useSelector((state: RootState) => state.auth.user);
+    return validate(user, ...requires);
 }
 
 export const useTimezone = () => {
