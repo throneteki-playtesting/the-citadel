@@ -1,8 +1,9 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { dataService, logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User } from "discord.js";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role } from "discord.js";
 import { discordCommandMiddleware } from "@/middleware/auth";
+import cron from "node-cron";
 
 class DiscordService {
     private client: Client;
@@ -13,12 +14,20 @@ class DiscordService {
         const clientId = process.env.DISCORD_CLIENT_ID;
 
         this.client = new Client({
-            intents: ["Guilds", "GuildMessages", "DirectMessages", "GuildPresences"],
+            intents: ["Guilds", "GuildMessages", "DirectMessages", "GuildPresences", "GuildMembers"],
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
 
         this.client.once(Events.ClientReady, (client) => {
             logger.info(`Discord connected with ${client.user.tag}`);
+
+            // Syncs necessary data once on startup, then once a day
+            logger.info("[Discord] Running daily sync...");
+            this.syncAll();
+            if (process.env.NODE_ENV === "production") {
+                cron.schedule("0 0 * * *", () => this.syncAll());
+                logger.info("[Discord] Daily sync scheduled");
+            }
         });
 
         buildCommands().then((available) => {
@@ -33,6 +42,55 @@ class DiscordService {
                     await deployCommands(available, { ...deployOptions, guild });
                 }
             });
+        });
+
+        this.client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+            if (!this.isGuild(newMember.guild)) return;
+
+            const nicknameChanged = oldMember.nickname !== newMember.nickname;
+            const avatarChanged = oldMember.avatar !== newMember.avatar;
+            const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size || oldMember.roles.cache.some((r) => !newMember.roles.cache.has(r.id));
+
+            if (!nicknameChanged && !avatarChanged && !rolesChanged) return;
+
+            const [user] = await dataService.users.read({ discordId: newMember.id });
+            if (!user) return;
+
+            logger.info(`[Discord] Member updated: ${newMember.user.username}`);
+            await DiscordService.syncUser(newMember);
+        });
+
+        this.client.on(Events.UserUpdate, async (oldUser, newUser) => {
+            const usernameChanged = oldUser.username !== newUser.username;
+            const avatarChanged = oldUser.avatar !== newUser.avatar;
+
+            if (!usernameChanged && !avatarChanged) return;
+
+            const [user] = await dataService.users.read({ discordId: newUser.id });
+            if (!user) return;
+
+            logger.info(`[Discord] User updated: ${newUser.username}`);
+            await DiscordService.syncUser(newUser);
+        });
+
+        this.client.on(Events.GuildRoleCreate, async (role) => {
+            if (!this.isGuild(role.guild)) return;
+            logger.info(`[Discord] Role created: ${role.name}`);
+            await DiscordService.syncRole(role);
+        });
+
+        this.client.on(Events.GuildRoleUpdate, async (_oldRole, newRole) => {
+            if (!this.isGuild(newRole.guild)) return;
+            logger.info(`[Discord] Role updated: ${newRole.name}`);
+            await DiscordService.syncRole(newRole);
+        });
+
+        this.client.on(Events.GuildRoleDelete, async (role) => {
+            if (!this.isGuild(role.guild)) return;
+            const [existing] = await dataService.roles.read({ discordId: role.id });
+            if (!existing) return;
+            logger.info(`[Discord] Role deleted: ${role.name}`);
+            await dataService.roles.update({ ...existing, active: false });
         });
 
         this.client.on(Events.InteractionCreate, async (interaction) => {
@@ -170,7 +228,7 @@ class DiscordService {
         return result || null;
     }
 
-    static async getUserFromMember(member: APIGuildMember | GuildMember | APIUser | User) {
+    static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;
 
@@ -178,33 +236,54 @@ class DiscordService {
             ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
             : null;
 
-        const displayname = nickname ?? discordUser.username;
-        const avatarUrl = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`;
+        const [existing] = await dataService.users.read({ discordId: discordUser.id });
 
-        let [user] = await dataService.users.read({ discordId: discordUser.id });
-
-        if (!user) {
-            user = {
-                id: discordUser.id,
-                discordId: discordUser.id,
-                username: discordUser.username,
-                displayname,
-                avatarUrl,
-                permissions: [],
-                roles: [],
-                lastLogin: new Date()
-            };
-        } else {
-            user.username = discordUser.username;
-            user.displayname = displayname;
-            user.avatarUrl = avatarUrl;
-            user.lastLogin = new Date();
-        }
-
-        await dataService.users.update(user);
-        return user;
+        return await dataService.users.update({
+            id: discordUser.id,
+            discordId: discordUser.id,
+            username: discordUser.username,
+            displayname: nickname ?? discordUser.username,
+            avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+            permissions: existing?.permissions ?? [],
+            roles: existing?.roles ?? [],
+            lastLogin: loggingIn ? new Date() : existing?.lastLogin
+        });
     }
 
+    static async syncRole(role: Role) {
+        const [existing] = await dataService.roles.read({ discordId: role.id });
+        return await dataService.roles.update({
+            discordId: role.id,
+            active: true,
+            name: role.name,
+            color: role.colors.primaryColor,
+            position: role.position,
+            hoist: role.hoist,
+            icon: role.icon,
+            unicodeEmoji: role.unicodeEmoji,
+            permissions: existing?.permissions ?? []
+        });
+    }
+
+    private async syncAll() {
+        try {
+            const guild = await this.getGuild();
+
+            const [members, roles] = await Promise.all([
+                guild.members.fetch(),
+                guild.roles.fetch()
+            ]);
+
+            await Promise.all([
+                ...members.map((m) => DiscordService.syncUser(m)),
+                ...roles.map((r) => DiscordService.syncRole(r))
+            ]);
+
+            logger.info("[Discord] Daily sync complete");
+        } catch (err) {
+            logger.error("[Discord] Daily sync failed", err);
+        }
+    }
 }
 
 export default DiscordService;

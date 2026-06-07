@@ -69,7 +69,7 @@ router.get("/:discordId",
             const guild = await discordService.getGuild();
             const discordUser = await discordService.findMemberOrUserById(guild, discordId);
             if (discordUser) {
-                user = await DiscordService.getUserFromMember(discordUser);
+                user = await DiscordService.syncUser(discordUser);
             }
         }
 

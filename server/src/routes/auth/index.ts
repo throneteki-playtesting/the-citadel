@@ -58,7 +58,7 @@ router.get("/discord/callback",
             }
 
             // 3. Authenticate discord member/user to user
-            const user = await DiscordService.getUserFromMember(discordDetails);
+            const user = await DiscordService.syncUser(discordDetails, true);
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             await applyTokensToResponse(res, user.discordId);

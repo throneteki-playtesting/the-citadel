@@ -18,7 +18,13 @@ interface IPrincipal {
 
 export interface Role {
     discordId: string;
+    active: boolean;
     name: string;
+    color: number;
+    position: number;
+    hoist: boolean;
+    icon: string | null;
+    unicodeEmoji: string | null;
     permissions: Permission[];
 }
 export interface User extends IPrincipal {
