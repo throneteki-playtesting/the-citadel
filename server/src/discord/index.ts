@@ -1,7 +1,7 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { dataService, logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser } from "discord.js";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User } from "discord.js";
 import { discordCommandMiddleware } from "@/middleware/auth";
 
 class DiscordService {
@@ -120,6 +120,27 @@ class DiscordService {
     }
 
     /**
+     * Finds a guild member or user by Discord ID
+     * Checks the guild first (to capture nickname), falls back to global user lookup
+     * @param guild Guild to search first
+     * @param id Discord user ID
+     * @returns GuildMember if found in guild, APIUser if found globally, null if not found
+     */
+    public async findMemberOrUserById(guild: Guild, id: string): Promise<GuildMember | User | null> {
+        try {
+            return await guild.members.fetch(id);
+        } catch {
+        // Not in guild, fall back to global user lookup
+        }
+
+        try {
+            return await guild.client.users.fetch(id);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
      * Finds a guild role by name
      * @param guild Guild to search
      * @param name Name of role
@@ -149,7 +170,7 @@ class DiscordService {
         return result || null;
     }
 
-    static async getUserFromMember(member: APIGuildMember | GuildMember | APIUser) {
+    static async getUserFromMember(member: APIGuildMember | GuildMember | APIUser | User) {
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;
 

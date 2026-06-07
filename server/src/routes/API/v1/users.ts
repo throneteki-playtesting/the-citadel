@@ -1,4 +1,4 @@
-import { dataService } from "@/services";
+import { dataService, discordService } from "@/services";
 import { celebrate, Joi, Segments } from "celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
@@ -11,6 +11,7 @@ import { StatusCodes } from "http-status-codes";
 import { getContext } from "@/middleware/context";
 import { User } from "common/models/auth";
 import { getRequestSchema } from "@/schemas";
+import DiscordService from "@/discord";
 
 const router = express.Router();
 
@@ -61,8 +62,18 @@ router.get("/:discordId",
     celebrate({ [Segments.PARAMS]: { discordId: Joi.string().required() } }),
     asyncHandler<{ discordId: string }, unknown, unknown, unknown>(async (req, res) => {
         const { discordId } = req.params;
-        const [result] = await dataService.users.read({ discordId });
-        res.status(StatusCodes.OK).json(result);
+        let [user] = await dataService.users.read({ discordId });
+
+        // Attempt to fetch user's discord Id and build their data from there
+        if (!user) {
+            const guild = await discordService.getGuild();
+            const discordUser = await discordService.findMemberOrUserById(guild, discordId);
+            if (discordUser) {
+                user = await DiscordService.getUserFromMember(discordUser);
+            }
+        }
+
+        res.status(StatusCodes.OK).json(user);
     })
 );
 
