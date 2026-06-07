@@ -3,7 +3,6 @@ import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
 import { ReactElement } from "react";
-import Cards from "./cards";
 import Suggestions from "./suggestions";
 import Users from "./admin/users";
 import Roles from "./admin/roles";
@@ -54,12 +53,6 @@ export const navItems: NavItem[] = [
                 element: <Project isCreating={true}/>
             }
         ]
-    },
-    {
-        path: "/cards",
-        label: "Cards",
-        permission: Permission.READ_CARDS,
-        element: <Cards />
     },
     {
         path: "/suggestions",
