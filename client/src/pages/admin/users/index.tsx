@@ -53,7 +53,7 @@ const Users = () => {
                     {permissions.concat(roles)}
                 </div>;
             case "lastLogin":
-                return <span>{user.lastLogin.toLocaleString()}</span>;
+                return <span>{user.lastLogin?.toLocaleString()}</span>;
             case "actions":
                 const allowedActions = [];
                 if (hasPermission(user, Permission.EDIT_USERS)) {

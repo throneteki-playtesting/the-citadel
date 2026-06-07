@@ -232,6 +232,9 @@ class DiscordService {
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;
 
+        // Do not sync bots
+        if (discordUser.bot) return;
+
         const nickname = !isUser
             ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
             : null;
