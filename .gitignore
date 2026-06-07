@@ -14,3 +14,6 @@ server/public/css/*.css
 server/public/css/*.css.map
 
 *.env
+
+# Migration data
+unresolved-users.json
