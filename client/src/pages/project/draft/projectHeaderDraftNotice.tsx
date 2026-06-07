@@ -75,7 +75,7 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
                                 </ModalBody>
                                 <ModalFooter>
                                     <Button onPress={onClose}>Turn Back</Button>
-                                    <Button color="primary" isDisabled={!errorMessage} onPress={onSubmit} isLoading={isInitialising}>Proceed</Button>
+                                    <Button color="primary" isDisabled={!!errorMessage} onPress={onSubmit} isLoading={isInitialising}>Proceed</Button>
                                 </ModalFooter>
                             </>
                         )}
