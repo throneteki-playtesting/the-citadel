@@ -3,6 +3,7 @@ import { enumToArray } from "./utils";
 import { Faction } from "common/models/cards";
 import { ChangeType } from "common/types";
 import * as discordEmojis from "discord-emoji";
+import { IPlaytestReview } from "common/models/reviews";
 
 export const availablePermissions = enumToArray(Permission);
 
@@ -63,3 +64,7 @@ export const emojis = {
     bugfixed: "wrench",
     other: "eight_spoked_asterisk"
 } as { [emoji: string]: string };
+
+export const highlightTarget = {
+    review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`
+} as const;

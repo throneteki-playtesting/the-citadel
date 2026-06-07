@@ -10,7 +10,7 @@ import { Alert, Avatar, Skeleton } from "@heroui/react";
 import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
-import { watermarkClasses } from "../../constants";
+import { highlightTarget, watermarkClasses } from "../../constants";
 import { usePermission } from "../../api/hooks";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
@@ -122,7 +122,7 @@ function ReviewRow({ review }: ReviewRowProps) {
 
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <Link to={`/project/${review.project}/${review.number}`}>
+            <Link to={`/project/${review.project}/${review.number}`} state={{ highlight: highlightTarget.review(review) }}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>

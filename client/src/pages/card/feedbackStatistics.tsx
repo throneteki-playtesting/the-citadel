@@ -19,6 +19,8 @@ import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
 import LoadingCard from "../../components/loadingCard";
+import { highlightTarget } from "../../constants";
+import { HighlightTarget } from "../../components/highlightTarget";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -333,100 +335,98 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
     }
 
     return (
-        <>
-            <div className={classNames("bg-content1 p-4 flex flex-col", className)} style={style}>
-                <div className="flex gap-2 items-center">
-                    <div className="flex-1 text-lg font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
-                    <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
-                    <div>
-                        <ButtonGroup size="sm">
-                            <PermissionGate requires={(user) => hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer}>
-                                <TouchTooltip content={
-                                    <div className="max-w-64">
-                                        <div className="text-sm">Amend your verdict</div>
-                                        <div className="text-xs">Reviews may only be amended for the current version of the card.</div>
-                                    </div>
-                                }>
-                                    <Button
-                                        isIconOnly
-                                        onPress={() => onEdit(card.latest)}
-                                        color="primary"
-                                    >
-                                        <FontAwesomeIcon icon={faPencil}/>
-                                    </Button>
-                                </TouchTooltip>
-                            </PermissionGate>
+        <HighlightTarget targetId={highlightTarget.review(review)} className={classNames("bg-content1 p-4 flex flex-col ", className)} style={style}>
+            <div className="flex gap-2 items-center">
+                <div className="flex-1 text-lg font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
+                <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
+                <div>
+                    <ButtonGroup size="sm">
+                        <PermissionGate requires={(user) => hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer}>
                             <TouchTooltip content={
                                 <div className="max-w-64">
-                                    <div className="text-sm">Join the discussion</div>
-                                    <div className="text-xs">You will be redirected to discord.</div>
+                                    <div className="text-sm">Amend your verdict</div>
+                                    <div className="text-xs">Reviews may only be amended for the current version of the card.</div>
                                 </div>
                             }>
                                 <Button
-                                    as={Link}
                                     isIconOnly
-                                    isDisabled={!review.discord?.messageUrl}
-                                    href={review.discord?.messageUrl?.replace("https://", "discord://")}
-                                    target="_blank"
+                                    onPress={() => onEdit(card.latest)}
+                                    color="primary"
                                 >
-                                    {/* TODO: Change this to sync if messageUrl is null, assuming permission */}
-                                    <FontAwesomeIcon icon={faDiscord}/>
+                                    <FontAwesomeIcon icon={faPencil}/>
                                 </Button>
                             </TouchTooltip>
-                        </ButtonGroup>
-                    </div>
-                </div>
-                <div className="flex gap-2">
-                    <div className="flex gap-2 items-center">
-                        <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} classNames={{ name: "text-2xl" }}className="shrink-0 size-12"/>
-                        <div className="flex flex-col min-w-0">
-                            <div className="text-lg font-crimson italic">
-                                Review by {user?.displayname ?? "Unknown Playtester"}
+                        </PermissionGate>
+                        <TouchTooltip content={
+                            <div className="max-w-64">
+                                <div className="text-sm">Join the discussion</div>
+                                <div className="text-xs">You will be redirected to discord.</div>
                             </div>
-                            <div className="text-base font-crimson italic truncate text-foreground/40">
-                                {review.played} {review.played !== 1 ? "games" : "game"} played
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="flex flex-col sm:flex-row max-sm:divide-y sm:divide-x divide-content3 py-2">
-                    <div className="shrink-0 flex flex-wrap sm:flex-col gap-2 text-sm px-2 pb-2">
-                        <span>Boring: {statementAnswerIcon(review.statements.boring)}</span>
-                        <span>Competitive: {statementAnswerIcon(review.statements.competitive)}</span>
-                        <span>Creative: {statementAnswerIcon(review.statements.creative)}</span>
-                        <span>Balanced: {statementAnswerIcon(review.statements.balanced)}</span>
-                        <span>Releasable: {statementAnswerIcon(review.statements.releasable)}</span>
-                    </div>
-                    <div className="px-2 py-1">
-                        <div className="font-crimson italic text-lg">Additional Comments</div>
-                        <div className="relative">
-                            <div
-                                ref={additionalRef}
-                                className="text-sm leading-tight whitespace-pre-wrap overflow-hidden transition-all duration-300"
-                                style={{ maxHeight: isExpanded ? additionalRef.current?.scrollHeight : "8rem" }}
+                        }>
+                            <Button
+                                as={Link}
+                                isIconOnly
+                                isDisabled={!review.discord?.messageUrl}
+                                href={review.discord?.messageUrl?.replace("https://", "discord://")}
+                                target="_blank"
                             >
-                                {review.additional ?? "No comments provided."}
-                            </div>
-                            {!isExpanded && isOverflowing && (
-                                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-content1 to-transparent pointer-events-none" />
-                            )}
+                                {/* TODO: Change this to sync if messageUrl is null, assuming permission */}
+                                <FontAwesomeIcon icon={faDiscord}/>
+                            </Button>
+                        </TouchTooltip>
+                    </ButtonGroup>
+                </div>
+            </div>
+            <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                    <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} classNames={{ name: "text-2xl" }}className="shrink-0 size-12"/>
+                    <div className="flex flex-col min-w-0">
+                        <div className="text-lg font-crimson italic">
+                                Review by {user?.displayname ?? "Unknown Playtester"}
                         </div>
-                        {isOverflowing && (
-                            <button className="text-xs text-foreground/50 hover:text-default-600 mt-1" onClick={() => setIsExpanded((prev) => !prev)}>
-                                {isExpanded ? "Show less" : "Read more..."}
-                            </button>
+                        <div className="text-base font-crimson italic truncate text-foreground/40">
+                            {review.played} {review.played !== 1 ? "games" : "game"} played
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="flex flex-col sm:flex-row max-sm:divide-y sm:divide-x divide-content3 py-2">
+                <div className="shrink-0 flex flex-wrap sm:flex-col gap-2 text-sm px-2 pb-2">
+                    <span>Boring: {statementAnswerIcon(review.statements.boring)}</span>
+                    <span>Competitive: {statementAnswerIcon(review.statements.competitive)}</span>
+                    <span>Creative: {statementAnswerIcon(review.statements.creative)}</span>
+                    <span>Balanced: {statementAnswerIcon(review.statements.balanced)}</span>
+                    <span>Releasable: {statementAnswerIcon(review.statements.releasable)}</span>
+                </div>
+                <div className="px-2 py-1">
+                    <div className="font-crimson italic text-lg">Additional Comments</div>
+                    <div className="relative">
+                        <div
+                            ref={additionalRef}
+                            className="text-sm leading-tight whitespace-pre-wrap overflow-hidden transition-all duration-300"
+                            style={{ maxHeight: isExpanded ? additionalRef.current?.scrollHeight : "8rem" }}
+                        >
+                            {review.additional ?? "No comments provided."}
+                        </div>
+                        {!isExpanded && isOverflowing && (
+                            <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-content1 to-transparent pointer-events-none" />
                         )}
                     </div>
+                    {isOverflowing && (
+                        <button className="text-xs text-foreground/50 hover:text-default-600 mt-1" onClick={() => setIsExpanded((prev) => !prev)}>
+                            {isExpanded ? "Show less" : "Read more..."}
+                        </button>
+                    )}
                 </div>
-                <Accordion>
-                    <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="View Submitted Decks" keepContentMounted>
-                        <div className="overflow-hidden min-w-0">
-                            {review.decks.map((deck) => <ReviewSummaryDeck key={deck} url={deck} className="p-1" />)}
-                        </div>
-                    </AccordionItem>
-                </Accordion>
             </div>
-        </>
+            <Accordion>
+                <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="View Submitted Decks" keepContentMounted>
+                    <div className="overflow-hidden min-w-0">
+                        {review.decks.map((deck) => <ReviewSummaryDeck key={deck} url={deck} className="p-1" />)}
+                    </div>
+                </AccordionItem>
+            </Accordion>
+        </HighlightTarget>
     );
 }
 
