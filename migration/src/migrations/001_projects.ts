@@ -8,7 +8,7 @@ const userId = "120834530801221634";
 
 export const migration: Migration = {
     name: "001_projects",
-    description: "Copy & migrate projects from source to destination",
+    description: "Upsert migrated projects into destination (match on number)",
 
     async run({ sourceDb, destDb, dryRun }) {
         const source = sourceDb.collection("projects");
@@ -24,19 +24,15 @@ export const migration: Migration = {
         }
 
         const now = new Date();
-        const docs: Record<string, any>[] = [];
+        const ops: object[] = [];
 
         log.info("Transforming...");
         for (const project of allProjects) {
             const newDoc: Record<string, any> = {
-                ...project,
-                _id: new ObjectId(),
                 number: project.code,
                 code: project.short,
                 type: (project.type as string).toLowerCase(),
                 version: project.releases,
-                created: now,
-                createdBy: userId,
                 updated: now,
                 updatedBy: userId,
                 draft: !project.active,
@@ -51,35 +47,42 @@ export const migration: Migration = {
                     tyrell: project.perFaction,
                     neutral: project.neutral
                 },
-                emoji: project.emoji ? (project.emoji as string).replaceAll(":", "") : ""
+                emoji: project.emoji ? (project.emoji as string).replaceAll(":", "") : "",
+                // Carry through any remaining fields not explicitly remapped
+                ...(project.active !== undefined && { active: project.active }),
+                ...(project.name && { name: project.name })
             };
 
-            delete newDoc.short;
-            delete newDoc.releases;
-            delete newDoc.perFaction;
-            delete newDoc.neutral;
-
-            docs.push(newDoc);
+            ops.push({
+                updateOne: {
+                    filter: { number: newDoc.number },
+                    update: {
+                        $set: newDoc,
+                        $setOnInsert: { _id: new ObjectId(), created: now, createdBy: userId }
+                    },
+                    upsert: true
+                }
+            });
         }
 
         if (dryRun) {
-            log.info("[dry-run] Would drop dest \"projects\" collection");
-            log.info(`[dry-run] Would insert ${docs.length} transformed project(s)`);
+            log.info(`[dry-run] Would upsert ${ops.length} project(s) into dest (match on number)`);
             log.info("[dry-run] Would create unique index on { number: 1 }");
             return;
         }
 
-        log.info("Dropping destination collection...");
-        await dest.drop().catch(() => { /* collection may not exist yet */ });
+        // Ensure index exists before upserting
+        await dest.createIndex({ number: 1 }, { unique: true });
 
-        log.info("Inserting transformed projects...");
-        for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-            const batch = docs.slice(i, i + BATCH_SIZE);
-            await dest.insertMany(batch, { ordered: true });
-            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: inserted ${batch.length}`);
+        let upserted = 0, modified = 0;
+        for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+            const batch = ops.slice(i, i + BATCH_SIZE);
+            const result = await dest.bulkWrite(batch as any, { ordered: false });
+            upserted += result.upsertedCount;
+            modified += result.modifiedCount;
+            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
         }
 
-        await dest.createIndex({ number: 1 }, { unique: true });
-        log.success("Projects migration complete");
+        log.success(`Projects migration complete — ${upserted} inserted, ${modified} updated`);
     }
 };

@@ -9,11 +9,13 @@ import { MigrationContext, Migration } from "./lib/types";
 import { migration as projectsMigration } from "./migrations/001_projects";
 import { migration as cardsMigration } from "./migrations/002_cards";
 import { migration as reviewsMigration } from "./migrations/003_reviews";
+import { migration as playtestingUpdatesMigration } from "./migrations/004_playtestingUpdates";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
     cardsMigration,
-    reviewsMigration
+    reviewsMigration,
+    playtestingUpdatesMigration
 ];
 
 const args = process.argv.slice(2);

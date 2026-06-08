@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { ObjectId } from "mongodb";
 import { Migration } from "../lib/types";
-import { log } from "../lib/logger";
-import { fetchIssueData, parseIssueNumber } from "../lib/github";
+import { log, createProgress } from "../lib/logger";
+import { loadAllIssues, getIssueByNumber, getIssueByCardCode, parseIssueNumber } from "../lib/github";
 
 const BATCH_SIZE = 500;
 const userId = "120834530801221634";
@@ -48,75 +48,68 @@ export const migration: Migration = {
             return;
         }
 
-        // Pre-fetch all GitHub issues upfront (cache deduplicates)
-        const cardsWithIssues = allCards.filter(c => c.github?.issueUrl);
-        log.info(`Fetching GitHub data for ${cardsWithIssues.length} card(s) with issues...`);
-
-        let githubFetchErrors = 0;
-        for (const card of cardsWithIssues) {
-            const issueNumber = parseIssueNumber(card.github.issueUrl);
-            if (issueNumber !== null) {
-                try {
-                    await fetchIssueData(issueNumber);
-                } catch (err) {
-                    log.error(`Failed to fetch issue for card ${card._id}`, err);
-                    githubFetchErrors++;
-                }
-            }
-        }
-        if (githubFetchErrors > 0) {
-            log.warn(`${githubFetchErrors} GitHub issue(s) failed to fetch — those cards will retain their existing status`);
-        }
+        // Load all GitHub issues into memory once — no per-card API calls needed
+        log.info("Loading GitHub issues into memory...");
+        await loadAllIssues();
 
         const now = new Date();
-        const latestMap: Record<string, { id: ObjectId; version: string }> = {};
+        const latestMap: Record<string, { key: string; version: string }> = {};
         const docs: Record<string, any>[] = [];
+        let issueFound = 0, issueMissing = 0;
 
-        log.info("Transforming cards...");
-        for (const card of allCards) {
-            const newId = new ObjectId();
+        const transformProgress = createProgress("Transforming");
+        for (let i = 0; i < allCards.length; i++) {
+            const card = allCards[i];
+            transformProgress.counter(i + 1, allCards.length);
+
             const newDoc: Record<string, any> = {
                 ...card,
-                _id: newId,
                 project: card.projectId,
                 latest: false,
                 draft: !card.playtesting,
                 implemented: card.playtesting && (!card.github || card.github?.status === "complete"),
-                created: now,
-                createdBy: userId,
                 updated: now,
                 updatedBy: userId,
                 cardUpdated: now
             };
 
-            // Code calculation
             if (newDoc.release) {
                 newDoc.code = `${newDoc.project}${newDoc.release.number.toString().padStart(3, "0")}`;
             } else {
-                newDoc.code = `${newDoc.project}${newDoc.number + 500}`;
+                newDoc.code = `${newDoc.project}${(newDoc.number + 500).toString().padStart(3, "0")}`;
             }
 
-            // GitHub — fetch fresh data from API if we have an issue URL
             if (newDoc.github) {
+                // Card already has github data — refresh from in-memory index by issue number
                 const issueNumber = newDoc.github.issueUrl ? parseIssueNumber(newDoc.github.issueUrl) : null;
-                if (issueNumber !== null) {
-                    const issueData = await fetchIssueData(issueNumber).catch(() => null);
-                    if (issueData) {
-                        newDoc.github = {
-                            status: issueData.status,
-                            issueUrl: issueData.issueUrl,
-                            closedAt: issueData.closedAt ?? undefined,
-                            lastSynced: now
-                        };
-                    } else {
-                        if (newDoc.github.status === "complete") newDoc.github.status = "closed";
-                        if (newDoc.github.status === "closed") newDoc.github.closedAt = now;
-                        newDoc.github.lastSynced = now;
-                    }
+                const issueData = issueNumber !== null ? getIssueByNumber(issueNumber) : null;
+
+                if (issueData) {
+                    newDoc.github = {
+                        status: issueData.status,
+                        issueUrl: issueData.issueUrl,
+                        closedAt: issueData.closedAt ?? undefined,
+                        lastSynced: now
+                    };
                 } else {
+                    // Issue not found in index — normalise what we have
                     if (newDoc.github.status === "complete") newDoc.github.status = "closed";
                     if (newDoc.github.status === "closed") newDoc.github.closedAt = now;
                     newDoc.github.lastSynced = now;
+                }
+            } else {
+                // No github data — look up by card code + version from the in-memory index
+                const issueData = getIssueByCardCode(newDoc.code, newDoc.version);
+                if (issueData) {
+                    newDoc.github = {
+                        status: issueData.status,
+                        issueUrl: issueData.issueUrl,
+                        closedAt: issueData.closedAt ?? undefined,
+                        lastSynced: now
+                    };
+                    issueFound++;
+                } else {
+                    issueMissing++;
                 }
             }
 
@@ -125,22 +118,25 @@ export const migration: Migration = {
             if (newDoc.note?.type) newDoc.note.type = (newDoc.note.type as string).toLowerCase();
             if (newDoc.text) newDoc.text = (newDoc.text as string).replace(/\r/g, "");
 
+            delete newDoc._id;
             delete newDoc.projectId;
             delete newDoc["note.type"];
             delete newDoc.playtesting;
 
             const key = `${newDoc.project}-${newDoc.number}`;
             if (!latestMap[key] || compareSemver(newDoc.version, latestMap[key].version) > 0) {
-                latestMap[key] = { id: newId, version: newDoc.version };
+                latestMap[key] = { key: `${newDoc.project}-${newDoc.number}-${newDoc.version}`, version: newDoc.version };
             }
 
             docs.push(newDoc);
         }
+        transformProgress.done(
+            `done — ${issueMissing + issueFound > 0 ? `issue lookup: ${issueFound} found, ${issueMissing} not found` : "no issue lookups needed"}`
+        );
 
-        // Flip latest flags
-        const latestIds = new Set(Object.values(latestMap).map(v => v.id.toString()));
+        const latestKeys = new Set(Object.values(latestMap).map(v => v.key));
         for (const doc of docs) {
-            if (latestIds.has(doc._id.toString())) doc.latest = true;
+            if (latestKeys.has(`${doc.project}-${doc.number}-${doc.version}`)) doc.latest = true;
         }
 
         if (dryRun) {
@@ -151,16 +147,22 @@ export const migration: Migration = {
         }
 
         log.info("Dropping destination collection...");
-        await dest.drop().catch(() => { /* collection may not exist yet */ });
+        await dest.drop().catch(() => { /* may not exist */ });
 
-        log.info("Inserting transformed cards...");
+        const saveProgress = createProgress("Saving");
+        let inserted = 0;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
-            await dest.insertMany(batch, { ordered: true });
-            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: inserted ${batch.length}`);
+            const ops = batch.map(doc => ({
+                insertOne: { document: { _id: new ObjectId(), created: now, createdBy: userId, ...doc } }
+            }));
+            const result = await dest.bulkWrite(ops, { ordered: true });
+            inserted += result.insertedCount;
+            saveProgress.counter(inserted, docs.length);
         }
+        saveProgress.done("done");
 
         await dest.createIndex({ project: 1, number: 1, version: 1 }, { unique: true });
-        log.success("Cards migration complete");
+        log.success(`Cards migration complete — ${inserted} inserted`);
     }
 };

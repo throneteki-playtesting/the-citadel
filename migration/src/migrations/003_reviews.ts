@@ -9,7 +9,7 @@ const BATCH_SIZE = 500;
 
 export const migration: Migration = {
     name: "003_reviews",
-    description: "Copy & migrate reviews from source to destination, resolving reviewer Discord usernames to IDs",
+    description: "Upsert migrated reviews into destination (match on project + number + version + reviewer)",
 
     async run({ sourceDb, destDb, dryRun }) {
         const source = sourceDb.collection("reviews");
@@ -67,7 +67,7 @@ export const migration: Migration = {
         }
 
         let skipped = 0;
-        const docs: Record<string, any>[] = [];
+        const ops: object[] = [];
 
         log.info("Transforming reviews...");
         for (const review of allReviews) {
@@ -80,14 +80,14 @@ export const migration: Migration = {
                 continue;
             }
 
-            const newDoc: Record<string, any> = {
-                ...review,
-                _id: new ObjectId(),
+            const created = new Date(Number(review.epoch));
+
+            const setDoc: Record<string, any> = {
                 project: review.projectId,
+                number: review.number,
+                version: review.version,
                 reviewer: reviewerId,
-                created: new Date(Number(review.epoch)),
-                createdBy: reviewerId,
-                updated: new Date(Number(review.epoch)),
+                updated: created,
                 updatedBy: reviewerId,
                 statements: {
                     boring: (review.statements.boring as string).toLowerCase(),
@@ -98,40 +98,53 @@ export const migration: Migration = {
                 }
             };
 
-            delete newDoc.projectId;
-            delete newDoc.epoch;
-            delete newDoc.faction;
-            delete newDoc.name;
+            // Carry through any other fields not explicitly remapped
+            for (const [k, v] of Object.entries(review)) {
+                if (!["_id", "projectId", "epoch", "faction", "name", "reviewer", "statements"].includes(k)) {
+                    if (!(k in setDoc)) setDoc[k] = v;
+                }
+            }
 
-            docs.push(newDoc);
+            ops.push({
+                updateOne: {
+                    filter: {
+                        project: review.projectId,
+                        number: review.number,
+                        version: review.version,
+                        reviewer: reviewerId
+                    },
+                    update: {
+                        $set: setDoc,
+                        $setOnInsert: { _id: new ObjectId(), created, createdBy: reviewerId }
+                    },
+                    upsert: true
+                }
+            });
         }
 
         if (dryRun) {
-            log.info("[dry-run] Would drop dest \"reviews\" collection");
-            log.info(`[dry-run] Would insert ${docs.length} transformed review(s) (${skipped} skipped — unresolved reviewers)`);
-            if (skipped === 0) log.info("[dry-run] Would create unique index on { project, number, version, reviewer }");
+            log.info(`[dry-run] Would upsert ${ops.length} review(s) into dest (match on project + number + version + reviewer)`);
+            log.info(`[dry-run] ${skipped} review(s) skipped (unresolved reviewers)`);
+            log.info("[dry-run] Would create unique index on { project, number, version, reviewer }");
             return;
         }
 
-        if (docs.length === 0) {
+        if (ops.length === 0) {
             log.warn("No reviews to write after filtering — nothing committed");
             return;
         }
 
-        log.info("Dropping destination collection...");
-        await dest.drop().catch(() => { /* collection may not exist yet */ });
+        await dest.createIndex({ project: 1, number: 1, version: 1, reviewer: 1 }, { unique: true });
 
-        log.info("Inserting transformed reviews...");
-        for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-            const batch = docs.slice(i, i + BATCH_SIZE);
-            await dest.insertMany(batch, { ordered: true });
-            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: inserted ${batch.length}`);
+        let upserted = 0, modified = 0;
+        for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+            const batch = ops.slice(i, i + BATCH_SIZE);
+            const result = await dest.bulkWrite(batch as any, { ordered: false });
+            upserted += result.upsertedCount;
+            modified += result.modifiedCount;
+            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
         }
 
-        if (skipped === 0) {
-            await dest.createIndex({ project: 1, number: 1, version: 1, reviewer: 1 }, { unique: true });
-        }
-
-        log.success(`Reviews migration complete (${docs.length} written, ${skipped} skipped)`);
+        log.success(`Reviews migration complete — ${upserted} inserted, ${modified} updated, ${skipped} skipped`);
     }
 };

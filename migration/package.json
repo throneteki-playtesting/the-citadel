@@ -13,13 +13,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@octokit/rest": "^22.0.1",
     "discord.js": "^14.26.4",
     "dotenv": "^17.4.2",
-    "mongodb": "^7.2.0"
+    "mongodb": "^7.2.0",
+    "octokit": "^5.0.5"
   },
   "devDependencies": {
     "@octokit/auth-app": "^8.2.0",
+    "@octokit/types": "^16.0.0",
     "@types/node": "^25.9.2",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
