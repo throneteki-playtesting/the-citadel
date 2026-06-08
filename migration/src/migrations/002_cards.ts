@@ -7,6 +7,15 @@ import { loadAllIssues, getIssueByNumber, getIssueByCardCode, parseIssueNumber }
 const BATCH_SIZE = 500;
 const userId = "120834530801221634";
 
+const releasePackDates: Record<string, Date> = {
+    WAID: new Date("2025-05-18"),
+    WoW: new Date("2025-07-02"),
+    MaV: new Date("2025-08-24"),
+    LotW: new Date("2025-10-03"),
+    JfE: new Date("2025-12-07"),
+    NCbT: new Date("2026-02-07")
+};
+
 const factionMap: Record<string, string> = {
     "House Baratheon": "baratheon",
     "House Greyjoy": "greyjoy",
@@ -55,7 +64,7 @@ export const migration: Migration = {
         const now = new Date();
         const latestMap: Record<string, { key: string; version: string }> = {};
         const docs: Record<string, any>[] = [];
-        let issueFound = 0, issueMissing = 0;
+        const issueFound: string[] = [], issueMissing: string[] = [], unknownDates: string[] = [];
 
         const transformProgress = createProgress("Transforming");
         for (let i = 0; i < allCards.length; i++) {
@@ -68,13 +77,17 @@ export const migration: Migration = {
                 latest: false,
                 draft: !card.playtesting,
                 implemented: card.playtesting && (!card.github || card.github?.status === "complete"),
-                updated: now,
-                updatedBy: userId,
-                cardUpdated: now
+                updatedBy: userId
             };
 
             if (newDoc.release) {
                 newDoc.code = `${newDoc.project}${newDoc.release.number.toString().padStart(3, "0")}`;
+                const releaseDate = releasePackDates[newDoc.release.short];
+                if (releaseDate) {
+                    newDoc.created = releaseDate;
+                    newDoc.updated = releaseDate;
+                    newDoc.cardUpdated = releaseDate;
+                }
             } else {
                 newDoc.code = `${newDoc.project}${(newDoc.number + 500).toString().padStart(3, "0")}`;
             }
@@ -91,6 +104,9 @@ export const migration: Migration = {
                         closedAt: issueData.closedAt ?? undefined,
                         lastSynced: now
                     };
+                    newDoc.created = issueData.created;
+                    newDoc.updated = issueData.updated;
+                    newDoc.cardUpdated = issueData.updated;
                 } else {
                     // Issue not found in index — normalise what we have
                     if (newDoc.github.status === "complete") newDoc.github.status = "closed";
@@ -99,7 +115,11 @@ export const migration: Migration = {
                 }
             } else {
                 // No github data — look up by card code + version from the in-memory index
-                const issueData = getIssueByCardCode(newDoc.code, newDoc.version);
+                let issueData = getIssueByCardCode(newDoc.code, newDoc.version);
+                if (!issueData && newDoc.release) {
+                    const devCode = `${newDoc.project}${(newDoc.number + 500).toString().padStart(3, "0")}`;
+                    issueData = getIssueByCardCode(devCode, newDoc.version);
+                }
                 if (issueData) {
                     newDoc.github = {
                         status: issueData.status,
@@ -107,10 +127,18 @@ export const migration: Migration = {
                         closedAt: issueData.closedAt ?? undefined,
                         lastSynced: now
                     };
-                    issueFound++;
+                    newDoc.created = issueData.created;
+                    newDoc.updated = issueData.updated;
+                    newDoc.cardUpdated = issueData.updated;
+
+                    issueFound.push(`${newDoc.code} | ${newDoc.version}`);
                 } else {
-                    issueMissing++;
+                    issueMissing.push(`${newDoc.code} | ${newDoc.version}`);
                 }
+            }
+
+            if (!newDoc.created || !newDoc.updated || !newDoc.cardUpdated) {
+                unknownDates.push(`${newDoc.code} | ${newDoc.version}`);
             }
 
             if (newDoc.faction && factionMap[newDoc.faction]) newDoc.faction = factionMap[newDoc.faction];
@@ -131,8 +159,12 @@ export const migration: Migration = {
             docs.push(newDoc);
         }
         transformProgress.done(
-            `done — ${issueMissing + issueFound > 0 ? `issue lookup: ${issueFound} found, ${issueMissing} not found` : "no issue lookups needed"}`
+            `done — ${issueMissing.length + issueFound.length > 0 ? `issue lookup: ${issueFound.length} found, ${issueMissing.length} not found` : "no issue lookups needed"}`
         );
+
+        if (unknownDates.length > 0) {
+            log.warn(`${unknownDates} cards could not have their created/updated dates resolved. Please investigate: ${unknownDates.join(", ")}`);
+        }
 
         const latestKeys = new Set(Object.values(latestMap).map(v => v.key));
         for (const doc of docs) {

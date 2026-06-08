@@ -17,6 +17,7 @@ import { TouchTooltip } from "../../components/touchTooltip";
 import { usePageTitle, useTimezone } from "../../api/hooks";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
+import Error from "../../components/error";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -33,8 +34,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     }
 
     if (!project || !playtestingUpdate) {
-        // TODO: Improve this page (maybe general 404 page)
-        return <div>Update not found</div>;
+        return <Error label="No such raven has been sent from the Citadel..." content="This playtesting update could not be found. It may have been removed, or you may have followed an incorrect link." />;
     }
 
     return (
@@ -121,8 +121,7 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
     }
 
     if (!cards) {
-        // TODO: Improve
-        return <div>Error</div>;
+        return ;
     }
 
     return (
@@ -136,9 +135,13 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
                 <p>Cards have changes to review, and will be applied together in this update.</p>
                 <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
-            </div>
+            {cards && cards.length > 0
+                ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
+                </div>
+                : <Error label="The raven arrived, but carried no news..." content="This update contains no changed cards — an uncommon occurrence & usually indicates this is a legacy update." />
+            }
+
         </div>
     );
 }
@@ -199,11 +202,13 @@ function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
         return null;
     }
 
+    const label = Object.keys(playtestingUpdate.cardChanges).length > 0 ? "Other Cards Implemented" : "Cards Implemented";
+
     return (
         <div className="space-y-2">
             <div className="flex items-center gap-4">
                 <div className="h-px w-8 bg-primary/30" />
-                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">Other Cards Implemented</span>
+                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">{label}</span>
                 <div className="h-px flex-1 bg-primary/30" />
             </div>
             <div className="text-base text-foreground space-y-1">

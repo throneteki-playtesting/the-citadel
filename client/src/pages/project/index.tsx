@@ -4,7 +4,7 @@ import { parseParamNumber } from "../../utils";
 import EditProjectModal from "./editProjectModal";
 import { addToast } from "@heroui/react";
 
-const Project = ({ isCreating = false }: ProjectProps) => {
+export default function Project({ isCreating = false }: ProjectProps) {
     const { number } = useParams();
     const navigate = useNavigate();
 
@@ -32,5 +32,3 @@ const Project = ({ isCreating = false }: ProjectProps) => {
 };
 
 type ProjectProps = { isCreating?: boolean };
-
-export default Project;

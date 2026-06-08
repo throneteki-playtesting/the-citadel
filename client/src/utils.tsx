@@ -62,9 +62,9 @@ export function convertToNode(htmlString: string): React.ReactNode[] {
     const raw = htmlString
         .replace(/(?<=\n?)([^\n]+)(?=\n?)/g, "<p>$1</p>")
         .replace(/\[([^\]]+)\]/g, "<icon name=\"$1\"></icon>")
-        // If any lists are detected, create the ul...
+        .replace(/\*\*\*(.*?)\*\*\*/g, "<i>$1</i>")
+        .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
         .replace(/((?:<p>-.*<\/p>\s*)+)/g, "<ul>$1</ul>")
-        // ... and wrap each line in li
         .replace(/<p>-\s*(.*?)<\/p>/g, "<li>$1</li>")
         .replace(/\n/g, "");
 

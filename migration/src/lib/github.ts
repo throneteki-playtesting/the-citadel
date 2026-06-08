@@ -5,6 +5,10 @@ import { PaginateInterface } from "@octokit/plugin-paginate-rest";
 import { Api } from "@octokit/plugin-rest-endpoint-methods";
 import { paginateGraphQLInterface } from "@octokit/plugin-paginate-graphql";
 import { log, createProgress } from "./logger";
+import { Endpoints } from "@octokit/types";
+
+
+type Issue = Endpoints["GET /repos/{owner}/{repo}/issues/{issue_number}"]["response"]["data"];
 
 type GithubClient = Octokit & { paginate: PaginateInterface } & paginateGraphQLInterface &
     Api & { retry: { retryRequest: (error: RequestError, retries: number, retryAfter: number) => RequestError } };
@@ -32,14 +36,8 @@ export type GithubIssueData = {
     status: "open" | "closed";
     issueUrl: string;
     closedAt: Date | null;
-};
-
-type RawIssue = {
-    number: number;
-    title: string;
-    state: string;
-    html_url: string;
-    closed_at: string | null;
+    created: Date;
+    updated: Date;
 };
 
 // All issues loaded into memory once — keyed two ways for fast lookup
@@ -55,13 +53,15 @@ let issueIndex: IssueIndex | null = null;
 //   updated  -> "<code> | ... - Update <name> (<version>)"
 //   reworked -> "<code> | ... - Rework as <name> (<version>)"
 //   replaced -> "<code> | ... - Replace with <name> (<version>)"
-const ISSUE_TITLE_RE = /^(\d{5})\s*\|.+(?:Update|Rework as|Replace with).+\((\d+\.\d+\.\d+)\)/i;
+const ISSUE_TITLE_RE = /^(\d{5})\s*\|.+(?:Update|Rework as|Replace with|Implement).+\((\d+\.\d+\.\d+)\)/i;
 
-function toIssueData(issue: RawIssue): GithubIssueData {
+function toIssueData(issue: Issue): GithubIssueData {
     return {
         status: issue.state === "closed" ? "closed" : "open",
         issueUrl: issue.html_url,
-        closedAt: issue.closed_at ? new Date(issue.closed_at) : null
+        closedAt: issue.closed_at ? new Date(issue.closed_at) : null,
+        created: new Date(issue.created_at),
+        updated: new Date(issue.updated_at)
     };
 }
 
@@ -92,7 +92,7 @@ export async function loadAllIssues(): Promise<void> {
         });
 
         // issues.list returns PRs too; filter them out (PRs have a pull_request key)
-        const issues = data.filter((i: any) => !i.pull_request) as RawIssue[];
+        const issues = data.filter((i: any) => !i.pull_request);
 
         if (data.length === 0) break;
 
@@ -283,7 +283,8 @@ export function parsePRBody(body: string, prNumber: number): ParsedCardChange[] 
     };
 
     for (const line of lines) {
-        const headingMatch = line.match(CARD_CHANGE_RE);
+        // Strip any check-marks & see if it matches
+        const headingMatch = line.replace(":white_check_mark:", "").match(CARD_CHANGE_RE);
         if (headingMatch) {
             flushChange();
             currentChange = { heading: headingMatch, lines: [] };
