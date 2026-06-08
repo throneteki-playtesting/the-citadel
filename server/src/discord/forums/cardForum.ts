@@ -1,5 +1,5 @@
 import { ActionRowBuilder, BaseMessageOptions, ButtonBuilder, ButtonStyle, EmbedBuilder, ForumChannel, Guild, GuildForumTag, Role } from "discord.js";
-import { emojis, colors } from "../utils";
+import { emojis, colors, discordify } from "../utils";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
@@ -383,7 +383,7 @@ function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
     if (card.note) {
         imageEmbed = imageEmbed
             .setTitle(`${emojis[card.note.type]} ${capitalize(card.note.type)}`)
-            .setDescription(card.note.text);
+            .setDescription(discordify(card.note.text));
     }
     return [imageEmbed];
 }

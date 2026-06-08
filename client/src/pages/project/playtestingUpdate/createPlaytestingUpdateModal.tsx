@@ -11,7 +11,7 @@ import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
-import { noteTypeIcon } from "../../../utils";
+import { convertToNode, noteTypeIcon } from "../../../utils";
 import { sortBy } from "lodash-es";
 import ImplementStatus from "../../../components/status/implementStatus";
 import { changeTypeClasses } from "../../../constants";
@@ -150,7 +150,7 @@ function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCard
                     {card.note ? (
                         <>
                             <div className={classNames("text-lg tracking-wider font-cinzel uppercase pl-4 pr-10 py-0.5 w-full", changeTypeClasses[card.note.type])}><FontAwesomeIcon icon={noteTypeIcon[card.note.type]}/> {card.note.type}</div>
-                            <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">{card.note.text}</div>
+                            <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">{convertToNode(card.note.text)}</div>
                         </>
                     ) : <Alert color="danger" className="text-sm" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
                 </div>

@@ -24,7 +24,7 @@ import ImageStatus from "../../components/status/imageStatus";
 import ImplementStatus from "../../components/status/implementStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
-import { noteTypeIcon, parseParamSemanticVersion } from "../../utils";
+import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
 import { changeTypeClasses } from "../../constants";
 import { TouchTooltip } from "../../components/touchTooltip";
 import DeckSummaries from "./deckSummaries";
@@ -179,7 +179,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
                                         <div className={classNames("pl-6 pr-3 py-2 text-lg tracking-wider font-cinzel uppercase w-full", changeTypeClasses[card.note.type])}>
                                             <FontAwesomeIcon icon={noteTypeIcon[card.note.type]} /> {card.note.type}
                                         </div>
-                                        <div className="pl-6 pr-3 py-4 text-sm tracking-wide text-foreground font-sans">{card.note.text}</div>
+                                        <div className="pl-6 pr-3 py-4 text-sm tracking-wide text-foreground font-sans">{convertToNode(card.note.text)}</div>
                                     </div>
                                 </div>
                             </div>
