@@ -220,9 +220,6 @@ const PR_TITLE_RE = /^(.+?)\s*\|\s*Playtesting Update\s+(\d+)$/i;
 // Matches a card change heading. Version is required — entries without a semver are not card changes.
 const CARD_CHANGE_RE = /^\*\*([^*]+?)\s+(\d{5})\s*\|\s*.+?\s+v(\d+\.\d+\.\d+)\*\*\s*$/;
 
-// Matches a bold heading that looks like a card entry but has no version — used to warn on malformed lines
-const CARD_HEADING_NO_VERSION_RE = /^\*\*[^*]*\d{5}[^*]*\*\*\s*$/;
-
 export function parsePRTitle(title: string): { projectCode: string; updateNumber: number } | null {
     const match = title.match(PR_TITLE_RE);
     if (!match) return null;
@@ -284,15 +281,13 @@ export function parsePRBody(body: string, prNumber: number): ParsedCardChange[] 
 
     for (const line of lines) {
         // Strip any check-marks & see if it matches
-        const headingMatch = line.replace(":white_check_mark:", "").match(CARD_CHANGE_RE);
+        const alteredLine = line.replace(":white_check_mark:", "");
+        const headingMatch = alteredLine.match(CARD_CHANGE_RE);
         if (headingMatch) {
             flushChange();
             currentChange = { heading: headingMatch, lines: [] };
         } else if (currentChange) {
             currentChange.lines.push(line);
-        } else if (CARD_HEADING_NO_VERSION_RE.test(line)) {
-            // Bold heading with a card code but no version — malformed entry, flag it
-            log.warn(`PR #${prNumber}: card heading found with no semver version — skipped. Fix the PR body or update the regex. Line: ${line.trim()}`);
         }
     }
     flushChange();
