@@ -155,7 +155,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
 
     return (
         <Card className={classNames("border-1", factionBorderClasses[card.faction])}>
-            <div className="grow flex transition-all duration-300 overflow-hidden">
+            <div className="grow flex flex-col max-sm:items-center sm:flex-row transition-all duration-300 overflow-hidden">
                 <div className="relative size-full">
                     <div className="absolute bottom-0 left-0 flex items-center justify-center pointer-events-none select-none">
                         <ThronesIcon name={card.faction} className={classNames("ml-8 mb-12 text-9xl", watermarkClasses[card.faction])}/>
@@ -171,18 +171,18 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                                 </>
                             ) : <Alert color="danger" className="text-sm" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
                         </div>
-                        <a href={card.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 px-2 font-sans">
-                            {card.github?.status === "closed"
-                                ? <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
-                                : <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
-                            }
-                        </a>
                     </div>
                 </div>
-                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className={classNames("cursor-pointer", card.type === "plot" || previousCard?.type === "plot" ? "h-48" : "h-72")} onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
+                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className={classNames("cursor-pointer", card.type === "plot" || previousCard?.type === "plot" ? "max-sm:w-72 sm:h-42 lg:h-52" : "max-sm:w-52 sm:h-62 lg:h-72")} onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
                     {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
                 </CardStack>
             </div>
+            <a href={card.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 p-2 font-sans">
+                {card.github?.status === "closed"
+                    ? <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
+                    : <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
+                }
+            </a>
         </Card>
     );
 }
