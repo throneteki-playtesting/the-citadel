@@ -160,7 +160,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                     <div className="absolute bottom-0 left-0 flex items-center justify-center pointer-events-none select-none">
                         <ThronesIcon name={card.faction} className={classNames("ml-8 mb-12 text-9xl", watermarkClasses[card.faction])}/>
                     </div>
-                    <div className="flex flex-col h-full pb-2">
+                    <div className="relative flex flex-col h-full pb-2">
                         <div className="text-xxs font-cinzel ml-4 mt-1 leading-none text-foreground/40">Card #{card.number}</div>
                         <div className="text-lg font-cinzel text-foreground font-semibold px-4 py-2 leading-tight">{card.name} <span className="text-foreground/50 font-semibold">{card.version}</span></div>
                         <div className="flex-1 space-y-1">
@@ -179,7 +179,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                         </a>
                     </div>
                 </div>
-                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className="h-72 md:h-52 lg:h-72 cursor-pointer" onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
+                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className={classNames("cursor-pointer", card.type === "plot" || previousCard?.type === "plot" ? "h-48" : "h-72")} onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
                     {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
                 </CardStack>
             </div>

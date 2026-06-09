@@ -131,7 +131,7 @@ type ProjectStatProps = {
 function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
     if (isLoading) {
         return (
-            <div className="bg-content2 px-5 py-5 border-b-2 space-y-2">
+            <div className="bg-content2/50 px-5 py-5 border-b-2 space-y-2">
                 <Skeleton className="h-4 w-32 rounded-sm"/>
                 <Skeleton className="h-12 w-28 rounded-sm"/>
                 <Skeleton className="h-4 w-42 rounded-sm" />
@@ -139,7 +139,7 @@ function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
         );
     }
     return (
-        <div className="bg-content2 px-5 py-5">
+        <div className="bg-content2/50 px-5 py-5">
             <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">
                 {label}
             </div>

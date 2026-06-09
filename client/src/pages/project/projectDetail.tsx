@@ -34,9 +34,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     return <div className={classNames("relative", className)} style={style}>
         <div className={classNames("absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}>
-            {project && <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
+            {project && <span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
         </div>
-        <div className="space-y-2">
+        <div className="relative space-y-2">
             <ProjectHeader project={project} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
             {
                 project?.draft

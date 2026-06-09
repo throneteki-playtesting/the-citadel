@@ -108,7 +108,7 @@ function FactionCarousel({ className, style, faction, slots, onNew, onSuggestion
             <div className="absolute -top-8 right-48 flex items-center justify-center pointer-events-none select-none">
                 <ThronesIcon name={faction} className={classNames("text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>
             </div>
-            <div className="flex h-20">
+            <div className="relative flex h-20">
                 <div className={classNames("text-2xl sm:text-3xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow", className)} style={style}>
                     {factionNames[faction]}
                 </div>
