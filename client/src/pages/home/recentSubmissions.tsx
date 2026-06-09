@@ -126,22 +126,20 @@ function ReviewRow({ review }: ReviewRowProps) {
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
-                <div className="relative z-10 px-4 py-2">
-                    <div className="min-w-0 space-y-0.5">
-                        <div className="grid grid-cols-[1fr_auto] gap-2">
-                            <div className="text-md font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
-                            <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
-                        </div>
-                        <div className="flex gap-2 items-center">
-                            <Avatar src={user?.avatarUrl} name={user?.displayname ?? "Unknown"} className="shrink-0 size-10 sm:size-8 md:size-10"/>
-                            <div className="flex flex-col gap-1 min-w-0">
-                                <div className="text-xs font-crimson italic text-foreground/40">
+                <div className="relative min-w-0 space-y-0.5 px-4 py-2">
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                        <div className="text-md font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
+                        <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                        <Avatar src={user?.avatarUrl} name={user?.displayname ?? "Unknown"} className="shrink-0 size-10 sm:size-8 md:size-10"/>
+                        <div className="flex flex-col gap-1 min-w-0">
+                            <div className="text-xs font-crimson italic text-foreground/40">
                                     Review by {user?.displayname ?? "Unknown Playtester"}
-                                </div>
-                                <StatementBars statements={review.statements} />
-                                <div className="text-xxs font-crimson italic truncate text-foreground/40">
-                                    {review.played} {review.played !== 1 ? "games" : "game"} played
-                                </div>
+                            </div>
+                            <StatementBars statements={review.statements} />
+                            <div className="text-xxs font-crimson italic truncate text-foreground/40">
+                                {review.played} {review.played !== 1 ? "games" : "game"} played
                             </div>
                         </div>
                     </div>

@@ -67,15 +67,13 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
-                <div className="relative z-10">
-                    <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
-                        <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
-                        <div className="min-w-0">
-                            <div className="text-sm font-cinzel text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
-                            <div className="flex text-xs font-crimson text-foreground/40 mt-0.5 truncate leading-none">
-                                <span>{project?.code} #{card.number} · v{card.version}</span>
-                                <Timestamp className="ml-auto text-right" date={card.updated}/>
-                            </div>
+                <div className="relative grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
+                    <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
+                    <div className="min-w-0">
+                        <div className="text-sm font-cinzel text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
+                        <div className="flex text-xs font-crimson text-foreground/40 mt-0.5 truncate leading-none">
+                            <span>{project?.code} #{card.number} · v{card.version}</span>
+                            <Timestamp className="ml-auto text-right" date={card.updated}/>
                         </div>
                     </div>
                 </div>
