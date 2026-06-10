@@ -1,5 +1,5 @@
 import classNames from "classnames";
-import { ReactElement, useMemo } from "react";
+import { ReactNode, useMemo } from "react";
 import { BaseElementProps } from "../types";
 import LoadingCard from "./loadingCard";
 
@@ -42,7 +42,7 @@ const CardGrid = function<T>({ cards = [], size = "md", children: renderMapFunc,
 type CardGridProps<T> = Omit<BaseElementProps, "children"> & {
     cards?: T[],
     size?: "sm" | "md" | "lg",
-    children: (card: T, index: number) => ReactElement
+    children: (card: T, index: number) => ReactNode
     isLoading?: boolean
 }
 

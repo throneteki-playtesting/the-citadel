@@ -9,7 +9,7 @@ import Roles from "./admin/roles";
 import AuthRedirect from "./authRedirect";
 import Project from "./project";
 import Card from "./card";
-import SubmitReview from "./review/submitReview";
+import SubmitReview from "./review";
 import { User } from "common/models/auth";
 import PlaytestingUpdate from "./playtestingUpdate";
 

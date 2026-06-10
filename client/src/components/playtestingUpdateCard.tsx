@@ -95,7 +95,7 @@ function CardChangeList({ cards, maxCards = 3 }: CardChangeListProps) {
                         </div>
                         <div
                             key={`${card.project}|${card.number}|${card.version}`}
-                            className="grid grid-cols-[3.5rem_1fr] items-center gap-2 p-2"
+                            className="relative grid grid-cols-[3.5rem_1fr] items-center gap-2 p-2"
                         >
                             <ChangeTypeChip className="text-[0.5rem]" card={card} />
                             <div className="text-sm font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50 font-semibold">{card.version}</span></div>

@@ -19,6 +19,7 @@ import classNames from "classnames";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import Timestamp from "../../components/timestamp";
+import SectionTitle from "../../components/sectionTitle";
 
 export default function DeckSummaries({ className, style, project, number }: DeckSummariesProps) {
     const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({ filter: { project, number } });
@@ -110,11 +111,9 @@ export default function DeckSummaries({ className, style, project, number }: Dec
     }, [deckGroups, isLoading, loading.length]);
     return (
         <div className={classNames("flex flex-col min-h-0 flex-1", className)} style={style}>
-            <div className="flex items-center gap-4 flex-shrink-0">
-                <div className="h-px w-4 bg-primary/30" />
-                <span className="font-cinzel text-base uppercase tracking-widest text-primary">Decks for this card</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle>
+                Decks for this card
+            </SectionTitle>
             {content}
         </div>
     );

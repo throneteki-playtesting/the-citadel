@@ -10,15 +10,14 @@ import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightFromBracket, faFeather } from "@fortawesome/free-solid-svg-icons";
+import SectionTitle from "../../../components/sectionTitle";
 
 export default function ProjectPlaytestingUpdates({ project }: ProjectPlaytestingUpdatesProps) {
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-4 bg-primary/30" />
-                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Playtesting Updates</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle>
+                Playtesting Updates
+            </SectionTitle>
             <div className="bg-content1 border border-content3 divide-y divide-content3">
                 <PlaytestingUpdateCarousel project={project} />
             </div>

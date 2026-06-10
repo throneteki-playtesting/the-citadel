@@ -3,9 +3,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
 import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faExternalLink, faHandBackFist, faLightbulb, faMeh, faPencil, faScaleBalanced, faScroll, faThumbsDown, faThumbsUp, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { faCircleCheck, faExternalLink, faLightbulb, faMeh, faPencil, faScaleBalanced, faScroll, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeckLink, DecklistLink } from "common/types";
-import { IPlaytestReview, StatementAnswer, statementAnswers, StatementQuestions, Statements } from "common/models/reviews";
+import { IPlaytestReview, statementAnswers, StatementQuestions, Statements } from "common/models/reviews";
 import { useLazyGetTDBCardQuery, useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import { BaseTickContentProps, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import ThronesIcon from "../../components/thronesIcon";
@@ -21,6 +22,7 @@ import Timestamp from "../../components/timestamp";
 import LoadingCard from "../../components/loadingCard";
 import { highlightTarget } from "../../constants";
 import { HighlightTarget } from "../../components/highlightTarget";
+import SectionTitle from "../../components/sectionTitle";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -57,11 +59,9 @@ export default function FeedbackStatistics({ className, style, project, number }
     }
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4 w-full">
-                <div className="h-px w-2 bg-primary/30" />
-                <span className="font-cinzel text-base uppercase tracking-widest text-primary">Feedback & Statistics</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle>
+                Feedback & Statistics
+            </SectionTitle>
             {reviewsData && reviewsData.total === 0 ? (
                 <div className="p-4 bg-content1 border border-content3 flex-shrink-0">
                     <div className="text-2xl font-cinzel"><FontAwesomeIcon icon={faScroll} /> No maester has rendered a verdict...</div>
@@ -252,31 +252,6 @@ type ReviewSummariesProps = Omit<BaseElementProps, "children"> & {
     dataSet?: IPlaytestReview[]
 }
 
-
-function statementAnswerIcon(answer: StatementAnswer) {
-    switch (answer) {
-        case "strongly disagree":
-            return <TouchTooltip content="Strongly Disagree">
-                <span><FontAwesomeIcon icon={faThumbsDown} className="text-statement-1"/><FontAwesomeIcon icon={faThumbsDown} className="text-statement-1"/></span>
-            </TouchTooltip>;
-        case "somewhat disagree":
-            return <TouchTooltip content="Somewhat Disagree">
-                <span><FontAwesomeIcon icon={faThumbsDown} className="text-statement-2"/></span>
-            </TouchTooltip>;
-        case "neither agree nor disagree":
-            return <TouchTooltip content="Neither Agree/Disagree">
-                <span><FontAwesomeIcon icon={faHandBackFist} className="text-statement-3"/></span>
-            </TouchTooltip>;
-        case "somewhat agree":
-            return <TouchTooltip content="Somewhat Agree">
-                <span><FontAwesomeIcon icon={faThumbsUp} className="text-statement-4"/></span>
-            </TouchTooltip>;
-        case "strongly agree":
-            return <TouchTooltip content="Strongly Agree">
-                <span><FontAwesomeIcon icon={faThumbsUp} className="text-statement-5"/><FontAwesomeIcon icon={faThumbsUp} className="text-statement-5"/></span>
-            </TouchTooltip>;
-    }
-};
 function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps) {
     const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
     const { data: card, isLoading: isCardLoading } = useGetCardQuery({ project: review.project, number: review.number, version: review.version });
@@ -392,11 +367,11 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
             </div>
             <div className="flex flex-col sm:flex-row max-sm:divide-y sm:divide-x divide-content3 py-2">
                 <div className="shrink-0 flex flex-wrap sm:flex-col gap-2 text-sm px-2 pb-2">
-                    <span>Boring: {statementAnswerIcon(review.statements.boring)}</span>
-                    <span>Competitive: {statementAnswerIcon(review.statements.competitive)}</span>
-                    <span>Creative: {statementAnswerIcon(review.statements.creative)}</span>
-                    <span>Balanced: {statementAnswerIcon(review.statements.balanced)}</span>
-                    <span>Releasable: {statementAnswerIcon(review.statements.releasable)}</span>
+                    <span>Boring: <StatementAnswerIcon answer={review.statements.boring}/></span>
+                    <span>Competitive: <StatementAnswerIcon answer={review.statements.competitive}/></span>
+                    <span>Creative: <StatementAnswerIcon answer={review.statements.creative}/></span>
+                    <span>Balanced: <StatementAnswerIcon answer={review.statements.balanced}/></span>
+                    <span>Releasable: <StatementAnswerIcon answer={review.statements.releasable}/></span>
                 </div>
                 <div className="px-2 py-1">
                     <div className="font-crimson italic text-lg">Additional Comments</div>
@@ -420,7 +395,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                 </div>
             </div>
             <Accordion>
-                <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="View Submitted Decks" keepContentMounted>
+                <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
                     <div className="overflow-hidden min-w-0">
                         {review.decks.map((deck) => <ReviewSummaryDeck key={deck} url={deck} className="p-1" />)}
                     </div>

@@ -18,6 +18,7 @@ import { usePageTitle, useTimezone } from "../../api/hooks";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
 import Error from "../../components/error";
+import SectionTitle from "../../components/sectionTitle";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -126,11 +127,9 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-8 bg-primary/30" />
-                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">Card Changes</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle size="xl" indent="md">
+                Card Changes
+            </SectionTitle>
             <div className="text-base text-foreground space-y-1">
                 <p>Cards have changes to review, and will be applied together in this update.</p>
                 <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
@@ -206,11 +205,9 @@ function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-8 bg-primary/30" />
-                <span className="font-cinzel text-xl uppercase tracking-widest text-primary">{label}</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle size="xl" indent="md">
+                {label}
+            </SectionTitle>
             <div className="text-base text-foreground space-y-1">
                 <p>Some other cards have been implemented, and will be pushed to the Online Platform alongside this update.</p>
                 <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click to view their closed <FontAwesomeIcon icon={faGithub}/> issue.</p>

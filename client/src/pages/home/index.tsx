@@ -7,6 +7,7 @@ import RecentSubmissions from "./recentSubmissions";
 import StatCards from "./statCards";
 import { hasPermission } from "common/utils";
 import { usePageTitle } from "../../api/hooks";
+import SectionTitle from "../../components/sectionTitle";
 
 export default function Home() {
     usePageTitle("Home");
@@ -19,11 +20,9 @@ export default function Home() {
             <StatCards />
             <PermissionGate requires={Permission.READ_PROJECTS}>
                 <div className="space-y-2">
-                    <div className="flex items-center gap-4">
-                        <div className="h-px w-8 bg-primary/30" />
-                        <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Active Projects</span>
-                        <div className="h-px flex-1 bg-primary/30" />
-                    </div>
+                    <SectionTitle>
+                        Active Projects
+                    </SectionTitle>
                     <ProjectsSummary />
                 </div>
             </PermissionGate>

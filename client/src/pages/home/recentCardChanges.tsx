@@ -9,6 +9,7 @@ import ChangeTypeChip from "./changeTypeChip";
 import { useMemo } from "react";
 import { Skeleton } from "@heroui/react";
 import { watermarkClasses } from "../../constants";
+import SectionTitle from "../../components/sectionTitle";
 
 export default function RecentCardChanges() {
     const items = 5;
@@ -46,11 +47,9 @@ export default function RecentCardChanges() {
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-4 bg-primary/30" />
-                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Recent Card Changes</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle size="sm" indent="xs">
+                Recent Card Changes
+            </SectionTitle>
             <div className="border border-content3 divide-y divide-content3">
                 {content}
             </div>

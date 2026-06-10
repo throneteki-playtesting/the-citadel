@@ -2,6 +2,7 @@ import { useGetPlaytestingUpdatesQuery } from "../../api";
 import { useMemo } from "react";
 import { Skeleton } from "@heroui/react";
 import PlaytestingUpdateCard from "../../components/playtestingUpdateCard";
+import SectionTitle from "../../components/sectionTitle";
 
 export default function RecentPlaytestingUpdates() {
     const items = 3;
@@ -29,11 +30,9 @@ export default function RecentPlaytestingUpdates() {
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-4 bg-primary/30" />
-                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Recent PT Updates</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle size="sm" indent="xs">
+                Recent PT Updates
+            </SectionTitle>
             <div className="bg-content1 border border-content3 divide-y divide-content3">
                 {content}
             </div>

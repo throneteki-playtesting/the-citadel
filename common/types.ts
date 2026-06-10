@@ -44,6 +44,21 @@ export type Filter<T> =
                     ? { [P in keyof NonNullable<T>]?: Filter<NonNullable<T>[P]> | ComparableOperators<NonNullable<T>[P]> }
                     : T | ComparableOperators<T>;
 
+type ExplodableValue<T> =
+    [NonNullable<T>] extends [Date]
+        ? T | ComparableOperators<T>
+        : [NonNullable<T>] extends [Primitive]
+            ? T | T[] | ComparableOperators<T>
+            : NonNullable<T> extends (infer U)[]
+                ? Filter<U>[] | undefined
+                : NonNullable<T> extends object
+                    ? Explodable<NonNullable<T>>
+                    : T | ComparableOperators<T>;
+
+export type Explodable<T extends object> = {
+    [K in keyof T]?: ExplodableValue<T[K]>;
+};
+
 const OPERATOR_KEYS = new Set(["$gt", "$gte", "$lt", "$lte", "$ne", "$in", "$nin", "$regex", "$exists"]);
 export function isOperatorObject(value: unknown): value is Record<string, unknown> {
     return (
@@ -54,19 +69,17 @@ export function isOperatorObject(value: unknown): value is Record<string, unknow
         Object.keys(value).every(k => OPERATOR_KEYS.has(k))
     );
 }
+export function isIterable(v: unknown): v is Iterable<unknown> {
+    return (
+        v != null &&
+        typeof v !== "string" &&
+        typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
+    );
+}
 
 export type SortDirection = "asc" | "desc";
 export type Sort<T> = EntriesOf<T, SortDirection>;
 
-export type Filterable<T> = {
-    [K in keyof T]?: T[K] extends Array<infer U>
-        ? Iterable<U> | U | undefined
-        : T[K] extends ReadonlyArray<infer U>
-            ? Iterable<U> | U | undefined
-            : T[K] extends object
-                ? Filterable<T[K]> | undefined
-                : Iterable<T[K]> | T[K] | undefined;
-};
 export type SingleOrArray<T> = T | T[];
 
 export type DeckLink = `https://thronesdb.com/deck/view/${UUID}`;

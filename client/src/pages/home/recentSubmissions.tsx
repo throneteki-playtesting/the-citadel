@@ -12,6 +12,7 @@ import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
 import { highlightTarget, watermarkClasses } from "../../constants";
 import { usePermission } from "../../api/hooks";
+import SectionTitle from "../../components/sectionTitle";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 
@@ -64,11 +65,9 @@ export default function RecentSubmissions() {
 
     return (
         <div className="space-y-2">
-            <div className="flex items-center gap-4">
-                <div className="h-px w-4 bg-primary/30" />
-                <span className="font-cinzel text-sm uppercase tracking-widest text-primary">Recent Submissions</span>
-                <div className="h-px flex-1 bg-primary/30" />
-            </div>
+            <SectionTitle size="sm" indent="xs">
+                Recent Submissions
+            </SectionTitle>
             <div className="border border-content3 divide-y divide-content3">
                 {content}
             </div>

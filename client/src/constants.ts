@@ -3,7 +3,7 @@ import { enumToArray } from "./utils";
 import { Faction } from "common/models/cards";
 import { ChangeType } from "common/types";
 import * as discordEmojis from "discord-emoji";
-import { IPlaytestReview } from "common/models/reviews";
+import { IPlaytestReview, StatementAnswer } from "common/models/reviews";
 
 export const availablePermissions = enumToArray(Permission);
 
@@ -68,3 +68,11 @@ export const emojis = {
 export const highlightTarget = {
     review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`
 } as const;
+
+export const statementOptions: { value: StatementAnswer; color: "danger" | "warning" | "default" | "secondary" | "success" }[] = [
+    { value: "strongly disagree", color: "danger" },
+    { value: "somewhat disagree", color: "warning" },
+    { value: "neither agree nor disagree", color: "default" },
+    { value: "somewhat agree", color: "secondary" },
+    { value: "strongly agree", color: "success" }
+];

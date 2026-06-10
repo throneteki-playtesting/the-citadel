@@ -210,7 +210,7 @@ const api = createApi({
             },
             providesTags: (response) => mapTags(response?.items, "card")
         }),
-        getCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+        getCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion | "latest" }>({
             query: (options) => {
                 const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
                 return { url, method: "GET" };

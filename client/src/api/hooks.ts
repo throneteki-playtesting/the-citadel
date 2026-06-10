@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Filterable } from "common/types";
+import { Explodable, Filter, isOperatorObject, SingleOrArray } from "common/types";
 import { SyncOperation, SyncStatus, SyncType } from "server/types";
 import { SemanticVersion, validate, ValidationStep } from "common/utils";
 import { User } from "common/models/auth";
@@ -7,50 +7,65 @@ import { useSelector } from "react-redux";
 import { RootState } from "./store";
 import { useLocation } from "react-router-dom";
 
-export function useFilter<T>(filter?: Filterable<T>) {
+function isIterable(v: unknown): v is Iterable<unknown> {
+    return (
+        v != null &&
+        typeof v !== "string" &&
+        typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function"
+    );
+}
+
+function cartesianProduct(obj: Filter<object>): Record<string, unknown>[] | undefined {
+    const worker = (input: unknown): Record<string, unknown>[] | undefined => {
+        if (input == null || typeof input !== "object") return undefined;
+
+        if (isOperatorObject(input)) return [input as Record<string, unknown>];
+
+        const entries = Object.entries(input as Record<string, unknown>).filter(([, v]) => {
+            if (v == null) return false;
+            if (isOperatorObject(v)) return true;
+            if (isIterable(v)) return Array.from(v as Iterable<unknown>).length > 0;
+            if (typeof v !== "object") return true;
+            return worker(v) !== undefined;
+        });
+
+        if (entries.length === 0) return undefined;
+
+        return entries.reduce<Record<string, unknown>[]>((acc, [key, v]) => {
+            if (isOperatorObject(v)) {
+                return acc.map(item => ({ ...item, [key]: v }));
+            }
+
+            if (isIterable(v)) {
+                const values = Array.from(v as Iterable<unknown>);
+                return acc.flatMap(item => values.map(val => ({ ...item, [key]: val })));
+            }
+
+            if (typeof v !== "object") {
+                return acc.map(item => ({ ...item, [key]: v }));
+            }
+
+            const nested = worker(v);
+            if (!nested) return acc;
+            return acc.flatMap(item => nested.map(n => ({ ...item, [key]: n })));
+        }, [{}]);
+    };
+
+    return worker(obj);
+}
+
+export function useFilter<T extends object>(
+    filter?: SingleOrArray<Explodable<T>>
+): Filter<T>[] | undefined {
     return useMemo(() => {
-        if (!filter) {
-            return filter;
-        }
-        function cartesianProduct(obj: Filterable<T>): Record<string, unknown>[] | undefined {
-            // Type-guard for iterables (arrays, sets, etc.) without using `any`.
-            const isIterable = (v: unknown): v is Iterable<unknown> =>
-                v != null && typeof (v as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function";
+        if (!filter) return undefined;
 
-            // Recursive worker that accepts unknown to avoid unsafe casts in the public signature.
-            const worker = (input: unknown): Record<string, unknown>[] | undefined => {
-                if (input == null || typeof input !== "object") return undefined;
-
-                // Keep only entries that have non-empty iterable values, scalar values, or nested non-empty objects
-                const entries = Object.entries(input as Record<string, unknown>).filter(([, v]) => {
-                    if (v == null) return false;
-                    if (isIterable(v) && typeof v !== "string") return Array.from(v as Iterable<unknown>).length > 0;
-                    if (typeof v !== "object") return true; // scalar single value (treat as single-item iterable)
-                    return typeof v === "object" && worker(v) !== undefined;
-                });
-
-                if (entries.length === 0) return undefined;
-
-                // Reduce entries into the cartesian product
-                return entries.reduce<Record<string, unknown>[]>((acc, [key, v]) => {
-                    if (isIterable(v) && typeof v !== "string") {
-                        const values = Array.from(v as Iterable<unknown>);
-                        return acc.flatMap(item => values.map(val => ({ ...item, [key]: val })));
-                    }
-
-                    if (typeof v !== "object") {
-                        return acc.map(item => ({ ...item, [key]: v }));
-                    }
-
-                    const nested = worker(v);
-                    return acc.flatMap(item => (nested ?? []).map(n => ({ ...item, [key]: n })));
-                }, [{}]);
-            };
-
-            return worker(obj);
+        if (Array.isArray(filter)) {
+            const results = filter.flatMap(f => cartesianProduct(f as Filter<object>) ?? [{}]);
+            return results as Filter<T>[];
         }
 
-        return cartesianProduct(filter);
+        return (cartesianProduct(filter as Filter<object>) ?? [{}]) as Filter<T>[];
     }, [filter]);
 }
 

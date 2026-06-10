@@ -1,13 +1,11 @@
 import { Autocomplete, AutocompleteItem, AutocompleteProps } from "@heroui/react";
-import { Filterable, Sort } from "common/types";
+import { Filter, SingleOrArray, Sort } from "common/types";
 import { Key, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useGetProjectsQuery } from "../../api";
-import { useFilter } from "../../api/hooks";
 import { fuzzyMatch } from "common/utils";
 import { IProject } from "common/models/projects";
 
-const ProjectsAutocomplete = ({ filter: initialFilter, orderBy, children = (project) => (<div>{project.name}</div>), isLoading: isForcedLoading = false, selectedKey, onSelectionChange = () => true, ...autocompleteProps }: ProjectsAutocompleteProps) => {
-    const filter = useFilter(initialFilter);
+export default function ProjectsAutocomplete({ filter, orderBy, children = (project) => (<div>{project.name}</div>), isLoading: isForcedLoading = false, selectedKey, onSelectionChange = () => true, ...autocompleteProps }: ProjectsAutocompleteProps) {
     const { data, isLoading } = useGetProjectsQuery({ filter, orderBy });
     const [selected, setSelected] = useState<IProject | undefined>();
     const [input, setInput] = useState<string>("");
@@ -52,6 +50,11 @@ const ProjectsAutocomplete = ({ filter: initialFilter, orderBy, children = (proj
     );
 };
 
-type ProjectsAutocompleteProps = Omit<AutocompleteProps<IProject>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IProject>, orderBy?: Sort<IProject>, children?: (project: IProject) => ReactNode, isLoading?: boolean, selectedKey?: Key, onSelectionChange?: (project?: IProject) => void };
-
-export default ProjectsAutocomplete;
+type ProjectsAutocompleteProps = Omit<AutocompleteProps<IProject>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & {
+    filter?: SingleOrArray<Filter<IProject>>;
+    orderBy?: Sort<IProject>;
+    children?: (project: IProject) => ReactNode;
+    isLoading?: boolean;
+    selectedKey?: Key;
+    onSelectionChange?: (project?: IProject) => void;
+};

@@ -9,9 +9,9 @@ import { merge } from "lodash-es";
 import { BaseElementProps } from "../../types";
 import { useWizard, WizardContext, WizardContextProps } from "./context";
 
-export function Wizard<T>({ schema, data: initial, onSubmit = () => true, onValidationError = () => true, children }: WizardProps<T>) {
+export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubmit = () => true, onValidationError = () => true, children }: WizardProps<T>) {
     const [internalData, setInternalData] = useState(initial ?? {} as DeepPartial<T>);
-    const [currentPage, setCurrentPage] = useState(1);
+    const [currentPage, setCurrentPage] = useState(initialPage);
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
     const [totalPages, setTotalPages] = useState(0);
 
@@ -21,6 +21,10 @@ export function Wizard<T>({ schema, data: initial, onSubmit = () => true, onVali
     useEffect(() => {
         setInternalData(initial ?? {} as DeepPartial<T>);
     }, [initial]);
+
+    useEffect(() => {
+        setCurrentPage(initialPage);
+    }, [initialPage]);
 
     const validate = useCallback((data: Record<string, any>, partial = false) => {
         const { error } = schema.validate(data, {
@@ -123,6 +127,7 @@ type WizardProps<T> = {
     schema: Joi.Schema;
     data?: DeepPartial<T>;
     onSubmit?: (data: T) => void;
+    page?: number;
     onValidationError?: (errors: Record<string, string>, partial: boolean) => void;
     children: ReactNode | ReactNode[];
 }
@@ -284,7 +289,7 @@ export function WizardBack({ children, backContent = "Back", cancelContent = "Ca
 
     return (
         (!isFirstPage || onCancel) &&
-        <Button type="submit" className="font-sans" onPress={onPress} {...buttonProps}>
+        <Button className="font-sans" onPress={onPress} {...buttonProps}>
             {children || (isFirstPage ? cancelContent : backContent)}
         </Button>
     );

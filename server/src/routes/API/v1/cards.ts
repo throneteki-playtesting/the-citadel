@@ -35,6 +35,14 @@ const CardVersionParams = {
     version: Joi.string().regex(Regex.SemanticVersion)
 };
 
+const CardVersionOrLatestParams = {
+    ...CardParams,
+    version: Joi.alternatives().try(
+        Joi.string().regex(Regex.SemanticVersion),
+        Joi.string().valid("latest")
+    ).required()
+};
+
 // Core data-fetching logic, shared across GET routes
 async function getCards(
     filter: IGetRequest<IPlaytestCard>["filter"],
@@ -95,14 +103,16 @@ router.get("/:project/:number",
     })
 );
 
-// Read specific version of a card
+// Read specific version of a card, or "latest"
 router.get("/:project/:number/:version",
-    celebrate({ [Segments.PARAMS]: CardVersionParams }),
+    celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
     validateRequest(Permission.READ_CARDS),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
+    asyncHandler<{ project: number, number: number, version: SemanticVersion | "latest" }, unknown, unknown, IPlaytestCard>(async (req, res) => {
         const { project, number, version } = req.params;
 
-        const filter = { project, number, version };
+        const filter = version === "latest"
+            ? { project, number, latest: true }
+            : { project, number, version };
         const [response] = await dataService.cards.read(filter);
         res.status(StatusCodes.OK).json(response);
     })

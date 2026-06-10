@@ -1,13 +1,11 @@
 import { Autocomplete, AutocompleteItem, AutocompleteProps } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
-import { Filterable, Sort } from "common/types";
+import { Filter, SingleOrArray, Sort } from "common/types";
 import { Key, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useGetCardsQuery } from "../../api";
-import { useFilter } from "../../api/hooks";
 import { factionNames, fuzzyMatch } from "common/utils";
 
-const CardsAutocomplete = ({ filter: initialFilter, orderBy, children = (card) => (<div>{card.name}</div>), isLoading: isForcedLoading = false, mapKey = (card) => `${card.project}|${card.number}|${card.version}`, selectedKey, onSelectionChange = () => true, ...autocompleteProps }: CardsAutocompleteProps) => {
-    const filter = useFilter(initialFilter);
+export default function CardsAutocomplete({ filter, orderBy, children = (card) => (<div>{card.name}</div>), isLoading: isForcedLoading = false, mapKey = (card) => `${card.project}|${card.number}|${card.version}`, selectedKey, onSelectionChange = () => true, ...autocompleteProps }: CardsAutocompleteProps) {
     const { data, isLoading } = useGetCardsQuery({ filter, orderBy });
 
     const [selected, setSelected] = useState<IPlaytestCard | undefined>();
@@ -57,6 +55,12 @@ const CardsAutocomplete = ({ filter: initialFilter, orderBy, children = (card) =
     );
 };
 
-type CardsAutocompleteProps = Omit<AutocompleteProps<IPlaytestCard>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & { filter?: Filterable<IPlaytestCard>, orderBy?: Sort<IPlaytestCard>, children?: (card: IPlaytestCard) => ReactNode, isLoading?: boolean, mapKey?: (card: IPlaytestCard) => Key, selectedKey?: Key, onSelectionChange?: (card?: IPlaytestCard) => void };
-
-export default CardsAutocomplete;
+type CardsAutocompleteProps = Omit<AutocompleteProps<IPlaytestCard>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & {
+    filter?: SingleOrArray<Filter<IPlaytestCard>>;
+    orderBy?: Sort<IPlaytestCard>;
+    children?: (card: IPlaytestCard) => ReactNode;
+    isLoading?: boolean;
+    mapKey?: (card: IPlaytestCard) => Key;
+    selectedKey?: Key;
+    onSelectionChange?: (card?: IPlaytestCard) => void;
+};
