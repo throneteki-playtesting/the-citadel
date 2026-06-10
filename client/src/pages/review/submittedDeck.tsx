@@ -17,7 +17,7 @@ type DeckEntry = { url: DeckLink | DecklistLink; broken: boolean };
 const toEntries = (urls: (DeckLink | DecklistLink)[]): DeckEntry[] =>
     urls.map((url) => ({ url, broken: false }));
 
-export default function SubmitDecks({ card, decks: initial, onValueChange: onDecksChange }: SubmitDecksProps) {
+export default function SubmitDecks({ card, decks: initial = [], onValueChange: onDecksChange }: SubmitDecksProps) {
     const [entries, setEntries] = useState<DeckEntry[]>(toEntries(initial));
     const [deckUrlInput, setDeckUrlInput] = useState("");
     const [deckUrlInputError, setDeckUrlInputError] = useState<string | undefined>();
@@ -129,7 +129,7 @@ export default function SubmitDecks({ card, decks: initial, onValueChange: onDec
 
 type SubmitDecksProps = {
     card: IPlaytestCard;
-    decks: (DeckLink | DecklistLink)[];
+    decks?: (DeckLink | DecklistLink)[];
     onValueChange: (value: (DeckLink | DecklistLink)[]) => void;
 }
 

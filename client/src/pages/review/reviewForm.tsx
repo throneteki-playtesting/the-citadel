@@ -5,21 +5,20 @@ import { renderPlaytestingCard } from "common/utils";
 import { addToast, Button, NumberInput, Textarea } from "@heroui/react";
 import { IPlaytestReview } from "common/models/reviews";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
-import { DeckLink, DecklistLink, DeepPartial } from "common/types";
+import { DeepPartial } from "common/types";
 import { PlaytestingReview } from "common/models/schemas";
 import { useSelector } from "react-redux";
 import { RootState } from "../../api/store";
 import { useCreateReviewMutation, useLazyGetReviewQuery, useUpdateReviewMutation } from "../../api";
-import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
-import PlaytestCardGrid from "./reviewingCardGrid";
-import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
+import { Wizard, WizardBack, WizardPage, WizardPages } from "../../components/wizard";
 import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleArrowLeft, faCircleArrowRight, faExternalLink } from "@fortawesome/free-solid-svg-icons";
+import { faCircleArrowLeft, faExternalLink } from "@fortawesome/free-solid-svg-icons";
 import { merge } from "lodash-es";
+import CardSelection from "./cardSelection";
 
 const defaultData = {
     decks: [],
@@ -43,7 +42,6 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
     const [review, setReview] = useState<DeepPartial<IPlaytestReview>>(defaultData);
     const [isNew, setIsNew] = useState(true);
     const [card, setCard] = useState<IPlaytestCard>();
-    const [decks, setDecks] = useState<(DeckLink | DecklistLink)[]>([]);
 
     useEffect(() => {
         setReview((prev) => ({ ...prev, reviewer }));
@@ -62,7 +60,6 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                     // If review already exists, save it. Otherwise, set to default values + card values
                     if (existingReview) {
                         setReview(existingReview);
-                        setDecks(existingReview.decks);
                         setIsNew(false);
                         return;
                     }
@@ -129,7 +126,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                                         <NumberInput
                                             name="played"
                                             value={review.played ?? 0}
-                                            onValueChange={(value) => setReview((prev) => ({ ...prev, played: value }))}
+                                            onValueChange={(played) => setReview((prev) => ({ ...prev, played }))}
                                             minValue={0}
                                             maxValue={999}
                                             placeholder="Test"
@@ -137,7 +134,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                                             classNames={{ mainWrapper: "max-w-24", inputWrapper: "h-10", input: "text-2xl" }}
                                         />
                                     </div>
-                                    <SubmitDecks decks={decks} card={card} onValueChange={setDecks}/>
+                                    <SubmitDecks decks={review?.decks} card={card} onValueChange={(decks) => setReview((prev) => ({ ...prev, decks }))}/>
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1 p-2 w-full">
@@ -146,11 +143,11 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                                 </SectionTitle>
                                 <div className="font-sans">Respond to the following questions in how much you agree (<StatementAnswerIcon answer="somewhat agree"/>) or disagree (<StatementAnswerIcon answer="somewhat disagree"/>).</div>
                                 <div className="space-y-1">
-                                    <StatementQuestion name="statements.boring" statement="Is it boring?" answer={review.statements?.boring} onValueChange={(answer) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, boring: answer } }))}/>
-                                    <StatementQuestion name="statements.competitive" statement="Will it see competitive play?" answer={review.statements?.competitive} onValueChange={(answer) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, competitive: answer } }))}/>
-                                    <StatementQuestion name="statements.creative" statement="Does it encourage creativity?" answer={review.statements?.creative} onValueChange={(answer) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, creative: answer } }))}/>
-                                    <StatementQuestion name="statements.balanced" statement="Is it balanced?" answer={review.statements?.balanced} onValueChange={(answer) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, balanced: answer } }))}/>
-                                    <StatementQuestion name="statements.releasable" statement="Could it be released as is?" answer={review.statements?.releasable} onValueChange={(answer) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, releasable: answer } }))}/>
+                                    <StatementQuestion name="statements.boring" statement="Is it boring?" answer={review.statements?.boring} onValueChange={(boring) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, boring } }))}/>
+                                    <StatementQuestion name="statements.competitive" statement="Will it see competitive play?" answer={review.statements?.competitive} onValueChange={(competitive) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, competitive } }))}/>
+                                    <StatementQuestion name="statements.creative" statement="Does it encourage creativity?" answer={review.statements?.creative} onValueChange={(creative) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, creative } }))}/>
+                                    <StatementQuestion name="statements.balanced" statement="Is it balanced?" answer={review.statements?.balanced} onValueChange={(balanced) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, balanced } }))}/>
+                                    <StatementQuestion name="statements.releasable" statement="Could it be released as is?" answer={review.statements?.releasable} onValueChange={(releasable) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, releasable } }))}/>
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1 p-2 w-full">
@@ -161,7 +158,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                                     name="additional"
                                     placeholder="Provide comments here..."
                                     value={review.additional ?? ""}
-                                    onValueChange={(value) => setReview((prev) => ({ ...prev, additional: value }))}
+                                    onValueChange={(additional) => setReview((prev) => ({ ...prev, additional }))}
                                     classNames={{
                                         input: "text-sm md:text-base"
                                     }}
@@ -189,29 +186,4 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
 type ReviewFormProps = {
     review?: DeepPartial<IPlaytestReview>;
     card?: IPlaytestCard;
-}
-
-function CardSelection({ value: selected, onSelect, searchValue }: CardSelectionProps) {
-    return (
-        <PlaytestCardGrid filter={{ latest: true }} orderBy={{ project: "desc", number: "asc" }} search={searchValue} menuContent={<WizardNext color="primary" isDisabled={!selected} endContent={<FontAwesomeIcon icon={faCircleArrowRight}/>}>Continue</WizardNext>}>
-            {(card) => {
-                const isSelected = selected && selected.project === card.project && selected.number === card.number && selected.version === card.version;
-                return (
-                    <div className="h-fit cursor-pointer select-none" onClick={() => onSelect(isSelected ? undefined : card)}>
-                        <CardPreview
-                            key={`${card.project}|${card.number}|${card.version}`}
-                            card={renderPlaytestingCard(card)}
-                            className={classNames("h-fit transition-all duration-500 ease-in-out", { "ring-2 ring-primary": isSelected, "brightness-50": selected && !isSelected })}
-                        />
-                    </div>
-                );
-            }}
-        </PlaytestCardGrid>
-    );
-};
-
-type CardSelectionProps = {
-    value?: IPlaytestCard;
-    onSelect: (card?: IPlaytestCard) => void;
-    searchValue?: string;
 }
