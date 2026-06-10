@@ -11,7 +11,7 @@ import { faAngleLeft, faPencil, faScroll, faSquarePlus, faTrash } from "@fortawe
 import { rcompare } from "semver";
 import classNames from "classnames";
 import CardImage from "../../components/cardImage";
-import { useSwipe } from "../../api/hooks";
+import { usePageTitle, useSwipe } from "../../api/hooks";
 import EditCardModal from "./editCardModal";
 import DeleteCardModal from "./deleteCardModal";
 import LoadingCard from "../../components/loadingCard";
@@ -32,7 +32,7 @@ import FeedbackStatistics from "./feedbackStatistics";
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number: projectNumber });
-
+    usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     return (
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="flex-1 flex items-center">
