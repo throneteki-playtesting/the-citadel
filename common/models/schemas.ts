@@ -483,12 +483,24 @@ export const PlaytestingReview = {
 export const Role = {
     Full: Joi.object({
         discordId: Joi.string().required(),
+        active: Joi.boolean().required(),
         name: Joi.string().required(),
+        color: Joi.number().required(),
+        position: Joi.number().required(),
+        hoist: Joi.boolean().required(),
+        icon: Joi.string().allow(null).required(),
+        unicodeEmoji: Joi.string().allow(null).required(),
         permissions: Joi.array().items(Permission).default([])
     }),
     Partial: Joi.object({
         discordId: Joi.string(),
+        active: Joi.boolean(),
         name: Joi.string(),
+        color: Joi.number(),
+        position: Joi.number(),
+        hoist: Joi.boolean(),
+        icon: Joi.string().allow(null),
+        unicodeEmoji: Joi.string().allow(null),
         permissions: Joi.array().items(Permission)
     })
 };
@@ -500,6 +512,8 @@ export const User = {
         discordId: Joi.string().required(),
         avatarUrl: Joi.string().required(),
         lastLogin: Joi.date(),
+        // Principal Data
+        id: Joi.string().required(),
         permissions: Joi.array().items(Permission).default([]),
         roles: Joi.array().items(Role.Full).default([])
     }),
@@ -509,6 +523,8 @@ export const User = {
         discordId: Joi.string(),
         avatarUrl: Joi.string(),
         lastLogin: Joi.date(),
+        // Principal Data
+        id: Joi.string(),
         permissions: Joi.array().items(Permission),
         roles: Joi.array().items(Role.Partial)
     })

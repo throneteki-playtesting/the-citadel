@@ -32,7 +32,7 @@ export interface User extends IPrincipal {
     displayname: string,
     discordId: string,
     avatarUrl: string,
-    lastLogin: Date
+    lastLogin?: Date
 }
 
 export interface Integration extends IAuditable, IPrincipal {

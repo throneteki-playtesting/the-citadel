@@ -2,6 +2,7 @@ import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { dataService, logger } from "@/services";
 import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role } from "discord.js";
+import { Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
 
@@ -247,6 +248,18 @@ class DiscordService {
 
         const [existing] = await dataService.users.read({ discordId: discordUser.id });
 
+        let roles: AppRole[] = existing?.roles ?? [];
+        if (!isUser) {
+            const guildMember = member as GuildMember | APIGuildMember;
+            const roleIds = guildMember instanceof GuildMember
+                ? [...guildMember.roles.cache.keys()]
+                : guildMember.roles;
+
+            roles = roleIds.length > 0
+                ? await dataService.roles.read(roleIds.map((id) => ({ discordId: id })))
+                : [];
+        }
+
         return await dataService.users.update({
             id: discordUser.id,
             discordId: discordUser.id,
@@ -254,14 +267,14 @@ class DiscordService {
             displayname: nickname ?? discordUser.username,
             avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
             permissions: existing?.permissions ?? [],
-            roles: existing?.roles ?? [],
+            roles,
             lastLogin: loggingIn ? new Date() : existing?.lastLogin
         });
     }
 
     static async syncRole(role: Role) {
         const [existing] = await dataService.roles.read({ discordId: role.id });
-        return await dataService.roles.update({
+        const updated = await dataService.roles.update({
             discordId: role.id,
             active: true,
             name: role.name,
@@ -272,6 +285,8 @@ class DiscordService {
             unicodeEmoji: role.unicodeEmoji,
             permissions: existing?.permissions ?? []
         });
+        await dataService.users.syncEmbeddedRole(updated);
+        return updated;
     }
 
     private async syncAll() {
@@ -283,10 +298,9 @@ class DiscordService {
                 guild.roles.fetch()
             ]);
 
-            await Promise.all([
-                ...members.map((m) => DiscordService.syncUser(m)),
-                ...roles.map((r) => DiscordService.syncRole(r))
-            ]);
+            // Roles must be synced before users so embedded role objects are fresh
+            await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
+            await Promise.all(members.map((m) => DiscordService.syncUser(m)));
 
             logger.info("[Discord] Daily sync complete");
         } catch (err) {

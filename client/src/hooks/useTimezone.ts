@@ -4,7 +4,7 @@ export default function useTimezone() {
     const timezone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
 
     const format = (date: Date, options?: Intl.DateTimeFormatOptions) => {
-        return date.toLocaleString(navigator.language, {
+        return new Date(date).toLocaleString(navigator.language, {
             timeZone: timezone,
             month: "long",
             day: "numeric",

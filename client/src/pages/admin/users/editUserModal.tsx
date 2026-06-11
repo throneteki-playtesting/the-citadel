@@ -1,13 +1,13 @@
-import { addToast, Button, Chip, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Select, SelectItem } from "@heroui/react";
+import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
-import { availablePermissions } from "../../../constants";
 import { useUpdateUserMutation } from "../../../api";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { User } from "common/models/auth";
 import { cloneDeep } from "lodash-es";
+import PermissionCheckboxes from "../../../components/permissionCheckboxes";
 
-const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModalProps) => {
+export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }: EditUserModalProps) {
     const [updateUser, { isLoading }] = useUpdateUserMutation();
     const [permissions, setPermissions] = useState(new Set<string>([]));
 
@@ -21,6 +21,7 @@ const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModal
             if (response.error) {
                 addToast({ title: "Error", color: "danger", description: "Failed to save user" });
             } else {
+                addToast({ title: "User saved", color: "success", description: `${model.displayname} was updated successfully.` });
                 if (onUserSave) {
                     onUserSave(model);
                 }
@@ -29,53 +30,46 @@ const EditUserModal = ({ user, onOpenChange, onSave: onUserSave }: EditUserModal
         }
     }, [onOpenChange, onUserSave, permissions, updateUser, user]);
 
-    // Update editable fields when user is being edited
+    const roleGrantedPermissions = useMemo(() => {
+        const perms = new Set<string>();
+        for (const role of user?.roles ?? []) {
+            for (const p of role.permissions) {
+                perms.add(p.toString());
+            }
+        }
+        return perms;
+    }, [user]);
+
     useEffect(() => {
         setPermissions(new Set(user?.permissions.map((p) => p.toString()) ?? []));
     }, [user]);
 
-    return <Modal isOpen={!!user} placement="top-center" onOpenChange={onOpenChange}>
-        <ModalContent>
-            {(onClose) => (
-                <>
-                    <ModalHeader>Edit {user?.displayname}</ModalHeader>
-                    <ModalBody>
-                        <Select
-                            classNames={{
-                                trigger: "min-h-12 py-2"
-                            }}
-                            label="Permissions"
-                            placeholder="Select permission(s)"
-                            isMultiline={true}
-                            selectionMode="multiple"
-                            items={availablePermissions}
-                            selectedKeys={permissions}
-                            onSelectionChange={(keys) => setPermissions(new Set([...keys] as string[]))}
-                            labelPlacement="outside"
-                            renderValue={(items) => (
-                                <div className="flex flex-wrap gap-1">
-                                    {items.map((item) => (
-                                        <Chip key={item.data?.key}>{item.data?.value}</Chip>
-                                    ))}
-                                </div>
-                            )}
-                        >
-                            {(permission) => <SelectItem key={permission.key} className="capitalize">{permission.value}</SelectItem>}
-                        </Select>
-                    </ModalBody>
-                    <ModalFooter>
-                        <Button color="danger" variant="flat" onPress={onClose}>
+    return (
+        <Modal isOpen={!!user} size="2xl" scrollBehavior="inside" placement="top-center" onOpenChange={onOpenChange}>
+            <ModalContent>
+                {(onClose) => (
+                    <>
+                        <ModalHeader>Edit {user?.displayname}</ModalHeader>
+                        <ModalBody>
+                            <PermissionCheckboxes selectedPermissions={permissions} roleGrantedPermissions={roleGrantedPermissions} onChange={setPermissions} />
+                        </ModalBody>
+                        <ModalFooter>
+                            <Button color="danger" variant="flat" onPress={onClose}>
                                 Cancel
-                        </Button>
-                        <Button color="primary" isLoading={isLoading} onPress={onSave}>
+                            </Button>
+                            <Button color="primary" isLoading={isLoading} onPress={onSave}>
                                 Save
-                        </Button>
-                    </ModalFooter>
-                </>
-            )}
-        </ModalContent>
-    </Modal>;
+                            </Button>
+                        </ModalFooter>
+                    </>
+                )}
+            </ModalContent>
+        </Modal>
+    );
 };
-type EditUserModalProps = Omit<BaseElementProps, "children"> & { user?: User, onOpenChange: ((isOpen?: boolean) => void), onSave?: (user: User) => void }
 
-export default EditUserModal;
+type EditUserModalProps = Omit<BaseElementProps, "children"> & {
+    user?: User;
+    onOpenChange: (isOpen?: boolean) => void;
+    onSave?: (user: User) => void;
+};

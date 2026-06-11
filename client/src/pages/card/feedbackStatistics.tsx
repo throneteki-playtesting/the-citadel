@@ -333,20 +333,22 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                                 </Button>
                             </TouchTooltip>
                         </PermissionGate>
-                        <TouchTooltip content={
-                            <div className="max-w-64">
-                                <div className="text-sm">Join the discussion</div>
-                                <div className="text-xs">You will be redirected to discord.</div>
-                            </div>
-                        }>
-                            <DiscordReviewStatus
-                                project={review.project}
-                                number={review.number}
-                                version={review.version}
-                                reviewer={review.reviewer}
-                                isIconOnly
-                            />
-                        </TouchTooltip>
+                        <PermissionGate requires={Permission.READ_DISCORD_REVIEW_FORUM}>
+                            <TouchTooltip content={
+                                <div className="max-w-64">
+                                    <div className="text-sm">Join the discussion</div>
+                                    <div className="text-xs">You will be redirected to discord.</div>
+                                </div>
+                            }>
+                                <DiscordReviewStatus
+                                    project={review.project}
+                                    number={review.number}
+                                    version={review.version}
+                                    reviewer={review.reviewer}
+                                    isIconOnly
+                                />
+                            </TouchTooltip>
+                        </PermissionGate>
                     </ButtonGroup>
                 </div>
             </div>

@@ -55,6 +55,8 @@ enum Permission {
     DELETE_REVIEWS = "DELETE_REVIEWS",
     /** Can access & read from the card forum on discord */
     READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM",
+    /** Can access & read from the review forum on discord */
+    READ_DISCORD_REVIEW_FORUM = "READ_DISCORD_REVIEW_FORUM",
     /** Can sync card images */
     SYNC_CARD_IMAGES = "SYNC_CARD_IMAGES",
     /** Can sync card discord forum threads */
