@@ -15,15 +15,30 @@ function convertIncomingText(text?: string) {
 }
 
 function convertOutgoingHtml(html: string) {
-    return html.replace(/<br\s*\/?>/gi, "\n").replace(/<span>\[(\w+)\]<\/span>/g, "[$1]");
+    return html.replace(/<br\s*\/?>/gi, "\n").replace(/<span[^>]*data-thrones-icon="(\w+)"[^>]*>[^<]*<\/span>/g, "[$1]");
 }
 
-export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, errorMessage }: AbilityTextEditorProps<string>) => {
-    const TextDocument = Document.extend({
-        content: "inline*",
-        marks: "_"
-    });
+const TextDocument = Document.extend({
+    content: "inline*",
+    marks: "_"
+});
 
+const EditorButton = ({ className, style, command, children }: Omit<BaseElementProps, "children"> & { command: () => boolean, children?: BaseElementProps["children"] }) => {
+    return (
+        <Button
+            className={className}
+            style={style}
+            onMouseDown={(e) => { e.preventDefault(); command(); }}
+            isIconOnly={true}
+            radius="none"
+            size="sm"
+        >
+            {children}
+        </Button>
+    );
+};
+
+export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, errorMessage }: AbilityTextEditorProps<string>) => {
     const editor = useEditor({
         extensions: [TextDocument, Text, TriggeredAbility, AutoTextConversions, Trait, AbilityIcon, NewLine, History],
         content: convertIncomingText(text),
@@ -45,31 +60,22 @@ export const AbilityEditor = ({ value: text, setValue: setText, isDisabled, erro
         if (typeof isDisabled !== "undefined") {
             editor.setEditable(!isDisabled);
         }
-        const currentPlain = editor.getText();
-        const incomingPlain = text ?? "";
+        const currentText = convertOutgoingHtml(editor.getHTML()) || undefined;
 
-        if (!editor.isFocused && incomingPlain !== currentPlain) {
-            editor.commands.setContent(convertIncomingText(incomingPlain));
+        if (!editor.isFocused && text !== currentText) {
+            editor.commands.setContent(convertIncomingText(text ?? ""));
         }
     }, [text, editor, isDisabled]);
-
-    const EditorButton = ({ className, style, command, children }: BaseElementProps & { key: string, command: () => boolean }) => {
-        return (
-            <Button className={className} style={style} onPress={() => command()} isIconOnly={true} radius="none" size="sm">
-                {children}
-            </Button>
-        );
-    };
 
     return (
         <div className={classNames("bg-default-100 rounded-xl overflow-hidden", { "bg-blend-darken": isDisabled })}>
             <div className="bg-default pt-1 px-1">
-                <EditorButton key="trait" className="font-crimson italic font-bold text-medium" command={() => editor.chain().focus().toggleTrait().run()}>
+                <EditorButton key="trait" className="font-crimson italic font-bold text-medium" command={() => editor.chain().toggleTrait().run()}>
                     T
                 </EditorButton>
                 {
                     Object.keys(abilityIcons).map((icon) => (
-                        <EditorButton key={icon} command={() => editor.chain().focus().insertThronesIcon(icon).run()}>
+                        <EditorButton key={icon} command={() => editor.chain().insertThronesIcon(icon).run()}>
                             <ThronesIcon name={icon as Icon}/>
                         </EditorButton>
                     ))

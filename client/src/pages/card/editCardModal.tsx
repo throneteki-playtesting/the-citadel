@@ -2,7 +2,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { BaseElementProps } from "../../types";
 import { addToast, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import { usePutDraftCardMutation } from "../../api";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import { getBaseCardValues, isPreview, renderPlaytestingCard } from "common/utils";
@@ -11,7 +11,7 @@ import { PlaytestingCard } from "common/models/schemas";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import NoteEditor from "./noteEditor";
 
-const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => true, onSave = () => true }: EditCardModalProps) => {
+export default function EditCardModal({ title = "Card Editor", isOpen, card: initial, onClose: onModalClose = () => true, onSave = () => true }: EditCardModalProps) {
     const [putDraft, { isLoading: isPuttingDraft }] = usePutDraftCardMutation();
     const [card, setCard] = useState<DeepPartial<IPlaytestCard>>({});
 
@@ -48,7 +48,7 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
                     onSubmit={onSubmit}
                     data={card}
                 >
-                    <ModalHeader>Draft Card Editor</ModalHeader>
+                    <ModalHeader>{title}</ModalHeader>
                     <ModalBody>
                         <div className="flex flex-col md:flex-row gap-2">
                             <CardPreview card={renderDraftCard} className="self-center md:self-start shrink-0 max-w-64"/>
@@ -74,6 +74,10 @@ const EditCardModal = ({ isOpen, card: initial, onClose: onModalClose = () => tr
     </Modal>;
 };
 
-type EditCardModalProps = Omit<BaseElementProps, "children"> & { isOpen: boolean, card?: DeepPartial<IPlaytestCard>, onClose?: () => void, onSave?: (card: IPlaytestCard) => void }
-
-export default EditCardModal;
+type EditCardModalProps = Omit<BaseElementProps, "children"> & {
+    title?: ReactNode;
+    isOpen: boolean;
+    card?: DeepPartial<IPlaytestCard>;
+    onClose?: () => void;
+    onSave?: (card: IPlaytestCard) => void;
+}

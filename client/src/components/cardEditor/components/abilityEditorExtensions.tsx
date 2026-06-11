@@ -1,7 +1,7 @@
 import { Extension, Mark, mergeAttributes, Node } from "@tiptap/core";
 import HardBreak from "@tiptap/extension-hard-break";
 import { abilityIcons } from "common/utils";
-import { Plugin, PluginKey, TextSelection } from "prosemirror-state";
+import { Plugin, PluginKey } from "prosemirror-state";
 
 declare module "@tiptap/core" {
     interface Commands<ReturnType> {
@@ -253,22 +253,8 @@ export const AbilityIcon = Node.create({
     addCommands: () => ({
         insertThronesIcon:
             (name: string) =>
-                ({ state, dispatch, view }) => {
-                    const { schema } = state;
-                    const node = schema.nodes.thronesIcon.create({ name });
-
-                    const insertPos = view.state.selection.from;
-                    const baseTr = view.state.tr;
-                    const insert = baseTr
-                        .insert(insertPos, node)
-                        .setSelection(
-                            TextSelection.near(
-                                baseTr.doc.resolve(insertPos + node.nodeSize)
-                            )
-                        );
-                    if (dispatch) dispatch(insert);
-                    return true;
-                }
+                ({ commands }) =>
+                    commands.insertContent(`[${name}]`)
     })
 });
 

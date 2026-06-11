@@ -21,7 +21,9 @@ const CardEditor = ({ className, style, card: initial, inputOptions = {}, onUpda
     }, [initial]);
 
     const applyDefaults = (card: DeepPartial<ICard>) => {
-        const defaults: DeepPartial<ICard> = {};
+        const defaults: DeepPartial<ICard> = {
+            traits: card.traits ?? []
+        };
         if (card.type === "character") {
             defaults.icons = {
                 military: card.icons?.military ?? false,
