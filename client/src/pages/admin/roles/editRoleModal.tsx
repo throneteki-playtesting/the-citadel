@@ -45,7 +45,7 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
                             <PermissionCheckboxes selectedPermissions={permissions} onChange={setPermissions} />
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="danger" variant="flat" onPress={onClose}>
+                            <Button onPress={onClose}>
                                 Cancel
                             </Button>
                             <Button color="primary" isLoading={isLoading} onPress={onSave}>

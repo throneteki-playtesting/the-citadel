@@ -54,7 +54,7 @@ export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }
                             <PermissionCheckboxes selectedPermissions={permissions} roleGrantedPermissions={roleGrantedPermissions} onChange={setPermissions} />
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="danger" variant="flat" onPress={onClose}>
+                            <Button onPress={onClose}>
                                 Cancel
                             </Button>
                             <Button color="primary" isLoading={isLoading} onPress={onSave}>
