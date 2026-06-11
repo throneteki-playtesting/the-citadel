@@ -8,7 +8,7 @@ import EditUserModal from "./editUserModal";
 import { hasPermission } from "common/utils";
 import Loading from "../../../components/loading";
 import { User } from "common/models/auth";
-import { usePageTitle } from "../../../api/hooks";
+import usePageTitle from "../../../hooks/usePageTitle";
 
 const Users = () => {
     usePageTitle("Users");

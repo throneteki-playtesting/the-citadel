@@ -11,7 +11,6 @@ import { faAngleLeft, faPencil, faScroll, faSquarePlus, faTrash } from "@fortawe
 import { rcompare } from "semver";
 import classNames from "classnames";
 import CardImage from "../../components/cardImage";
-import { usePageTitle, useSwipe } from "../../api/hooks";
 import EditCardModal from "./editCardModal";
 import DeleteCardModal from "./deleteCardModal";
 import LoadingCard from "../../components/loadingCard";
@@ -29,6 +28,8 @@ import { changeTypeClasses } from "../../constants";
 import { TouchTooltip } from "../../components/touchTooltip";
 import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
+import usePageTitle from "../../hooks/usePageTitle";
+import useSwipe from "../../hooks/useSwipe";
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number: projectNumber });

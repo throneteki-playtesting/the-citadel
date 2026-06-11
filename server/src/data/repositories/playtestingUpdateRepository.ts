@@ -4,10 +4,8 @@ import { MongoClient } from "mongodb";
 import { IPlaytestCard } from "common/models/cards";
 import { BasicAuditableRepository } from "./shared";
 import { syncPullRequests } from "@/github/pullRequests";
-import { logger } from "@/services";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
-import { getContext } from "@/middleware/context";
 
 export default class PlaytestingUpdateRepository extends BasicAuditableRepository<IPlaytestingUpdate> {
     constructor(mongoClient: MongoClient) {
@@ -42,20 +40,7 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
             () => syncPullRequests().then(result => { data = result; })
         ];
 
-        const { source } = getContext();
-
-        // Client does not need to wait for syncing to complete
-        if (source === "client") {
-            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
-        } else {
-            for (const fn of syncs) {
-                try {
-                    await fn();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
-        }
+        await this.internalSync(syncs);
 
         return data;
     }

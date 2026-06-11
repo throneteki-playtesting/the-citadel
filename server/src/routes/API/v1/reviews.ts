@@ -12,6 +12,7 @@ import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter } from "@/utils";
 import { ApiErrorResponse } from "@/errors";
 import { getRequestSchema } from "@/schemas";
+import { syncReviewForum } from "@/discord/forums/playtestingReviews";
 
 const router = express.Router();
 
@@ -139,6 +140,36 @@ router.delete("/:project/:number/:version/:reviewer",
         const { project, number, version, reviewer } = req.params;
         const [deleted] = await dataService.reviews.destroy({ project, number, version, reviewer });
         res.status(StatusCodes.OK).json(deleted);
+    })
+);
+
+router.post("/:project/:number/:version/:reviewer/sync/:type",
+    celebrate({
+        [Segments.PARAMS]: {
+            ...reviewParams,
+            type: Joi.string().valid("discord")
+        }
+    }),
+    validateRequest((principal, req) => {
+        const { type } = req.params;
+        switch (type) {
+            case "discord": return hasPermission(principal, Permission.SYNC_REVIEW_DISCORD);
+            default: return false;
+        }
+    }),
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string, type: "discord" }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, number, version, reviewer, type } = req.params;
+
+        let [review] = await dataService.reviews.read({ project, number, version, reviewer });
+
+        switch (type) {
+            case "discord": {
+                [review] = await syncReviewForum([review]);
+                break;
+            }
+        }
+
+        res.status(StatusCodes.OK).json(review);
     })
 );
 

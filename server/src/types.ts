@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
 import { IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
+import { IPlaytestReview } from "common/models/reviews";
 
 export interface AccessTokenPayload {
     discordId: string,
@@ -62,13 +63,15 @@ export interface IDeleteRequest<T> { filter?: SingleOrArray<Filter<T>> }
 export interface IDeleteResponse<T> { total: number, deleted: T[] }
 
 
-export type SyncType = "card" | "playtestingUpdate";
+export type SyncType = "card" | "review" | "playtestingUpdate";
 export interface SyncDataMap {
     card: IPlaytestCard;
+    review: IPlaytestReview;
     playtestingUpdate: IPlaytestingUpdate;
 }
 interface SyncOperationMap {
     card: "image" | "discord" | "github";
+    review: "discord";
     playtestingUpdate: "github";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];

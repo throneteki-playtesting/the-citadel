@@ -1,9 +1,9 @@
 import TimeAgo, { Formatter } from "react-timeago";
 import { CSSProperties } from "react";
 import { TouchTooltip } from "./touchTooltip";
-import { useTimezone } from "../api/hooks";
 import classNames from "classnames";
 import { ISO8601String } from "common/types";
+import useTimezone from "../hooks/useTimezone";
 
 const shortFormatter: Formatter = (value, unit) => {
     if (unit === "second") return value < 10 ? "just now" : `${value}s`;

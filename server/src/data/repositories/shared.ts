@@ -6,6 +6,8 @@ import { flatten } from "flat";
 import { Sort as MongoSort } from "mongodb";
 import { getContext } from "@/middleware/context";
 import { IRepository } from "@/types";
+import { logger } from "@/services";
+import { groupBy } from "lodash-es";
 
 
 export class Database<T> {
@@ -62,7 +64,36 @@ export class BasicAuditableRepository<T extends IAuditable> extends IAuditableDa
     public async destroy(destroying: SingleOrArray<Filter<T>>): Promise<T[]> {
         return await this.database.destroy(destroying);
     }
+
+    protected async internalSync(tasks: SyncTask[]) {
+        if (tasks.length === 0) {
+            return;
+        }
+        const { source } = getContext();
+
+        const syncs = tasks.map((task) => typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task);
+        // Client does not need to wait for syncing to complete
+        if (source === "client") {
+            const priorityGroups = groupBy(syncs, "priority");
+            const sortedPriorities = Object.keys(priorityGroups).map(Number).sort((a, b) => a - b);
+            void sortedPriorities.reduce(
+                (chain, priority) => chain.then(() =>
+                    Promise.all(priorityGroups[priority].map(({ func }) => func().catch(err => logger.warn(err))))
+                ),
+                Promise.resolve() as Promise<unknown>
+            );
+        } else {
+            for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
+                try {
+                    await func();
+                } catch (err) {
+                    logger.warn(err);
+                }
+            }
+        }
+    }
 }
+type SyncTask = (() => Promise<unknown>) | { priority: number, func: () => Promise<unknown> };
 
 export class BasicRepository<T> extends Database<T> implements IRepository<T> {
     public async create(creating: T): Promise<T>;

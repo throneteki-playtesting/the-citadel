@@ -6,7 +6,7 @@ import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import EditRoleModal from "./editRoleModal";
 import Loading from "../../../components/loading";
 import { Role } from "common/models/auth";
-import { usePageTitle } from "../../../api/hooks";
+import usePageTitle from "../../../hooks/usePageTitle";
 
 const Roles = () => {
     usePageTitle("Roles");

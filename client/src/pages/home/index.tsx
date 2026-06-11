@@ -6,8 +6,8 @@ import RecentPlaytestingUpdates from "./recentPlaytestingUpdates";
 import RecentSubmissions from "./recentSubmissions";
 import StatCards from "./statCards";
 import { hasPermission } from "common/utils";
-import { usePageTitle } from "../../api/hooks";
 import SectionTitle from "../../components/sectionTitle";
+import usePageTitle from "../../hooks/usePageTitle";
 
 export default function Home() {
     usePageTitle("Home");

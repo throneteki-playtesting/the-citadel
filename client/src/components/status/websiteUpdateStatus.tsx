@@ -1,7 +1,6 @@
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { usePermission, usePlaytestingUpdateSync } from "../../api/hooks";
 import { useMemo } from "react";
 import { BaseElementProps } from "../../types";
 import ThronesIcon from "../thronesIcon";
@@ -9,8 +8,10 @@ import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncProjectsGithubMutation } from "../../api";
 import Permission from "common/models/permissions";
 import { BaseStatus, StatusData } from "./baseStatus";
+import { usePermission } from "../../hooks/usePermission";
+import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 
-const WebsiteUpdateStatus = ({ className, style, project, version, isIconOnly }: WebsiteUpdateStatusProps) => {
+export default function WebsiteUpdateStatus({ className, style, project, version, isIconOnly }: WebsiteUpdateStatusProps) {
     const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({ project, version });
     const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
 
@@ -111,5 +112,3 @@ type WebsiteUpdateStatusProps = Omit<BaseElementProps, "children"> & {
     version: number;
     isIconOnly?: boolean;
 }
-
-export default WebsiteUpdateStatus;

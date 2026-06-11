@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import ReviewForm from "./reviewForm";
-import { usePageTitle } from "../../api/hooks";
 import { parseParamNumber } from "../../utils";
 import { useGetCardQuery } from "../../api";
+import usePageTitle from "../../hooks/usePageTitle";
 
 export default function SubmitReview() {
     const [searchParams] = useSearchParams();

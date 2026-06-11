@@ -16,11 +16,11 @@ import { faAddressCard, faEllipsis, faPencil, faStarOfLife, faTrash, IconDefinit
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
-import { usePermission } from "../../../api/hooks";
 import { groupBy } from "lodash-es";
 import RadialMenu from "../../../components/radialMenu";
 import { watermarkClasses } from "../../../constants";
 import { BaseElementProps } from "../../../types";
+import { usePermission } from "../../../hooks/usePermission";
 
 type DraftSlot = {
     faction: Faction;

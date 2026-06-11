@@ -11,8 +11,8 @@ import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
 import { highlightTarget, watermarkClasses } from "../../constants";
-import { usePermission } from "../../api/hooks";
 import SectionTitle from "../../components/sectionTitle";
+import { usePermission } from "../../hooks/usePermission";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 

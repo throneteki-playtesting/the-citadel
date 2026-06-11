@@ -59,6 +59,7 @@ export interface SyncEmitter<K extends SyncType> {
 
 const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = {
     card: (card) => `${card.project}|${card.number}|${card.version}`,
+    review: (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`
 };
 

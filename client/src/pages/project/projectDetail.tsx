@@ -9,9 +9,9 @@ import ProjectHeader from "./projectHeader";
 import ProjectContent from "./projectContent";
 import ProjectDrafting from "./draft/projectDrafting";
 import classNames from "classnames";
-import { usePageTitle } from "../../api/hooks";
 import { dismoji } from "../../constants";
 import Error from "../../components/error";
+import usePageTitle from "../../hooks/usePageTitle";
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number });

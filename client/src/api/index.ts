@@ -479,6 +479,13 @@ const api = createApi({
                 return tags;
             }
         }),
+        syncReviewDiscord: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
+            query: (options) => {
+                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}/sync/discord`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "review")
+        }),
         // Reviews API
         getReview: builder.query<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
             query: (options) => {
@@ -570,6 +577,7 @@ export const {
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,
     useSyncProjectsGithubMutation,
+    useSyncReviewDiscordMutation,
 
     useGetReviewQuery,
     useLazyGetReviewQuery,

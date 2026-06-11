@@ -14,11 +14,12 @@ import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { faAngleLeft, faBug, faCheck, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
 import WebsiteUpdateStatus from "../../components/status/websiteUpdateStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { usePageTitle, useTimezone } from "../../api/hooks";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
 import Error from "../../components/error";
 import SectionTitle from "../../components/sectionTitle";
+import usePageTitle from "../../hooks/usePageTitle";
+import useTimezone from "../../hooks/useTimezone";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });

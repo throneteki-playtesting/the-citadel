@@ -10,7 +10,7 @@ import { IPlaytestReview, statementAnswers, StatementQuestions, Statements } fro
 import { useLazyGetTDBCardQuery, useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import { BaseTickContentProps, PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import ThronesIcon from "../../components/thronesIcon";
-import { faDiscord, IconDefinition } from "@fortawesome/free-brands-svg-icons";
+import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { useNavigate } from "react-router-dom";
@@ -23,6 +23,7 @@ import LoadingCard from "../../components/loadingCard";
 import { highlightTarget } from "../../constants";
 import { HighlightTarget } from "../../components/highlightTarget";
 import SectionTitle from "../../components/sectionTitle";
+import DiscordReviewStatus from "../../components/status/discordReviewStatus";
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -338,16 +339,13 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                                 <div className="text-xs">You will be redirected to discord.</div>
                             </div>
                         }>
-                            <Button
-                                as={Link}
+                            <DiscordReviewStatus
+                                project={review.project}
+                                number={review.number}
+                                version={review.version}
+                                reviewer={review.reviewer}
                                 isIconOnly
-                                isDisabled={!review.discord?.messageUrl}
-                                href={review.discord?.messageUrl?.replace("https://", "discord://")}
-                                target="_blank"
-                            >
-                                {/* TODO: Change this to sync if messageUrl is null, assuming permission */}
-                                <FontAwesomeIcon icon={faDiscord}/>
-                            </Button>
+                            />
                         </TouchTooltip>
                     </ButtonGroup>
                 </div>

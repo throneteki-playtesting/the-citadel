@@ -8,10 +8,9 @@ import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { BasicAuditableRepository } from "./shared";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
-import { dataService, logger } from "@/services";
+import { dataService } from "@/services";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
-import { getContext } from "@/middleware/context";
 
 export default class CardsRepository extends BasicAuditableRepository<IPlaytestCard> {
     declare protected database: CardMongoDataSource;
@@ -52,29 +51,14 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
         let data = asArray(syncing);
         const syncs = [
-            () => syncImage(data).then(result => { data = result; }),
-            () => syncCardForum(data).then(result => { data = result; }),
-            () => syncIssues(data).then(result => { data = result; }),
-            () => dataService.playtestingUpdates.sync()
+            { priority: 0, func: () => syncImage(data).then(result => { data = result; }) },
+            { priority: 1, func: () => syncCardForum(data).then(result => { data = result; }) },
+            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) },
+            { priority: 1, func: () => dataService.playtestingUpdates.sync() }
         ];
 
-        const { source } = getContext();
+        await this.internalSync(syncs);
 
-        // Client does not need to wait for syncing to complete
-        if (source === "client") {
-            // Run image sync first (as others rely on it), then run the rest together
-            void syncs[0]().catch(err => logger.warn(err)).then(() => {
-                syncs.slice(1).forEach(fn => void fn().catch(err => logger.warn(err)));
-            });
-        } else {
-            for (const fn of syncs) {
-                try {
-                    await fn();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
-        }
         return Array.isArray(syncing) ? data : data[0];
     }
 
@@ -89,20 +73,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
             () => dataService.playtestingUpdates.sync()
         ];
 
-        const { source } = getContext();
-
-        // Client does not need to wait for syncing to complete
-        if (source === "client") {
-            syncs.forEach(fn => void fn().catch(err => logger.warn(err)));
-        } else {
-            for (const fn of syncs) {
-                try {
-                    await fn();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
-        }
+        await this.internalSync(syncs);
 
         return Array.isArray(desyncing) ? data : data[0];
     }

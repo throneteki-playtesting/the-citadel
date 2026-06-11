@@ -14,7 +14,7 @@ import { CardPreview } from "@agot/card-preview";
 import SuggestionsGrid from "./suggestionsGrid";
 import { User } from "common/models/auth";
 import { downloadBlob } from "../../utils";
-import { usePageTitle } from "../../api/hooks";
+import usePageTitle from "../../hooks/usePageTitle";
 
 
 const Suggestions = () => {

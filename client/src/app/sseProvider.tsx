@@ -7,6 +7,7 @@ import { merge } from "lodash-es";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { DeepPartial } from "common/types";
+import { IPlaytestReview } from "common/models/reviews";
 
 type SyncHandlers = {
     [K in SyncType]?: (event: SyncCompleteEvent<K>) => void;
@@ -32,6 +33,32 @@ const syncCompleteHandlers: SyncHandlers = {
                         updateCachedEntity<IPlaytestCard>(
                             draft,
                             (c) => c.project === Number(project) && c.number === Number(number) && c.version === version,
+                            event.data
+                        );
+                    })
+                );
+            } catch (error) {
+                console.error(
+                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
+                    error
+                );
+            }
+        });
+    },
+    review: (event) => {
+        if (!event.data || Object.keys(event.data).length === 0) return;
+
+        const state = store.getState();
+        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "review", id: event.id }]);
+        const [project, number, version, reviewer] = event.id.split("|");
+
+        invalidated.forEach(({ endpointName, originalArgs }) => {
+            try {
+                store.dispatch(
+                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
+                        updateCachedEntity<IPlaytestReview>(
+                            draft,
+                            (u) => u.project === Number(project) && u.number === Number(number) && u.version === version && u.reviewer === reviewer,
                             event.data
                         );
                     })

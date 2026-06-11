@@ -1,5 +1,5 @@
 import classNames from "classnames";
-import { useHighlightOnMount } from "../api/hooks";
+import useHighlightOnMount from "../hooks/useHighlightOnMount";
 
 export function HighlightTarget({ targetId, children, className, ...rest }: HighlightTargetProps) {
     const { ref, isHighlighted } = useHighlightOnMount<HTMLDivElement>(targetId);

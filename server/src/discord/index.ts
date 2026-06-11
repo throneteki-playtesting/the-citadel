@@ -228,6 +228,12 @@ class DiscordService {
         return result || null;
     }
 
+    public async getUserFromId(guild: Guild, discordId: string) {
+        const member = await this.findMemberOrUserById(guild, discordId);
+        const user = await DiscordService.syncUser(member);
+        return user;
+    }
+
     static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;

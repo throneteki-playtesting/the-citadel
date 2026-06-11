@@ -2,13 +2,13 @@ import { faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
-import { useCardSync } from "../../api/hooks";
 import { useGetCardsQuery, useSyncCardImageMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { getMostRecent, SemanticVersion } from "common/utils";
+import { useCardSync } from "../../hooks/useSync";
 
-const ImageStatus = ({ className, style, project, number, isIconOnly }: ImageStatusProps) => {
+export default function ImageStatus({ className, style, project, number, isIconOnly }: ImageStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
 
@@ -72,5 +72,3 @@ type ImageStatusProps = Omit<BaseElementProps, "children"> & {
     version?: SemanticVersion;
     isIconOnly?: boolean;
 }
-
-export default ImageStatus;

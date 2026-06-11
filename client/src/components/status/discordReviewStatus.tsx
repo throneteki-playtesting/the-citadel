@@ -3,25 +3,25 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useGetCardQuery, useSyncCardDiscordMutation } from "../../api";
+import { useGetReviewQuery, useSyncReviewDiscordMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { SemanticVersion } from "common/utils";
-import { useCardSync } from "../../hooks/useSync";
-import Permission from "common/models/permissions";
+import { useReviewSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
+import Permission from "common/models/permissions";
 
-export default function DiscordCardStatus({ className, style, project, number, version, isIconOnly }: DiscordCardStatusProps) {
-    const { data: card, isLoading } = useGetCardQuery({ project, number, version: version ?? "latest" });
+export default function DiscordReviewStatus({ className, style, project, number, version, reviewer, isIconOnly }: DiscordCardStatusProps) {
+    const { data: review, isLoading } = useGetReviewQuery({ project, number, version, reviewer });
 
-    const [syncCardDiscord, { isLoading: isSyncing }] = useSyncCardDiscordMutation();
-    const { status, step, error } = useCardSync(card).discord;
+    const [syncCardDiscord, { isLoading: isSyncing }] = useSyncReviewDiscordMutation();
+    const { status, step, error } = useReviewSync(review).discord;
 
-    const canPressSync = usePermission(Permission.SYNC_CARD_DISCORD);
+    const canPressSync = usePermission(Permission.SYNC_REVIEW_DISCORD);
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Discord Thread";
-        if (!card) {
+        if (!review) {
             return {
                 title,
                 description: "Unknown",
@@ -37,21 +37,21 @@ export default function DiscordCardStatus({ className, style, project, number, v
             };
         }
 
-        const syncAsync = canPressSync ? async () => await syncCardDiscord({ project: card.project, number: card.number, version: card.version }).unwrap() : undefined;
+        const syncAsync = canPressSync ? async () => await syncCardDiscord({ project, number, version, reviewer }).unwrap() : undefined;
 
         if (status === "error") {
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
+                icon: <FontAwesomeIcon icon={faRotate} />,
                 onPress: syncAsync,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!card.discord?.messageUrl || (card.discord?.lastSynced && card.discord.lastSynced < card.cardUpdated)) {
+        if (!review.discord?.messageUrl) {
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
+                icon: <FontAwesomeIcon icon={faRotate} />,
                 onPress: syncAsync,
                 color: "secondary",
                 description: "Requires Syncing"
@@ -60,12 +60,12 @@ export default function DiscordCardStatus({ className, style, project, number, v
 
         return {
             title,
-            icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
-            href: card.discord!.messageUrl!.replace("https://", "discord://"),
-            color: "success",
-            description: "Synced"
+            icon: <FontAwesomeIcon icon={faDiscord} />,
+            href: review.discord!.messageUrl!.replace("https://", "discord://"),
+            color: "default",
+            description: "Join the discussion"
         };
-    }, [canPressSync, card, error, isSyncing, status, step, syncCardDiscord]);
+    }, [canPressSync, error, isSyncing, number, project, review, reviewer, status, step, syncCardDiscord, version]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
@@ -73,6 +73,7 @@ export default function DiscordCardStatus({ className, style, project, number, v
 type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
-    version?: SemanticVersion;
+    version: SemanticVersion;
+    reviewer: string;
     isIconOnly?: boolean;
 }

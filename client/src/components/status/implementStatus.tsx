@@ -1,7 +1,6 @@
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
-import { useCardSync } from "../../api/hooks";
 import { useMemo } from "react";
 import ThronesIcon from "../thronesIcon";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
@@ -9,8 +8,9 @@ import { useGetCardsQuery, useSyncCardGithubMutation } from "../../api";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { getMostRecent, SemanticVersion } from "common/utils";
+import { useCardSync } from "../../hooks/useSync";
 
-const ImplementStatus = ({ className, style, project, number, version, isIconOnly }: ImplementStatusProps) => {
+export default function ImplementStatus({ className, style, project, number, version, isIconOnly }: ImplementStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
 
@@ -106,5 +106,3 @@ type ImplementStatusProps = Omit<BaseElementProps, "children"> & {
     version?: SemanticVersion;
     isIconOnly?: boolean;
 }
-
-export default ImplementStatus;

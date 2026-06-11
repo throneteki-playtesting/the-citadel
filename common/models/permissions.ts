@@ -62,7 +62,9 @@ enum Permission {
     /** Can sync card github issues */
     SYNC_CARD_GITHUB = "SYNC_CARD_GITHUB",
     /** Can sync card github pull requests */
-    SYNC_PROJECT_GITHUB = "SYNC_PROJECT_GITHUB"
+    SYNC_PROJECT_GITHUB = "SYNC_PROJECT_GITHUB",
+    /** Can sync review discord forum threads */
+    SYNC_REVIEW_DISCORD = "SYNC_REVIEW_DISCORD"
 }
 
 export default Permission;

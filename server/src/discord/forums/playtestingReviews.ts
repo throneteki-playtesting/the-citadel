@@ -1,27 +1,33 @@
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestReview, StatementQuestions } from "common/models/reviews";
-import { Guild, ForumChannel, GuildForumTag, BaseMessageOptions, EmbedBuilder, AttachmentBuilder, ButtonStyle, ActionRowBuilder, ButtonBuilder, GuildMember } from "discord.js";
+import { Guild, ForumChannel, GuildForumTag, BaseMessageOptions, EmbedBuilder, AttachmentBuilder, ButtonStyle, ActionRowBuilder, ButtonBuilder } from "discord.js";
 import { colors, emojis } from "../utils";
 import { capitalize } from "lodash-es";
 import { dataService, discordService, logger } from "@/services";
 import { factionNames, isPreview, parseCardCode } from "common/utils";
+import { createSyncEmitter } from "@/services/sseService";
+import { syncImage } from "@/rendering/hosting";
+import { User } from "common/models/auth";
 
-export async function syncPlaytestingReviews(reviews: IPlaytestReview[]) {
+export async function syncReviewForum(reviews: IPlaytestReview[]) {
     const context = await getPlaytestingReviewContext();
 
     const toUpdate: IPlaytestReview[] = [];
     let needsUpdate = false;
     for (let review of reviews) {
+        const emitter = createSyncEmitter("review", "discord", review);
         try {
             if (isMessageOutdated(review)) {
+                emitter.progress("Syncing");
                 needsUpdate = true;
                 logger.info(`[Discord] Syncing ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
                 const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
-                const member = await context.guild.members.fetch(review.reviewer);
+                const user = await discordService.getUserFromId(context.guild, review.reviewer);
 
                 let initialExists = !!review.discord?.messageUrl;
                 if (!initialExists) {
-                    const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card, member));
+                    emitter.progress("Searching");
+                    const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card, user));
                     if (existingThread) {
                         // For legacy reasons; if a thread exists before review.discord was created, we need to map it
                         const starter = await existingThread.fetchStarterMessage();
@@ -35,15 +41,18 @@ export async function syncPlaytestingReviews(reviews: IPlaytestReview[]) {
                 }
                 // Check outdated again, in case it was mapped from above code
                 if (isMessageOutdated(review)) {
+                    emitter.progress("Syncing");
                     if (initialExists) {
-                        review = await updateInitial(review, card, member, context);
+                        review = await updateInitial(review, card, user, context);
                     } else {
-                        review = await createInitial(review, card, member, context);
+                        review = await createInitial(review, card, user, context);
                     }
                 }
                 logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review.discord?.messageUrl}`);
             }
+            emitter.complete(review);
         } catch (err) {
+            emitter.error("Failure");
             logger.warn(new Error(`[Discord] Failed to sync ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`, { cause: err }));
         }
         toUpdate.push(review);
@@ -65,12 +74,14 @@ interface PlaytestingReviewContext {
     factionTags: Record<string, GuildForumTag>;
 }
 
-export async function createInitial(review: IPlaytestReview, card: IPlaytestCard, member: GuildMember, context?: PlaytestingReviewContext) {
+export async function createInitial(review: IPlaytestReview, card: IPlaytestCard, user: User, context?: PlaytestingReviewContext) {
     try {
         context = context ?? await getPlaytestingReviewContext();
 
-        const initialMessage = messages.initial(review, member, card);
-        const thread = await createThreadFor(review, card, member, initialMessage, context);
+        card = await syncImage(card);
+
+        const initialMessage = messages.initial(review, user, card);
+        const thread = await createThreadFor(review, card, user, initialMessage, context);
 
         // Pin the first message of the newly-created thread
         const starter = await thread.fetchStarterMessage();
@@ -86,9 +97,11 @@ export async function createInitial(review: IPlaytestReview, card: IPlaytestCard
     }
 };
 
-export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard, member: GuildMember, context?: PlaytestingReviewContext) {
+export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard, user: User, context?: PlaytestingReviewContext) {
     try {
         context = context ?? await getPlaytestingReviewContext();
+
+        card = await syncImage(card);
 
         if (!review.discord?.messageUrl) {
             throw new Error("Cannot edit message of review as message url is missing");
@@ -103,7 +116,7 @@ export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard
         // Update original message on thread
         const thread = await getThreadFor(review);
         let message = await channel.messages.fetch(messageId);
-        const initialMessage = messages.initial(review, member, card);
+        const initialMessage = messages.initial(review, user, card);
         message = await message.edit(initialMessage);
 
         review.discord = {
@@ -112,9 +125,9 @@ export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard
         };
 
         // Then, send update message to thread, ensuring the correct user is listed as the updater
-        let updatedBy = member;
-        if (member.user.id !== review.updatedBy) {
-            updatedBy = await context.guild.members.fetch(review.updatedBy);
+        let updatedBy = user;
+        if (user.discordId !== review.updatedBy) {
+            updatedBy = await discordService.getUserFromId(context.guild, review.updatedBy);
         }
         const updateMessage = messages.update(review, updatedBy);
         await thread.send(updateMessage);
@@ -151,14 +164,14 @@ export async function deleteInitial(review: IPlaytestReview, context?: Playtesti
 }
 
 // Thread helper functions
-function threadNameFor(card: IPlaytestCard, member: GuildMember) {
+function threadNameFor(card: IPlaytestCard, user: User) {
     const cardLabel = `${card.name} ${isPreview(card) ? "Preview" : card.version}`;
-    return `${card.number} | ${cardLabel} - ${member.nickname ?? member.displayName}`;
+    return `${card.number} | ${cardLabel} - ${user.displayname}`;
 }
-async function createThreadFor(review: IPlaytestReview, card: IPlaytestCard, member: GuildMember, message: BaseMessageOptions, context: PlaytestingReviewContext) {
-    logger.info(`[Discord] Creating thread for ${card.name} (${card.version}) - ${member.nickname ?? member.displayName}`);
-    const name = threadNameFor(card, member);
-    const reason = `Playtesting Review by ${member.nickname ?? member.displayName} for ${card.code}, ${card.name} (${card.version})`;
+async function createThreadFor(review: IPlaytestReview, card: IPlaytestCard, user: User, message: BaseMessageOptions, context: PlaytestingReviewContext) {
+    logger.info(`[Discord] Creating thread for ${card.name} (${card.version}) - ${user.displayname}`);
+    const name = threadNameFor(card, user);
+    const reason = `Playtesting Review by ${user.displayname} for ${card.code}, ${card.name} (${card.version})`;
     const tags = [
         context.projectTags[card.project],
         context.factionTags[card.faction]
@@ -227,11 +240,11 @@ async function getPlaytestingReviewContext(): Promise<PlaytestingReviewContext> 
     return { guild, channel, projectTags, factionTags };
 }
 
-function createReviewEmbeds(review: IPlaytestReview, member: GuildMember) {
+function createReviewEmbeds(review: IPlaytestReview, user: User) {
     const embed = new EmbedBuilder()
         .setAuthor({
-            name: member.nickname ?? member.displayName,
-            iconURL: `https://cdn.discordapp.com/avatars/${member.user.id}/${member.user.avatar}.png`
+            name: user.displayname,
+            iconURL: user.avatarUrl
         })
         .addFields(
             {
@@ -285,10 +298,10 @@ function extractFromURL(url: string) {
     return { guildId, channelId, messageId };
 }
 const messages = {
-    initial(review: IPlaytestReview, member: GuildMember, card: IPlaytestCard): BaseMessageOptions {
-        const content = `<@${member.id}> has submitted a new review for **${card.name} (${card.version})**`;
+    initial(review: IPlaytestReview, user: User, card: IPlaytestCard): BaseMessageOptions {
+        const content = `<@${user.discordId}> has submitted a new review for **${card.name} (${card.version})**`;
 
-        const embeds = createReviewEmbeds(review, member);
+        const embeds = createReviewEmbeds(review, user);
 
         const file = new AttachmentBuilder(card.imageUrl, { name: `${card.code}_${card.version}.png`, description: `${card.name} v${card.version}` });
 
@@ -311,9 +324,10 @@ const messages = {
             components: [buttonRow]
         };
     },
-    update(review: IPlaytestReview, member: GuildMember): BaseMessageOptions {
+    update(review: IPlaytestReview, user: User): BaseMessageOptions {
         const content = "### Review Updated"
-        + `\n<@${member.id}> has updated this review.`;
+        + `\n<@${user.discordId}> has updated this review.`
+        + "\nContact the reviewer if you wish to know what exactly was updated.";
 
         const starterButton = new ButtonBuilder()
             .setLabel("View Current Review")
