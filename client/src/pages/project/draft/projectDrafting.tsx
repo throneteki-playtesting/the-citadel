@@ -150,7 +150,14 @@ function FactionSlot({ slot, onNew, onSuggestion, onEdit, onDelete }: FactionSlo
     const canDelete = usePermission(Permission.DELETE_CARDS);
     if (slot.options.length > 0) {
         return (
-            <CardStack key={slot.number} cards={[...slot.options].reverse()} selectedIndex={selectedIndex} tilt={3} className="size-full" style={{ zIndex: slot.totalSlots - slot.number }} onClick={() => setSelectedIndex((prev) => prev === 0 ? slot.options.length - 1 : --prev)}>
+            <CardStack
+                key={slot.number}
+                cards={[...slot.options].reverse()}
+                selectedIndex={selectedIndex} tilt={3}
+                className="h-full"
+                style={{ zIndex: slot.totalSlots - slot.number }}
+                onClick={() => setSelectedIndex((prev) => prev === 0 ? slot.options.length - 1 : --prev)}
+            >
                 {
                     (card) => {
                         const dropdownItems: DropdownItemDef[] = [

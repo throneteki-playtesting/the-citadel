@@ -93,20 +93,19 @@ function ProjectContentCard({ card }: ProjectContentCardProps) {
     const { data: draftData } = useGetCardsQuery({ filter: { project: card.project, number: card.number, draft: true } });
     const hasDraft = useMemo(() => draftData && draftData.total > 0, [draftData]);
 
-    if (card.release) {
-        return <CardImage card={card} />;
-    }
-    return <div className="w-full flex justify-center items-center drop-shadow-xl">
-        <div className="relative w-full">
-            <CardPreview
-                card={renderPlaytestingCard(card)}
-                rounded
-                className="transition-all"
-            />
-            <Tooltip placement="bottom" content="New version being drafted" className={classNames("transition-opacity duration-500", { "opacity-0": !hasDraft })}>
-                <FontAwesomeIcon icon={faStar} className={classNames("absolute top-0 right-0 m-2 text-3xl text-gray-500 transition-opacity duration-500", hasDraft ? "opacity-75" : "opacity-0")}/>
-            </Tooltip>
-        </div>
+    return <div className="h-full flex justify-center items-center drop-shadow-xl">
+        {card.release ? <CardImage card={card} /> :
+            <div className="relative w-full">
+                <CardPreview
+                    card={renderPlaytestingCard(card)}
+                    rounded
+                    className="transition-all"
+                />
+                <Tooltip placement="bottom" content="New version being drafted" className={classNames("transition-opacity duration-500", { "opacity-0": !hasDraft })}>
+                    <FontAwesomeIcon icon={faStar} className={classNames("absolute top-0 right-0 m-2 text-3xl text-gray-500 transition-opacity duration-500", hasDraft ? "opacity-75" : "opacity-0")}/>
+                </Tooltip>
+            </div>
+        }
     </div>;
 };
 
