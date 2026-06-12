@@ -225,6 +225,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
         // If controlled, simply submit that (ignore form data)
         if (controlledData !== undefined) {
             onPageSubmit(controlledData);
+            return;
         }
 
         // Collect natural (named) inputs via FormData
