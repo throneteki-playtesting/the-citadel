@@ -374,6 +374,13 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "project")
         }),
+        archiveProject: builder.mutation<IProject, { number: number }>({
+            query: (options) => {
+                const url = buildUrl(`projects/${options.number}/archive`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => mapTags(result, "project")
+        }),
         // Playtesting Update API
         getPlaytestingUpdates: builder.query<IGetResponse<IPlaytestingUpdate>, IGetRequest<IPlaytestingUpdate> | void>({
             query: (options) => {
@@ -564,6 +571,7 @@ export const {
     useInitialiseProjectMutation,
     useUpdateProjectMutation,
     useDeleteProjectMutation,
+    useArchiveProjectMutation,
 
     useGetPlaytestingUpdatesQuery,
     useGetPlaytestingUpdateQuery,

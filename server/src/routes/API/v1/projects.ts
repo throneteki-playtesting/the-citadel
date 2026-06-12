@@ -210,10 +210,18 @@ router.put("/:number",
     })
 );
 
-// Delete project
+// Delete draft project
 router.delete("/:number",
     validateRequest(Permission.DELETE_PROJECTS),
     celebrate({ [Segments.PARAMS]: numberParams }),
+    loadProjectByNumber,
+    asyncHandler(async (req, res, next) => {
+        const project = res.locals.project as IProject;
+        if (!project.draft) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Active projects cannot be deleted, only archived");
+        }
+        next();
+    }),
     asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
         const { number } = req.params;
         const [deleted] = await dataService.projects.destroy({ number });
@@ -222,6 +230,31 @@ router.delete("/:number",
         }
         await dataService.cards.destroy({ project: number });
         res.status(StatusCodes.OK).json(deleted);
+    })
+);
+
+// Archive active project
+router.post("/:number/archive",
+    validateRequest(Permission.ARCHIVE_PROJECTS),
+    celebrate({ [Segments.PARAMS]: numberParams }),
+    loadProjectByNumber,
+    asyncHandler(async (req, res, next) => {
+        const project = res.locals.project as IProject;
+        if (project.draft) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Draft projects cannot be archived, only deleted");
+        }
+        if (!project.active) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Project is already archived");
+        }
+        next();
+    }),
+    asyncHandler(async (req, res) => {
+        let project = res.locals.project as IProject;
+        project.active = false;
+
+        project = await dataService.projects.update(project);
+
+        res.status(StatusCodes.OK).json(project);
     })
 );
 

@@ -2,7 +2,7 @@ import { BaseElementProps } from "../../types";
 import { Button, ButtonGroup, Chip, Link, Skeleton } from "@heroui/react";
 import { IProject } from "common/models/projects";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUpRightFromSquare, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faArrowUpRightFromSquare, faBoxArchive, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import classNames from "classnames";
@@ -48,13 +48,24 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                         </Button>
                     </TouchTooltip>
                 </PermissionGate>
-                <PermissionGate requires={Permission.DELETE_PROJECTS}>
-                    <TouchTooltip content="Delete Project">
-                        <Button isIconOnly color="danger" onPress={onDelete}>
-                            <FontAwesomeIcon icon={faTrash}/>
-                        </Button>
-                    </TouchTooltip>
-                </PermissionGate>
+                {project.draft && !project.active &&
+                    <PermissionGate requires={Permission.DELETE_PROJECTS}>
+                        <TouchTooltip content="Delete Project">
+                            <Button isIconOnly color="danger" onPress={onDelete}>
+                                <FontAwesomeIcon icon={faTrash}/>
+                            </Button>
+                        </TouchTooltip>
+                    </PermissionGate>
+                }
+                {!project.draft && project.active &&
+                    <PermissionGate requires={Permission.ARCHIVE_PROJECTS}>
+                        <TouchTooltip content="Archive Project">
+                            <Button isIconOnly color="danger" onPress={onDelete}>
+                                <FontAwesomeIcon icon={faBoxArchive}/>
+                            </Button>
+                        </TouchTooltip>
+                    </PermissionGate>
+                }
             </ButtonGroup>
             <div className="flex flex-col gap-2">
                 <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">

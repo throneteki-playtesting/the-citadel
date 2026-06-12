@@ -14,7 +14,7 @@ import Permission from "common/models/permissions";
 export default function DiscordReviewStatus({ className, style, project, number, version, reviewer, isIconOnly }: DiscordCardStatusProps) {
     const { data: review, isLoading } = useGetReviewQuery({ project, number, version, reviewer });
 
-    const [syncCardDiscord, { isLoading: isSyncing }] = useSyncReviewDiscordMutation();
+    const [syncReviewDiscord, { isLoading: isSyncing }] = useSyncReviewDiscordMutation();
     const { status, step, error } = useReviewSync(review).discord;
 
     const canPressSync = usePermission(Permission.SYNC_REVIEW_DISCORD);
@@ -37,7 +37,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
             };
         }
 
-        const syncAsync = canPressSync ? async () => await syncCardDiscord({ project, number, version, reviewer }).unwrap() : undefined;
+        const syncAsync = canPressSync ? async () => await syncReviewDiscord({ project, number, version, reviewer }).unwrap() : undefined;
 
         if (status === "error") {
             return {
@@ -65,7 +65,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
             color: "default",
             description: "Join the discussion"
         };
-    }, [canPressSync, error, isSyncing, number, project, review, reviewer, status, step, syncCardDiscord, version]);
+    }, [canPressSync, error, isSyncing, number, project, review, reviewer, status, step, syncReviewDiscord, version]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

@@ -414,6 +414,10 @@ async function getThreadFor(card: IPlaytestCard) {
         target = previous;
     }
 
+    if (!target.discord?.messageUrl) {
+        throw new Error(`Missing discord message url data for "${card.code}"`);
+    }
+
     const { messageId: threadId } = extractFromURL(target.discord.messageUrl);
     const guild = await discordService.getGuild();
     const thread = await guild.channels.fetch(threadId);
@@ -449,8 +453,8 @@ async function createThreadFor(card: IPlaytestCard, message: BaseMessageOptions,
     return thread;
 }
 async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
-    const { thread } = await getThreadFor(card);
-    if (thread) {
+    try {
+        const { thread } = await getThreadFor(card);
         logger.info(`[Discord] Closing thread for ${card.name} (${card.version}): ${card.discord.messageUrl}`);
         if (thread.archived) {
             await thread.setArchived(false);
@@ -467,8 +471,10 @@ async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
         }
         await thread.setAppliedTags(tags.map((tag) => tag.id));
         await thread.setArchived(true);
+        return thread;
+    } catch (err) {
+        logger.warn(new Error(`[Discord] Failed to close thread for ${card.name} (${card.version})`, { cause: err }));
     }
-    return thread;
 }
 
 const messages = {

@@ -13,6 +13,7 @@ const permissionMeta: Record<Permission, { label: string; group: string }> = {
     [Permission.CREATE_PROJECTS]: { label: "Create", group: "Projects" },
     [Permission.EDIT_PROJECTS]: { label: "Edit", group: "Projects" },
     [Permission.DELETE_PROJECTS]: { label: "Delete", group: "Projects" },
+    [Permission.ARCHIVE_PROJECTS]: { label: "Archive", group: "Projects" },
     [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects" },
     [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting" },
     [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting" },

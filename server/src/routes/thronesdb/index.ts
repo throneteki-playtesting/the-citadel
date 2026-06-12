@@ -24,7 +24,7 @@ router.get("/deck/:identifier",
     asyncHandler<{ identifier: number | UUID }, unknown, unknown, IDecklist>(async (req, res) => {
         const { identifier } = req.params;
 
-        let response = null;
+        let response: Response = null;
         if (typeof identifier === "number") {
             // Id decks are publicly available
             response = await fetch(`https://thronesdb.com/api/public/decklist/${identifier}`);
@@ -40,9 +40,9 @@ router.get("/deck/:identifier",
             if (response.status === 404) {
                 // If deck cannot be found, it should simply return nothing rather than error
                 res.status(StatusCodes.OK).json(undefined);
+                return;
             }
-            const text = await response.text();
-            throw new Error(`Failed to fetch deck with uuid "${identifier}": ${text}`);
+            throw new Error(`Failed to fetch deck with uuid "${identifier}": ${response.statusText}`);
         }
 
         const json = await response.json();
@@ -63,8 +63,7 @@ router.get("/card/:code",
         const response = await fetch(`https://thronesdb.com/api/public/card/${code}`);
 
         if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`Failed to fetch card with code "${code}": ${text}`);
+            throw new Error(`Failed to fetch card with code "${code}": ${response.statusText}`);
         }
 
         const json = await response.json();

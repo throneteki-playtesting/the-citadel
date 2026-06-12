@@ -3,7 +3,7 @@ enum Permission {
     CREATE_PROJECTS = "CREATE_PROJECTS",
     /** Can edit existing projects */
     EDIT_PROJECTS = "EDIT_PROJECTS",
-    /** Can delete existing projects */
+    /** Can delete draft projects */
     DELETE_PROJECTS = "DELETE_PROJECTS",
     /** Can view all projects */
     READ_ALL_PROJECTS = "READ_ALL_PROJECTS",
@@ -11,6 +11,8 @@ enum Permission {
     READ_PROJECTS = "READ_PROJECTS",
     /** Can initialise draft projects (eg. confirm starting lineups) */
     INITIALISE_PROJECTS = "INITIALISE_PROJECTS",
+    /** Can archive active projects */
+    ARCHIVE_PROJECTS = "ARCHIVE_PROJECTS",
     /** Can create playtesting updates for a specific project */
     CREATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
     /** Can read playtesting updates for any project */
