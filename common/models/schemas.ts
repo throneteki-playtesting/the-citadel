@@ -232,7 +232,9 @@ export const CardSuggestion = {
             displayname: Joi.string().required()
         }).required(),
         created: Joi.date().required(),
+        createdBy: Joi.string().required(),
         updated: Joi.date().required(),
+        updatedBy: Joi.string().required(),
         threadId: Joi.string(),
         likedBy: Joi.array().items(Joi.string()).default([]),
         approvedBy: Joi.string(),
@@ -246,7 +248,9 @@ export const CardSuggestion = {
             displayname: Joi.string()
         }),
         created: Joi.date(),
+        createdBy: Joi.string(),
         updated: Joi.date(),
+        updatedBy: Joi.string(),
         threadId: Joi.string(),
         likedBy: Joi.array().items(Joi.string()),
         approvedBy: Joi.string(),
@@ -260,7 +264,9 @@ export const CardSuggestion = {
             displayname: Joi.string()
         }).required(),
         created: Joi.date(),
+        createdBy: Joi.string(),
         updated: Joi.date(),
+        updatedBy: Joi.string(),
         threadId: Joi.string(),
         likedBy: Joi.array().items(Joi.string()).default([]),
         approvedBy: Joi.string(),
