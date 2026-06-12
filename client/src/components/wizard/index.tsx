@@ -66,12 +66,8 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
         return true;
     }, [onValidationError, schema]);
 
-    const onPageSubmit = useCallback((formData: Record<string, any>, controlledData?: Record<string, any>) => {
-        const pageData = merge(
-            {},
-            unflatten<Record<string, any>, Record<string, any>>(formData),
-            controlledData // already nested, merged on top after unflattening
-        );
+    const onPageSubmit = useCallback((data: Record<string, any>) => {
+        const pageData = data ?? {};
 
         if (validate(pageData, true)) {
             const submitData = merge({}, internalData, pageData);
@@ -226,6 +222,11 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
     const onSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
+        // If controlled, simply submit that (ignore form data)
+        if (controlledData !== undefined) {
+            onPageSubmit(controlledData);
+        }
+
         // Collect natural (named) inputs via FormData
         const formData = new FormData(e.target as HTMLFormElement);
         const pageData: Record<string, any> = Object.fromEntries(
@@ -236,12 +237,13 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
         if (process.env.NODE_ENV === "development") {
             // Warn if nothing was collected by either path — likely a misconfigured page
             const formDataEmpty = Object.keys(pageData).length === 0;
-            if (formDataEmpty && !controlledData) {
+            if (formDataEmpty) {
                 console.warn(`WizardPage ${pageNo}: No FormData collected and no controlledData provided. Check that inputs have name props, or pass controlledData for controlled inputs.`);
             }
         }
 
-        onPageSubmit(pageData, controlledData);
+        // Unflatten data before sending through (eg. "inner.data": "value" -> "inner" : { "data": "value" })
+        onPageSubmit(unflatten(formData));
     }, [controlledData, onPageSubmit, pageNo]);
 
     return (
@@ -259,6 +261,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
 
 type WizardPageProps = BaseElementProps & {
     controlledData?: Record<string, any>;
+    ignoreFormData?: boolean;
     pageNo?: number;
 }
 
