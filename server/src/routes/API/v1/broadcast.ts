@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
 import { randomUUID } from "crypto";
-import { SyncType } from "@/types";
 import { sseService } from "@/services/sseService";
 
 const router = express.Router();
@@ -40,17 +39,15 @@ router.get("/",
     }
 );
 
-// Per-resource progress channel — opt-in per component
-router.get("/progress/:type/:id",
+// Shared progress channel — one connection per client, all resource types
+router.get("/progress",
     disableCompression,
     (req, res) => {
-        const { type, id } = req.params;
-
         res.set(sseHeaders);
         res.flushHeaders();
 
         const clientId = randomUUID();
-        sseService.addProgressClient(clientId, type as SyncType, id, res);
+        sseService.addProgressClient(clientId, res);
 
         // Send a keepalive comment every 30 seconds
         const keepalive = setInterval(() => {
@@ -58,7 +55,6 @@ router.get("/progress/:type/:id",
         }, 30000);
 
         req.on("close", () => {
-            sseService.removeBroadcastClient(clientId);
             sseService.removeProgressClient(clientId);
             clearInterval(keepalive);
         });

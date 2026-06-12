@@ -131,10 +131,6 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             }
         });
 
-        es.onerror = () => {
-            es.close();
-        };
-
         return () => {
             es.close();
         };

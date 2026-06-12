@@ -8,13 +8,8 @@ interface SseClient {
     res: Response;
 }
 
-interface SseProgressClient extends SseClient {
-    type: SyncType;
-    resourceId: string;
-}
-
 const broadcastClients = new Map<string, SseClient>();
-const progressClients = new Map<string, SseProgressClient>();
+const progressClients = new Map<string, SseClient>();
 
 function sendEvent(res: Response, event: SyncEvent<SyncType>) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -29,8 +24,8 @@ export const sseService = {
         broadcastClients.delete(id);
     },
 
-    addProgressClient(id: string, type: SyncType, resourceId: string, res: Response) {
-        progressClients.set(id, { id, res, type, resourceId });
+    addProgressClient(id: string, res: Response) {
+        progressClients.set(id, { id, res });
     },
 
     removeProgressClient(id: string) {
@@ -41,12 +36,8 @@ export const sseService = {
         broadcastClients.forEach(({ res }) => sendEvent(res, event));
     },
 
-    sendProgress(type: SyncType, resourceId: string, event: SyncEvent<SyncType>) {
-        progressClients.forEach((client) => {
-            if (client.type === type && client.resourceId === resourceId) {
-                sendEvent(client.res, event);
-            }
-        });
+    sendProgress(event: SyncEvent<SyncType>) {
+        progressClients.forEach(({ res }) => sendEvent(res, event));
     }
 };
 
@@ -67,7 +58,7 @@ export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOp
     const initialResource = cloneDeep(resource);
     const resourceId = resourceIdFunc[type](initialResource);
     const emit = (event: SyncEvent<K>) => {
-        sseService.sendProgress(type, resourceId, event);
+        sseService.sendProgress(event);
         if (event.status === "complete" || event.status === "error") {
             sseService.broadcast(event);
         }
