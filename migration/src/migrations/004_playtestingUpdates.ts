@@ -52,7 +52,7 @@ async function applyCardNote(
 
     await cardsCol.updateOne(
         { _id: card._id },
-        { $set: { note: { type: change.noteType, text: change.noteText }, updated: now, updatedBy: userId } }
+        { $set: { note: { type: change.noteType, text: change.noteText } } }
     );
     return "applied";
 }
