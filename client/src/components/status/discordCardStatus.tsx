@@ -48,7 +48,7 @@ export default function DiscordCardStatus({ className, style, project, number, v
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!card.discord?.messageUrl || (card.discord?.lastSynced && card.discord.lastSynced < card.cardUpdated)) {
+        if (!card._metadata?.discord?.messageUrl || (card._metadata?.discord?.lastSynced && card._metadata.discord.lastSynced < card.updated)) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -61,7 +61,7 @@ export default function DiscordCardStatus({ className, style, project, number, v
         return {
             title,
             icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
-            href: card.discord!.messageUrl!.replace("https://", "discord://"),
+            href: card._metadata!.discord!.messageUrl!.replace("https://", "discord://"),
             color: "success",
             description: "Synced"
         };

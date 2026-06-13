@@ -45,7 +45,7 @@ export default function ImageStatus({ className, style, project, number, isIconO
             };
         }
 
-        if (!card.imageUrl) {
+        if (!card._metadata?.imageUrl) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -57,7 +57,7 @@ export default function ImageStatus({ className, style, project, number, isIconO
 
         return {
             title,
-            href: card.imageUrl,
+            href: card._metadata.imageUrl,
             color: "success",
             description: "Synced"
         };

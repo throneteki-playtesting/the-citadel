@@ -42,7 +42,7 @@ export default function PlaytestingUpdateCard({ className, style, playtestingUpd
         );
     }
 
-    const isImplemented = playtestingUpdate.github?.status === "closed" && !!playtestingUpdate.github?.mergedAt;
+    const isImplemented = playtestingUpdate._metadata?.github?.status === "closed" && !!playtestingUpdate._metadata?.github?.mergedAt;
 
     return (
         <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>

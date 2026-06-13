@@ -3,7 +3,6 @@ import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
 import { Filter, SingleOrArray } from "common/types";
-import { flatten } from "flat";
 import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { BasicAuditableRepository } from "./shared";
@@ -94,42 +93,6 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         return cards;
     }
 
-    protected override async applyAudit(auditing: IPlaytestCard, isNew: boolean): Promise<IPlaytestCard>;
-    protected override async applyAudit(auditing: IPlaytestCard[], isNew: boolean): Promise<IPlaytestCard[]>;
-    protected override async applyAudit(auditing: SingleOrArray<IPlaytestCard>, isNew: boolean) {
-        let audited = await super.applyAudit(asArray(auditing), isNew);
-        // Intentionally excluding imageUrl
-        const cardProperties = [
-            "code", "cost", "deckLimit", "designer", "faction", "flavor", "icons", "illustrator", "loyal", "name", "plotStats", "strength", "traits", "text", "type", "unique", "quantity"
-        ];
-
-        const tempKey = (card: IPlaytestCard) => `${card.project}@${card.number}@${card.version}`;
-
-        const existingFilter = audited.map(({ project, number, version }) => ({ project, number, version }));
-        const existing = await this.read(existingFilter);
-        const existingDocsMap = new Map<string, IPlaytestCard>();
-        existing.forEach((card) => {
-            existingDocsMap.set(tempKey(card), card);
-        });
-
-        audited = audited.map((card) => {
-            const existing = existingDocsMap.get(tempKey(card));
-            let hasChangedCard = !existing;
-            if (existing) {
-                const flatExisting = flatten(existing, { safe: false });
-                const flatCard = flatten(card, { safe: false });
-                hasChangedCard = cardProperties.some(
-                    (field) => flatExisting[field] !== flatCard[field]
-                );
-            }
-
-            return {
-                ...card,
-                ...(hasChangedCard && { cardUpdated: new Date() })
-            };
-        });
-        return Array.isArray(auditing) ? audited : audited[0];
-    }
 }
 
 class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {

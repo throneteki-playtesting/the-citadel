@@ -2,7 +2,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestReview, StatementQuestions } from "common/models/reviews";
 import { Guild, ForumChannel, GuildForumTag, BaseMessageOptions, EmbedBuilder, AttachmentBuilder, ButtonStyle, ActionRowBuilder, ButtonBuilder } from "discord.js";
 import { colors, emojis } from "../utils";
-import { capitalize } from "lodash-es";
+import { capitalize, merge } from "lodash-es";
 import { dataService, discordService, logger } from "@/services";
 import { factionNames, isPreview, parseCardCode } from "common/utils";
 import { createSyncEmitter } from "@/services/sseService";
@@ -24,17 +24,14 @@ export async function syncReviewForum(reviews: IPlaytestReview[]) {
                 const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
                 const user = await discordService.getUserFromId(context.guild, review.reviewer);
 
-                let initialExists = !!review.discord?.messageUrl;
+                let initialExists = !!review._metadata?.discord?.messageUrl;
                 if (!initialExists) {
                     emitter.progress("Searching");
                     const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card, user));
                     if (existingThread) {
                         // For legacy reasons; if a thread exists before review.discord was created, we need to map it
                         const starter = await existingThread.fetchStarterMessage();
-                        review.discord = {
-                            messageUrl: starter.url,
-                            lastSynced: new Date(starter.createdTimestamp)
-                        };
+                        merge(review, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date(starter.createdTimestamp) } } });
                         initialExists = true;
                         logger.info(`[Discord] Found & attaching thread for ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
                     }
@@ -48,7 +45,7 @@ export async function syncReviewForum(reviews: IPlaytestReview[]) {
                         review = await createInitial(review, card, user, context);
                     }
                 }
-                logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review.discord?.messageUrl}`);
+                logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review._metadata?.discord?.messageUrl}`);
             }
             emitter.complete(review);
         } catch (err) {
@@ -65,7 +62,7 @@ export async function syncReviewForum(reviews: IPlaytestReview[]) {
     return reviews;
 }
 function isMessageOutdated(review: IPlaytestReview) {
-    return !review.discord?.lastSynced || review.updated > review.discord.lastSynced;
+    return !review._metadata?.discord?.lastSynced || review.updated > review._metadata.discord.lastSynced;
 }
 interface PlaytestingReviewContext {
     guild: Guild,
@@ -87,10 +84,7 @@ export async function createInitial(review: IPlaytestReview, card: IPlaytestCard
         const starter = await thread.fetchStarterMessage();
         await starter.pin();
 
-        review.discord = {
-            messageUrl: starter.url,
-            lastSynced: new Date()
-        };
+        merge(review, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return review;
     } catch (err) {
         throw new Error(`Error creating initial thread for ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`, { cause: err });
@@ -103,11 +97,11 @@ export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard
 
         card = await syncImage(card);
 
-        if (!review.discord?.messageUrl) {
+        if (!review._metadata?.discord?.messageUrl) {
             throw new Error("Cannot edit message of review as message url is missing");
         }
 
-        const { channelId, messageId } = extractFromURL(review.discord?.messageUrl);
+        const { channelId, messageId } = extractFromURL(review._metadata.discord.messageUrl);
         const channel = await context.guild.channels.fetch(channelId);
         if (!channel.isThread()) {
             throw new Error(`Found channel is not a thread with id: ${channelId}`);
@@ -119,10 +113,7 @@ export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard
         const initialMessage = messages.initial(review, user, card);
         message = await message.edit(initialMessage);
 
-        review.discord = {
-            messageUrl: message.url,
-            lastSynced: new Date()
-        };
+        merge(review, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
 
         // Then, send update message to thread, ensuring the correct user is listed as the updater
         let updatedBy = user;
@@ -142,11 +133,11 @@ export async function deleteInitial(review: IPlaytestReview, context?: Playtesti
     try {
         context = context ?? await getPlaytestingReviewContext();
 
-        if (!review.discord?.messageUrl) {
+        if (!review._metadata?.discord?.messageUrl) {
             throw new Error("Cannot delete review as message url is missing");
         }
 
-        const { channelId, messageId } = extractFromURL(review.discord?.messageUrl);
+        const { channelId, messageId } = extractFromURL(review._metadata.discord.messageUrl);
         const channel = await context.guild.channels.fetch(channelId);
         if (!channel.isThread()) {
             throw new Error(`Found channel is not a thread with id: ${channelId}`);
@@ -155,7 +146,9 @@ export async function deleteInitial(review: IPlaytestReview, context?: Playtesti
         const message = await channel.messages.fetch(messageId);
         await message.delete();
 
-        delete review.discord;
+        if (review._metadata) {
+            delete review._metadata.discord;
+        }
 
         return review;
     } catch (err) {
@@ -165,7 +158,7 @@ export async function deleteInitial(review: IPlaytestReview, context?: Playtesti
 
 // Thread helper functions
 function threadNameFor(card: IPlaytestCard, user: User) {
-    const cardLabel = `${card.name} ${isPreview(card) ? "Preview" : card.version}`;
+    const cardLabel = `${card.name} (${isPreview(card) ? "Preview" : card.version})`;
     return `${card.number} | ${cardLabel} - ${user.displayname}`;
 }
 async function createThreadFor(review: IPlaytestReview, card: IPlaytestCard, user: User, message: BaseMessageOptions, context: PlaytestingReviewContext) {
@@ -189,7 +182,7 @@ async function createThreadFor(review: IPlaytestReview, card: IPlaytestCard, use
     return thread;
 }
 async function getThreadFor(review: IPlaytestReview) {
-    const { messageId: threadId } = extractFromURL(review.discord.messageUrl);
+    const { messageId: threadId } = extractFromURL(review._metadata.discord.messageUrl);
     const guild = await discordService.getGuild();
     const thread = await guild.channels.fetch(threadId);
     if (!thread) {
@@ -303,7 +296,7 @@ const messages = {
 
         const embeds = createReviewEmbeds(review, user);
 
-        const file = new AttachmentBuilder(card.imageUrl, { name: `${card.code}_${card.version}.png`, description: `${card.name} v${card.version}` });
+        const file = new AttachmentBuilder(card._metadata?.imageUrl as string, { name: `${card.code}_${card.version}.png`, description: `${card.name} v${card.version}` });
 
         const buttons = [
             new ButtonBuilder()
@@ -331,7 +324,7 @@ const messages = {
 
         const starterButton = new ButtonBuilder()
             .setLabel("View Current Review")
-            .setURL(review.discord.messageUrl)
+            .setURL(review._metadata.discord.messageUrl)
             .setStyle(ButtonStyle.Link);
 
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents([starterButton]);

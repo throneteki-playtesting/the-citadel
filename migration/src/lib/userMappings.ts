@@ -36,7 +36,7 @@ export function writeUnresolvedUsers(unresolvedUsernames: string[]): void {
 
     fs.writeFileSync(UNRESOLVED_PATH, JSON.stringify(merged, null, 2), "utf-8");
     log.warn(`${unresolvedUsernames.length} unresolved user(s) written to: ${UNRESOLVED_PATH}`);
-    log.info(`Fill in the Discord IDs and re-run with --resolve-users`);
+    log.info("Fill in the Discord IDs and re-run with --resolve-users");
 }
 
 export function getResolvedMappings(): UserMappingFile {

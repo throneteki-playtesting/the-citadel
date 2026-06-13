@@ -177,8 +177,8 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                     {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
                 </CardStack>
             </div>
-            <a href={card.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 p-2 font-sans">
-                {card.github?.status === "closed"
+            <a href={card._metadata?.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 p-2 font-sans">
+                {card._metadata?.github?.status === "closed"
                     ? <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
                     : <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
                 }
@@ -215,7 +215,7 @@ function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-1">
                 {otherImplemented.map((card) =>
-                    <a key={`${card.project}|${card.number}|${card.version}`} href={card.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none overflow-hidden", factionBorderClasses[card.faction])}>
+                    <a key={`${card.project}|${card.number}|${card.version}`} href={card._metadata?.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none overflow-hidden", factionBorderClasses[card.faction])}>
                         <div className="relative size-full">
                             <div className="absolute right-0 flex items-center justify-center pointer-events-none select-none">
                                 <ThronesIcon name={card.faction} className={classNames("mr-8 text-5xl", watermarkClasses[card.faction])}/>

@@ -39,9 +39,9 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
                 // Otherwise, card code needs to be used to fetch actual card data from ThronesDB
                 fetchCardAsync(identifier);
             }
-        } else if (identifier.imageUrl || identifier.release) {
+        } else if (identifier._metadata?.imageUrl || identifier.release) {
             // If a playtesting card is provided, it MUST have imageUrl or release to grab an actual image
-            const cardImageUrl = identifier.imageUrl ?? generateReleaseImageUrl(identifier.release!.short, identifier.release!.number, identifier.name);
+            const cardImageUrl = identifier._metadata?.imageUrl ?? generateReleaseImageUrl(identifier.release!.short, identifier.release!.number, identifier.name);
             setImageUrl(cardImageUrl);
             setDefaultOrientation(identifier.type === "plot" ? "horizontal" : "vertical");
             setAlt(identifier.name);

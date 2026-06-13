@@ -54,7 +54,7 @@ export default function ImplementStatus({ className, style, project, number, ver
                 href: "https://theironthrone.net"
             };
         }
-        if (!card.github && !card.implemented) {
+        if (!card._metadata?.github && !card.implemented) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -72,9 +72,9 @@ export default function ImplementStatus({ className, style, project, number, ver
                 href: "https://playtesting.theironthrone.net"
             };
         }
-        const href = card.github!.issueUrl;
+        const href = card._metadata!.github!.issueUrl;
         const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
-        switch (card.github!.status) {
+        switch (card._metadata!.github!.status) {
             case "open": {
                 return {
                     title,

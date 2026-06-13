@@ -38,7 +38,7 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
                 text: values[CardColumn.NoteText]
             } : undefined,
             // playtesting: values[CardColumn.PlaytestVersion] || undefined,
-            github: this.extractLinkText(values[CardColumn.GithubIssue], (link, text) => ({ status: text, issueUrl: link })) || undefined,
+            _metadata: this.extractLinkText(values[CardColumn.GithubIssue], (link, text) => ({ github: { status: text, issueUrl: link } })) || undefined,
             release: values[CardColumn.PackShort] ? {
                 short: values[CardColumn.PackShort],
                 number: parseInt(values[CardColumn.ReleaseNumber])
@@ -93,7 +93,7 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
         values[CardColumn.NoteType] = model.note ? model.note.type as string : "";
         values[CardColumn.NoteText] = model.note?.text || "";
         // values[CardColumn.PlaytestVersion] = model.playtesting || "";
-        values[CardColumn.GithubIssue] = model.github ? `<a href="${model.github.issueUrl}">${model.github.status}</a>` : "";
+        values[CardColumn.GithubIssue] = model._metadata?.github ? `<a href="${model._metadata.github.issueUrl}">${model._metadata.github.status}</a>` : "";
         values[CardColumn.PackShort] = model.release?.short || "";
         values[CardColumn.ReleaseNumber] = model.release?.number.toString() || "";
 
@@ -173,7 +173,7 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
             && compare(filter.illustrator, values[CardColumn.Illustrator])
             && compare(filter.note?.type, values[CardColumn.NoteType])
             && compare(filter.note?.text, values[CardColumn.NoteText])
-            && compare(filter.github?.status, values[CardColumn.GithubIssue])
+            && compare(filter._metadata?.github?.status, values[CardColumn.GithubIssue])
             && compare(filter.release?.short, values[CardColumn.PackShort])
             && compare(filter.release?.number, values[CardColumn.ReleaseNumber])
             // More expensive checks at the end

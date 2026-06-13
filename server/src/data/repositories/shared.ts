@@ -7,7 +7,7 @@ import { Sort as MongoSort } from "mongodb";
 import { getContext } from "@/middleware/context";
 import { IRepository } from "@/types";
 import { logger } from "@/services";
-import { groupBy } from "lodash-es";
+import { groupBy, isEqual } from "lodash-es";
 
 
 export class Database<T> {
@@ -16,18 +16,48 @@ export class Database<T> {
         this.database = database;
     }
 }
+const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
+const stripAudit = (obj: object) =>
+    Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
+
 export abstract class IAuditableDatabase<T extends IAuditable> extends Database<T> {
     protected async applyAudit(auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">, isNew: boolean): Promise<T>;
     protected async applyAudit(auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">[], isNew: boolean): Promise<T[]>;
     protected async applyAudit(auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>, isNew: boolean) {
         const { principal } = getContext();
         const now = new Date();
-        const audited = asArray(auditing).map((data) => ({
-            ...data,
-            updated: now,
-            updatedBy: principal.id,
-            ...(isNew && { created: now, createdBy: principal.id })
-        } as T));
+        const items = asArray(auditing);
+
+        if (isNew) {
+            const audited = items.map(data => ({
+                ...data,
+                updated: now,
+                updatedBy: principal.id,
+                created: now,
+                createdBy: principal.id
+            } as T));
+            return Array.isArray(auditing) ? audited : audited[0];
+        }
+
+        // Batch-fetch current DB state to detect whether only _metadata changed
+        const pks = this.database.primaryKeys;
+        const filters = items.map(item =>
+            pks.reduce((f, pk) => ({ ...f, [pk]: (item as Record<string, unknown>)[pk] }), {} as Filter<T>)
+        );
+        const existing = await this.database.read(filters);
+        const byKey = new Map(
+            existing.map(e => [pks.map(pk => String((e as Record<string, unknown>)[pk])).join("|"), e])
+        );
+
+        const audited = items.map(data => {
+            const key = pks.map(pk => String((data as Record<string, unknown>)[pk])).join("|");
+            const current = byKey.get(key);
+            if (current && isEqual(stripAudit(data as object), stripAudit(current as object))) {
+                // Only _metadata (or nothing) changed — preserve existing audit timestamps
+                return { ...data, updated: current.updated, updatedBy: current.updatedBy } as T;
+            }
+            return { ...data, updated: now, updatedBy: principal.id } as T;
+        });
 
         return Array.isArray(auditing) ? audited : audited[0];
     }

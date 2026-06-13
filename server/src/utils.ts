@@ -71,10 +71,10 @@ export function convertTDBCard(obj: any): ILabeledCard {
  * image based on the url rather than its last modified date.
  */
 export function getTimeLockedImageUrl(card: IPlaytestCard) {
-    if (!card.imageUrl) {
+    if (!card._metadata?.imageUrl) {
         throw new Error("Attempted to create time locked image url for card with no image");
     }
-    return `${card.imageUrl}?t=${card.cardUpdated.getTime()}`;
+    return `${card._metadata.imageUrl}?t=${card.updated.getTime()}`;
 }
 
 export function pascalCase(value: string) {

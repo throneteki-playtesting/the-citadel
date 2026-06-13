@@ -2,7 +2,8 @@ export interface IAuditable {
     created: Date,
     updated: Date,
     createdBy: string,
-    updatedBy: string
+    updatedBy: string,
+    _metadata?: Record<string, unknown>
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

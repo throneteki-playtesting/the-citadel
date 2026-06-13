@@ -66,13 +66,12 @@ export const migration: Migration = {
         }
 
         if (dryRun) {
-            log.info(`[dry-run] Would upsert ${ops.length} project(s) into dest (match on number)`);
+            log.info(`[dry-run] Would drop and re-insert ${ops.length} project(s) into dest`);
             log.info("[dry-run] Would create unique index on { number: 1 }");
             return;
         }
 
-        // Ensure index exists before upserting
-        await dest.createIndex({ number: 1 }, { unique: true });
+        await dest.drop().catch(() => { /* may not exist */ });
 
         let upserted = 0, modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
@@ -83,6 +82,7 @@ export const migration: Migration = {
             log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
         }
 
+        await dest.createIndex({ number: 1 }, { unique: true });
         log.success(`Projects migration complete — ${upserted} inserted, ${modified} updated`);
     }
 };

@@ -187,8 +187,10 @@ router.put("/:project/:number/draft",
         card.draft = true;
         card.latest = false;
         card.implemented = false;
-        delete card.imageUrl;
-        delete card.github;
+        if (card._metadata) {
+            delete card._metadata.github;
+            delete card._metadata.imageUrl;
+        }
         delete card.release;
 
         const process = async (action: "create" | "update") => {

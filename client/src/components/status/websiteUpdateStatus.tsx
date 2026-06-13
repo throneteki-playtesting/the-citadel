@@ -52,7 +52,7 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!playtestingUpdate.github || (playtestingUpdate.github.lastSynced && playtestingUpdate.github.lastSynced < playtestingUpdate.updated)) {
+        if (!playtestingUpdate._metadata?.github || (playtestingUpdate._metadata.github.lastSynced && playtestingUpdate._metadata.github.lastSynced < playtestingUpdate.updated)) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -61,7 +61,7 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 description: "Requires Syncing"
             };
         }
-        if (playtestingUpdate.github?.mergedAt) {
+        if (playtestingUpdate._metadata?.github?.mergedAt) {
             if (cards && cards.some((card) => !card.implemented)) {
                 return {
                     title,
@@ -79,9 +79,9 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 href: "https://playtesting.theironthrone.net"
             };
         }
-        const href = playtestingUpdate.github!.pullRequestUrl;
+        const href = playtestingUpdate._metadata!.github!.pullRequestUrl;
         const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
-        switch (playtestingUpdate.github!.status) {
+        switch (playtestingUpdate._metadata!.github!.status) {
             case "open": {
                 return {
                     title,

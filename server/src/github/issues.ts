@@ -8,6 +8,7 @@ import { GithubContext } from ".";
 import { syncImage } from "@/rendering/hosting";
 import { emojis } from "./utils";
 import { getTimeLockedImageUrl, pascalCase } from "@/utils";
+import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
 
 type Issue = Endpoints["GET /repos/{owner}/{repo}/issues"]["response"]["data"][number];
@@ -54,13 +55,16 @@ export async function syncIssues(cards: IPlaytestCard[]) {
 
                 if (existingIssue) {
                     needsUpdate = true;
-                    card.github = card.github ?? {};
-                    card.github.issueUrl = existingIssue.html_url;
-                    card.github.status = existingIssue.state as "open" | "closed";
-                    if (existingIssue.closed_at) {
-                        card.github.closedAt = new Date(existingIssue.closed_at);
-                    }
-                    card.github.lastSynced = new Date(existingIssue.updated_at);
+                    merge(card, {
+                        _metadata: {
+                            github: {
+                                issueUrl: existingIssue.html_url,
+                                status: existingIssue.state as "open" | "closed",
+                                ...(existingIssue.closed_at && { closedAt: new Date(existingIssue.closed_at) }),
+                                lastSynced: new Date(existingIssue.updated_at)
+                            }
+                        }
+                    });
 
                     isMissing = false;
                     logger.info(`[Github] Missing issue found & attached to ${card.name} (${card.version})`);
@@ -109,7 +113,7 @@ export async function clearIssues(cards: IPlaytestCard[]) {
     for (const card of cards) {
         try {
             if (!isIssueMissing(card)) {
-                const { issueNumber } = extractFromURL(card.github.issueUrl);
+                const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
                 const { data: issue } = await context.client.rest.issues.get({ issue_number: issueNumber, owner: context.owner, repo: context.repo });
                 await context.client.graphql(
                     `mutation DeleteIssue($issueId: ID!) {
@@ -122,7 +126,9 @@ export async function clearIssues(cards: IPlaytestCard[]) {
                     { issueId: issue.node_id }
                 );
 
-                delete card.github;
+                if (card._metadata) {
+                    delete card._metadata.github;
+                }
             }
         } catch (err) {
             logger.warn(new Error(`[Github] Failed to clear issue for ${card.name} (${card.version})`, { cause: err }));
@@ -225,29 +231,37 @@ async function internalSync(card: IPlaytestCard, details: { title: string, body:
     if (isIssueMissing(card)) {
         const { data: issue } = await context.client.rest.issues.create(details);
         logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
-        card.github = {
-            issueUrl: issue.html_url,
-            status: issue.state as "open" | "closed",
-            lastSynced: new Date()
-        };
+        merge(card, {
+            _metadata: {
+                github: {
+                    issueUrl: issue.html_url,
+                    status: issue.state as "open" | "closed",
+                    lastSynced: new Date()
+                }
+            }
+        });
     } else {
-        const { issueNumber } = extractFromURL(card.github.issueUrl);
+        const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
         const { data: issue } = await context.client.rest.issues.update({ issue_number: issueNumber, ...details });
         logger.info(`[Github] Updated issue #${issue.number} for ${card.name} (${card.version})`);
-        card.github.status = issue.state as "open" | "closed";
-        if (issue.closed_at) {
-            card.github.closedAt = new Date(issue.closed_at);
-        }
-        card.github.lastSynced = new Date();
+        merge(card, {
+            _metadata: {
+                github: {
+                    status: issue.state as "open" | "closed",
+                    ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }),
+                    lastSynced: new Date()
+                }
+            }
+        });
     }
     return card;
 }
 
 function isIssueMissing(card: IPlaytestCard) {
-    return !card.github?.issueUrl;
+    return !card._metadata?.github?.issueUrl;
 }
 function isIssueOutdated(card: IPlaytestCard) {
-    return !card.github?.lastSynced || card.updated > card.github.lastSynced;
+    return !card._metadata?.github?.lastSynced || card.updated > card._metadata.github.lastSynced;
 }
 
 function extractFromURL(url: string) {

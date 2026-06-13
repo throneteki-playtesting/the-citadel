@@ -21,7 +21,7 @@ export type PlotValue = number | "X";
 export type Quantity = 1 | 2 | 3;
 
 /**
- * Base released card, fitting structure of JSON Card Data Repository
+ * Base released card, fitting structure of JSON Card Data Repository, minus certain fields
  */
 export interface ICard {
     code?: Code,
@@ -43,7 +43,7 @@ export interface ICard {
     // octgnId?: string,
     quantity: Quantity,
     // errata: ?, Probably not necessary
-    imageUrl?: string
+    // imageUrl?: string
 }
 
 export interface Icons {
@@ -79,17 +79,19 @@ export interface IPlaytestCard extends ICard, IAuditable {
     release?: ReleaseDetails,
     implemented: boolean,
     suggestionId?: string,
-    github?: {
-        status?: typeof githubStatuses[number],
-        issueUrl?: string,
-        closedAt?: Date,
-        lastSynced?: Date
-    },
-    discord?: {
-        messageUrl?: string,
-        lastSynced?: Date
-    },
-    cardUpdated: Date // Specific for when card values are updated
+    _metadata?: {
+        github?: {
+            status?: typeof githubStatuses[number],
+            issueUrl?: string,
+            closedAt?: Date,
+            lastSynced?: Date
+        },
+        discord?: {
+            messageUrl?: string,
+            lastSynced?: Date
+        },
+        imageUrl?: string
+    }
 }
 
 export interface NoteDetails {
@@ -115,6 +117,7 @@ export interface Watermark {
 
 export interface ILabeledCard extends ICard {
     label: string,
+    imageUrl: string,
     workInProgress: boolean
 }
 
@@ -126,9 +129,11 @@ export interface ICardSuggestion extends IAuditable {
         discordId: string,
         displayname: string
     },
-    discord: {
-        messageUrl?: string,
-        lastSynced?: Date
+    _metadata?: {
+        discord?: {
+            messageUrl?: string,
+            lastSynced?: Date
+        }
     },
     /** Discord Id array of users who like this suggestion */
     likedBy: string[],

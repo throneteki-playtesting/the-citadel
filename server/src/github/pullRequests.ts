@@ -4,15 +4,15 @@ import { GithubContext } from ".";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { emojis } from "./utils";
 import { parseCardCode } from "common/utils";
-import { sortBy } from "lodash-es";
+import { merge, sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter, SyncEmitter } from "@/services/sseService";
 
 type PullRequest = Endpoints["GET /repos/{owner}/{repo}/pulls"]["response"]["data"][number];
 
 export async function syncPullRequests() {
-    let playtestingUpdates = await dataService.playtestingUpdates.read([{ github: { status: null } }, { github: { status: "open" } }]);
-    const newlyImplemented = await dataService.cards.read({ github: { status: "closed" }, implemented: false });
+    let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { status: null } } }, { _metadata: { github: { status: "open" } } }]);
+    const newlyImplemented = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
     const context = githubService.getContext();
 
     const emitters: Map<IPlaytestingUpdate, SyncEmitter<"playtestingUpdate">> = new Map(playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github", pt)]));
@@ -41,12 +41,7 @@ export async function syncPullRequests() {
                 const { syncedAt, url, status, mergedAt } = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
                 const toUpdate: IPlaytestingUpdate[] = [];
                 for (const playtestingUpdate of playtestingUpdates) {
-                    playtestingUpdate.github = {
-                        pullRequestUrl: url,
-                        mergedAt,
-                        status,
-                        lastSynced: syncedAt
-                    };
+                    merge(playtestingUpdate, { _metadata: { github: { pullRequestUrl: url, mergedAt, status, lastSynced: syncedAt } } });
                     toUpdate.push(playtestingUpdate);
                 }
                 playtestingUpdates = await dataService.playtestingUpdates.update(toUpdate, false, false);
@@ -73,7 +68,7 @@ function isPROutdated(pullRequest: PullRequest | undefined, playtestingUpdates: 
         return true;
     }
     const prUpdatedAt = new Date(pullRequest.updated_at);
-    const outdated = playtestingUpdates.some((pu) => !pu.github?.lastSynced || pu.updated > pu.github.lastSynced) || newlyImplemented.some((ni) => ni.updated > prUpdatedAt);
+    const outdated = playtestingUpdates.some((pu) => !pu._metadata?.github?.lastSynced || pu.updated > pu._metadata.github.lastSynced) || newlyImplemented.some((ni) => ni.updated > prUpdatedAt);
     if (outdated) {
         return true;
     }
@@ -214,7 +209,7 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
         }
         // Recently implemented cards will be closed, but not marked as implemented yet
         // Implemented is set to true on successful merge
-        if (card.github?.status === "closed" && card.implemented === false) {
+        if (card._metadata?.github?.status === "closed" && card.implemented === false) {
             implementedCount++;
         }
     }

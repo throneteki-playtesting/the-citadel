@@ -5,7 +5,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { factionNames, isInitial, isPreview } from "common/utils";
 import { syncImage } from "@/rendering/hosting";
-import { capitalize } from "lodash-es";
+import { capitalize, merge } from "lodash-es";
 import { getTimeLockedImageUrl } from "@/utils";
 import { User } from "common/models/auth";
 import { createSyncEmitter } from "@/services/sseService";
@@ -32,17 +32,17 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                 if (card.draft) {
                     emitter.progress("Syncing Draft");
                     logger.info(`[Discord] Syncing draft ${card.name} (${card.version})`);
-                    const draftMessageExists = !!card.discord?.messageUrl;
+                    const draftMessageExists = !!card._metadata?.discord?.messageUrl;
                     if (draftMessageExists) {
                         card = await updateDraft(card, context);
                     } else {
                         card = await newDraft(card, context);
                     }
-                    logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card.discord?.messageUrl}`);
+                    logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
                 } else {
                     emitter.progress("Syncing");
                     logger.info(`[Discord] Syncing ${card.name} (${card.version})`);
-                    const messageExists = !!card.discord?.messageUrl;
+                    const messageExists = !!card._metadata?.discord?.messageUrl;
                     if (messageExists) {
                         // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
                         logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
@@ -50,12 +50,9 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                         emitter.progress("Searching");
                         const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
                         if (existingThread) {
-                            // For legacy reasons; if a thread exists before card.discord was created, we need to map it
+                            // For legacy reasons; if a thread exists before card._metadata.discord was created, we need to map it
                             const starter = await existingThread.fetchStarterMessage();
-                            card.discord = {
-                                messageUrl: starter.url,
-                                lastSynced: new Date()
-                            };
+                            merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
                         } else {
                             emitter.progress("Syncing");
                             if (isPreview(card)) {
@@ -66,7 +63,7 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
                                 card = await createNewLatest(card, context);
                             }
                         }
-                        logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card.discord?.messageUrl}`);
+                        logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
                     }
                 }
             }
@@ -84,7 +81,7 @@ export async function syncCardForum(cards: IPlaytestCard[]) {
 }
 
 function isMessageOutdated(card: IPlaytestCard) {
-    return !card.discord?.lastSynced || card.updated > card.discord.lastSynced;
+    return !card._metadata?.discord?.lastSynced || card.updated > card._metadata.discord.lastSynced;
 }
 
 export async function createPreview(card: IPlaytestCard, context?: CardForumContext) {
@@ -104,10 +101,7 @@ export async function createPreview(card: IPlaytestCard, context?: CardForumCont
         const starter = await thread.fetchStarterMessage();
         await starter.pin();
 
-        card.discord = {
-            messageUrl: starter.url,
-            lastSynced: new Date()
-        };
+        merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating preview thread for ${card.name} (Preview)`, { cause: err });
@@ -137,10 +131,7 @@ export async function createInitial(card: IPlaytestCard, context?: CardForumCont
             await closeThreadFor(preview, context);
         }
 
-        card.discord = {
-            messageUrl: starter.url,
-            lastSynced: new Date()
-        };
+        merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating initial thread for ${card.name} (${card.version})`, { cause: err });
@@ -175,10 +166,7 @@ export async function createNewLatest(card: IPlaytestCard, context?: CardForumCo
             await closeThreadFor(previous, context);
         }
 
-        card.discord = {
-            messageUrl: starter.url,
-            lastSynced: new Date()
-        };
+        merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating new latest thread for ${card.name} (${card.version})`, { cause: err });
@@ -195,7 +183,7 @@ export async function newDraft(card: IPlaytestCard, context?: CardForumContext) 
 
         const { thread, threadCard: previous } = await getThreadFor(card);
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const draftMessage = messages.newDraft(card, user, previous.discord.messageUrl, context);
+        const draftMessage = messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
         let message = await thread.send(draftMessage);
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
@@ -203,10 +191,7 @@ export async function newDraft(card: IPlaytestCard, context?: CardForumContext) 
         await new Promise(resolve => setTimeout(resolve, 1000));
         message = await message.edit(draftMessage);
 
-        card.discord = {
-            messageUrl: message.url,
-            lastSynced: new Date()
-        };
+        merge(card, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating new draft message for ${card.name} (${card.version})`, { cause: err });
@@ -219,11 +204,11 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
         if (!card.draft) {
             throw new Error("Card is not in draft");
         }
-        if (!card.discord?.messageUrl) {
+        if (!card._metadata?.discord?.messageUrl) {
             throw new Error("Cannot edit message of draft card as message url is missing");
         }
 
-        const { channelId, messageId } = extractFromURL(card.discord?.messageUrl);
+        const { channelId, messageId } = extractFromURL(card._metadata.discord.messageUrl);
         const channel = await context.guild.channels.fetch(channelId);
         if (!channel.isThread()) {
             throw new Error(`Found channel is not a thread with id: ${channelId}`);
@@ -233,7 +218,7 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
         // Send update message to thread
         const { thread, threadCard: previous } = await getThreadFor(card);
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const draftMessage = messages.newDraft(card, user, previous.discord.messageUrl, context);
+        const draftMessage = messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
         let message = await thread.send(draftMessage);
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
@@ -241,10 +226,7 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
         await new Promise(resolve => setTimeout(resolve, 1000));
         message = await message.edit(draftMessage);
 
-        card.discord = {
-            messageUrl: message.url,
-            lastSynced: new Date()
-        };
+        merge(card, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
 
         // Then, override previous message with message
         const oldMessage = await channel.messages.fetch(messageId);
@@ -262,11 +244,11 @@ export async function deleteDraft(card: IPlaytestCard) {
         if (!card.draft) {
             throw new Error("Card is not in draft");
         }
-        if (!card.discord?.messageUrl) {
+        if (!card._metadata?.discord?.messageUrl) {
             throw new Error("Original message does not exist to delete");
         }
         // Delete the draft priumary message
-        const { channelId, messageId } = extractFromURL(card.discord?.messageUrl);
+        const { channelId, messageId } = extractFromURL(card._metadata.discord.messageUrl);
         const guild = await discordService.getGuild();
         const channel = await guild.channels.fetch(channelId);
         if (!channel.isThread()) {
@@ -280,7 +262,9 @@ export async function deleteDraft(card: IPlaytestCard) {
         const deleteMessage = messages.deleteDraft(starter.url);
         await thread.send(deleteMessage);
 
-        delete card.discord;
+        if (card._metadata) {
+            delete card._metadata.discord;
+        }
 
         return card;
     } catch (err) {
@@ -395,7 +379,7 @@ function extractFromURL(url: string) {
 
 // Thread helper functions
 function threadNameFor(card: IPlaytestCard) {
-    const cardLabel = `${card.name} ${isPreview(card) ? "Preview" : card.version}`;
+    const cardLabel = `${card.name} (${isPreview(card) ? "Preview" : card.version})`;
     return `${card.number}. ${cardLabel}`;
 }
 async function getThreadFor(card: IPlaytestCard) {
@@ -406,7 +390,7 @@ async function getThreadFor(card: IPlaytestCard) {
             throw new Error(`Failed to find previous version for draft card "${card.code}"`);
         }
 
-        if (!previous.discord?.messageUrl) {
+        if (!previous._metadata?.discord?.messageUrl) {
             logger.info(`[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`);
             [previous] = await syncCardForum([previous]);
         }
@@ -414,11 +398,11 @@ async function getThreadFor(card: IPlaytestCard) {
         target = previous;
     }
 
-    if (!target.discord?.messageUrl) {
+    if (!target._metadata?.discord?.messageUrl) {
         throw new Error(`Missing discord message url data for "${card.code}"`);
     }
 
-    const { messageId: threadId } = extractFromURL(target.discord.messageUrl);
+    const { messageId: threadId } = extractFromURL(target._metadata.discord.messageUrl);
     const guild = await discordService.getGuild();
     const thread = await guild.channels.fetch(threadId);
     if (!thread) {
@@ -455,7 +439,7 @@ async function createThreadFor(card: IPlaytestCard, message: BaseMessageOptions,
 async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
     try {
         const { thread } = await getThreadFor(card);
-        logger.info(`[Discord] Closing thread for ${card.name} (${card.version}): ${card.discord.messageUrl}`);
+        logger.info(`[Discord] Closing thread for ${card.name} (${card.version}): ${card._metadata.discord.messageUrl}`);
         if (thread.archived) {
             await thread.setArchived(false);
         }
@@ -547,7 +531,7 @@ const messages = {
 
         const newVersionButton = new ButtonBuilder()
             .setLabel("View New Version")
-            .setURL(card.discord.messageUrl)
+            .setURL(card._metadata.discord.messageUrl)
             .setStyle(ButtonStyle.Link);
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents([newVersionButton]);
         return {

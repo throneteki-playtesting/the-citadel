@@ -5,6 +5,25 @@ import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
 
+const DiscordMetadata = Joi.object({
+    messageUrl: Joi.string().uri(),
+    lastSynced: Joi.date()
+});
+
+const GithubIssueMetadata = Joi.object({
+    status: Joi.string().valid(...Cards.githubStatuses),
+    issueUrl: Joi.string().uri(),
+    closedAt: Joi.date(),
+    lastSynced: Joi.date()
+});
+
+const GithubPRMetadata = Joi.object({
+    status: Joi.string().valid(...Projects.githubStatuses),
+    mergedAt: Joi.date(),
+    pullRequestUrl: Joi.string().uri(),
+    lastSynced: Joi.date()
+});
+
 const JoiXNumber = Joi.alternatives().try(
     Joi.number(),
     Joi.string().valid("X")
@@ -37,7 +56,6 @@ export const Card = {
         designer: Joi.string(),
         deckLimit: Joi.number(),
         quantity: Joi.number(),
-        imageUrl: Joi.string(),
         cost: Joi.when("type", {
             is: Joi.valid("character", "location", "attachment", "event"),
             then: JoiXDashNumber.required()
@@ -119,20 +137,15 @@ export const PlaytestingCard = {
             number: Joi.number().required()
         }),
         suggestionId: Joi.string(),
-        github: Joi.object({
-            status: Joi.string().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string(),
-            lastSynced: Joi.date()
+        _metadata: Joi.object({
+            github: GithubIssueMetadata,
+            discord: DiscordMetadata,
+            imageUrl: Joi.string().uri()
         }),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
-        }).required(),
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string(),
-        cardUpdated: Joi.date()
+        createdBy: Joi.string()
     }),
     Partial: Card.Partial.keys({
         project: Joi.number(),
@@ -151,20 +164,15 @@ export const PlaytestingCard = {
             number: Joi.number()
         }),
         suggestionId: Joi.string(),
-        github: Joi.object({
-            status: Joi.string().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string(),
-            lastSynced: Joi.date()
-        }),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
+        _metadata: Joi.object({
+            github: GithubIssueMetadata,
+            discord: DiscordMetadata,
+            imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string(),
-        cardUpdated: Joi.date()
+        createdBy: Joi.string()
     }),
     Draft: Card.Full.keys({
         project: Joi.number().required(),
@@ -186,20 +194,11 @@ export const PlaytestingCard = {
             number: Joi.number().required()
         }),
         suggestionId: Joi.string(),
-        github: Joi.object({
-            status: Joi.string().valid(...Cards.githubStatuses),
-            issueUrl: Joi.string(),
-            lastSynced: Joi.date()
-        }),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
-        }),
+        _metadata: Joi.forbidden(),
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
-        createdBy: Joi.string(),
-        cardUpdated: Joi.date()
+        createdBy: Joi.string()
     })
 };
 
@@ -239,6 +238,9 @@ export const CardSuggestion = {
         likedBy: Joi.array().items(Joi.string()).default([]),
         approvedBy: Joi.string(),
         tags: Joi.array().items(Joi.string()).default([]),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
+        }),
         card: Card.Full.required()
     }),
     Partial: Joi.object({
@@ -255,6 +257,9 @@ export const CardSuggestion = {
         likedBy: Joi.array().items(Joi.string()),
         approvedBy: Joi.string(),
         tags: Joi.array().items(Joi.string()),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
+        }),
         card: Card.Partial
     }),
     Draft: Joi.object({
@@ -271,6 +276,7 @@ export const CardSuggestion = {
         likedBy: Joi.array().items(Joi.string()).default([]),
         approvedBy: Joi.string(),
         tags: Joi.array().items(Joi.string()).default([]),
+        _metadata: Joi.forbidden(),
         card: Card.Full.required()
     })
 };
@@ -378,6 +384,9 @@ export const PlaytestingUpdate = {
             Joi.string().regex(Regex.SemanticVersion)
         ).required(),
         pullRequest: Joi.string(),
+        _metadata: Joi.object({
+            github: GithubPRMetadata
+        }),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
         updated: Joi.date().required(),
@@ -392,6 +401,9 @@ export const PlaytestingUpdate = {
             Joi.string().regex(Regex.SemanticVersion)
         ),
         pullRequest: Joi.string(),
+        _metadata: Joi.object({
+            github: GithubPRMetadata
+        }),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),
@@ -404,6 +416,7 @@ export const PlaytestingUpdate = {
             Joi.number(),
             Joi.string().regex(Regex.SemanticVersion)
         ).required(),
+        _metadata: Joi.forbidden(),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),
@@ -427,9 +440,8 @@ export const PlaytestingReview = {
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
+        _metadata: Joi.object({
+            discord: DiscordMetadata
         }),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -451,9 +463,8 @@ export const PlaytestingReview = {
             releasable: Joi.string().valid(...statementAnswers)
         }),
         additional: Joi.string(),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
+        _metadata: Joi.object({
+            discord: DiscordMetadata
         }),
         created: Joi.date(),
         createdBy: Joi.string(),
@@ -475,10 +486,7 @@ export const PlaytestingReview = {
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
-        discord: Joi.object({
-            messageUrl: Joi.string(),
-            lastSynced: Joi.date()
-        }),
+        _metadata: Joi.forbidden(),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

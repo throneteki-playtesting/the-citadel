@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { Migration } from "../lib/types";
 import { log, createProgress } from "../lib/logger";
 import { loadAllIssues, getIssueByNumber, getIssueByCardCode, parseIssueNumber } from "../lib/github";
+import { fetchCardForumThreads } from "../lib/discord";
 
 const BATCH_SIZE = 500;
 const userId = "120834530801221634";
@@ -86,32 +87,41 @@ export const migration: Migration = {
                 if (releaseDate) {
                     newDoc.created = releaseDate;
                     newDoc.updated = releaseDate;
-                    newDoc.cardUpdated = releaseDate;
                 }
             } else {
                 newDoc.code = `${newDoc.project}${(newDoc.number + 500).toString().padStart(3, "0")}`;
             }
 
-            if (newDoc.github) {
+            const rawGithub = newDoc.github;
+            delete newDoc.github;
+
+            if (newDoc.imageUrl) {
+                newDoc._metadata = { ...(newDoc._metadata ?? {}), imageUrl: newDoc.imageUrl };
+                delete newDoc.imageUrl;
+            }
+
+            if (rawGithub) {
                 // Card already has github data — refresh from in-memory index by issue number
-                const issueNumber = newDoc.github.issueUrl ? parseIssueNumber(newDoc.github.issueUrl) : null;
+                const issueNumber = rawGithub.issueUrl ? parseIssueNumber(rawGithub.issueUrl) : null;
                 const issueData = issueNumber !== null ? getIssueByNumber(issueNumber) : null;
 
                 if (issueData) {
-                    newDoc.github = {
-                        status: issueData.status,
-                        issueUrl: issueData.issueUrl,
-                        closedAt: issueData.closedAt ?? undefined,
-                        lastSynced: now
+                    newDoc._metadata = {
+                        github: {
+                            status: issueData.status,
+                            issueUrl: issueData.issueUrl,
+                            closedAt: issueData.closedAt ?? undefined,
+                            lastSynced: now
+                        }
                     };
                     newDoc.created = issueData.created;
-                    newDoc.updated = issueData.updated;
-                    newDoc.cardUpdated = issueData.updated;
+                    newDoc.updated = issueData.created;
                 } else {
                     // Issue not found in index — normalise what we have
-                    if (newDoc.github.status === "complete") newDoc.github.status = "closed";
-                    if (newDoc.github.status === "closed") newDoc.github.closedAt = now;
-                    newDoc.github.lastSynced = now;
+                    if (rawGithub.status === "complete") rawGithub.status = "closed";
+                    if (rawGithub.status === "closed") rawGithub.closedAt = now;
+                    rawGithub.lastSynced = now;
+                    newDoc._metadata = { github: rawGithub };
                 }
             } else {
                 // No github data — look up by card code + version from the in-memory index
@@ -121,23 +131,23 @@ export const migration: Migration = {
                     issueData = getIssueByCardCode(devCode, newDoc.version);
                 }
                 if (issueData) {
-                    newDoc.github = {
-                        status: issueData.status,
-                        issueUrl: issueData.issueUrl,
-                        closedAt: issueData.closedAt ?? undefined,
-                        lastSynced: now
+                    newDoc._metadata = {
+                        github: {
+                            status: issueData.status,
+                            issueUrl: issueData.issueUrl,
+                            closedAt: issueData.closedAt ?? undefined,
+                            lastSynced: now
+                        }
                     };
                     newDoc.created = issueData.created;
-                    newDoc.updated = issueData.updated;
-                    newDoc.cardUpdated = issueData.updated;
-
+                    newDoc.updated = issueData.created;
                     issueFound.push(`${newDoc.code} | ${newDoc.version}`);
                 } else {
                     issueMissing.push(`${newDoc.code} | ${newDoc.version}`);
                 }
             }
 
-            if (!newDoc.created || !newDoc.updated || !newDoc.cardUpdated) {
+            if (!newDoc.created || !newDoc.updated) {
                 unknownDates.push(`${newDoc.code} | ${newDoc.version}`);
             }
 
@@ -169,6 +179,39 @@ export const migration: Migration = {
         const latestKeys = new Set(Object.values(latestMap).map(v => v.key));
         for (const doc of docs) {
             if (latestKeys.has(`${doc.project}-${doc.number}-${doc.version}`)) doc.latest = true;
+        }
+
+        // === Discord forum thread lookup ===
+        // Populate _metadata.discord.messageUrl for non-draft cards by matching
+        // thread names in the card forum. Uses the same naming convention as the
+        // live sync: "${number}. ${name} Preview" for 0.0.x cards, "${number}. ${name} ${version}" otherwise.
+        // Draft cards are skipped — their messageUrl points to a message inside a thread,
+        // not the thread starter, and cannot be reconstructed from thread metadata alone.
+        log.info("Connecting to Discord to map card forum threads...");
+        try {
+            const threadMap = await fetchCardForumThreads();
+            log.info(`Loaded ${threadMap.size} card forum thread(s)`);
+
+            let discordMapped = 0, discordMissing = 0;
+            for (const doc of docs) {
+                if (doc.draft) continue;
+                if (doc._metadata?.discord?.messageUrl) continue;
+
+                const isPreview = doc.version?.startsWith("0.0.");
+                const threadName = `${doc.number}. ${doc.name} (${isPreview ? "Preview" : doc.version})`;
+                const thread = threadMap.get(threadName);
+
+                if (thread) {
+                    doc._metadata = { ...(doc._metadata ?? {}), discord: { messageUrl: thread.url, lastSynced: now } };
+                    discordMapped++;
+                } else {
+                    discordMissing++;
+                    log.verbose(`No Discord thread found for: "${threadName}"`);
+                }
+            }
+            log.info(`Discord: ${discordMapped} URL(s) mapped, ${discordMissing} non-draft card(s) without a thread`);
+        } catch (err) {
+            log.warn(`Discord forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         if (dryRun) {

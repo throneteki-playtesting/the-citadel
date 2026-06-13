@@ -5,6 +5,7 @@ import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedE
 import { dataService, githubService, logger } from "@/services";
 import { githubWebhookMiddleware } from "@/middleware/auth";
 import { createSyncEmitter } from "@/services/sseService";
+import { merge } from "lodash-es";
 
 const router = express.Router();
 
@@ -33,17 +34,13 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
 
     logger.info(`[Github] Webhook recieved for issue ${issue.title} (#${issue.number}) closing`);
 
-    let cards = await dataService.cards.read({ github: { issueUrl: issue.html_url } });
+    let cards = await dataService.cards.read({ _metadata: { github: { issueUrl: issue.html_url } } });
     if (cards.length > 0) {
         const lastSynced = new Date();
         for (const card of cards) {
             const emitter = createSyncEmitter("card", "github", card);
             emitter.start();
-            card.github.status = issue.state;
-            if (issue.closed_at) {
-                card.github.closedAt = new Date(issue.closed_at);
-            }
-            card.github.lastSynced = lastSynced;
+            merge(card, { _metadata: { github: { status: issue.state, ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }), lastSynced } } });
             emitter.complete(card);
         }
         cards = await dataService.cards.update(cards, false, false);
@@ -59,15 +56,14 @@ async function onIssueReopened({ issue }: IssuesReopenedEvent) {
 
     logger.info(`[Github] Webhook recieved for issue ${issue.title} (#${issue.number}) re-opening`);
 
-    let cards = await dataService.cards.read({ github: { issueUrl: issue.html_url } });
+    let cards = await dataService.cards.read({ _metadata: { github: { issueUrl: issue.html_url } } });
     if (cards.length > 0) {
         const lastSynced = new Date();
         for (const card of cards) {
             const emitter = createSyncEmitter("card", "github", card);
             emitter.start();
-            card.github.status = issue.state;
-            delete card.github.closedAt;
-            card.github.lastSynced = lastSynced;
+            delete card._metadata?.github?.closedAt;
+            merge(card, { _metadata: { github: { status: issue.state, lastSynced } } });
             emitter.complete(card);
         }
         cards = await dataService.cards.update(cards, false, false);
@@ -81,12 +77,14 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
 
     logger.info(`[Github] Webhook recieved for issue ${issue.title} (#${issue.number}) being deleted`);
 
-    let cards = await dataService.cards.read({ github: { issueUrl: issue.html_url } });
+    let cards = await dataService.cards.read({ _metadata: { github: { issueUrl: issue.html_url } } });
     if (cards.length > 0) {
         for (const card of cards) {
             const emitter = createSyncEmitter("card", "github", card);
             emitter.start();
-            delete card.github;
+            if (card._metadata) {
+                delete card._metadata.github;
+            }
             emitter.complete(card);
         }
         cards = await dataService.cards.update(cards, false, false);
@@ -112,18 +110,16 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
     logger.info(`[Github] Webhook recieved for pull request ${pullRequest.title} (#${pullRequest.number}) being closed${isMerged ? " & merged" : ""}`);
 
     if (isAutomated(pullRequest)) {
-        let playtestingUpdates = await dataService.playtestingUpdates.read({ github: { pullRequestUrl: pullRequest.html_url } });
+        let playtestingUpdates = await dataService.playtestingUpdates.read({ _metadata: { github: { pullRequestUrl: pullRequest.html_url } } });
         if (playtestingUpdates.length > 0) {
             const lastSynced = new Date();
             for (const playtestingUpdate of playtestingUpdates) {
                 const emitter = createSyncEmitter("playtestingUpdate", "github", playtestingUpdate);
                 emitter.start();
                 if (isMerged) {
-                    playtestingUpdate.github.status = pullRequest.state;
-                    playtestingUpdate.github.mergedAt = new Date(pullRequest.merged_at);
-                    playtestingUpdate.github.lastSynced = lastSynced;
-                } else {
-                    delete playtestingUpdate.github;
+                    merge(playtestingUpdate, { _metadata: { github: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced } } });
+                } else if (playtestingUpdate._metadata) {
+                    delete playtestingUpdate._metadata.github;
                 }
                 emitter.complete(playtestingUpdate);
             }

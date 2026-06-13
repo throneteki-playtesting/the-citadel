@@ -3,6 +3,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { SingleOrArray } from "common/types";
 import { asPDF, asPNG } from ".";
 import { asArray, generateReleaseImageUrl, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
+import { merge } from "lodash-es";
 import { dataService, logger } from "@/services";
 import { BatchRenderJobOptions } from "@/types";
 import { createSyncEmitter } from "@/services/sseService";
@@ -59,8 +60,9 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
     const promises = packages.map(async ({ key, card, emitter }) => {
         try {
             if (card.release) {
-                card.imageUrl = generateReleaseImageUrl(card.release.short, card.release.number, card.name);
-                const response = await fetch(card.imageUrl, { method: "HEAD" });
+                const releaseImageUrl = generateReleaseImageUrl(card.release.short, card.release.number, card.name);
+                merge(card, { _metadata: { imageUrl: releaseImageUrl } });
+                const response = await fetch(releaseImageUrl, { method: "HEAD" });
                 if (!response.ok) {
                     emitter.error("Release Image Missing");
                     return;
@@ -72,7 +74,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
                     emitter.progress("Uploading");
                     const imageUrl = await uploadS3File(buffer, fileKey, "PNG");
                     uploaded.push(fileKey);
-                    card.imageUrl = imageUrl;
+                    merge(card, { _metadata: { imageUrl } });
                 }
             }
             emitter.complete(card);
@@ -96,7 +98,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
 
 async function isImageOutdated(card: IPlaytestCard) {
     // Cheapest check is if there is no imageUrl
-    if (!card.imageUrl) {
+    if (!card._metadata?.imageUrl) {
         return true;
     }
     // Then we check modified date of uploaded image
@@ -106,7 +108,7 @@ async function isImageOutdated(card: IPlaytestCard) {
         return true;
     }
     // And compare it to the cards updated date
-    return card.cardUpdated > lastModified;
+    return card.updated > lastModified;
 }
 
 export async function deleteImage(card: { project: number, number: number, version: SemanticVersion }): Promise<string>

@@ -48,7 +48,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!review.discord?.messageUrl) {
+        if (!review._metadata?.discord?.messageUrl) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} />,
@@ -61,7 +61,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
         return {
             title,
             icon: <FontAwesomeIcon icon={faDiscord} />,
-            href: review.discord!.messageUrl!.replace("https://", "discord://"),
+            href: review._metadata!.discord!.messageUrl!.replace("https://", "discord://"),
             color: "default",
             description: "Join the discussion"
         };

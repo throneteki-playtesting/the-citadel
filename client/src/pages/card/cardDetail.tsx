@@ -215,9 +215,11 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
         delete draft.note;
-        delete draft.github;
+        if (draft._metadata) {
+            delete draft._metadata.github;
+            delete draft._metadata.discord;
+        }
         delete draft.release;
-        delete draft.discord;
         draft.latest = false;
         draft.implemented = false;
         setEditing(draft);
@@ -283,12 +285,12 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                 </>
             )}
             <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
-                {latest?.discord?.messageUrl &&
+                {latest?._metadata?.discord?.messageUrl &&
                     <TouchTooltip content="Join Discussion">
                         <Button
                             isIconOnly
                             as={Link}
-                            href={latest.discord.messageUrl.replace("https://", "discord://")}
+                            href={latest._metadata.discord.messageUrl.replace("https://", "discord://")}
                             target="_blank"
                         >
                             <FontAwesomeIcon icon={faDiscord} />

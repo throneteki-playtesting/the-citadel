@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, GuildMember, Guild } from "discord.js";
+import { Client, FetchedThreadsMore, ForumChannel, GatewayIntentBits, GuildMember, Guild } from "discord.js";
 import { log } from "./logger";
 
 let client: Client | null = null;
@@ -82,4 +82,61 @@ export async function resolveUsernameToId(username: string): Promise<string | nu
     }
 
     return null;
+}
+
+export interface CardForumThread {
+    url: string,
+    createdAt: Date
+}
+
+/**
+ * Fetches all threads from the card forum channel and returns a map of
+ * thread name → { url, createdAt }. Forum post starter message URL is
+ * computable as channels/{guildId}/{threadId}/{threadId} without an extra
+ * API call per thread.
+ */
+export async function fetchCardForumThreads(): Promise<Map<string, CardForumThread>> {
+    const discord = await getDiscordClient();
+    const guild = await getGuild(discord);
+    const guildId = guild.id;
+
+    const forumName = "card-forum";
+    const channels = await guild.channels.fetch();
+    const channel = channels.find(c => c?.name?.endsWith(forumName));
+    if (!channel) {
+        throw new Error(`Forum channel "${forumName}" not found in guild "${guild.name}"`);
+    }
+    if (!channel.isThreadOnly()) {
+        throw new Error(`Channel "${forumName}" is not a forum channel`);
+    }
+
+    const forum = channel as ForumChannel;
+    const threadMap = new Map<string, CardForumThread>();
+
+    const active = await forum.threads.fetchActive();
+    for (const thread of active.threads.values()) {
+        threadMap.set(thread.name, {
+            url: `https://discord.com/channels/${guildId}/${thread.id}/${thread.id}`,
+            createdAt: thread.createdAt ?? new Date()
+        });
+    }
+    log.verbose(`${active.threads.size} active thread(s) loaded`);
+
+    let before: string | undefined;
+    let batch: FetchedThreadsMore;
+    let archivedCount = 0;
+    do {
+        batch = await forum.threads.fetchArchived({ type: "public", fetchAll: true, before, limit: 100 });
+        for (const thread of batch.threads.values()) {
+            threadMap.set(thread.name, {
+                url: `https://discord.com/channels/${guildId}/${thread.id}/${thread.id}`,
+                createdAt: thread.createdAt ?? new Date()
+            });
+        }
+        archivedCount += batch.threads.size;
+        before = batch.threads.last()?.id;
+    } while (batch.hasMore);
+    log.verbose(`${archivedCount} archived thread(s) loaded`);
+
+    return threadMap;
 }

@@ -101,7 +101,12 @@ export const migration: Migration = {
             // Carry through any other fields not explicitly remapped
             for (const [k, v] of Object.entries(review)) {
                 if (!["_id", "projectId", "epoch", "faction", "name", "reviewer", "statements"].includes(k)) {
-                    if (!(k in setDoc)) setDoc[k] = v;
+                    if (k === "discord") {
+                        // Remap old root-level discord to _metadata
+                        if (v) setDoc._metadata = { ...(setDoc._metadata ?? {}), discord: v };
+                    } else if (!(k in setDoc)) {
+                        setDoc[k] = v;
+                    }
                 }
             }
 
@@ -134,7 +139,7 @@ export const migration: Migration = {
             return;
         }
 
-        await dest.createIndex({ project: 1, number: 1, version: 1, reviewer: 1 }, { unique: true });
+        await dest.drop().catch(() => { /* may not exist */ });
 
         let upserted = 0, modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
@@ -145,6 +150,7 @@ export const migration: Migration = {
             log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
         }
 
+        await dest.createIndex({ project: 1, number: 1, version: 1, reviewer: 1 }, { unique: true });
         log.success(`Reviews migration complete — ${upserted} inserted, ${modified} updated, ${skipped} skipped`);
     }
 };

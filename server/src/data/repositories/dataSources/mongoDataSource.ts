@@ -5,7 +5,7 @@ import { asArray } from "common/utils";
 
 export default class MongoDataSource<T> {
     public collection: Collection<T>;
-    protected primaryKeys: string[];
+    public primaryKeys: string[];
     constructor(client: MongoClient, protected name: string, primaryKeys: IndexSpecification = {}) {
         this.collection = client.db().collection<T>(name);
         this.primaryKeys = Object.keys(primaryKeys);

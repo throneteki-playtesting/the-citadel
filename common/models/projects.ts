@@ -40,10 +40,12 @@ export interface IPlaytestingUpdate extends IAuditable {
     version: number,
     description?: string,
     cardChanges: Record<number, SemanticVersion>,
-    github?: {
-        status?: typeof githubStatuses[number],
-        mergedAt?: Date,
-        pullRequestUrl?: string,
-        lastSynced?: Date
+    _metadata?: {
+        github?: {
+            status?: typeof githubStatuses[number],
+            mergedAt?: Date,
+            pullRequestUrl?: string,
+            lastSynced?: Date
+        }
     }
 }

@@ -13,11 +13,13 @@ type PlaytestingUpdateDoc = {
     project: number;
     version: number;
     cardChanges: Record<number, SemanticVersion>;
-    github: {
-        status: "open" | "closed";
-        mergedAt?: Date;
-        pullRequestUrl: string;
-        lastSynced: Date;
+    _metadata: {
+        github: {
+            status: "open" | "closed";
+            mergedAt?: Date;
+            pullRequestUrl: string;
+            lastSynced: Date;
+        };
     };
     created: Date;
     createdBy: string;
@@ -115,11 +117,13 @@ export const migration: Migration = {
                 project: projectNumber,
                 version: updateNumber,
                 cardChanges,
-                github: {
-                    status: pr.merged ? "closed" : pr.state,
-                    ...(pr.mergedAt && { mergedAt: pr.mergedAt }),
-                    pullRequestUrl: pr.pullRequestUrl,
-                    lastSynced: now
+                _metadata: {
+                    github: {
+                        status: pr.merged ? "closed" : pr.state,
+                        ...(pr.mergedAt && { mergedAt: pr.mergedAt }),
+                        pullRequestUrl: pr.pullRequestUrl,
+                        lastSynced: now
+                    }
                 },
                 created: pr.createdAt,
                 createdBy: userId,
@@ -147,7 +151,7 @@ export const migration: Migration = {
             return;
         }
 
-        await playtestingUpdatesCol.createIndex({ project: 1, version: 1 }, { unique: true });
+        await playtestingUpdatesCol.drop().catch(() => { /* may not exist */ });
 
         const saveProgress = createProgress("Saving");
         let upserted = 0, modified = 0;
@@ -160,6 +164,7 @@ export const migration: Migration = {
         }
         saveProgress.done(`done — ${upserted} inserted, ${modified} updated`);
 
+        await playtestingUpdatesCol.createIndex({ project: 1, version: 1 }, { unique: true });
         log.success("playtestingUpdates migration complete");
     }
 };

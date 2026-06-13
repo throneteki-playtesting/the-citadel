@@ -16,7 +16,7 @@ export default function RecentCardChanges() {
     const { data: projectsData, isLoading: isProjectsDataLoading } = useGetProjectsQuery({ filter: { active: true } });
     const { data: cardsData, isLoading: isCardsDataLoading } = useGetCardsQuery({
         filter: projectsData?.items.map((project) => [{ project: project.number, latest: true }]).flat(),
-        orderBy: { cardUpdated: "desc" },
+        orderBy: { updated: "desc" },
         page: 1,
         perPage: items
     }, { skip: !projectsData });

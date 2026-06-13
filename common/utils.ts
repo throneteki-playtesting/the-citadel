@@ -230,8 +230,7 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
         text,
         type,
         unique,
-        quantity,
-        imageUrl
+        quantity
     } = card;
     return {
         code,
@@ -250,8 +249,7 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
         text,
         type,
         unique,
-        quantity,
-        imageUrl
+        quantity
     };
 }
 
