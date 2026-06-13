@@ -187,7 +187,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
                         )
                     )}
                 </div>
-                <CardStack cards={sortedCards} selectedIndex={selectedIndex} tilt={-1} className={classNames("h-full", widthClass)}>
+                <CardStack cards={sortedCards} selectedIndex={selectedIndex} tilt={-1} className={classNames(sortedCards.some((card) => card.type === "plot") ? "w-full" : "h-full", widthClass)}>
                     {(card) => {
                         if (card.release) {
                             return <CardImage card={card} />;
