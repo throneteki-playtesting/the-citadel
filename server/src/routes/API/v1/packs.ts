@@ -5,6 +5,7 @@ import { dataService } from "@/services";
 import { IPack, IPlaytestPack, ReleaseDate } from "common/models/pack";
 import { IProject } from "common/models/projects";
 import { loadProjectByParam } from "@/utils";
+import { StatusCodes } from "http-status-codes";
 
 const router = express.Router();
 
@@ -12,7 +13,6 @@ const ProjectParams = {
     project: Joi.number().required()
 };
 
-// TODO: Openapi spec
 router.get("/:project/development",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     loadProjectByParam,
@@ -29,7 +29,7 @@ router.get("/:project/development",
             cards
         };
 
-        res.json(pack);
+        res.status(StatusCodes.OK).json(pack);
     })
 );
 
@@ -58,7 +58,7 @@ router.get("/:project/release",
             cards
         };
 
-        res.json(pack);
+        res.status(StatusCodes.OK).json(pack);
     })
 );
 
