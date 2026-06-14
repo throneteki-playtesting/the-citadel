@@ -15,18 +15,18 @@ import { TouchTooltip } from "../../components/touchTooltip";
 const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
-            <span>#{project.number}</span>,
-            <span className="uppercase">{project.type}</span>
+            <span key="number">#{project.number}</span>,
+            <span key="type" className="uppercase">{project.type}</span>
         ];
 
         if (project.draft) {
-            components.push(<span>In Draft</span>);
+            components.push(<span key="version">In Draft</span>);
         } else {
-            components.push(<span>{project.version} updates</span>);
+            components.push(<span key="version">{project.version} updates</span>);
         }
 
         if (project.mandateUrl) {
-            components.push(<Link href={project.mandateUrl} className="cursor-pointer">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link>);
+            components.push(<Link key="mandate" href={project.mandateUrl} className="cursor-pointer">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link>);
         }
 
         return (
