@@ -98,7 +98,7 @@ export default function DeckSummaries({ className, style, project, number }: Dec
         }
 
         return (
-            <div className="md:flex-1 min-h-0 relative h-98">
+            <div className="md:flex-1 min-h-0 relative">
                 <ScrollShadow className="absolute inset-0 overflow-y-auto p-2">
                     <div className="flex flex-col gap-2">
                         {sorted.map(([url, { review, card, deck }]) => (
@@ -110,7 +110,7 @@ export default function DeckSummaries({ className, style, project, number }: Dec
         );
     }, [deckGroups, isLoading, loading.length]);
     return (
-        <div className={classNames("flex flex-col min-h-0 flex-1", className)} style={style}>
+        <div className={classNames("flex flex-col min-h-60 flex-1", className)} style={style}>
             <SectionTitle>
                 Decks for this card
             </SectionTitle>
