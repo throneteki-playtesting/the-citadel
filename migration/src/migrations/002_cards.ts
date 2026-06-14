@@ -227,13 +227,19 @@ export const migration: Migration = {
             const ops = batch.map(doc => {
                 const { created, ...restDoc } = doc;
                 const setFields: Record<string, any> = { ...restDoc, updated: restDoc.updated ?? now };
-                if (created) setFields.created = created;
+                // created goes in $set only when we have real data; otherwise falls back to now via $setOnInsert
+                const insertOnlyFields: Record<string, any> = { _id: new ObjectId(), createdBy: userId };
+                if (created) {
+                    setFields.created = created;
+                } else {
+                    insertOnlyFields.created = now;
+                }
                 return {
                     updateOne: {
                         filter: { project: doc.project, number: doc.number, version: doc.version },
                         update: {
                             $set: setFields,
-                            $setOnInsert: { _id: new ObjectId(), created: created ?? now, createdBy: userId }
+                            $setOnInsert: insertOnlyFields
                         },
                         upsert: true
                     }
