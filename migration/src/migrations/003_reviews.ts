@@ -2,7 +2,7 @@
 import { ObjectId } from "mongodb";
 import { Migration } from "../lib/types";
 import { log } from "../lib/logger";
-import { resolveUsernameToId, fetchAllGuildMembers } from "../lib/discord";
+import { resolveUsernameToId, fetchAllGuildMembers, fetchForumThreads, getDisplayNamesFor, ForumThread } from "../lib/discord";
 import { writeUnresolvedUsers, getResolvedMappings } from "../lib/userMappings";
 
 const BATCH_SIZE = 500;
@@ -66,10 +66,28 @@ export const migration: Migration = {
             return;
         }
 
+        // Fetch card names from already-migrated destination cards for thread name matching
+        const cardNameMap = new Map<string, string>();
+        const destCards = await destDb.collection("cards")
+            .find({}, { projection: { project: 1, number: 1, version: 1, name: 1 } })
+            .toArray();
+        for (const card of destCards) {
+            cardNameMap.set(`${card.project}-${card.number}-${card.version}`, card.name as string);
+        }
+        log.info(`Loaded ${cardNameMap.size} card name(s) for Discord thread matching`);
+
+        // Fetch review forum threads for _metadata.discord population
+        log.info("Connecting to Discord to map review forum threads...");
+        let threadMap = new Map<string, ForumThread>();
+        try {
+            threadMap = await fetchForumThreads("playtesting-reviews");
+            log.info(`Loaded ${threadMap.size} review forum thread(s)`);
+        } catch (err) {
+            log.warn(`Discord review forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
         let skipped = 0;
         const ops: object[] = [];
-
-        log.info("Transforming reviews...");
         for (const review of allReviews) {
             const reviewerUsername = review.reviewer as string;
             const reviewerId = resolvedMap.get(reviewerUsername);
@@ -110,6 +128,26 @@ export const migration: Migration = {
                 }
             }
 
+            // Discord review thread lookup
+            if (!setDoc._metadata?.discord?.messageUrl && threadMap.size > 0) {
+                const cardKey = `${setDoc.project}-${setDoc.number}-${setDoc.version}`;
+                const cardName = cardNameMap.get(cardKey);
+                if (cardName) {
+                    const isPreview = (setDoc.version as string)?.startsWith("0.0.");
+                    const versionLabel = isPreview ? "Preview" : setDoc.version;
+                    const displayNames = getDisplayNamesFor(reviewerId);
+                    for (const displayName of displayNames) {
+                        const threadName = `${setDoc.number} | ${cardName} (${versionLabel}) - ${displayName}`;
+                        const thread = threadMap.get(threadName);
+                        if (thread) {
+                            const lastSynced = thread.createdAt < setDoc.updated ? thread.createdAt : setDoc.updated;
+                            setDoc._metadata = { ...(setDoc._metadata ?? {}), discord: { messageUrl: thread.url, lastSynced } };
+                            break;
+                        }
+                    }
+                }
+            }
+
             ops.push({
                 updateOne: {
                     filter: {
@@ -139,8 +177,6 @@ export const migration: Migration = {
             return;
         }
 
-        await dest.drop().catch(() => { /* may not exist */ });
-
         let upserted = 0, modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
             const batch = ops.slice(i, i + BATCH_SIZE);
@@ -150,6 +186,7 @@ export const migration: Migration = {
             log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
         }
 
+        await dest.dropIndex("project_1_number_1_version_1_reviewer_1").catch(() => undefined);
         await dest.createIndex({ project: 1, number: 1, version: 1, reviewer: 1 }, { unique: true });
         log.success(`Reviews migration complete — ${upserted} inserted, ${modified} updated, ${skipped} skipped`);
     }

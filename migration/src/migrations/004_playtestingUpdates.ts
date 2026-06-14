@@ -151,8 +151,6 @@ export const migration: Migration = {
             return;
         }
 
-        await playtestingUpdatesCol.drop().catch(() => { /* may not exist */ });
-
         const saveProgress = createProgress("Saving");
         let upserted = 0, modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
@@ -164,6 +162,7 @@ export const migration: Migration = {
         }
         saveProgress.done(`done — ${upserted} inserted, ${modified} updated`);
 
+        await playtestingUpdatesCol.dropIndex("project_1_version_1").catch(() => undefined);
         await playtestingUpdatesCol.createIndex({ project: 1, version: 1 }, { unique: true });
         log.success("playtestingUpdates migration complete");
     }

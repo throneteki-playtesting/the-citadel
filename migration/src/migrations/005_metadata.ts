@@ -109,6 +109,7 @@ export const migration: Migration = {
         total += await migrateMetadataFields(suggestionsCol, "suggestions", ["discord"], dryRun);
 
         if (!dryRun) {
+            await suggestionsCol.dropIndex("id_1").catch(() => undefined);
             await suggestionsCol.createIndex({ id: 1 }, { unique: true });
         }
 

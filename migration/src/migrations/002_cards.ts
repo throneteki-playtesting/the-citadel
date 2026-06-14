@@ -215,29 +215,39 @@ export const migration: Migration = {
         }
 
         if (dryRun) {
-            log.info("[dry-run] Would drop dest \"cards\" collection");
-            log.info(`[dry-run] Would insert ${docs.length} transformed card(s)`);
-            log.info("[dry-run] Would create unique index on { project, number, version }");
+            log.info(`[dry-run] Would upsert ${docs.length} transformed card(s) (match on project + number + version)`);
+            log.info("[dry-run] Would drop and recreate unique index on { project, number, version }");
             return;
         }
 
-        log.info("Dropping destination collection...");
-        await dest.drop().catch(() => { /* may not exist */ });
-
         const saveProgress = createProgress("Saving");
-        let inserted = 0;
+        let upserted = 0, modified = 0;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
-            const ops = batch.map(doc => ({
-                insertOne: { document: { _id: new ObjectId(), created: now, createdBy: userId, ...doc } }
-            }));
-            const result = await dest.bulkWrite(ops, { ordered: true });
-            inserted += result.insertedCount;
-            saveProgress.counter(inserted, docs.length);
+            const ops = batch.map(doc => {
+                const { created, ...restDoc } = doc;
+                const setFields: Record<string, any> = { ...restDoc, updated: restDoc.updated ?? now };
+                if (created) setFields.created = created;
+                return {
+                    updateOne: {
+                        filter: { project: doc.project, number: doc.number, version: doc.version },
+                        update: {
+                            $set: setFields,
+                            $setOnInsert: { _id: new ObjectId(), created: created ?? now, createdBy: userId }
+                        },
+                        upsert: true
+                    }
+                };
+            });
+            const result = await dest.bulkWrite(ops as any, { ordered: false });
+            upserted += result.upsertedCount;
+            modified += result.modifiedCount;
+            saveProgress.counter(upserted + modified, docs.length);
         }
         saveProgress.done("done");
 
+        await dest.dropIndex("project_1_number_1_version_1").catch(() => undefined);
         await dest.createIndex({ project: 1, number: 1, version: 1 }, { unique: true });
-        log.success(`Cards migration complete — ${inserted} inserted`);
+        log.success(`Cards migration complete — ${upserted} inserted, ${modified} updated`);
     }
 };
