@@ -45,7 +45,7 @@ export interface SyncEmitter<K extends SyncType> {
     start: () => void,
     progress: (step: string) => void,
     complete: (data: SyncDataMap[K]) => void,
-    error: (error: string) => void,
+    error: (error: string) => void
 }
 
 const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = {

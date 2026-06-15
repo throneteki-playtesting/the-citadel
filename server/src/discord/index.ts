@@ -1,7 +1,8 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
+import { registerEvents } from "./events";
 import { dataService, logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role } from "discord.js";
+import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role, Partials } from "discord.js";
 import { Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
@@ -16,6 +17,7 @@ class DiscordService {
 
         this.client = new Client({
             intents: ["Guilds", "GuildMessages", "DirectMessages", "GuildPresences", "GuildMembers"],
+            partials: [Partials.Message, Partials.Channel],
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
 
@@ -31,6 +33,7 @@ class DiscordService {
             }
         });
 
+        // Deploys slash commands to the guild on join or availability.
         buildCommands().then((available) => {
             const deployOptions = { token, clientId };
             this.client.on(Events.GuildCreate, async (guild) => {
@@ -45,55 +48,9 @@ class DiscordService {
             });
         });
 
-        this.client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-            if (!this.isGuild(newMember.guild)) return;
+        registerEvents(this.client, this.guildId, DiscordService.syncUser, DiscordService.syncRole);
 
-            const nicknameChanged = oldMember.nickname !== newMember.nickname;
-            const avatarChanged = oldMember.avatar !== newMember.avatar;
-            const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size || oldMember.roles.cache.some((r) => !newMember.roles.cache.has(r.id));
-
-            if (!nicknameChanged && !avatarChanged && !rolesChanged) return;
-
-            const [user] = await dataService.users.read({ discordId: newMember.id });
-            if (!user) return;
-
-            logger.info(`[Discord] Member updated: ${newMember.user.username}`);
-            await DiscordService.syncUser(newMember);
-        });
-
-        this.client.on(Events.UserUpdate, async (oldUser, newUser) => {
-            const usernameChanged = oldUser.username !== newUser.username;
-            const avatarChanged = oldUser.avatar !== newUser.avatar;
-
-            if (!usernameChanged && !avatarChanged) return;
-
-            const [user] = await dataService.users.read({ discordId: newUser.id });
-            if (!user) return;
-
-            logger.info(`[Discord] User updated: ${newUser.username}`);
-            await DiscordService.syncUser(newUser);
-        });
-
-        this.client.on(Events.GuildRoleCreate, async (role) => {
-            if (!this.isGuild(role.guild)) return;
-            logger.info(`[Discord] Role created: ${role.name}`);
-            await DiscordService.syncRole(role);
-        });
-
-        this.client.on(Events.GuildRoleUpdate, async (_oldRole, newRole) => {
-            if (!this.isGuild(newRole.guild)) return;
-            logger.info(`[Discord] Role updated: ${newRole.name}`);
-            await DiscordService.syncRole(newRole);
-        });
-
-        this.client.on(Events.GuildRoleDelete, async (role) => {
-            if (!this.isGuild(role.guild)) return;
-            const [existing] = await dataService.roles.read({ discordId: role.id });
-            if (!existing) return;
-            logger.info(`[Discord] Role deleted: ${role.name}`);
-            await dataService.roles.update({ ...existing, active: false });
-        });
-
+        // Routes slash commands and autocomplete interactions to the appropriate command handler.
         this.client.on(Events.InteractionCreate, async (interaction) => {
             try {
                 if (!this.isGuild(interaction.guild)) {

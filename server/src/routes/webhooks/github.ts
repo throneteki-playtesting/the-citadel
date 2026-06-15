@@ -1,8 +1,9 @@
 import express from "express";
 import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";
-import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent } from "@octokit/webhooks-types";
+import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent, type PushEvent } from "@octokit/webhooks-types";
 import { dataService, githubService, logger } from "@/services";
+import { syncPullRequests } from "@/github/pullRequests";
 import { githubWebhookMiddleware } from "@/middleware/auth";
 import { createSyncEmitter } from "@/services/sseService";
 import { merge } from "lodash-es";
@@ -93,6 +94,26 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
     }
 }
 
+router.post("/push",
+    asyncHandler(async (req, res) => {
+        const event = req.body;
+
+        if (isPushEvent(event) && event.ref === "refs/heads/development") {
+            await onDevelopmentPush(event);
+        }
+
+        res.sendStatus(StatusCodes.OK);
+    })
+);
+
+async function onDevelopmentPush({ commits }: PushEvent) {
+    logger.info(`[Github] Webhook recieved for ${commits.length} commit(s) pushed to development`);
+
+    await syncPullRequests();
+
+    logger.info("[Github] Synced pull requests after push to development");
+}
+
 router.post("/pull-request",
     asyncHandler(async (req, res) => {
         const event = req.body;
@@ -161,6 +182,10 @@ function isIssuesReopenedEvent(event: unknown): event is IssuesReopenedEvent {
 
 function isIssuesDeletedEvent(event: unknown): event is IssuesDeletedEvent {
     return event && event["action"] === "deleted" && !!event["issue"];
+}
+
+function isPushEvent(event: unknown): event is PushEvent {
+    return event && "ref" in (event as object) && "commits" in (event as object);
 }
 
 function isPullRequestClosedEvent(event: unknown): event is PullRequestClosedEvent {

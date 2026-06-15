@@ -74,3 +74,15 @@ export const discordCommandMiddleware = async (member: APIGuildMember | GuildMem
     const context = createContext("api", user);
     requestContext.run(context, callback);
 };
+
+export const discordEventMiddleware = async (member: APIGuildMember | GuildMember | undefined, callback: () => void) => {
+    // TODO: Separate Discord into its own integration, rather than using internal
+    const rawToken = await dataService.integrations.fetchInternalToken();
+    const integration = await dataService.integrations.findByToken(rawToken);
+    if (!integration) {
+        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
+    }
+
+    const context = createContext("webhook", integration);
+    requestContext.run(context, callback);
+};

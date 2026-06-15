@@ -239,6 +239,25 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
     }
 }
 
+export async function onCardForumMessageDeleted(messageUrl: string) {
+    logger.info(`[Discord] Forum thread message deleted: ${messageUrl}`);
+
+    let cards = await dataService.cards.read({ _metadata: { discord: { messageUrl } } });
+    if (cards.length === 0) return;
+
+    for (const card of cards) {
+        const emitter = createSyncEmitter("card", "discord", card);
+        emitter.start();
+        if (card._metadata) {
+            delete card._metadata.discord;
+        }
+        emitter.complete(card);
+    }
+    cards = await dataService.cards.update(cards, false, false);
+
+    logger.info(`[Discord] Removed discord metadata for ${cards.length} card(s)`);
+}
+
 export async function deleteDraft(card: IPlaytestCard) {
     try {
         if (!card.draft) {

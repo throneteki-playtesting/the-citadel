@@ -129,6 +129,25 @@ export async function updateInitial(review: IPlaytestReview, card: IPlaytestCard
     }
 }
 
+export async function onReviewForumMessageDeleted(messageUrl: string) {
+    logger.info(`[Discord] Forum thread message deleted: ${messageUrl}`);
+
+    let reviews = await dataService.reviews.read({ _metadata: { discord: { messageUrl } } });
+    if (reviews.length === 0) return;
+
+    for (const review of reviews) {
+        const emitter = createSyncEmitter("review", "discord", review);
+        emitter.start();
+        if (review._metadata) {
+            delete review._metadata.discord;
+        }
+        emitter.complete(review);
+    }
+    reviews = await dataService.reviews.update(reviews, false, false);
+
+    logger.info(`[Discord] Removed discord metadata for ${reviews.length} review(s)`);
+}
+
 export async function deleteInitial(review: IPlaytestReview, context?: PlaytestingReviewContext) {
     try {
         context = context ?? await getPlaytestingReviewContext();

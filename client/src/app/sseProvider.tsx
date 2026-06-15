@@ -3,7 +3,7 @@ import { SyncCompleteEvent, SyncEvent, SyncType } from "server/types";
 import api from "../api";
 import { store } from "../api/store";
 import { SSEContext } from "./sseContext";
-import { merge } from "lodash-es";
+import { mergeWith, isPlainObject } from "lodash-es";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { DeepPartial } from "common/types";
@@ -104,7 +104,11 @@ const updateCachedEntity = <T extends object>(
     matchFn: (entity: T) => boolean,
     data: DeepPartial<T>
 ) => {
-    const update = (entity: T) => merge(entity, data);
+    const update = (entity: T) => mergeWith(entity, data, (_entityVal, dataVal) => {
+        if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) {
+            return {};
+        }
+    });
 
     if (Array.isArray(draft)) {
         const entity = (draft as T[]).find(matchFn);

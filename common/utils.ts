@@ -365,7 +365,8 @@ export function generateReleaseImageUrl(short: string, number: number, name: str
  */
 export function getDiff<T extends object>(original: T, updated: T): DeepPartial<T> {
     const isPlainObject = (val: unknown): val is object => val !== null && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date);
-    return (Object.keys(updated) as (keyof T)[]).reduce((diff, key) => {
+
+    const diff = (Object.keys(updated) as (keyof T)[]).reduce((diff, key) => {
         const a = original[key];
         const b = updated[key];
 
@@ -378,7 +379,16 @@ export function getDiff<T extends object>(original: T, updated: T): DeepPartial<
             : b) as DeepPartial<T[keyof T]>;
 
         return diff;
-    }, {} as Record<keyof T, DeepPartial<T[keyof T]>>) as DeepPartial<T>;
+    }, {} as Record<keyof T, DeepPartial<T[keyof T]>>);
+
+    // Keys present in original but absent in updated were deleted — represent as {} for objects
+    for (const key of Object.keys(original) as (keyof T)[]) {
+        if (!(key in (updated as object))) {
+            diff[key] = (isPlainObject(original[key]) ? {} : undefined) as DeepPartial<T[keyof T]>;
+        }
+    }
+
+    return diff as DeepPartial<T>;
 }
 
 export function getMostRecent(cards: Cards.IPlaytestCard[]): Cards.IPlaytestCard | undefined {
