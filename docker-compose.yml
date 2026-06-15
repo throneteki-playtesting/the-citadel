@@ -9,7 +9,7 @@ services:
         - VITE_VERBOSE=${VERBOSE}
         - VITE_BUG_REPORT_URL=${BUG_REPORT_URL}
     restart: always
-    container_name: got_client
+    container_name: citadel_client
     ports:
       - ${CLIENT_PORT}:${CLIENT_PORT}
     environment:
@@ -20,7 +20,7 @@ services:
       dockerfile: server/Dockerfile
       context: ./
     restart: always
-    container_name: got_server
+    container_name: citadel_server
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
     environment:

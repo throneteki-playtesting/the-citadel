@@ -1,4 +1,4 @@
-# got-automation — Claude Context
+# the-citadel — Claude Context
 
 ## Project Overview
 A fullstack playtesting management tool for **A Game of Thrones: The Card Game (LCG)**. Manages draft/playtest cards, reviews, suggestions, and Discord/GitHub integration.
