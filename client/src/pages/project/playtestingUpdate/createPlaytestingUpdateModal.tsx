@@ -83,7 +83,7 @@ export default function CreatePlaytestingUpdateModal({ isOpen, project, onClose:
     }, [draftsData?.items, isDraftsLoading, selectedCards, toggleCard]);
 
     return (
-        <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose() }>
+        <Modal isOpen={isOpen} placement="top-center" size="4xl" scrollBehavior="inside" onOpenChange={(isOpen) => !isOpen && onModalClose() }>
             <ModalContent>
                 {(onClose) => (
                     <Wizard
@@ -93,21 +93,23 @@ export default function CreatePlaytestingUpdateModal({ isOpen, project, onClose:
                     >
                         <ModalHeader className="font-cinzel">{`Create PT Update - ${project.code} #${project.version + 1}`}</ModalHeader>
                         <ModalBody>
-                            <WizardPages>
-                                <WizardPage className="flex flex-col p-2 gap-2 font-crimson">
-                                    <div className="text-md font-cinzel">Select Drafted Cards</div>
-                                    <div className="text-sm font-sans">Expand the card name to view the changed version.</div>
-                                    <div className="text-xs font-sans"><FontAwesomeIcon icon={faInfoCircle}/> Any cards which are not implemented will need to be manually playtested online until they are implemented.</div>
-                                    <div className="flex flex-col gap-2 w-full">
-                                        {draftCardSelectors}
-                                    </div>
-                                </WizardPage>
-                                <WizardPage>
-                                    <div className="text-md font-cinzel">Describe the update</div>
-                                    <div className="text-sm font-sans">This is optional, but helps tell playtesters any broad details about this update.</div>
-                                    <Textarea label="Description" name="description"/>
-                                </WizardPage>
-                            </WizardPages>
+                            <div>
+                                <WizardPages>
+                                    <WizardPage className="flex flex-col p-2 gap-2 font-crimson">
+                                        <div className="text-md font-cinzel">Select Drafted Cards</div>
+                                        <div className="text-sm font-sans">Expand the card name to view the changed version.</div>
+                                        <div className="text-xs font-sans"><FontAwesomeIcon icon={faInfoCircle}/> Any cards which are not implemented will need to be manually playtested online until they are implemented.</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 w-full">
+                                            {draftCardSelectors}
+                                        </div>
+                                    </WizardPage>
+                                    <WizardPage>
+                                        <div className="text-md font-cinzel">Describe the update</div>
+                                        <div className="text-sm font-sans">This is optional, but helps tell playtesters any broad details about this update.</div>
+                                        <Textarea label="Description" name="description"/>
+                                    </WizardPage>
+                                </WizardPages>
+                            </div>
                         </ModalBody>
                         <ModalFooter>
                             <WizardBack onCancel={onClose}/>
