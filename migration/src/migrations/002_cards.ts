@@ -76,7 +76,7 @@ export const migration: Migration = {
                 ...card,
                 project: card.projectId,
                 latest: false,
-                draft: !card.playtesting,
+                draft: !card.playtesting || card.version !== card.playtesting,
                 implemented: card.playtesting && (!card.github || card.github?.status === "complete"),
                 updatedBy: userId
             };
