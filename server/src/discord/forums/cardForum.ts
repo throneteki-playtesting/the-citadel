@@ -10,74 +10,84 @@ import { getTimeLockedImageUrl } from "@/utils";
 import { User } from "common/models/auth";
 import { createSyncEmitter } from "@/services/sseService";
 
+let syncCardForumLock: Promise<void> = Promise.resolve();
+
 /**
  * Creates any new threads & messages for cards which are missing their discordMessageUrl.
  * Note: Will not update the content of these messages - only create if missing
  * @param cards Cards to sync
  */
-export async function syncCardForum(cards: IPlaytestCard[]) {
-    const context = await getCardForumContext();
+export async function syncCardForum(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
+    const wait = syncCardForumLock;
+    let release!: () => void;
+    syncCardForumLock = new Promise(resolve => { release = resolve; });
+    await wait;
+    try {
+        const context = await getCardForumContext();
+        const results: IPlaytestCard[] = [];
+        for (const card of cards) {
+            results.push(await syncCardThread(card, context));
+        }
+        return results;
+    } finally {
+        release();
+    }
+}
 
-    const toUpdate: IPlaytestCard[] = [];
-    let needsUpdate = false;
-    for (let card of cards) {
-        const emitter = createSyncEmitter("card", "discord", card);
-        try {
-            emitter.start();
-            if (isMessageOutdated(card)) {
-                needsUpdate = true;
-                // Drafts & Regular releases are treated differently:
-                // - Draft will send a new message to the existing thread, and can be incrementally updated (sends as new message)
-                // - Regular will send a new thread, and shouldn't ever be updated (that's what drafts are for!)
-                if (card.draft) {
-                    emitter.progress("Syncing Draft");
-                    logger.info(`[Discord] Syncing draft ${card.name} (${card.version})`);
-                    const draftMessageExists = !!card._metadata?.discord?.messageUrl;
-                    if (draftMessageExists) {
-                        card = await updateDraft(card, context);
+async function syncCardThread(card: IPlaytestCard, context?: CardForumContext): Promise<IPlaytestCard> {
+    context = context ?? await getCardForumContext();
+    const emitter = createSyncEmitter("card", "discord", card);
+    try {
+        emitter.start();
+        if (isMessageOutdated(card)) {
+            // Drafts & Regular releases are treated differently:
+            // - Draft will send a new message to the existing thread, and can be incrementally updated (sends as new message)
+            // - Regular will send a new thread, and shouldn't ever be updated (that's what drafts are for!)
+            if (card.draft) {
+                emitter.progress("Syncing Draft");
+                logger.info(`[Discord] Syncing draft ${card.name} (${card.version})`);
+                const draftMessageExists = !!card._metadata?.discord?.messageUrl;
+                if (draftMessageExists) {
+                    card = await updateDraft(card, context);
+                } else {
+                    card = await newDraft(card, context);
+                }
+                logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
+            } else {
+                emitter.progress("Syncing");
+                logger.info(`[Discord] Syncing ${card.name} (${card.version})`);
+                const messageExists = !!card._metadata?.discord?.messageUrl;
+                if (messageExists) {
+                    // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
+                    logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
+                } else {
+                    emitter.progress("Searching");
+                    const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
+                    if (existingThread) {
+                        // For legacy reasons; if a thread exists before card._metadata.discord was created, we need to map it
+                        const starter = await existingThread.fetchStarterMessage();
+                        merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
                     } else {
-                        card = await newDraft(card, context);
+                        emitter.progress("Syncing");
+                        if (isPreview(card)) {
+                            card = await createPreview(card, context);
+                        } else if (isInitial(card)) {
+                            card = await createInitial(card, context);
+                        } else {
+                            card = await createNewLatest(card, context);
+                        }
                     }
                     logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
-                } else {
-                    emitter.progress("Syncing");
-                    logger.info(`[Discord] Syncing ${card.name} (${card.version})`);
-                    const messageExists = !!card._metadata?.discord?.messageUrl;
-                    if (messageExists) {
-                        // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
-                        logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
-                    } else {
-                        emitter.progress("Searching");
-                        const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
-                        if (existingThread) {
-                            // For legacy reasons; if a thread exists before card._metadata.discord was created, we need to map it
-                            const starter = await existingThread.fetchStarterMessage();
-                            merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
-                        } else {
-                            emitter.progress("Syncing");
-                            if (isPreview(card)) {
-                                card = await createPreview(card, context);
-                            } else if (isInitial(card)) {
-                                card = await createInitial(card, context);
-                            } else {
-                                card = await createNewLatest(card, context);
-                            }
-                        }
-                        logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
-                    }
                 }
             }
-            toUpdate.push(card);
-            emitter.complete(card);
-        } catch (err) {
-            emitter.error("Failure");
-            logger.warn(new Error(`[Discord] Failed to sync ${card.name} (${card.version})`, { cause: err }));
+            [card] = await dataService.cards.update([card], false, false);
         }
+        emitter.complete(card);
+    } catch (err) {
+        emitter.error("Failure");
+        logger.warn(new Error(`[Discord] Failed to sync ${card.name} (${card.version})`, { cause: err }));
     }
-    if (needsUpdate) {
-        cards = await dataService.cards.update(toUpdate, false, false);
-    }
-    return cards;
+    return card;
 }
 
 function isMessageOutdated(card: IPlaytestCard) {
@@ -411,7 +421,7 @@ async function getThreadFor(card: IPlaytestCard) {
 
         if (!previous._metadata?.discord?.messageUrl) {
             logger.info(`[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`);
-            [previous] = await syncCardForum([previous]);
+            previous = await syncCardThread(previous);
         }
 
         target = previous;

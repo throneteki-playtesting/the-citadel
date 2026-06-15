@@ -9,58 +9,67 @@ import { createSyncEmitter } from "@/services/sseService";
 import { syncImage } from "@/rendering/hosting";
 import { User } from "common/models/auth";
 
-export async function syncReviewForum(reviews: IPlaytestReview[]) {
-    const context = await getPlaytestingReviewContext();
+let syncReviewForumLock: Promise<void> = Promise.resolve();
 
-    const toUpdate: IPlaytestReview[] = [];
-    let needsUpdate = false;
-    for (let review of reviews) {
-        const emitter = createSyncEmitter("review", "discord", review);
-        try {
+export async function syncReviewForum(reviews: IPlaytestReview[]): Promise<IPlaytestReview[]> {
+    const wait = syncReviewForumLock;
+    let release!: () => void;
+    syncReviewForumLock = new Promise(resolve => { release = resolve; });
+    await wait;
+    try {
+        const context = await getPlaytestingReviewContext();
+        const results: IPlaytestReview[] = [];
+        for (const review of reviews) {
+            results.push(await syncReviewThread(review, context));
+        }
+        return results;
+    } finally {
+        release();
+    }
+}
+
+async function syncReviewThread(review: IPlaytestReview, context?: PlaytestingReviewContext): Promise<IPlaytestReview> {
+    context = context ?? await getPlaytestingReviewContext();
+    const emitter = createSyncEmitter("review", "discord", review);
+    try {
+        if (isMessageOutdated(review)) {
+            emitter.progress("Syncing");
+            logger.info(`[Discord] Syncing ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
+            const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+            const user = await discordService.getUserFromId(context.guild, review.reviewer);
+
+            let initialExists = !!review._metadata?.discord?.messageUrl;
+            if (!initialExists) {
+                emitter.progress("Searching");
+                const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card, user));
+                if (existingThread) {
+                    // For legacy reasons; if a thread exists before review.discord was created, we need to map it
+                    const starter = await existingThread.fetchStarterMessage();
+                    merge(review, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date(starter.createdTimestamp) } } });
+                    initialExists = true;
+                    logger.info(`[Discord] Found & attaching thread for ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
+                }
+            }
+            // Check outdated again, in case it was mapped from above code
             if (isMessageOutdated(review)) {
                 emitter.progress("Syncing");
-                needsUpdate = true;
-                logger.info(`[Discord] Syncing ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
-                const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
-                const user = await discordService.getUserFromId(context.guild, review.reviewer);
-
-                let initialExists = !!review._metadata?.discord?.messageUrl;
-                if (!initialExists) {
-                    emitter.progress("Searching");
-                    const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card, user));
-                    if (existingThread) {
-                        // For legacy reasons; if a thread exists before review.discord was created, we need to map it
-                        const starter = await existingThread.fetchStarterMessage();
-                        merge(review, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date(starter.createdTimestamp) } } });
-                        initialExists = true;
-                        logger.info(`[Discord] Found & attaching thread for ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`);
-                    }
+                if (initialExists) {
+                    review = await updateInitial(review, card, user, context);
+                } else {
+                    review = await createInitial(review, card, user, context);
                 }
-                // Check outdated again, in case it was mapped from above code
-                if (isMessageOutdated(review)) {
-                    emitter.progress("Syncing");
-                    if (initialExists) {
-                        review = await updateInitial(review, card, user, context);
-                    } else {
-                        review = await createInitial(review, card, user, context);
-                    }
-                }
-                logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review._metadata?.discord?.messageUrl}`);
             }
-            emitter.complete(review);
-        } catch (err) {
-            emitter.error("Failure");
-            logger.warn(new Error(`[Discord] Failed to sync ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`, { cause: err }));
+            logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review._metadata?.discord?.messageUrl}`);
+            [review] = await dataService.reviews.update([review], false, false);
         }
-        toUpdate.push(review);
+        emitter.complete(review);
+    } catch (err) {
+        emitter.error("Failure");
+        logger.warn(new Error(`[Discord] Failed to sync ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}`, { cause: err }));
     }
-
-    if (needsUpdate) {
-        reviews = await dataService.reviews.update(toUpdate, false, false);
-    }
-
-    return reviews;
+    return review;
 }
+
 function isMessageOutdated(review: IPlaytestReview) {
     return !review._metadata?.discord?.lastSynced || review.updated > review._metadata.discord.lastSynced;
 }

@@ -1,6 +1,5 @@
 import { IProject } from "common/models/projects";
 import { getMilestone } from "./milestones";
-import type { Endpoints } from "@octokit/types";
 import { IPlaytestCard } from "common/models/cards";
 import { dataService, githubService, logger } from "@/services";
 import { isInitial, parseCardCode } from "common/utils";
@@ -11,20 +10,36 @@ import { getTimeLockedImageUrl, pascalCase } from "@/utils";
 import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
 
-type Issue = Endpoints["GET /repos/{owner}/{repo}/issues"]["response"]["data"][number];
 
-export async function syncIssues(cards: IPlaytestCard[]) {
+let syncIssuesLock: Promise<void> = Promise.resolve();
 
-    const projects = await dataService.projects.read([...new Set(cards.map((card) => card.project))].map((number) => ({ number })));
+export async function syncIssues(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
+    const wait = syncIssuesLock;
+    let release!: () => void;
+    syncIssuesLock = new Promise(resolve => { release = resolve; });
+    await wait;
+    try {
+        const results: IPlaytestCard[] = [];
+        for (const card of cards) {
+            results.push(await syncIssue(card));
+        }
+        return results;
+    } finally {
+        release();
+    }
+}
+
+async function syncIssue(card: IPlaytestCard): Promise<IPlaytestCard> {
+    const [project] = await dataService.projects.read({ number: card.project });
     const context = githubService.getContext();
-
-    // Contains cached issues, split by project number
-    const cachedIssues: Record<number, Issue[]> = {};
-    const getIssuesForProject = async (project: IProject) => {
-        let issues = cachedIssues[project.number];
-        if (!issues) {
+    const emitter = createSyncEmitter("card", "github", card);
+    try {
+        emitter.start();
+        let isMissing = isIssueMissing(card);
+        if (isMissing) {
+            emitter.progress("Searching");
             const milestone = await getMilestone(project);
-            issues = await context.client.paginate(context.client.rest.issues.listForRepo, {
+            const projectIssues = await context.client.paginate(context.client.rest.issues.listForRepo, {
                 owner: context.owner,
                 repo: context.repo,
                 milestone: milestone.toString(),
@@ -32,82 +47,55 @@ export async function syncIssues(cards: IPlaytestCard[]) {
                 state: "all",
                 per_page: 100
             });
-
-            cachedIssues[project.number] = issues;
-        }
-
-        return issues;
-    };
-
-    const toUpdate: IPlaytestCard[] = [];
-    let needsUpdate = false;
-    for (let card of cards) {
-        const emitter = createSyncEmitter("card", "github", card);
-        try {
-            emitter.start();
-            const project = projects.find((project) => project.number === card.project);
-            let isMissing = isIssueMissing(card);
-            if (isMissing) {
-                emitter.progress("Searching");
-                // Fetches issues for project (from cache, or github)
-                const projectIssues = await getIssuesForProject(project);
-                const existingIssue = projectIssues.find((i) => i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version));
-
-                if (existingIssue) {
-                    needsUpdate = true;
-                    merge(card, {
-                        _metadata: {
-                            github: {
-                                issueUrl: existingIssue.html_url,
-                                status: existingIssue.state as "open" | "closed",
-                                ...(existingIssue.closed_at && { closedAt: new Date(existingIssue.closed_at) }),
-                                lastSynced: new Date(existingIssue.updated_at)
-                            }
+            const existingIssue = projectIssues.find((i) => i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version));
+            if (existingIssue) {
+                merge(card, {
+                    _metadata: {
+                        github: {
+                            issueUrl: existingIssue.html_url,
+                            status: existingIssue.state as "open" | "closed",
+                            ...(existingIssue.closed_at && { closedAt: new Date(existingIssue.closed_at) }),
+                            lastSynced: new Date(existingIssue.updated_at)
                         }
-                    });
-
-                    isMissing = false;
-                    logger.info(`[Github] Missing issue found & attached to ${card.name} (${card.version})`);
-                }
+                    }
+                });
+                isMissing = false;
+                logger.info(`[Github] Missing issue found & attached to ${card.name} (${card.version})`);
             }
-            if (isMissing || isIssueOutdated(card)) {
-                needsUpdate = true;
-                emitter.progress("Syncing");
-                if (isInitial(card)) {
-                    card = await syncInitial(card, project);
-                } else {
-                    switch (card.note?.type) {
-                        case "updated": {
-                            card = await syncUpdate(card, project);
-                            break;
-                        }
-                        case "reworked": {
-                            card = await syncRework(card, project);
-                            break;
-                        }
-                        case "replaced": {
-                            card = await syncReplace(card, project);
-                            break;
-                        }
-                        default: {
-                            logger.warn(`Attempted to sync issue for ${card.name} (${card.version}) with missing note type`);
-                        }
+        }
+        if (isMissing || isIssueOutdated(card)) {
+            emitter.progress("Syncing");
+            if (isInitial(card)) {
+                card = await syncInitial(card, project);
+            } else {
+                switch (card.note?.type) {
+                    case "updated": {
+                        card = await syncUpdate(card, project);
+                        break;
+                    }
+                    case "reworked": {
+                        card = await syncRework(card, project);
+                        break;
+                    }
+                    case "replaced": {
+                        card = await syncReplace(card, project);
+                        break;
+                    }
+                    default: {
+                        logger.warn(`Attempted to sync issue for ${card.name} (${card.version}) with missing note type`);
                     }
                 }
             }
-            toUpdate.push(card);
-            emitter.complete(card);
-        } catch (err) {
-            emitter.error("Failure");
-            logger.warn(new Error(`[Github] Failed to sync ${card.name} (${card.version})`, { cause: err }));
+            [card] = await dataService.cards.update([card], false, false);
         }
+        emitter.complete(card);
+    } catch (err) {
+        emitter.error("Failure");
+        logger.warn(new Error(`[Github] Failed to sync ${card.name} (${card.version})`, { cause: err }));
     }
-
-    if (needsUpdate) {
-        cards = await dataService.cards.update(toUpdate, false, false);
-    }
-    return cards;
+    return card;
 }
+
 export async function clearIssues(cards: IPlaytestCard[]) {
     const context = githubService.getContext();
     for (const card of cards) {

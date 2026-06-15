@@ -9,14 +9,14 @@ type GithubClient = Octokit & { paginate: PaginateInterface; } & paginateGraphQL
 
 class GithubService {
     private client: GithubClient;
-    private repoDetails: { owner: string, repo: string };
+
+    private organisation = process.env.GITHUB_OWNER;
+    private codeRepo = process.env.GITHUB_REPOSITORY;
+    private dataRepo = process.env.GITHUB_REPOSITORY_DATA;
+
     constructor() {
-        const owner = process.env.GITHUB_OWNER;
-        const repo = process.env.GITHUB_REPOSITORY;
         const appId = process.env.GITHUB_APP_ID;
         const privateKey = process.env.GITHUB_PRIVATE_KEY;
-
-        this.repoDetails = { owner, repo };
 
         this.initialiseClient(appId, privateKey).then(() => this.initialiseWebhooks());
     }
@@ -26,19 +26,20 @@ class GithubService {
             appId,
             privateKey
         });
-        const { data: installation } = await app.octokit.rest.apps.getOrgInstallation({ org: this.repoDetails.owner });
+        const { data: installation } = await app.octokit.rest.apps.getOrgInstallation({ org: this.organisation });
         logger.info(`GitHub connected with ${installation.app_slug}`);
         const octokit = await app.getInstallationOctokit(installation.id);
         this.client = octokit;
     }
 
-    public getContext(): GithubContext {
+    public getContext(repo: "code" | "data" = "code"): GithubContext {
         if (!this.client) {
             throw new Error("Github Client not initialised");
         }
         return {
             client: this.client,
-            ...this.repoDetails
+            owner: this.organisation,
+            repo: repo === "code" ? this.codeRepo : this.dataRepo
         };
     }
 

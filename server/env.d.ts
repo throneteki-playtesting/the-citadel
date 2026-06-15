@@ -26,6 +26,7 @@ declare namespace NodeJS {
 
         GITHUB_OWNER: string;
         GITHUB_REPOSITORY: string;
+        GITHUB_REPOSITORY_DATA: string;
         GITHUB_APP_ID: string;
         GITHUB_PRIVATE_KEY: string;
         GITHUB_WEBHOOK_SECRET: string;
