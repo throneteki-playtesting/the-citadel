@@ -72,7 +72,7 @@ export interface SyncDataMap {
 interface SyncOperationMap {
     card: "image" | "discord" | "github";
     review: "discord";
-    playtestingUpdate: "github";
+    playtestingUpdate: "github.code" | "github.data";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
 export type SyncStatus = "start" | "progress" | "complete" | "error";

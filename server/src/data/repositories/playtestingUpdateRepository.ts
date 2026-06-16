@@ -3,7 +3,7 @@ import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { IPlaytestCard } from "common/models/cards";
 import { BasicAuditableRepository } from "./shared";
-import { syncPullRequests } from "@/github/pullRequests";
+import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 
@@ -18,7 +18,7 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
         let data = asArray(creating);
         data = await super.create(data);
         if (sync) {
-            await this.sync();
+            await this.sync(data);
         }
         return Array.isArray(creating) ? data : data[0];
     }
@@ -29,15 +29,16 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
         let data = asArray(updating);
         data = await super.update(data, upsert);
         if (sync) {
-            await this.sync();
+            await this.sync(data);
         }
         return Array.isArray(updating) ? data : data[0];
     }
 
-    public async sync() {
-        let data: IPlaytestingUpdate[] = [];
+    public async sync(syncing: SingleOrArray<IPlaytestingUpdate>) {
+        let data = asArray(syncing);
         const syncs = [
-            () => syncPullRequests().then(result => { data = result; })
+            () => syncCodePullRequests(data).then(result => { data = result; }),
+            () => syncDataPullRequests(data).then(result => { data = result; })
         ];
 
         await this.internalSync(syncs);

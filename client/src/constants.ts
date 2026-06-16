@@ -41,7 +41,8 @@ const permissionMeta: Record<Permission, { label: string; group: string }> = {
     [Permission.SYNC_CARD_IMAGES]: { label: "Card Images", group: "Sync" },
     [Permission.SYNC_CARD_DISCORD]: { label: "Card Discord", group: "Sync" },
     [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync" },
-    [Permission.SYNC_PROJECT_GITHUB]: { label: "Project GitHub", group: "Sync" },
+    [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
+    [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA]: { label: "PT Update Github Data", group: "Sync" },
     [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync" }
 };
 

@@ -108,7 +108,6 @@ router.put("/:id",
         const { id } = req.params;
         let suggestion = req.body;
         suggestion.id = id;
-        suggestion.updated = new Date();
         suggestion = await dataService.suggestions.update(suggestion);
         res.status(StatusCodes.OK).json(suggestion);
     })

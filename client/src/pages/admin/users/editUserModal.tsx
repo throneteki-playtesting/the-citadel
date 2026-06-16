@@ -14,7 +14,8 @@ export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }
     const onSave = useCallback(async () => {
         if (user) {
             const model = cloneDeep(user);
-            model.permissions = [...permissions].map((p) => p as Permission);
+            const validPermissions = new Set<string>(Object.values(Permission));
+            model.permissions = [...permissions].filter((p) => validPermissions.has(p)).map((p) => p as Permission);
 
             // TODO: Consider (somehow) updating edited user who have sessions open?
             const response = await updateUser(model);

@@ -85,7 +85,6 @@ router.post("/",
     }),
     asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
         const body = req.body;
-        body.created = body.updated = new Date();
         const project = await dataService.projects.create(body);
         res.status(StatusCodes.OK).json(project);
     })
@@ -158,7 +157,6 @@ router.put("/:number",
 
         const newNumber = project.number !== number;
         project.number = number;
-        project.updated = new Date();
 
         const [previous] = await dataService.projects.read({ number: project.number });
         // If the project number changes, we need to destroy + create, as its a primary key
@@ -278,16 +276,6 @@ router.post("/:number/sync/image",
         cards = await syncImage(cards);
 
         res.status(StatusCodes.OK).json(cards);
-    })
-);
-
-// Sync github pull reqyests
-router.post("/sync/github",
-    validateRequest(Permission.SYNC_PROJECT_GITHUB),
-    asyncHandler(async (req, res) => {
-        const playtestingUpdates = await dataService.playtestingUpdates.sync();
-
-        res.status(StatusCodes.OK).json(playtestingUpdates);
     })
 );
 

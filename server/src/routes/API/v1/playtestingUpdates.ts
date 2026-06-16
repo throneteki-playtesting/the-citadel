@@ -13,7 +13,8 @@ import { applyToFilter, generateGetResponse, loadProjectByParam } from "@/utils"
 import { IPlaytestCard } from "common/models/cards";
 import { getRequestSchema } from "@/schemas";
 import { asPDF } from "@/rendering";
-import { renderPlaytestingCard } from "common/utils";
+import { hasPermission, renderPlaytestingCard } from "common/utils";
+import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
 
 const router = express.Router();
 
@@ -115,8 +116,7 @@ router.post("/:project",
         }
         newCards = await dataService.cards.update(newCards);
 
-        project.version = project.version + 1;
-        project.updated = new Date();
+        project.version = playtestingUpdate.version;
         project = await dataService.projects.update(project);
 
         res.status(StatusCodes.OK).json({ playtestingUpdate, project, cards: newCards });
@@ -195,12 +195,60 @@ router.get("/:project/:version/implemented",
             throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Playtesting update v${version} for project #${project.number} does not exist`);
         }
         const [previous] = await dataService.playtestingUpdates.read([{ project: project.number, version: { $lt: version } }], { version: "desc" }, 1, 1);
-        const fromDate = previous?._metadata?.github?.mergedAt;
-        const toDate = playtestingUpdate._metadata?.github?.mergedAt ?? playtestingUpdate.updated;
+        const fromDate = previous?._metadata?.github?.code?.mergedAt;
+        const toDate = playtestingUpdate._metadata?.github?.code?.mergedAt ?? playtestingUpdate.updated;
 
         const cards = await dataService.cards.read([{ _metadata: { github: { closedAt: { $gt: fromDate, $lte: toDate } } } }]);
 
         res.status(StatusCodes.OK).json(cards);
+    })
+);
+
+// Sync github pull requests
+router.post("/:project/:version/sync/github/:type",
+    celebrate({
+        [Segments.PARAMS]: {
+            project: Joi.number().required(),
+            version: Joi.number().required(),
+            type: Joi.string().valid("code", "data").required()
+        }
+    }),
+    validateRequest<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, unknown>((principal, req) => {
+        const { type } = req.params;
+        switch (type) {
+            case "code": return hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE);
+            case "data": return hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA);
+            default: return false;
+        }
+    }),
+    loadProjectByParam,
+    asyncHandler<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, unknown>(async (req, res, next) => {
+        const { version } = req.params;
+        const project = res.locals.project as IProject;
+
+        const [playtestingUpdate] = await dataService.playtestingUpdates.read({ project: project.number, version });
+        if (!playtestingUpdate) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Playtesting Update with that number & version does not exist");
+        }
+        res.locals.playtestingUpdate = playtestingUpdate;
+        next();
+    }),
+    asyncHandler<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, unknown>(async (req, res) => {
+        const { type } = req.params;
+        let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
+
+        switch (type) {
+            case "code": {
+                [playtestingUpdate] = await syncCodePullRequests([playtestingUpdate]);
+                break;
+            }
+            case "data": {
+                [playtestingUpdate] = await syncDataPullRequests([playtestingUpdate]);
+                break;
+            }
+        }
+
+        res.status(StatusCodes.OK).json(playtestingUpdate);
     })
 );
 

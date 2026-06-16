@@ -102,8 +102,43 @@ export const migration: Migration = {
         // Reviews: discord → _metadata
         total += await migrateMetadataFields(reviewsCol, "reviews", ["discord"], dryRun);
 
-        // PlaytestingUpdates: github → _metadata
-        total += await migrateMetadataFields(playtestingUpdatesCol, "playtestingUpdates", ["github"], dryRun);
+        // PlaytestingUpdates: github → _metadata.github.code (nested under code, not flat)
+        {
+            const docs = await playtestingUpdatesCol.find({ github: { $exists: true } }).toArray();
+            if (docs.length === 0) {
+                log.info("playtestingUpdates: nothing to migrate");
+            } else if (dryRun) {
+                log.info(`playtestingUpdates: [dry-run] would migrate ${docs.length} document(s)`);
+            } else {
+                const ops: object[] = [];
+                for (const doc of docs) {
+                    const existingMeta = doc._metadata ?? {};
+                    const newMeta = {
+                        ...existingMeta,
+                        github: {
+                            ...(existingMeta.github ?? {}),
+                            code: existingMeta.github?.code ?? doc.github
+                        }
+                    };
+                    ops.push({
+                        updateOne: {
+                            filter: { _id: doc._id },
+                            update: { $set: { _metadata: newMeta }, $unset: { github: "" } }
+                        }
+                    });
+                }
+                const progress = createProgress("playtestingUpdates");
+                let done = 0;
+                for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+                    const batch = ops.slice(i, i + BATCH_SIZE);
+                    await playtestingUpdatesCol.bulkWrite(batch as any, { ordered: false });
+                    done += batch.length;
+                    progress.counter(done, ops.length);
+                }
+                progress.done(`${done} migrated`);
+                total += done;
+            }
+        }
 
         // Suggestions: discord → _metadata
         total += await migrateMetadataFields(suggestionsCol, "suggestions", ["discord"], dryRun);

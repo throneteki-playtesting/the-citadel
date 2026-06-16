@@ -155,9 +155,8 @@ async function syncUpdate(card: IPlaytestCard, project: IProject, context?: Gith
         if (card.note?.type !== "updated") {
             new Error("Card must have a note type of \"updated\"");
         }
-        card = await syncImage(card);
         let previous = await dataService.cards.previous(card);
-        previous = await dataService.cards.sync(previous);
+        [card, previous] = await syncImage([card, previous]);
 
         const details = await issues.updated(card, previous, project, context);
         card = await internalSync(card, details, context);
@@ -177,9 +176,8 @@ async function syncRework(card: IPlaytestCard, project: IProject, context?: Gith
         if (card.note?.type !== "reworked") {
             new Error("Card must have a note type of \"reworked\"");
         }
-        card = await syncImage(card);
         let previous = await dataService.cards.previous(card);
-        previous = await dataService.cards.sync(previous);
+        [card, previous] = await syncImage([card, previous]);
 
         const details = await issues.reworked(card, previous, project, context);
         card = await internalSync(card, details, context);
@@ -199,9 +197,8 @@ async function syncReplace(card: IPlaytestCard, project: IProject, context?: Git
         if (card.note?.type !== "replaced") {
             new Error("Card must have a note type of \"replaced\"");
         }
-        card = await syncImage(card);
         let previous = await dataService.cards.previous(card);
-        previous = await dataService.cards.sync(previous);
+        [card, previous] = await syncImage([card, previous]);
 
         const details = await issues.replaced(card, previous, project, context);
         card = await internalSync(card, details, context);

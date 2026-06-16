@@ -15,10 +15,18 @@ type PlaytestingUpdateDoc = {
     cardChanges: Record<number, SemanticVersion>;
     _metadata: {
         github: {
-            status: "open" | "closed";
-            mergedAt?: Date;
-            pullRequestUrl: string;
-            lastSynced: Date;
+            code?: {
+                status?: "open" | "closed";
+                mergedAt?: Date;
+                pullRequestUrl?: string;
+                lastSynced?: Date;
+            };
+            data?: {
+                status?: "open" | "closed";
+                mergedAt?: Date;
+                pullRequestUrl?: string;
+                lastSynced?: Date;
+            };
         };
     };
     created: Date;
@@ -119,10 +127,13 @@ export const migration: Migration = {
                 cardChanges,
                 _metadata: {
                     github: {
-                        status: pr.merged ? "closed" : pr.state,
-                        ...(pr.mergedAt && { mergedAt: pr.mergedAt }),
-                        pullRequestUrl: pr.pullRequestUrl,
-                        lastSynced: now
+                        code: {
+                            status: pr.merged ? "closed" : pr.state,
+                            ...(pr.mergedAt && { mergedAt: pr.mergedAt }),
+                            pullRequestUrl: pr.pullRequestUrl,
+                            lastSynced: now
+                        },
+                        data: { lastSynced: now }
                     }
                 },
                 created: pr.createdAt,
@@ -143,6 +154,10 @@ export const migration: Migration = {
 
         if (dryRun) {
             log.info(`[dry-run] Would upsert ${ops.length} playtestingUpdate record(s)`);
+            const unmatched = await playtestingUpdatesCol.countDocuments({ $or: [{ "_metadata.github.code.lastSynced": { $exists: false } }, { "_metadata.github.data.lastSynced": { $exists: false } }] });
+            if (unmatched > 0) {
+                log.info(`[dry-run] Would set base-case code/data lastSynced on ${unmatched} unmatched playtestingUpdate(s)`);
+            }
             return;
         }
 
@@ -161,6 +176,14 @@ export const migration: Migration = {
             saveProgress.counter(upserted + modified, ops.length);
         }
         saveProgress.done(`done — ${upserted} inserted, ${modified} updated`);
+
+        const baseCase = await playtestingUpdatesCol.updateMany(
+            { $or: [{ "_metadata.github.code.lastSynced": { $exists: false } }, { "_metadata.github.data.lastSynced": { $exists: false } }] },
+            { $set: { "_metadata.github.code.lastSynced": now, "_metadata.github.data.lastSynced": now } }
+        );
+        if (baseCase.modifiedCount > 0) {
+            log.info(`Set base-case code/data lastSynced on ${baseCase.modifiedCount} unmatched playtestingUpdate(s)`);
+        }
 
         await playtestingUpdatesCol.dropIndex("project_1_version_1").catch(() => undefined);
         await playtestingUpdatesCol.createIndex({ project: 1, version: 1 }, { unique: true });

@@ -65,8 +65,10 @@ enum Permission {
     SYNC_CARD_DISCORD = "SYNC_CARD_DISCORD",
     /** Can sync card github issues */
     SYNC_CARD_GITHUB = "SYNC_CARD_GITHUB",
-    /** Can sync card github pull requests */
-    SYNC_PROJECT_GITHUB = "SYNC_PROJECT_GITHUB",
+    /** Can sync playtesting update code pull requests */
+    SYNC_PLAYTESTINGUPDATE_GITHUB_CODE = "SYNC_PLAYTESTINGUPDATE_GITHUB_CODE",
+    /** Can sync playtesting update data pull requests */
+    SYNC_PLAYTESTINGUPDATE_GITHUB_DATA = "SYNC_PLAYTESTINGUPDATE_GITHUB_DATA",
     /** Can sync review discord forum threads */
     SYNC_REVIEW_DISCORD = "SYNC_REVIEW_DISCORD"
 }

@@ -3,10 +3,10 @@ import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";
 import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent, type PushEvent } from "@octokit/webhooks-types";
 import { dataService, githubService, logger } from "@/services";
-import { syncPullRequests } from "@/github/pullRequests";
 import { githubWebhookMiddleware } from "@/middleware/auth";
 import { createSyncEmitter } from "@/services/sseService";
 import { merge } from "lodash-es";
+import { syncCodePullRequests } from "@/github/pullRequests";
 
 const router = express.Router();
 
@@ -109,7 +109,8 @@ router.post("/push",
 async function onDevelopmentPush({ commits }: PushEvent) {
     logger.info(`[Github] Webhook recieved for ${commits.length} commit(s) pushed to development`);
 
-    await syncPullRequests();
+    const playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: null } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
+    await syncCodePullRequests(playtestingUpdates);
 
     logger.info("[Github] Synced pull requests after push to development");
 }
@@ -131,23 +132,9 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
     logger.info(`[Github] Webhook recieved for pull request ${pullRequest.title} (#${pullRequest.number}) being closed${isMerged ? " & merged" : ""}`);
 
     if (isAutomated(pullRequest)) {
-        let playtestingUpdates = await dataService.playtestingUpdates.read({ _metadata: { github: { pullRequestUrl: pullRequest.html_url } } });
-        if (playtestingUpdates.length > 0) {
-            const lastSynced = new Date();
-            for (const playtestingUpdate of playtestingUpdates) {
-                const emitter = createSyncEmitter("playtestingUpdate", "github", playtestingUpdate);
-                emitter.start();
-                if (isMerged) {
-                    merge(playtestingUpdate, { _metadata: { github: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced } } });
-                } else if (playtestingUpdate._metadata) {
-                    delete playtestingUpdate._metadata.github;
-                }
-                emitter.complete(playtestingUpdate);
-            }
-            playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
-
-            logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github data for ${playtestingUpdates.length} playtesting updates`);
-        }
+        const lastSynced = new Date();
+        await syncPlaytestingUpdatePR(pullRequest, "code", isMerged, lastSynced);
+        await syncPlaytestingUpdatePR(pullRequest, "data", isMerged, lastSynced);
     } else if (isMerged && pullRequest.base.ref === "development") {
         // For regular Pull Requests into development, check any "closing" issues mentioned and manually close them
         const issueNumbers = extractClosedIssueNumbers(pullRequest.body ?? "");
@@ -166,6 +153,25 @@ async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClo
             logger.info(`[Github] Closed ${issueNumbers.length} issues referenced in PR #${pullRequest.number}`);
         }
     }
+}
+
+async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull_request"], key: "code" | "data", isMerged: boolean, lastSynced: Date) {
+    const operation = `github.${key}` as const;
+    let updates = await dataService.playtestingUpdates.read({ _metadata: { github: { [key]: { pullRequestUrl: pullRequest.html_url } } } });
+    if (updates.length === 0) return;
+
+    for (const playtestingUpdate of updates) {
+        const emitter = createSyncEmitter("playtestingUpdate", operation, playtestingUpdate);
+        emitter.start();
+        if (isMerged) {
+            merge(playtestingUpdate, { _metadata: { github: { [key]: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced } } } });
+        } else if (playtestingUpdate._metadata?.github) {
+            delete playtestingUpdate._metadata.github[key];
+        }
+        emitter.complete(playtestingUpdate);
+    }
+    updates = await dataService.playtestingUpdates.update(updates, false, false);
+    logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github.${key} data for ${updates.length} playtesting updates`);
 }
 
 function isAutomated(data: { labels?: Label[] }) {

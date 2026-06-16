@@ -467,9 +467,9 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "card")
         }),
-        syncProjectsGithub: builder.mutation<IPlaytestingUpdate[], void>({
-            query: () => {
-                const url = buildUrl("projects/sync/github");
+        syncPlaytestingUpdateGithub: builder.mutation<IPlaytestingUpdate[], { project: number, version: number, type: "code" | "data" }>({
+            query: ({ project, version, type }) => {
+                const url = buildUrl(`playtesting-updates/${project}/${version}/sync/github/${type}`);
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => {
@@ -584,7 +584,7 @@ export const {
     useSyncCardImageMutation,
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,
-    useSyncProjectsGithubMutation,
+    useSyncPlaytestingUpdateGithubMutation,
     useSyncReviewDiscordMutation,
 
     useGetReviewQuery,

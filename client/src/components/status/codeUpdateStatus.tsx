@@ -4,25 +4,25 @@ import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import { BaseElementProps } from "../../types";
 import ThronesIcon from "../thronesIcon";
-import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncProjectsGithubMutation } from "../../api";
+import { faCode, faRotate } from "@fortawesome/free-solid-svg-icons";
+import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncPlaytestingUpdateGithubMutation } from "../../api";
 import Permission from "common/models/permissions";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 
-export default function WebsiteUpdateStatus({ className, style, project, version, isIconOnly }: WebsiteUpdateStatusProps) {
+export default function CodeUpdateStatus({ className, style, project, version, isIconOnly }: CodeUpdateStatusProps) {
     const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({ project, version });
     const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
 
     const isLoading = isLoadingPlaytestingUpdate || isLoadingCards;
 
-    const [syncProjectsGithub, { isLoading: isSyncing }] = useSyncProjectsGithubMutation();
-    const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github;
-    const hasSyncPermission = usePermission(Permission.SYNC_PROJECT_GITHUB);
+    const [syncPlaytestingUpdateGithub, { isLoading: isSyncing }] = useSyncPlaytestingUpdateGithubMutation();
+    const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github.code;
+    const hasSyncPermission = usePermission(Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE);
 
     const data = useMemo<StatusData | null>(() => {
-        const title = "Online Platform";
+        const title = "Code Changes";
         if (!playtestingUpdate) {
             return {
                 title,
@@ -40,7 +40,7 @@ export default function WebsiteUpdateStatus({ className, style, project, version
         }
 
         const syncAsync = hasSyncPermission
-            ? async () => await syncProjectsGithub().unwrap()
+            ? async () => await syncPlaytestingUpdateGithub({ project, version, type: "code" }).unwrap()
             : undefined;
 
         if (status === "error") {
@@ -52,7 +52,9 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!playtestingUpdate._metadata?.github || (playtestingUpdate._metadata.github.lastSynced && playtestingUpdate._metadata.github.lastSynced < playtestingUpdate.updated)) {
+
+        const codeMeta = playtestingUpdate._metadata?.github?.code;
+        if (!codeMeta || (codeMeta.lastSynced && codeMeta.lastSynced < playtestingUpdate.updated)) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -61,7 +63,17 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 description: "Requires Syncing"
             };
         }
-        if (playtestingUpdate._metadata?.github?.mergedAt) {
+        // If its been synced, but no PR was created due to no code changes
+        if (codeMeta.lastSynced && !codeMeta.pullRequestUrl) {
+            return {
+                title,
+                icon: <FontAwesomeIcon icon={faCode} size="xl" />,
+                onPress: syncAsync,
+                color: "secondary",
+                description: "None Implemented"
+            };
+        }
+        if (codeMeta.mergedAt) {
             if (cards && cards.some((card) => !card.implemented)) {
                 return {
                     title,
@@ -79,9 +91,9 @@ export default function WebsiteUpdateStatus({ className, style, project, version
                 href: "https://playtesting.theironthrone.net"
             };
         }
-        const href = playtestingUpdate._metadata!.github!.pullRequestUrl;
+        const href = codeMeta.pullRequestUrl;
         const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
-        switch (playtestingUpdate._metadata!.github!.status) {
+        switch (codeMeta.status) {
             case "open": {
                 return {
                     title,
@@ -102,12 +114,12 @@ export default function WebsiteUpdateStatus({ className, style, project, version
             }
         }
         return null;
-    }, [cards, error, hasSyncPermission, isSyncing, playtestingUpdate, status, step, syncProjectsGithub]);
+    }, [cards, error, hasSyncPermission, isSyncing, playtestingUpdate, project, status, step, syncPlaytestingUpdateGithub, version]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-};
+}
 
-type WebsiteUpdateStatusProps = Omit<BaseElementProps, "children"> & {
+type CodeUpdateStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     version: number;
     isIconOnly?: boolean;

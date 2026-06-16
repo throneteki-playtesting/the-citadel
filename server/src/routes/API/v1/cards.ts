@@ -255,7 +255,7 @@ router.post("/:project/:number/:version/sync/:type",
     celebrate({
         [Segments.PARAMS]: {
             ...CardVersionParams,
-            type: Joi.string().valid("image", "discord", "github")
+            type: Joi.string().valid("image", "discord", "github").required()
         }
     }),
     validateRequest((principal, req) => {

@@ -7,36 +7,49 @@ import { emojis } from "./utils";
 import { parseCardCode } from "common/utils";
 import { merge, sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
-import { createSyncEmitter, SyncEmitter } from "@/services/sseService";
+import { createSyncEmitter } from "@/services/sseService";
 
 type PullRequest = Endpoints["GET /repos/{owner}/{repo}/pulls"]["response"]["data"][number];
+type BranchRef = Endpoints["GET /repos/{owner}/{repo}/git/ref/{ref}"]["response"]["data"];
 
-let syncPullRequestsLock: Promise<void> = Promise.resolve();
+let syncCodePullRequestLock: Promise<void> = Promise.resolve();
+let syncDataPullRequestLock: Promise<void> = Promise.resolve();
 
-export async function syncPullRequests() {
-    const wait = syncPullRequestsLock;
+const DEVELOPMENT_BRANCH = "development";
+const PLAYTESTING_BRANCH = "playtesting";
+const STAGING_BRANCH = "development-updating";
+
+export async function syncCodePullRequests(playtestingUpdates: IPlaytestingUpdate[]) {
+    const wait = syncCodePullRequestLock;
     let release!: () => void;
-    syncPullRequestsLock = new Promise(resolve => { release = resolve; });
+    syncCodePullRequestLock = new Promise(resolve => { release = resolve; });
     await wait;
 
-    let failed = false;
     try {
-        let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { status: null } } }, { _metadata: { github: { status: "open" } } }]);
         const newlyImplemented = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
         const context = githubService.getContext();
 
-        const emitters: Map<IPlaytestingUpdate, SyncEmitter<"playtestingUpdate">> = new Map(playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github", pt)]));
+        const emitters = new Map(
+            playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github.code", pt)])
+        );
         emitters.forEach((e) => e.start());
 
-        const canCreatePullRequest = await isPlaytestingBranchBehind(context);
-        if (canCreatePullRequest) {
-            try {
+        try {
+            const canCreatePullRequest = await isPlaytestingBranchBehind(context);
+            const toUpdate: IPlaytestingUpdate[] = [];
+            if (!canCreatePullRequest) {
+                for (const playtestingUpdate of playtestingUpdates) {
+                    merge(playtestingUpdate, { _metadata: { github: {} } });
+                    playtestingUpdate._metadata.github.code = { lastSynced: new Date() };
+                    toUpdate.push(playtestingUpdate);
+                }
+            } else {
                 emitters.forEach((e) => e.progress("Searching"));
                 const { data: [existingPR] } = await context.client.rest.pulls.list({
                     owner: context.owner,
                     repo: context.repo,
-                    head: `${context.owner}:development`,
-                    base: "playtesting",
+                    head: `${context.owner}:${DEVELOPMENT_BRANCH}`,
+                    base: PLAYTESTING_BRANCH,
                     state: "open"
                 });
 
@@ -45,12 +58,10 @@ export async function syncPullRequests() {
                     if (isPROutdated(existingPR, playtestingUpdates, newlyImplemented)) {
                         emitters.forEach((e) => e.progress("Syncing"));
                         const { syncedAt, url, status, mergedAt } = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
-                        const toUpdate: IPlaytestingUpdate[] = [];
                         for (const playtestingUpdate of playtestingUpdates) {
-                            merge(playtestingUpdate, { _metadata: { github: { pullRequestUrl: url, mergedAt, status, lastSynced: syncedAt } } });
+                            merge(playtestingUpdate, { _metadata: { github: { code: { pullRequestUrl: url, mergedAt, status, lastSynced: syncedAt } } } });
                             toUpdate.push(playtestingUpdate);
                         }
-                        playtestingUpdates = await dataService.playtestingUpdates.update(toUpdate, false, false);
                     }
                 } else if (existingPR) {
                     logger.info(`[Github] Closing pull request #${existingPR.number} as no latest playtesting changes exist`);
@@ -61,123 +72,124 @@ export async function syncPullRequests() {
                         state: "closed"
                     });
                 }
-            } catch (err) {
-                failed = true;
-                logger.warn(new Error("[Github] Failed to sync playtesting pull request", { cause: err }));
             }
-        }
 
-        // Attempt to sync json-data repository based on projects being updated
-        try {
-            emitters.forEach((e) => e.progress("Syncing Data"));
-            await syncDataPullRequest(playtestingUpdates);
-        } catch (err) {
-            failed = true;
-            logger.warn(new Error("[Github] Failed to sync data pull request", { cause: err }));
-        }
-
-        if (failed) {
-            emitters.forEach((e) => e.error("Failure"));
-        } else {
             emitters.forEach((e, pt) => e.complete(pt));
-        }
 
-        return playtestingUpdates;
+            if (toUpdate.length > 0) {
+                playtestingUpdates = await dataService.playtestingUpdates.update(toUpdate, false, false);
+            }
+        } catch (err) {
+            emitters.forEach((e) => e.error("Failure"));
+            logger.warn(new Error("[Github] Failed to sync code pull request", { cause: err }));
+        }
     } finally {
         release();
     }
+
+    return playtestingUpdates;
 }
 
-let syncDataPullRequestLock: Promise<void> = Promise.resolve();
-
-async function syncDataPullRequest(playtestingUpdates: IPlaytestingUpdate[]) {
+export async function syncDataPullRequests(playtestingUpdates: IPlaytestingUpdate[]) {
     const wait = syncDataPullRequestLock;
     let release!: () => void;
     syncDataPullRequestLock = new Promise(resolve => { release = resolve; });
     await wait;
+
     try {
         const context = githubService.getContext("data");
-        const DATA_BRANCH = "development-updating";
-        const BASE_BRANCH = "development";
 
-        const [branchRef, existingPR] = await Promise.all([
-            context.client.rest.git.getRef({ owner: context.owner, repo: context.repo, ref: `heads/${DATA_BRANCH}` }).then(r => r.data).catch(() => null),
-            getDataOpenPR(context, DATA_BRANCH, BASE_BRANCH)
-        ]);
+        const emitters = new Map(
+            playtestingUpdates.map((pu) => [pu, createSyncEmitter("playtestingUpdate", "github.data", pu)])
+        );
+        emitters.forEach((e) => e.start());
 
-        const updatingProjects = await dataService.projects.read([...new Set(playtestingUpdates.map(pu => pu.project))].map(n => ({ number: n })));
+        let branchRef = await context.client.rest.git.getRef({ owner: context.owner, repo: context.repo, ref: `heads/${STAGING_BRANCH}` }).then((result) => result.data).catch(() => null as BranchRef);
+        const { data: [existingPR] } = await context.client.rest.pulls.list({ owner: context.owner, repo: context.repo, head: `${context.owner}:${STAGING_BRANCH}`, base: DEVELOPMENT_BRANCH, state: "open" });
 
-        if (updatingProjects.length === 0) {
-            await cleanupDataBranch(context, existingPR, branchRef, DATA_BRANCH);
-            return;
-        }
+        const hasSyncedFile: IPlaytestingUpdate[] = [];
 
-        // Determine which packs differ from development
-        const changedPacks: Array<{ project: IProject; content: string }> = [];
-        for (const project of updatingProjects) {
-            const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true, release: null }));
-            const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map(toExportCard) };
-            const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
-            const devContent = await getDataFileContent(context, `packs/${project.code}.json`, BASE_BRANCH);
-            if (devContent?.trim() !== content.trim()) {
-                changedPacks.push({ project, content });
+        for (const playtestingUpdate of playtestingUpdates) {
+            try {
+                const [project] = await dataService.projects.read({ number: playtestingUpdate.project });
+
+                if (!project) {
+                    throw Error(`Project ${playtestingUpdate.project} does not exist for Playtesting Update #${playtestingUpdate.version}`);
+                }
+
+                emitters.get(playtestingUpdate).progress("Checking");
+
+                // Checking greater than to account for Playtesting Update creation, where its created prior to project being updated
+                const isLatest = playtestingUpdate.version >= project.version;
+
+                // Prevents data from being reverted to an older version
+                if (!isLatest) {
+                    playtestingUpdate._metadata.github.data = { lastSynced: new Date() };
+                    continue;
+                }
+
+                // Builds the new data file & compares it to current development file
+                const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true, release: null }));
+                const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map(toExportCard) };
+                const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
+                const devContent = await getDataFileContent(context, `packs/${project.code}.json`, DEVELOPMENT_BRANCH);
+
+                if (devContent?.trim() === content.trim()) {
+                    playtestingUpdate._metadata.github.data = { lastSynced: new Date() };
+                    continue;
+                }
+
+                // Create branch if it doesnt already exist
+                if (!branchRef) {
+                    const { data: baseRef } = await context.client.rest.git.getRef({ owner: context.owner, repo: context.repo, ref: `heads/${DEVELOPMENT_BRANCH}` });
+                    const response = await context.client.rest.git.createRef({ owner: context.owner, repo: context.repo, ref: `refs/heads/${STAGING_BRANCH}`, sha: baseRef.object.sha });
+                    branchRef = response.data;
+                }
+
+                // Commits changed card file to staging branch
+                emitters.get(playtestingUpdate).progress("Committing");
+                const filePath = `packs/${project.code}.json`;
+                const dataFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
+                if (!dataFile || dataFile.content.trim() !== content.trim()) {
+                    logger.info(`[Github] Committing ${filePath} to ${STAGING_BRANCH} (dataFile ${dataFile ? "exists" : "is new"})`);
+                    await context.client.rest.repos.createOrUpdateFileContents({
+                        owner: context.owner,
+                        repo: context.repo,
+                        path: filePath,
+                        message: `Automatic sync of ${project.code} development pack changes`,
+                        content: Buffer.from(content).toString("base64"),
+                        branch: STAGING_BRANCH,
+                        sha: dataFile?.sha
+                    });
+                    logger.info(`[Github] Committed ${filePath} to ${STAGING_BRANCH}`);
+                }
+
+                hasSyncedFile.push(playtestingUpdate);
+            } catch (err) {
+                emitters.get(playtestingUpdate).error("Failure");
+                emitters.delete(playtestingUpdate);
+                logger.warn(new Error("[Github] Failed to sync data pull request", { cause: err }));
             }
         }
-
-        if (changedPacks.length === 0) {
-            await cleanupDataBranch(context, existingPR, branchRef, DATA_BRANCH);
-            return;
-        }
-
-        // Ensure branch exists (created from development HEAD if new)
-        if (!branchRef) {
-            const { data: baseRef } = await context.client.rest.git.getRef({ owner: context.owner, repo: context.repo, ref: `heads/${BASE_BRANCH}` });
-            await context.client.rest.git.createRef({ owner: context.owner, repo: context.repo, ref: `refs/heads/${DATA_BRANCH}`, sha: baseRef.object.sha });
-        }
-
-        // Commit each changed file (one commit per file, skip if already current on data branch)
-        for (const { project, content } of changedPacks) {
-            const filePath = `packs/${project.code}.json`;
-            const dataFile = await getDataFileWithSha(context, filePath, DATA_BRANCH);
-            if (dataFile?.content.trim() === content.trim()) {
-                logger.info(`[Github] Skipping ${filePath} — already current on ${DATA_BRANCH}`);
-                continue;
+        emitters.forEach((e) => e.progress("Syncing"));
+        // Only creates Pull Request if one or more files have synced
+        if (hasSyncedFile.length > 0) {
+            const { url, status, syncedAt } = await internalDataSync(existingPR, playtestingUpdates, context);
+            for (const playtestingUpdate of hasSyncedFile) {
+                merge(playtestingUpdate, { _metadata: { github: { data: { pullRequestUrl: url, status, lastSynced: syncedAt } } } });
             }
-
-            logger.info(`[Github] Committing ${filePath} to ${DATA_BRANCH} (dataFile ${dataFile ? "exists" : "is new"})`);
-            await context.client.rest.repos.createOrUpdateFileContents({
-                owner: context.owner,
-                repo: context.repo,
-                path: filePath,
-                message: `Automatic sync of ${project.code} development pack changes`,
-                content: Buffer.from(content).toString("base64"),
-                branch: DATA_BRANCH,
-                sha: dataFile?.sha
-            });
-            logger.info(`[Github] Committed ${filePath} to ${DATA_BRANCH}`);
         }
+        emitters.forEach((e, pu) => e.complete(pu));
 
-        await internalDataSync(existingPR, playtestingUpdates, context);
+        // But updates all playtesting updates as some may just have their lastSynced updated, and nothing else
+        await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
     } finally {
         release();
     }
+
+    return playtestingUpdates;
 }
 
-async function getDataOpenPR(context: GithubContext, head: string, base: string) {
-    const { data: [pr] } = await context.client.rest.pulls.list({ owner: context.owner, repo: context.repo, head: `${context.owner}:${head}`, base, state: "open" });
-    return pr ?? null;
-}
-
-async function cleanupDataBranch(context: GithubContext, existingPR: PullRequest | undefined, branchRef: unknown, branchName: string) {
-    if (existingPR) {
-        await context.client.rest.pulls.update({ owner: context.owner, repo: context.repo, pull_number: existingPR.number, state: "closed" });
-        logger.info(`[Github] Closed data pull request #${existingPR.number}`);
-    }
-    if (branchRef) {
-        await context.client.rest.git.deleteRef({ owner: context.owner, repo: context.repo, ref: `heads/${branchName}` });
-        logger.info(`[Github] Deleted branch ${branchName}`);
-    }
-}
 
 async function getDataFileContent(context: GithubContext, path: string, branch: string): Promise<string | null> {
     try {
@@ -204,7 +216,7 @@ function isPROutdated(pullRequest: PullRequest | undefined, playtestingUpdates: 
         return true;
     }
     const prUpdatedAt = new Date(pullRequest.updated_at);
-    const outdated = playtestingUpdates.some((pu) => !pu._metadata?.github?.lastSynced || pu.updated > pu._metadata.github.lastSynced) || newlyImplemented.some((ni) => ni.updated > prUpdatedAt);
+    const outdated = playtestingUpdates.some((pu) => !pu._metadata?.github?.code?.lastSynced || pu.updated > pu._metadata.github.code.lastSynced) || newlyImplemented.some((ni) => ni.updated > prUpdatedAt);
     if (outdated) {
         return true;
     }
@@ -219,7 +231,7 @@ async function isPlaytestingBranchBehind(context: GithubContext) {
     const { data } = await context.client.rest.repos.compareCommitsWithBasehead({
         owner: context.owner,
         repo: context.repo,
-        basehead: "playtesting...development"
+        basehead: `${PLAYTESTING_BRANCH}...${DEVELOPMENT_BRANCH}`
     });
 
     return data.total_commits > 0;
@@ -230,9 +242,11 @@ async function internalDataSync(existingPR: PullRequest | undefined, playtesting
     if (!existingPR) {
         const { data } = await context.client.rest.pulls.create(details);
         logger.info(`[Github] Created data pull request #${data.number}`);
+        return { url: data.html_url, status: data.state as "open" | "closed", syncedAt: new Date() };
     } else {
         const { data } = await context.client.rest.pulls.update({ pull_number: existingPR.number, ...details });
         logger.info(`[Github] Updated data pull request #${data.number}`);
+        return { url: data.html_url, status: data.state as "open" | "closed", syncedAt: new Date() };
     }
 }
 
@@ -287,8 +301,8 @@ const pullRequests = {
         + implementedCards;
 
         const labels = ["automated", "playtest-update"];
-        const head = `${context.owner}:development`;
-        const base = "playtesting";
+        const head = `${context.owner}:${DEVELOPMENT_BRANCH}`;
+        const base = PLAYTESTING_BRANCH;
         return { title, body, labels, owner: context.owner, repo: context.repo, head, base };
     },
     async data(playtestingUpdates: IPlaytestingUpdate[], context: GithubContext) {
@@ -300,8 +314,8 @@ const pullRequests = {
         + `\n${updateLinks}`;
 
         const labels = ["automated"];
-        const head = `${context.owner}:development-updating`;
-        const base = "development";
+        const head = `${context.owner}:${STAGING_BRANCH}`;
+        const base = DEVELOPMENT_BRANCH;
         return { title, body, labels, owner: context.owner, repo: context.repo, head, base };
     }
 };

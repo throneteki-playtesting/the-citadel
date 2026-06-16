@@ -35,6 +35,13 @@ export type FactionCardCount = {
     neutral: number
 }
 
+export interface GithubPRMeta {
+    status?: typeof githubStatuses[number],
+    mergedAt?: Date,
+    pullRequestUrl?: string,
+    lastSynced?: Date
+}
+
 export interface IPlaytestingUpdate extends IAuditable {
     project: number,
     version: number,
@@ -42,10 +49,8 @@ export interface IPlaytestingUpdate extends IAuditable {
     cardChanges: Record<number, SemanticVersion>,
     _metadata?: {
         github?: {
-            status?: typeof githubStatuses[number],
-            mergedAt?: Date,
-            pullRequestUrl?: string,
-            lastSynced?: Date
+            code?: GithubPRMeta,
+            data?: GithubPRMeta
         }
     }
 }

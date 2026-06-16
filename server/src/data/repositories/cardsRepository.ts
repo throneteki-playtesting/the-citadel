@@ -7,7 +7,6 @@ import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { BasicAuditableRepository } from "./shared";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
-import { dataService } from "@/services";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 
@@ -52,8 +51,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         const syncs = [
             { priority: 0, func: () => syncImage(data).then(result => { data = result; }) },
             { priority: 1, func: () => syncCardForum(data).then(result => { data = result; }) },
-            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) },
-            { priority: 1, func: () => dataService.playtestingUpdates.sync() }
+            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) }
         ];
 
         await this.internalSync(syncs);
@@ -68,8 +66,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         const syncs = [
             () => deleteImage(data),
             () => Promise.all(data.filter(card => card.draft).map(draft => deleteDraft(draft))),
-            () => clearIssues(data),
-            () => dataService.playtestingUpdates.sync()
+            () => clearIssues(data)
         ];
 
         await this.internalSync(syncs);

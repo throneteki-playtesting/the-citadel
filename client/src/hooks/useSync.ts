@@ -2,60 +2,75 @@ import { SemanticVersion } from "common/utils";
 import { useState, useEffect } from "react";
 import { SyncStatus, SyncType, SyncOperation } from "server/types";
 
-interface SyncState {
+export interface SyncState {
     status?: SyncStatus;
     step?: string;
     error?: string;
 }
 
-type SyncListenerState<K extends SyncType> = Record<SyncOperation<K>, SyncState>;
+// Converts a union A | B into an intersection A & B via contravariant inference
+type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
+// Converts a dot-notation string key into a nested object type, e.g. "a.b.c" → { a: { b: { c: V } } }
+type DotNested<K extends string, V> = K extends `${infer Head}.${infer Tail}`
+    ? { [P in Head]: DotNested<Tail, V> }
+    : { [P in K]: V };
+// Builds the full nested SyncState shape for all operations of a given SyncType
+type SyncListenerState<K extends SyncType> = UnionToIntersection<DotNested<SyncOperation<K>, SyncState>>;
 
 const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
-    card: {
-        image: {},
-        discord: {},
-        github: {}
-    },
-    review: {
-        discord: {}
-    },
-    playtestingUpdate: {
-        github: {}
-    }
+    card: { image: {}, discord: {}, github: {} },
+    review: { discord: {} },
+    playtestingUpdate: { github: { code: {}, data: {} } }
 };
+
+// One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }
+type FlatState = Record<string, SyncState>;
+// Top-level state keyed by operation prefix, values are either a SyncState or a FlatState one level deeper
+type NestedState = Record<string, SyncState | FlatState>;
 
 // Routing table: maps "${type}/${id}" to per-resource state + listeners
 type ResourceEntry = {
-    state: Record<string, SyncState>;
+    state: NestedState;
     listeners: Set<() => void>;
 };
 const registry = new Map<string, ResourceEntry>();
 
 // Singleton progress EventSource shared across all mounted sync hooks
-let progressEs: EventSource | null = null;
+let progressES: EventSource | null = null;
 let progressRefCount = 0;
 
-function connectProgress() {
-    if (!progressEs) {
-        progressEs = new EventSource("/api/v1/broadcast/progress", { withCredentials: true });
+function getAtPath(state: NestedState, [head, tail]: string[]): SyncState {
+    return (tail ? (state[head] as FlatState)?.[tail] : state[head] as SyncState) ?? {};
+}
 
-        progressEs.addEventListener("message", (e) => {
+function setAtPath(state: NestedState, [head, tail]: string[], value: SyncState): NestedState {
+    if (!tail) return { ...state, [head]: value };
+    return { ...state, [head]: { ...(state[head] as FlatState), [tail]: value } };
+}
+
+function connectProgress() {
+    if (!progressES) {
+        progressES = new EventSource("/api/v1/broadcast/progress", { withCredentials: true });
+
+        progressES.addEventListener("message", (e) => {
             const event = JSON.parse(e.data);
             const { type, id, operation, status } = event;
             const entry = registry.get(`${type}/${id}`);
             if (!entry) return;
 
-            const update = (partial: Partial<SyncState>) => {
-                entry.state = { ...entry.state, [operation]: { ...entry.state[operation], ...partial } };
-                entry.listeners.forEach(l => l());
-            };
+            const path = (operation as string).split(".");
 
+            let partial: Partial<SyncState>;
             switch (status as SyncStatus) {
-                case "start": update({ status: "start" }); break;
-                case "progress": update({ status: "progress", step: event.step }); break;
-                case "complete": update({ status: "complete" }); break;
-                case "error": update({ status: "error", error: event.error }); break;
+                case "start": partial = { status: "start" }; break;
+                case "progress": partial = { status: "progress", step: event.step }; break;
+                case "complete": partial = { status: "complete" }; break;
+                case "error": partial = { status: "error", error: event.error }; break;
+                default: return;
             }
+
+            entry.state = setAtPath(entry.state, path, { ...getAtPath(entry.state, path), ...partial });
+            entry.listeners.forEach(l => l());
         });
     }
     progressRefCount++;
@@ -64,8 +79,8 @@ function connectProgress() {
 function disconnectProgress() {
     progressRefCount--;
     if (progressRefCount === 0) {
-        progressEs?.close();
-        progressEs = null;
+        progressES?.close();
+        progressES = null;
     }
 }
 
@@ -81,7 +96,7 @@ function useSyncListener<K extends SyncType>(type: K, id?: string) {
         const key = `${type}/${id}`;
 
         if (!registry.has(key)) {
-            registry.set(key, { state: { ...defaultStates[type] }, listeners: new Set() });
+            registry.set(key, { state: { ...defaultStates[type] as NestedState }, listeners: new Set() });
         }
 
         const entry = registry.get(key)!;

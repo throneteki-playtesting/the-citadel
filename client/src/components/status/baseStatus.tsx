@@ -5,7 +5,7 @@ import { BaseElementProps, UIColor } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 
 export function BaseStatus({ isLoading = false, data, isIconOnly = false, className, style }: BaseStatusProps) {
-    const interactiveClass = "hover:brightness-125 transition duration-300 ease-in-out";
+    const interactiveClass = "font-sans hover:brightness-125 transition duration-300 ease-in-out";
 
     if (!data) {
         return null;
@@ -29,8 +29,7 @@ export function BaseStatus({ isLoading = false, data, isIconOnly = false, classN
                     href={data.href}
                     target={data.href ? "_blank" : undefined}
                     rel={data.href ? "noreferrer" : undefined}
-                    isDisabled={!data.onPress && !data.href}
-                    disableRipple={!data.onPress && !data.href}
+                    disableAnimation={!data.onPress && !data.href}
                     className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, className)}
                 >
                     {data.icon}

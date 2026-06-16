@@ -12,7 +12,8 @@ import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { faAngleLeft, faBug, faCheck, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
-import WebsiteUpdateStatus from "../../components/status/websiteUpdateStatus";
+import CodeUpdateStatus from "../../components/status/codeUpdateStatus";
+import DataUpdateStatus from "../../components/status/dataUpdateStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
@@ -85,18 +86,21 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                     </div>
                 </div>
                 <div className="flex flex-col">
-                    <div className="w-fit shrink-0 grid grid-cols-3 gap-1 self-end">
-                        <WebsiteUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
+                    <div className="w-fit shrink-0 flex gap-1 self-end">
+                        <CodeUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
+                        <DataUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
                         <TouchTooltip content="Download Print PDF Sheet" placement="top">
-                            <Button isIconOnly color="secondary" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
+                            <Button isIconOnly color="default" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
                                 <FontAwesomeIcon icon={faPrint} />
                             </Button>
                         </TouchTooltip>
-                        <TouchTooltip content="Report a bug">
-                            <Button isIconOnly color="secondary" href={bugReportUrl}>
-                                <FontAwesomeIcon icon={faBug} />
-                            </Button>
-                        </TouchTooltip>
+                        {bugReportUrl &&
+                            <TouchTooltip content="Report a bug">
+                                <Button isIconOnly color="secondary" as={Link} href={bugReportUrl} target="_blank">
+                                    <FontAwesomeIcon icon={faBug} />
+                                </Button>
+                            </TouchTooltip>
+                        }
                     </div>
                     <div className="justify-self-end self-end py-1 flex-1 mt-auto text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
                 </div>

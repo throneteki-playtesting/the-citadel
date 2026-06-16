@@ -14,7 +14,8 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
     const onSave = useCallback(async () => {
         if (role) {
             const model = cloneDeep(role);
-            model.permissions = [...permissions].map((p) => p as Permission);
+            const validPermissions = new Set<string>(Object.values(Permission));
+            model.permissions = [...permissions].filter((p) => validPermissions.has(p)).map((p) => p as Permission);
 
             // TODO: Consider (somehow) updating the users who have this role on open sessions?
             const response = await updateRole(model);
