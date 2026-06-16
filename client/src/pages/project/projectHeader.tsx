@@ -1,5 +1,5 @@
 import { BaseElementProps } from "../../types";
-import { Button, ButtonGroup, Chip, Link, Skeleton } from "@heroui/react";
+import { Button, Chip, Link, Skeleton } from "@heroui/react";
 import { IProject } from "common/models/projects";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faBoxArchive, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
@@ -40,14 +40,14 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
 
     return (
         <div className={classNames("space-y-2 md:space-y-4", className)} style={style}>
-            <div className="flex justify-between">
-                <div className="flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row">
+                <div className="flex flex-1 flex-col gap-2">
                     <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
                         {headerComponents}
                     </div>
                     <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
                 </div>
-                <ButtonGroup className="self-start">
+                <div className="self-end sm:self-start flex gap-1">
                     <PermissionGate requires={Permission.EDIT_PROJECTS}>
                         <TouchTooltip content="Edit Project">
                             <Button isIconOnly onPress={onEdit}>
@@ -73,7 +73,7 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                         </TouchTooltip>
                     </PermissionGate>
                     }
-                </ButtonGroup>
+                </div>
             </div>
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}

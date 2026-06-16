@@ -1,4 +1,4 @@
-import { addToast, Button, ButtonGroup, Link, Skeleton, Tab, Tabs } from "@heroui/react";
+import { addToast, Button, Link, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGetCardsQuery, useGetProjectQuery } from "../../api";
@@ -36,8 +36,8 @@ export default function CardDetail({ className, style, project: projectNumber, n
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     return (
         <div className={classNames("space-y-2", className)} style={style}>
-            <div className="flex-1 flex items-center">
-                <div className="flex flex-col">
+            <div className="flex-1 flex flex-col sm:flex-row">
+                <div className="flex-1 flex flex-col">
                     <Link href={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150">
                         {isLoading ? <Skeleton className="h-8 w-98 rounded-md"/> : <><FontAwesomeIcon icon={faAngleLeft}/> {project?.name}</>}
                     </Link>
@@ -45,7 +45,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
                         Playtesting Card #{parseCardCode(false, projectNumber, number)}
                     </div>
                 </div>
-                <ButtonSection project={projectNumber} number={number} className="ml-auto"/>
+                <ButtonSection project={projectNumber} number={number} className="self-end sm:self-start"/>
             </div>
             <div className="space-y-4">
                 <div className="flex flex-col md:flex-row gap-2 w-full overflow-x-hidden">
@@ -245,7 +245,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     }
 
     return (
-        <ButtonGroup className={className} style={style}>
+        <div className={classNames("flex gap-1", className)} style={style}>
             {!latest?.release && (
                 <>
                     <PermissionGate requires={Permission.MAKE_REVIEWS}>
@@ -300,7 +300,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
             </PermissionGate>
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `'${card.name}' ver. ${card.version} has been ${draft ? "edited" : "created"}` })}/>
             <DeleteCardModal isOpen={!!deleting} card={deleting} onClose={() => setDeleting(undefined)} onDelete={(card) => addToast({ title: "Successfully deleted", color: "success", description: `'${card.name}' ver. ${card.version} has been deleted` })}/>
-        </ButtonGroup>
+        </div>
     );
 }
 type ButtonSectionProps = Omit<BaseElementProps, "children"> & {

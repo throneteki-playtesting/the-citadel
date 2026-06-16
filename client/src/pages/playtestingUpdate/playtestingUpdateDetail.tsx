@@ -142,8 +142,8 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                         </div>
                     </div>
                 </div>
-                <div className="flex flex-col">
-                    <div className="w-fit shrink-0 flex gap-1 self-end">
+                <div className="self-end sm:self-start">
+                    <div className="flex gap-1">
                         <CodeUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
                         <DataUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
                         <TouchTooltip content="Download Print PDF Sheet" placement="top">
@@ -159,7 +159,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                             </TouchTooltip>
                         }
                     </div>
-                    <div className="justify-self-end self-end py-1 flex-1 mt-auto text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
+                    <div className="ml-auto w-fit py-1 flex-1 mt-auto text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
                 </div>
             </div>
             {playtestingUpdate.description && (
