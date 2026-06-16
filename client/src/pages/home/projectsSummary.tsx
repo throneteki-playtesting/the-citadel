@@ -3,16 +3,53 @@ import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
-import { daysFromNow } from "../../utils";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import { dismoji } from "../../constants";
 
 export const ProjectsSummary = () => {
-    const { data, isLoading } = useGetProjectsQuery({ filter: [{ active: true }] });
+    const { data, isLoading } = useGetProjectsQuery({ filter: { active: true }, orderBy: { number: "desc" } });
 
     if (isLoading) {
-        return <Skeleton className="w-full h-32 rounded-sm"/>;
+        return (
+            <div className="bg-content1 border border-content3 drop-shadow-lg">
+                <div className="bg-content1 border border-content3">
+                    <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2 space-y-2">
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-20 rounded-sm"/>
+                            <Skeleton className="h-8 w-56 rounded-sm"/>
+                            <Skeleton className="h-4 w-42 rounded-sm"/>
+                        </div>
+                        <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                            <Skeleton className="h-8 w-18 rounded-sm"/>
+                            <Skeleton className="h-8 w-64 rounded-sm"/>
+                        </div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
+                    <div className="px-6 py-4 space-y-1">
+                        <Skeleton className="h-4 w-32 rounded-sm"/>
+                        <Skeleton className="h-12 w-16 rounded-sm"/>
+                        <Skeleton className="h-4 w-28 rounded-sm" />
+                    </div>
+                    <div className="px-6 py-4 space-y-1">
+                        <Skeleton className="h-4 w-32 rounded-sm"/>
+                        <Skeleton className="h-12 w-16 rounded-sm"/>
+                        <Skeleton className="h-4 w-28 rounded-sm" />
+                    </div>
+                    <div className="px-6 py-4 space-y-1">
+                        <Skeleton className="h-4 w-32 rounded-sm"/>
+                        <Skeleton className="h-12 w-16 rounded-sm"/>
+                        <Skeleton className="h-4 w-28 rounded-sm" />
+                    </div>
+                    <div className="px-6 py-4 space-y-1">
+                        <Skeleton className="h-4 w-32 rounded-sm"/>
+                        <Skeleton className="h-12 w-16 rounded-sm"/>
+                        <Skeleton className="h-4 w-28 rounded-sm" />
+                    </div>
+                </div>
+            </div>
+        );
     }
     return (
         <div className="flex flex-col gap-2">
@@ -104,20 +141,18 @@ type ProjectCardProps = {
 };
 
 function CardChangesStat({ project }: ProjectStatProps) {
-    const dayRange = 7;
-    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
-    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, updated: { $gte: since }, note: { $exists: true } } });
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, version: { $ne: "1.0.0" } } });
 
     const factions = useMemo(() => new Set(data?.items.map((card) => card.faction)), [data?.items]);
 
-    return <StatCard label={`Changes · ${dayRange} days`} value={data?.total} footer={`across ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
+    return <StatCard label={"Total Changes"} value={data?.total} footer={`across ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
 }
 
 function ReviewsStat({ project }: ProjectStatProps) {
     const { data, isLoading } = useGetReviewsQuery({ filter: { project: project.number } });
     const reviewers = useMemo(() => new Set(data?.items.map((review) => review.reviewer)), [data?.items]);
 
-    return <StatCard label="Reviews this cycle" value={data?.total} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
+    return <StatCard label="Playtesting Reviews" value={data?.total} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
 }
 
 function ActiveDecksStat({ project }: ProjectStatProps) {

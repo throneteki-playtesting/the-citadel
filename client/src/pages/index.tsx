@@ -91,12 +91,6 @@ export const navItems: NavItem[] = [
 ] as const;
 
 export const profileItems: PageItem[] = [
-    {
-        // TODO: Add profile page
-        path: "/profile",
-        label: "Profile",
-        element: <div />
-    }
 ] as const;
 
 export const isVisibleFor = (page: NavItem, user?: User): boolean => {
