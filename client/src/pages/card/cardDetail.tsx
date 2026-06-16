@@ -7,7 +7,7 @@ import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faAngleLeft, faPencil, faScroll, faSquarePlus, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faFeather, faPencil, faScroll, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { rcompare } from "semver";
 import classNames from "classnames";
 import CardImage from "../../components/cardImage";
@@ -215,13 +215,10 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
         delete draft.note;
-        if (draft._metadata) {
-            delete draft._metadata.github;
-            delete draft._metadata.discord;
-        }
         delete draft.release;
         draft.latest = false;
         draft.implemented = false;
+        delete draft._metadata;
         setEditing(draft);
     }, []);
 
@@ -246,6 +243,20 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
 
     return (
         <div className={classNames("flex gap-1", className)} style={style}>
+            <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                {latest?._metadata?.discord?.messageUrl &&
+                    <TouchTooltip content="Join Discussion">
+                        <Button
+                            isIconOnly
+                            as={Link}
+                            href={latest._metadata.discord.messageUrl.replace("https://", "discord://")}
+                            target="_blank"
+                        >
+                            <FontAwesomeIcon icon={faDiscord} />
+                        </Button>
+                    </TouchTooltip>
+                }
+            </PermissionGate>
             {!latest?.release && (
                 <>
                     <PermissionGate requires={Permission.MAKE_REVIEWS}>
@@ -259,7 +270,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                         {!draft && latest && (
                             <TouchTooltip content="New Draft">
                                 <Button isIconOnly color="primary" onPress={() => onNewDraft(latest)} className="text-lg">
-                                    <FontAwesomeIcon icon={faSquarePlus} />
+                                    <FontAwesomeIcon icon={faFeather} />
                                 </Button>
                             </TouchTooltip>
                         )}
@@ -284,20 +295,6 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                     </PermissionGate>
                 </>
             )}
-            <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
-                {latest?._metadata?.discord?.messageUrl &&
-                    <TouchTooltip content="Join Discussion">
-                        <Button
-                            isIconOnly
-                            as={Link}
-                            href={latest._metadata.discord.messageUrl.replace("https://", "discord://")}
-                            target="_blank"
-                        >
-                            <FontAwesomeIcon icon={faDiscord} />
-                        </Button>
-                    </TouchTooltip>
-                }
-            </PermissionGate>
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `'${card.name}' ver. ${card.version} has been ${draft ? "edited" : "created"}` })}/>
             <DeleteCardModal isOpen={!!deleting} card={deleting} onClose={() => setDeleting(undefined)} onDelete={(card) => addToast({ title: "Successfully deleted", color: "success", description: `'${card.name}' ver. ${card.version} has been deleted` })}/>
         </div>
