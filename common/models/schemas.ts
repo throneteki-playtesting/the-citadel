@@ -194,7 +194,11 @@ export const PlaytestingCard = {
             number: Joi.number().required()
         }),
         suggestionId: Joi.string(),
-        _metadata: Joi.forbidden(),
+        _metadata: Joi.object({
+            github: GithubIssueMetadata,
+            discord: DiscordMetadata,
+            imageUrl: Joi.string().uri()
+        }),
         updated: Joi.date(),
         updatedBy: Joi.string(),
         created: Joi.date(),
@@ -276,7 +280,9 @@ export const CardSuggestion = {
         likedBy: Joi.array().items(Joi.string()).default([]),
         approvedBy: Joi.string(),
         tags: Joi.array().items(Joi.string()).default([]),
-        _metadata: Joi.forbidden(),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
+        }),
         card: Card.Full.required()
     })
 };
@@ -416,7 +422,9 @@ export const PlaytestingUpdate = {
             Joi.number(),
             Joi.string().regex(Regex.SemanticVersion)
         ).required(),
-        _metadata: Joi.forbidden(),
+        _metadata: Joi.object({
+            github: GithubPRMetadata
+        }),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),
@@ -486,7 +494,9 @@ export const PlaytestingReview = {
             releasable: Joi.string().required().valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
-        _metadata: Joi.forbidden(),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
+        }),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),
