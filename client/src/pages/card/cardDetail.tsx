@@ -52,7 +52,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
                     <CardVersions project={projectNumber} number={number} className="z-10" />
                     <div className="flex flex-col gap-2 flex-1">
                         <StatusBoard project={projectNumber} number={number} />
-                        <DeckSummaries project={projectNumber} number={number} className="flex-1 h-98" />
+                        <DeckSummaries project={projectNumber} number={number} className="flex-1" />
                     </div>
                 </div>
                 <PermissionGate requires={Permission.READ_REVIEWS}>

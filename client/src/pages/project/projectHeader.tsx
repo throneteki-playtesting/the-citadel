@@ -40,15 +40,22 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
 
     return (
         <div className={classNames("space-y-2 md:space-y-4", className)} style={style}>
-            <ButtonGroup className="absolute top-0 right-0 p-2">
-                <PermissionGate requires={Permission.EDIT_PROJECTS}>
-                    <TouchTooltip content="Edit Project">
-                        <Button isIconOnly onPress={onEdit}>
-                            <FontAwesomeIcon icon={faPencil}/>
-                        </Button>
-                    </TouchTooltip>
-                </PermissionGate>
-                {project.draft && !project.active &&
+            <div className="flex justify-between">
+                <div className="flex flex-col gap-2">
+                    <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
+                        {headerComponents}
+                    </div>
+                    <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
+                </div>
+                <ButtonGroup className="self-start">
+                    <PermissionGate requires={Permission.EDIT_PROJECTS}>
+                        <TouchTooltip content="Edit Project">
+                            <Button isIconOnly onPress={onEdit}>
+                                <FontAwesomeIcon icon={faPencil}/>
+                            </Button>
+                        </TouchTooltip>
+                    </PermissionGate>
+                    {project.draft && !project.active &&
                     <PermissionGate requires={Permission.DELETE_PROJECTS}>
                         <TouchTooltip content="Delete Project">
                             <Button isIconOnly color="danger" onPress={onDelete}>
@@ -56,8 +63,8 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                             </Button>
                         </TouchTooltip>
                     </PermissionGate>
-                }
-                {!project.draft && project.active &&
+                    }
+                    {!project.draft && project.active &&
                     <PermissionGate requires={Permission.ARCHIVE_PROJECTS}>
                         <TouchTooltip content="Archive Project">
                             <Button isIconOnly color="danger" onPress={onDelete}>
@@ -65,13 +72,8 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                             </Button>
                         </TouchTooltip>
                     </PermissionGate>
-                }
-            </ButtonGroup>
-            <div className="flex flex-col gap-2">
-                <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
-                    {headerComponents}
-                </div>
-                <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
+                    }
+                </ButtonGroup>
             </div>
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
@@ -98,7 +100,7 @@ type ProjectHeaderProps = Omit<BaseElementProps, "children"> & {
 };
 
 function CardChangesStat({ project }: ProjectStatProps) {
-    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, note: { $exists: true } } });
+    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, version: { $ne: "1.0.0" } } });
 
     const factions = useMemo(() => new Set(data?.items.map((card) => card.faction)), [data?.items]);
 

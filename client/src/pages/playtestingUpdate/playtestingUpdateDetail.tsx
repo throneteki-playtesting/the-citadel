@@ -11,7 +11,7 @@ import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
-import { faAngleLeft, faBug, faCheck, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faBug, faCheck, faChevronLeft, faChevronRight, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
 import CodeUpdateStatus from "../../components/status/codeUpdateStatus";
 import DataUpdateStatus from "../../components/status/dataUpdateStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -21,11 +21,13 @@ import Error from "../../components/error";
 import SectionTitle from "../../components/sectionTitle";
 import usePageTitle from "../../hooks/usePageTitle";
 import useTimezone from "../../hooks/useTimezone";
+import { useNavigate } from "react-router-dom";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(project ? `${project.code} #${version}` : undefined);
+    const navigate = useNavigate();
 
     const isLoading = isPlaytestingUpdateLoading || isProjectLoading;
 
@@ -81,10 +83,29 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
             <div className="absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none">
                 <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-1 md:space-y-4">
                 <PlaytestingUpdateHeader project={project} playtestingUpdate={playtestingUpdate}/>
                 <PlaytestingUpdateChangeNotes playtestingUpdate={playtestingUpdate} />
                 <ImplementedCards playtestingUpdate={playtestingUpdate}/>
+                <div className="flex gap-2">
+                    {playtestingUpdate.version > 1 &&
+                        <Button
+                            variant="bordered"
+                            startContent={<FontAwesomeIcon icon={faChevronLeft}/>}
+                            onPress={() => navigate(`/project/${projectNumber}/update/${version - 1}`)}
+                        >
+                            Previous Update
+                        </Button>}
+                    {playtestingUpdate.version < project.version &&
+                        <Button
+                            variant="bordered"
+                            endContent={<FontAwesomeIcon icon={faChevronRight}/>}
+                            onPress={() => navigate(`/project/${projectNumber}/update/${version + 1}`)}
+                            className="ml-auto"
+                        >
+                            Next Update
+                        </Button>}
+                </div>
             </div>
         </div>
     );
@@ -110,7 +131,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
     };
     return (
         <div className="relative space-y-1">
-            <div className="flex">
+            <div className="flex flex-col sm:flex-row">
                 <div className="flex-1 flex items-center">
                     <div className="flex flex-col">
                         <Link href={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150">
