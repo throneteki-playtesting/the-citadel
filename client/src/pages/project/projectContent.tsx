@@ -1,10 +1,9 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Divider, Link, Skeleton, Tooltip } from "@heroui/react";
+import { Divider, Link, Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faStar } from "@fortawesome/free-solid-svg-icons";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import { useMemo } from "react";
 import classNames from "classnames";
@@ -12,6 +11,8 @@ import ThronesIcon from "../../components/thronesIcon";
 import { IProject } from "common/models/projects";
 import { watermarkClasses } from "../../constants";
 import Error from "../../components/error";
+import { faFeather } from "@fortawesome/free-solid-svg-icons";
+import { TouchTooltip } from "../../components/touchTooltip";
 
 export default function ProjectContent({ project }: ProjectContentProps) {
     const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
@@ -101,9 +102,9 @@ function ProjectContentCard({ card }: ProjectContentCardProps) {
                     rounded
                     className="transition-all"
                 />
-                <Tooltip placement="bottom" content="New version being drafted" className={classNames("transition-opacity duration-500", { "opacity-0": !hasDraft })}>
-                    <FontAwesomeIcon icon={faStar} className={classNames("absolute top-0 right-0 m-2 text-3xl text-gray-500 transition-opacity duration-500", hasDraft ? "opacity-75" : "opacity-0")}/>
-                </Tooltip>
+                <TouchTooltip content="New version being drafted" className={classNames("z-10", { "hidden": !hasDraft })}>
+                    <FontAwesomeIcon icon={faFeather} className={classNames("absolute top-0 right-0 m-2 text-3xl text-foreground-500", hasDraft ? "animate-pulse" : "opacity-0")}/>
+                </TouchTooltip>
             </div>
         }
     </div>;
