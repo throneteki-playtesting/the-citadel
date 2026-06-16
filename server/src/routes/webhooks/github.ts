@@ -10,6 +10,9 @@ import { syncCodePullRequests } from "@/github/pullRequests";
 
 const router = express.Router();
 
+const CODE_REPO = process.env.GITHUB_REPOSITORY;
+const DATA_REPO = process.env.GITHUB_REPOSITORY_DATA;
+
 router.use(githubWebhookMiddleware);
 
 router.post("/issue",
@@ -127,19 +130,30 @@ router.post("/pull-request",
     })
 );
 
-async function onPullRequestClosed({ pull_request: pullRequest }: PullRequestClosedEvent) {
+async function onPullRequestClosed({ pull_request: pullRequest, repository }: PullRequestClosedEvent) {
     const isMerged = pullRequest.merged;
     logger.info(`[Github] Webhook recieved for pull request ${pullRequest.title} (#${pullRequest.number}) being closed${isMerged ? " & merged" : ""}`);
 
+    let type = null;
+    if (repository.name === CODE_REPO) {
+        type = "code";
+    } else if (repository.name === DATA_REPO) {
+        type = "data";
+    }
+
+    if (!type) {
+        // Ignore invalid repositories
+        return;
+    }
+
     if (isAutomated(pullRequest)) {
         const lastSynced = new Date();
-        await syncPlaytestingUpdatePR(pullRequest, "code", isMerged, lastSynced);
-        await syncPlaytestingUpdatePR(pullRequest, "data", isMerged, lastSynced);
+        await syncPlaytestingUpdatePR(pullRequest, type, isMerged, lastSynced);
     } else if (isMerged && pullRequest.base.ref === "development") {
         // For regular Pull Requests into development, check any "closing" issues mentioned and manually close them
         const issueNumbers = extractClosedIssueNumbers(pullRequest.body ?? "");
         if (issueNumbers.length > 0) {
-            const { client, owner, repo } = githubService.getContext();
+            const { client, owner, repo } = githubService.getContext(type);
 
             await Promise.all(issueNumbers.map(issueNumber =>
                 client.rest.issues.update({
@@ -165,8 +179,8 @@ async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull
         emitter.start();
         if (isMerged) {
             merge(playtestingUpdate, { _metadata: { github: { [key]: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced } } } });
-        } else if (playtestingUpdate._metadata?.github) {
-            delete playtestingUpdate._metadata.github[key];
+        } else {
+            playtestingUpdate._metadata.github[key] = { lastSynced };
         }
         emitter.complete(playtestingUpdate);
     }

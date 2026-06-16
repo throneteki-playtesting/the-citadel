@@ -44,43 +44,46 @@ class GithubService {
     }
 
     private async initialiseWebhooks() {
-        const { client, owner, repo } = this.getContext();
         const baseUrl = process.env.WEBHOOK_URL || process.env.SERVER_HOST;
-        const { data: webhooks } = await client.rest.repos.listWebhooks({ owner, repo });
 
-        const configs = [
+        const repoConfigs: Array<{ context: "code" | "data"; webhooks: { path: string; events: string[] }[] }> = [
             {
-                url: `${baseUrl}/webhooks/github/issue`,
-                events: ["issues"]
+                context: "code",
+                webhooks: [
+                    { path: "/webhooks/github/issue", events: ["issues"] },
+                    { path: "/webhooks/github/push", events: ["push"] },
+                    { path: "/webhooks/github/pull-request", events: ["pull_request"] }
+                ]
             },
             {
-                url: `${baseUrl}/webhooks/github/pull-request`,
-                events: ["pull_request"]
+                context: "data",
+                webhooks: [
+                    { path: "/webhooks/github/pull-request", events: ["pull_request"] }
+                ]
             }
         ];
 
-        for (const config of configs) {
-            const alreadyExists = webhooks.some(w => w.config.url === config.url);
-            if (alreadyExists) {
-                continue;
-            };
+        for (const { context, webhooks } of repoConfigs) {
+            const { client, owner, repo } = this.getContext(context);
+            const { data: existing } = await client.rest.repos.listWebhooks({ owner, repo });
 
-            const { data: webhook } = await client.rest.repos.createWebhook({
-                owner,
-                repo,
-                config: {
-                    url: config.url,
-                    content_type: "json",
-                    secret: process.env.GITHUB_WEBHOOK_SECRET
-                },
-                events: config.events,
-                active: true
-            });
+            for (const { path, events } of webhooks) {
+                const url = `${baseUrl}${path}`;
+                if (existing.some(w => w.config.url === url)) continue;
 
-            webhooks.push(webhook);
+                const { data: webhook } = await client.rest.repos.createWebhook({
+                    owner,
+                    repo,
+                    config: { url, content_type: "json", secret: process.env.GITHUB_WEBHOOK_SECRET },
+                    events,
+                    active: true
+                });
+
+                existing.push(webhook);
+            }
+
+            logger.info(`${existing.length} Github webhook(s) connected for ${repo}`);
         }
-
-        logger.info(`${webhooks.length} Github webhooks connected`);
     }
 }
 
