@@ -194,7 +194,10 @@ class DiscordService {
 
     static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
         const isUser = "username" in member && !("user" in member);
-        const discordUser = isUser ? member as APIUser : (member as APIGuildMember | GuildMember).user;
+        const discordUser = isUser ? member as APIUser | User : (member as APIGuildMember | GuildMember).user;
+
+        // APIGuildMember.user is optional in the API type
+        if (!discordUser) return;
 
         // Do not sync bots
         if (discordUser.bot) return;
@@ -202,6 +205,10 @@ class DiscordService {
         const nickname = !isUser
             ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
             : null;
+
+        const displayname = discordUser instanceof User
+            ? discordUser.globalName
+            : discordUser.global_name ?? null;
 
         const [existing] = await dataService.users.read({ discordId: discordUser.id });
 
@@ -221,8 +228,10 @@ class DiscordService {
             id: discordUser.id,
             discordId: discordUser.id,
             username: discordUser.username,
-            displayname: nickname ?? discordUser.username,
-            avatarUrl: `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`,
+            displayname: nickname ?? displayname ?? discordUser.username,
+            avatarUrl: discordUser.avatar
+                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+                : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) >> 22n) % 6}.png`,
             permissions: existing?.permissions ?? [],
             roles,
             lastLogin: loggingIn ? new Date() : existing?.lastLogin

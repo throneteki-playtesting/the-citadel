@@ -19,12 +19,13 @@ const DEVELOPMENT_BRANCH = "development";
 const PLAYTESTING_BRANCH = "playtesting";
 const STAGING_BRANCH = "development-updating";
 
-export async function syncCodePullRequests(playtestingUpdates: IPlaytestingUpdate[]) {
+export async function syncCodePullRequests() {
     const wait = syncCodePullRequestLock;
     let release!: () => void;
     syncCodePullRequestLock = new Promise(resolve => { release = resolve; });
     await wait;
 
+    let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
     try {
         const newlyImplemented = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
         const context = githubService.getContext();
@@ -60,7 +61,6 @@ export async function syncCodePullRequests(playtestingUpdates: IPlaytestingUpdat
                         const { syncedAt, url, status, mergedAt } = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
                         for (const playtestingUpdate of playtestingUpdates) {
                             merge(playtestingUpdate, { _metadata: { github: { code: { pullRequestUrl: url, mergedAt, status, lastSynced: syncedAt } } } });
-                            toUpdate.push(playtestingUpdate);
                         }
                     }
                 } else if (existingPR) {
@@ -77,7 +77,7 @@ export async function syncCodePullRequests(playtestingUpdates: IPlaytestingUpdat
             emitters.forEach((e, pt) => e.complete(pt));
 
             if (toUpdate.length > 0) {
-                playtestingUpdates = await dataService.playtestingUpdates.update(toUpdate, false, false);
+                playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
             }
         } catch (err) {
             emitters.forEach((e) => e.error("Failure"));
@@ -90,12 +90,13 @@ export async function syncCodePullRequests(playtestingUpdates: IPlaytestingUpdat
     return playtestingUpdates;
 }
 
-export async function syncDataPullRequests(playtestingUpdates: IPlaytestingUpdate[]) {
+export async function syncDataPullRequests() {
     const wait = syncDataPullRequestLock;
     let release!: () => void;
     syncDataPullRequestLock = new Promise(resolve => { release = resolve; });
     await wait;
 
+    let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
     try {
         const context = githubService.getContext("data");
 
@@ -182,7 +183,7 @@ export async function syncDataPullRequests(playtestingUpdates: IPlaytestingUpdat
         emitters.forEach((e, pu) => e.complete(pu));
 
         // But updates all playtesting updates as some may just have their lastSynced updated, and nothing else
-        await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
+        playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
     } finally {
         release();
     }
@@ -259,7 +260,7 @@ async function internalSync(existingPR: PullRequest | undefined, playtestingUpda
             syncedAt: new Date(),
             url: data.html_url,
             status: data.state as "open" | "closed",
-            mergedAt: new Date(data.merged_at)
+            mergedAt: data.merged_at ? new Date(data.merged_at) : undefined
         };
     } else {
         const { data } = await context.client.rest.pulls.update({ pull_number: existingPR.number, ...details });
@@ -268,7 +269,7 @@ async function internalSync(existingPR: PullRequest | undefined, playtestingUpda
             syncedAt: new Date(),
             url: data.html_url,
             status: data.state as "open" | "closed",
-            mergedAt: new Date(data.merged_at)
+            mergedAt: data.merged_at ? new Date(data.merged_at) : undefined
         };
     }
 }

@@ -9,6 +9,7 @@ import { BasicAuditableRepository } from "./shared";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
+import { syncCodePullRequests } from "@/github/pullRequests";
 
 export default class CardsRepository extends BasicAuditableRepository<IPlaytestCard> {
     declare protected database: CardMongoDataSource;
@@ -51,7 +52,8 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         const syncs = [
             { priority: 0, func: () => syncImage(data).then(result => { data = result; }) },
             { priority: 1, func: () => syncCardForum(data).then(result => { data = result; }) },
-            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) }
+            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) },
+            { priority: 1, func: () => syncCodePullRequests() }
         ];
 
         await this.internalSync(syncs);
@@ -66,7 +68,8 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
         const syncs = [
             () => deleteImage(data),
             () => Promise.all(data.filter(card => card.draft).map(draft => deleteDraft(draft))),
-            () => clearIssues(data)
+            () => clearIssues(data),
+            () => syncCodePullRequests()
         ];
 
         await this.internalSync(syncs);

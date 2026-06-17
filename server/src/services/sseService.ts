@@ -2,6 +2,7 @@ import { Response } from "express";
 import { SyncDataMap, SyncEvent, SyncOperation, SyncType } from "@/types";
 import { getDiff } from "common/utils";
 import { cloneDeep } from "lodash-es";
+import { logger } from "@/services";
 
 interface SseClient {
     id: string;
@@ -33,10 +34,12 @@ export const sseService = {
     },
 
     broadcast(event: SyncEvent<SyncType>) {
+        logger.verbose(`[SSE] Broadcasting to ${broadcastClients.size} client(s): ${JSON.stringify(event)}`);
         broadcastClients.forEach(({ res }) => sendEvent(res, event));
     },
 
     sendProgress(event: SyncEvent<SyncType>) {
+        logger.verbose(`[SSE] Sending progress to ${progressClients.size} client(s): ${JSON.stringify(event)}`);
         progressClients.forEach(({ res }) => sendEvent(res, event));
     }
 };

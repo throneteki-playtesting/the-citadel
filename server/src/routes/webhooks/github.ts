@@ -112,8 +112,7 @@ router.post("/push",
 async function onDevelopmentPush({ commits }: PushEvent) {
     logger.info(`[Github] Webhook recieved for ${commits.length} commit(s) pushed to development`);
 
-    const playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: null } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
-    await syncCodePullRequests(playtestingUpdates);
+    await syncCodePullRequests();
 
     logger.info("[Github] Synced pull requests after push to development");
 }
@@ -212,10 +211,21 @@ function isPullRequestClosedEvent(event: unknown): event is PullRequestClosedEve
     return event && event["action"] === "closed" && !!event["pull_request"];
 }
 
-const CLOSES_PATTERN = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[:\s]+#(\d+)/gi;
+const CLOSES_KEYWORD_PATTERN = /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[:\s]+/gi;
+const ISSUE_REF_PATTERN = /#(\d+)/g;
 function extractClosedIssueNumbers(body: string): number[] {
-    const matches = [...body.matchAll(CLOSES_PATTERN)];
-    return matches.map(match => parseInt(match[1]));
+    const numbers: number[] = [];
+    let keywordMatch: RegExpExecArray | null;
+    CLOSES_KEYWORD_PATTERN.lastIndex = 0;
+    while ((keywordMatch = CLOSES_KEYWORD_PATTERN.exec(body)) !== null) {
+        const afterKeyword = body.slice(keywordMatch.index + keywordMatch[0].length);
+        // Collect all #number refs that immediately follow, separated by spaces/commas
+        const segment = afterKeyword.match(/^(?:#\d+[\s,]*)+/)?.[0] ?? "";
+        for (const ref of segment.matchAll(ISSUE_REF_PATTERN)) {
+            numbers.push(parseInt(ref[1]));
+        }
+    }
+    return [...new Set(numbers)];
 }
 
 export default router;

@@ -37,8 +37,12 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
     public async sync(syncing: SingleOrArray<IPlaytestingUpdate>) {
         let data = asArray(syncing);
         const syncs = [
-            () => syncCodePullRequests(data).then(result => { data = result; }),
-            () => syncDataPullRequests(data).then(result => { data = result; })
+            () => syncCodePullRequests().then(result => {
+                data = data.map(item => result.find(r => r.project === item.project && r.version === item.version) ?? item);
+            }),
+            () => syncDataPullRequests().then(result => {
+                data = data.map(item => result.find(r => r.project === item.project && r.version === item.version) ?? item);
+            })
         ];
 
         await this.internalSync(syncs);

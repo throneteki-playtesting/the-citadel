@@ -239,11 +239,13 @@ router.post("/:project/:version/sync/github/:type",
 
         switch (type) {
             case "code": {
-                [playtestingUpdate] = await syncCodePullRequests([playtestingUpdate]);
+                const updates = await syncCodePullRequests();
+                playtestingUpdate = updates.find((pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version) ?? playtestingUpdate;
                 break;
             }
             case "data": {
-                [playtestingUpdate] = await syncDataPullRequests([playtestingUpdate]);
+                const updates = await syncDataPullRequests();
+                playtestingUpdate = updates.find((pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version) ?? playtestingUpdate;
                 break;
             }
         }
