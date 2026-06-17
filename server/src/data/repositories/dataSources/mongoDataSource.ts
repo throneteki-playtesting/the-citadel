@@ -119,8 +119,6 @@ export default class MongoDataSource<T> {
         }
         const results = await this.collection.insertMany(docs as OptionalUnlessRequiredId<T>[], { ordered: false, ...options });
 
-        logger.verbose(`[Mongo] Inserted ${results.insertedCount} documents into ${this.name} collection`);
-
         // Sanitise docs in case _id was added
         docs.forEach((doc) => {
             if (doc["_id"]) {
@@ -134,21 +132,18 @@ export default class MongoDataSource<T> {
     protected async find(query: MongoFilter<T>, options?: FindOptions) {
         const result = await this.collection.find(query, options).toArray();
 
-        logger.verbose(`[Mongo] Read ${result.length} documents from ${this.name} collection`);
         return this.withoutId(result);
     }
 
     protected async findOne(query: MongoFilter<T>, options?: FindOptions) {
         const result = await this.collection.findOne(query, options);
 
-        logger.verbose(`[Mongo] Read ${result ? "1" : "0"} documents from ${this.name} collection`);
         return this.withoutId(result);
     }
 
     protected async total(query: MongoFilter<T>) {
         const result = await this.collection.countDocuments(query);
 
-        logger.verbose(`[Mongo] Counted ${result} documents from ${this.name} collection`);
         return result;
     }
 
@@ -174,8 +169,6 @@ export default class MongoDataSource<T> {
         const failed = new Set(results.getWriteErrors().map((we) => we.index));
         const success = docs.filter((_, index) => !failed.has(index));
 
-        logger.verbose(`[Mongo] ${upsert ? "Upserted" : "Updated"} ${success.length} documents into ${this.name} collection`);
-
         return success;
     }
 
@@ -184,9 +177,7 @@ export default class MongoDataSource<T> {
             return []; // Do not delete anything if there are no query parameters
         }
         const deleting = await this.find(query);
-        const results = await this.collection.deleteMany(query, options);
-
-        logger.verbose(`[Mongo] Deleted ${results.deletedCount} documents from ${this.name} collection`);
+        await this.collection.deleteMany(query, options);
         return deleting;
     }
 };
