@@ -127,17 +127,10 @@ async function get<T>(url: string, authToken: string) {
 }
 
 function createAccessToken(discordId: string) {
-    const payload: AccessTokenPayload = {
-        discordId,
-        expiresAt: new Date(Date.now() + Number.parseInt(process.env.ACCESS_TOKEN_TTL) * 1000)
-    };
-    return jwt.sign(
-        payload,
-        process.env.JWT_SECRET,
-        {
-            expiresIn: Number.parseInt(process.env.ACCESS_TOKEN_TTL)
-        }
-    );
+    const expiresAt = new Date(Date.now() + Number.parseInt(process.env.ACCESS_TOKEN_TTL) * 1000);
+    const payload: AccessTokenPayload = { discordId, expiresAt };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: Number.parseInt(process.env.ACCESS_TOKEN_TTL) });
+    return { token, expiresAt };
 }
 
 async function createRefreshToken(discordId: string) {
@@ -153,7 +146,7 @@ async function createRefreshToken(discordId: string) {
     };
     await dataService.auth.addRefreshToken(refreshToken);
 
-    return rawToken;
+    return { token: rawToken, expiresAt };
 }
 
 function generateHash(raw: string) {
@@ -161,18 +154,20 @@ function generateHash(raw: string) {
 }
 
 async function applyTokensToResponse(res: Response, discordId: string) {
-    const accessToken = createAccessToken(discordId);
-    const refreshToken = await createRefreshToken(discordId);
+    const { token: accessToken, expiresAt: accessExpiresAt } = createAccessToken(discordId);
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await createRefreshToken(discordId);
 
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
+        sameSite: "lax",
+        expires: accessExpiresAt
     });
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
+        sameSite: "lax",
+        expires: refreshExpiresAt
     });
 }
 
