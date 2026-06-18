@@ -100,9 +100,9 @@ export const migration: Migration = {
                 delete newDoc.imageUrl;
             }
 
-            if (rawGithub) {
+            if (rawGithub?.issueUrl) {
                 // Card already has github data — refresh from in-memory index by issue number
-                const issueNumber = rawGithub.issueUrl ? parseIssueNumber(rawGithub.issueUrl) : null;
+                const issueNumber = parseIssueNumber(rawGithub.issueUrl);
                 const issueData = issueNumber !== null ? getIssueByNumber(issueNumber) : null;
 
                 if (issueData) {
