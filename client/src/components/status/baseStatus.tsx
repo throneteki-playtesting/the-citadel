@@ -1,41 +1,208 @@
-import { Button, Alert, Spinner } from "@heroui/react";
+import { Alert, Button, Listbox, ListboxItem, Spinner } from "@heroui/react";
 import classNames from "classnames";
-import { ReactNode } from "react";
+import { ReactNode, useRef, useState } from "react";
 import { BaseElementProps, UIColor } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 
-export function BaseStatus({ isLoading = false, data, isIconOnly = false, className, style }: BaseStatusProps) {
+const TRACE_STROKE = 2;
+
+// Clockwise path starting at bottom-center:
+// bottom-left → up left → top-right → down right → back to bottom-center
+function buildTracePath(w: number, h: number, sw: number, br: number): string {
+    const x = sw / 2;
+    const y = sw / 2;
+    const W = w - sw;
+    const H = h - sw;
+    const r = br;
+    return [
+        `M ${x + W / 2} ${y + H}`,
+        `H ${x + r}`,
+        `A ${r} ${r} 0 0 1 ${x} ${y + H - r}`,
+        `V ${y + r}`,
+        `A ${r} ${r} 0 0 1 ${x + r} ${y}`,
+        `H ${x + W - r}`,
+        `A ${r} ${r} 0 0 1 ${x + W} ${y + r}`,
+        `V ${y + H - r}`,
+        `A ${r} ${r} 0 0 1 ${x + W - r} ${y + H}`,
+        `H ${x + W / 2}`
+    ].join(" ");
+}
+
+export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, className, style, traceClassName }: BaseStatusProps) {
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const lpRef = useRef({ triggered: false, timer: null as ReturnType<typeof setTimeout> | null });
+
+    const hasLongPress = !!data?.longPressOptions?.length;
+
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const svgRef = useRef<SVGSVGElement>(null);
+    const svgPathRef = useRef<SVGPathElement>(null);
+    const traceAnimRef = useRef<Animation | null>(null);
+
+    const startTracing = () => {
+        const wrapper = wrapperRef.current;
+        const svg = svgRef.current;
+        const path = svgPathRef.current;
+        if (!wrapper || !svg || !path) return;
+
+        const width = wrapper.offsetWidth;
+        const height = wrapper.offsetHeight;
+        const child = wrapper.firstElementChild as HTMLElement | null;
+        const br = child ? parseFloat(window.getComputedStyle(child).borderRadius) || 0 : 0;
+        const sw = TRACE_STROKE;
+
+        svg.setAttribute("width", String(width));
+        svg.setAttribute("height", String(height));
+        path.setAttribute("d", buildTracePath(width, height, sw, br));
+
+        const color = window.getComputedStyle(svg).borderColor;
+        path.setAttribute("stroke", color || "white");
+
+        const length = path.getTotalLength();
+        path.style.strokeDasharray = String(length);
+        path.style.strokeDashoffset = String(length);
+
+        traceAnimRef.current = path.animate(
+            [{ strokeDashoffset: length }, { strokeDashoffset: 0 }],
+            { duration: longPressDelay, fill: "forwards", easing: "linear" }
+        );
+    };
+
+    const stopTracing = () => {
+        traceAnimRef.current?.cancel();
+        traceAnimRef.current = null;
+        const path = svgPathRef.current;
+        if (!path) return;
+        path.setAttribute("stroke", "transparent");
+        path.style.strokeDasharray = "";
+        path.style.strokeDashoffset = "";
+    };
+
+    const startTimer = () => {
+        if (!hasLongPress) return;
+        lpRef.current.triggered = false;
+        startTracing();
+        lpRef.current.timer = setTimeout(() => {
+            lpRef.current.triggered = true;
+            setDropdownOpen(true);
+        }, longPressDelay);
+    };
+
+    const clearTimer = () => {
+        stopTracing();
+        if (lpRef.current.timer !== null) {
+            clearTimeout(lpRef.current.timer);
+            lpRef.current.timer = null;
+        }
+    };
+
+    const closeDropdown = () => {
+        setDropdownOpen(false);
+        lpRef.current.triggered = false;
+    };
+
     const interactiveClass = "font-sans hover:brightness-125 transition duration-300 ease-in-out";
 
-    if (!data) {
-        return null;
-    }
+    if (!data) return null;
+
+    const lpDomHandlers = {
+        onMouseDown: startTimer,
+        onMouseUp: clearTimer,
+        onMouseLeave: clearTimer,
+        onTouchStart: startTimer,
+        onTouchEnd: clearTimer,
+        onTouchCancel: clearTimer,
+        onContextMenu: (e: React.MouseEvent) => { if (lpRef.current.triggered) e.preventDefault(); }
+    };
+
+    const overlayMenu = dropdownOpen ? (
+        <>
+            <div
+                className="fixed inset-0 z-40"
+                onMouseDown={(e) => { e.stopPropagation(); closeDropdown(); }}
+                onTouchStart={(e) => { e.preventDefault(); closeDropdown(); }}
+            />
+            <div className="absolute z-50 top-full mt-1 left-0 min-w-max shadow-medium bg-content2 rounded-medium border border-divider overflow-hidden">
+                <Listbox
+                    onAction={(key) => {
+                        data.longPressOptions?.[Number(key)]?.fn?.();
+                        closeDropdown();
+                    }}
+                >
+                    {(data.longPressOptions ?? []).map((opt, i) => (
+                        <ListboxItem key={String(i)}>{opt.label}</ListboxItem>
+                    ))}
+                </Listbox>
+            </div>
+        </>
+    ) : null;
+
+    const wrapWithDropdown = (inner: ReactNode, wrapperClass?: string) => (
+        <div ref={wrapperRef} className={classNames("relative", wrapperClass)}>
+            {inner}
+            {overlayMenu}
+            <svg
+                ref={svgRef}
+                className={classNames("absolute inset-0 pointer-events-none", traceClassName)}
+                style={{ overflow: "visible" }}
+            >
+                <path
+                    ref={svgPathRef}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={TRACE_STROKE}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    filter="drop-shadow(0 0 3px rgba(0,0,0,0.6))"
+                />
+            </svg>
+        </div>
+    );
 
     if (isIconOnly) {
-        return (
-            <TouchTooltip content={
-                <div className="flex flex-col">
-                    <div className="font-bold">{data.title}</div>
-                    <div>{data.description}</div>
-                </div>
-            }>
-                <Button
-                    isLoading={isLoading}
-                    isIconOnly
-                    color={data.color}
-                    style={style}
-                    onPress={data.onPress}
-                    as={data.href ? "a" : undefined}
-                    href={data.href}
-                    target={data.href ? "_blank" : undefined}
-                    rel={data.href ? "noreferrer" : undefined}
-                    disableAnimation={!data.onPress && !data.href}
-                    className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, className)}
-                >
-                    {data.icon}
-                </Button>
+        const tooltipContent = (
+            <div className="flex flex-col">
+                <div className="font-bold">{data.title}</div>
+                <div>{data.description}</div>
+            </div>
+        );
+
+        const handleButtonPress = () => {
+            clearTimer();
+            if (!lpRef.current.triggered) {
+                if (data.href) window.open(data.href, "_blank", "noreferrer");
+                else data.onPress?.();
+            }
+            lpRef.current.triggered = false;
+        };
+
+        const button = (
+            <Button
+                isLoading={isLoading}
+                isIconOnly
+                color={data.color}
+                style={style}
+                onPressStart={hasLongPress ? startTimer : undefined}
+                onPressEnd={hasLongPress ? clearTimer : undefined}
+                onPress={hasLongPress ? handleButtonPress : data.onPress}
+                as={hasLongPress ? undefined : (data.href ? "a" : undefined)}
+                href={hasLongPress ? undefined : data.href}
+                target={!hasLongPress && data.href ? "_blank" : undefined}
+                rel={!hasLongPress && data.href ? "noreferrer" : undefined}
+                disableAnimation={!data.onPress && !data.href}
+                className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, className)}
+            >
+                {data.icon}
+            </Button>
+        );
+
+        const withTooltip = (
+            <TouchTooltip content={tooltipContent}>
+                {button}
             </TouchTooltip>
         );
+
+        return hasLongPress ? wrapWithDropdown(withTooltip, "inline-flex") : withTooltip;
     }
 
     const alert = (
@@ -50,35 +217,79 @@ export function BaseStatus({ isLoading = false, data, isIconOnly = false, classN
     );
 
     if (data.onPress) {
-        return (
-            <a className={classNames("cursor-pointer", interactiveClass, className)} style={style} onClick={data.onPress}>
+        const handleClick = () => {
+            if (lpRef.current.triggered) {
+                lpRef.current.triggered = false;
+                return;
+            }
+            data.onPress!();
+        };
+
+        const el = (
+            <a
+                className={classNames("cursor-pointer", interactiveClass, className)}
+                style={style}
+                onClick={handleClick}
+                {...(hasLongPress ? lpDomHandlers : {})}
+            >
                 {alert}
             </a>
         );
+
+        return hasLongPress ? wrapWithDropdown(el) : el;
     }
 
     if (data.href) {
-        return (
-            <a className={classNames(interactiveClass, className)} style={style} href={data.href} target="_blank" rel="noreferrer">
+        const el = (
+            <a
+                className={classNames(interactiveClass, className)}
+                style={style}
+                href={data.href}
+                target="_blank"
+                rel="noreferrer"
+                onClick={hasLongPress ? (e) => {
+                    if (lpRef.current.triggered) {
+                        e.preventDefault();
+                        lpRef.current.triggered = false;
+                    }
+                } : undefined}
+                {...(hasLongPress ? lpDomHandlers : {})}
+            >
                 {alert}
             </a>
         );
+
+        return hasLongPress ? wrapWithDropdown(el) : el;
     }
 
-    return <div className={className} style={style}>{alert}</div>;
+    const el = (
+        <div className={className} style={style} {...(hasLongPress ? lpDomHandlers : {})}>
+            {alert}
+        </div>
+    );
+
+    return hasLongPress ? wrapWithDropdown(el) : el;
 }
+
+export type LongPressOption = {
+    label: ReactNode;
+    fn?: () => unknown;
+};
 
 type BaseStatusProps = Omit<BaseElementProps, "children"> & {
     isLoading?: boolean;
     data?: StatusData | null;
     isIconOnly?: boolean;
+    longPressDelay?: number;
+    traceClassName?: string;
 };
 
 export type StatusData = {
-  icon?: ReactNode;
-  title?: string;
-  description?: string;
-  color: UIColor;
-  onPress?: () => void;
-  href?: string;
+    icon?: ReactNode;
+    title?: string;
+    description?: string;
+    color: UIColor;
+    onPress?: () => void;
+    href?: string;
+    longPressOptions?: LongPressOption[];
 };

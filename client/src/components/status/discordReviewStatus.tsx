@@ -17,7 +17,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
     const [syncReviewDiscord, { isLoading: isSyncing }] = useSyncReviewDiscordMutation();
     const { status, step, error } = useReviewSync(review).discord;
 
-    const canPressSync = usePermission(Permission.SYNC_REVIEW_DISCORD);
+    const hasSyncPermission = usePermission(Permission.SYNC_REVIEW_DISCORD);
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Discord Thread";
@@ -37,13 +37,15 @@ export default function DiscordReviewStatus({ className, style, project, number,
             };
         }
 
-        const syncAsync = canPressSync ? async () => await syncReviewDiscord({ project, number, version, reviewer }).unwrap() : undefined;
+        const syncFn = () => syncReviewDiscord({ project, number, version, reviewer });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} />,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -52,7 +54,7 @@ export default function DiscordReviewStatus({ className, style, project, number,
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -62,10 +64,11 @@ export default function DiscordReviewStatus({ className, style, project, number,
             title,
             icon: <FontAwesomeIcon icon={faDiscord} />,
             href: review._metadata!.discord!.messageUrl!.replace("https://", "discord://"),
+            longPressOptions,
             color: "default",
             description: "Join the discussion"
         };
-    }, [canPressSync, error, isSyncing, number, project, review, reviewer, status, step, syncReviewDiscord, version]);
+    }, [error, hasSyncPermission, isSyncing, number, project, review, reviewer, status, step, syncReviewDiscord, version]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

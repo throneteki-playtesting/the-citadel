@@ -17,7 +17,7 @@ export default function DiscordCardStatus({ className, style, project, number, v
     const [syncCardDiscord, { isLoading: isSyncing }] = useSyncCardDiscordMutation();
     const { status, step, error } = useCardSync(card).discord;
 
-    const canPressSync = usePermission(Permission.SYNC_CARD_DISCORD);
+    const hasSyncPermission = usePermission(Permission.SYNC_CARD_DISCORD);
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Discord Thread";
@@ -37,13 +37,15 @@ export default function DiscordCardStatus({ className, style, project, number, v
             };
         }
 
-        const syncAsync = canPressSync ? async () => await syncCardDiscord({ project: card.project, number: card.number, version: card.version }).unwrap() : undefined;
+        const syncFn = () => syncCardDiscord({ project: card.project, number: card.number, version: card.version });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -52,7 +54,7 @@ export default function DiscordCardStatus({ className, style, project, number, v
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -62,10 +64,11 @@ export default function DiscordCardStatus({ className, style, project, number, v
             title,
             icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
             href: card._metadata!.discord!.messageUrl!.replace("https://", "discord://"),
+            longPressOptions,
             color: "success",
             description: "Synced"
         };
-    }, [canPressSync, card, error, isSyncing, status, step, syncCardDiscord]);
+    }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardDiscord]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

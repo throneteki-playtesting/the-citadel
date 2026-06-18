@@ -13,7 +13,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
 import { convertToNode, noteTypeIcon } from "../../../utils";
 import { sortBy } from "lodash-es";
-import ImplementStatus from "../../../components/status/implementStatus";
+import GithubCardStatus from "../../../components/status/githubCardStatus";
 import { changeTypeClasses } from "../../../constants";
 import CardStack from "../../../components/cardStack";
 import LoadingCard from "../../../components/loadingCard";
@@ -156,7 +156,7 @@ function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCard
                         </>
                     ) : <Alert color="danger" className="text-sm" title="No change note found!">This should not be possible, and likely indicates something went wrong.</Alert>}
                 </div>
-                <ImplementStatus project={card.project} number={card.number} version={card.version} className="mt-auto m-2"/>
+                <GithubCardStatus project={card.project} number={card.number} version={card.version} className="mt-auto m-2"/>
             </div>
         </Card>
     );

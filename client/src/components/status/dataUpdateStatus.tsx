@@ -30,15 +30,15 @@ export default function DataUpdateStatus({ className, style, project, version, i
             };
         }
 
-        const syncAsync = hasSyncPermission
-            ? async () => await syncPlaytestingUpdateGithub({ project, version, type: "data" }).unwrap()
-            : undefined;
+        const syncFn = () => syncPlaytestingUpdateGithub({ project, version, type: "data" });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -49,7 +49,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -59,7 +59,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faDatabase} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "None Detected"
             };
@@ -68,6 +68,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faDatabase} size="xl" />,
+                longPressOptions,
                 description: "Synced",
                 color: "success",
                 href: dataMeta.pullRequestUrl
@@ -80,6 +81,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
+                    longPressOptions,
                     description: "Github PR Open",
                     color: "warning",
                     href
@@ -89,6 +91,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
+                    longPressOptions,
                     description: "Github PR Closed",
                     color: "success",
                     href
@@ -98,7 +101,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
         return null;
     }, [playtestingUpdate, status, isSyncing, hasSyncPermission, step, syncPlaytestingUpdateGithub, project, version, error]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading}/>;
 }
 
 type DataUpdateStatusProps = Omit<BaseElementProps, "children"> & {

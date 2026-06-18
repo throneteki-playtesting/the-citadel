@@ -39,15 +39,15 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             };
         }
 
-        const syncAsync = hasSyncPermission
-            ? async () => await syncPlaytestingUpdateGithub({ project, version, type: "code" }).unwrap()
-            : undefined;
+        const syncFn = () => syncPlaytestingUpdateGithub({ project, version, type: "code" });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -58,7 +58,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -68,7 +68,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faCode} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "None Implemented"
             };
@@ -78,6 +78,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon: <ThronesIcon name="power"/>,
+                    longPressOptions,
                     description: "Partially Implemented",
                     color: "success",
                     href: "https://playtesting.theironthrone.net"
@@ -86,6 +87,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <ThronesIcon name="power"/>,
+                longPressOptions,
                 description: "Implemented",
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
@@ -98,6 +100,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
+                    longPressOptions,
                     description: "Github PR Open",
                     color: "warning",
                     href
@@ -107,6 +110,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
+                    longPressOptions,
                     description: "Github PR Closed",
                     color: "success",
                     href

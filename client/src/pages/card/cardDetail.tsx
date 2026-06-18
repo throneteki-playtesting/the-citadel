@@ -20,7 +20,7 @@ import Permission from "common/models/permissions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
-import ImplementStatus from "../../components/status/implementStatus";
+import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
 import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
@@ -309,7 +309,7 @@ function StatusBoard({ className, style, project, number }: StatusBoardProps) {
     return (
         <div className={classNames("py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1", className)} style={style}>
             <DevelopmentStatus project={project} number={number} />
-            <ImplementStatus project={project} number={number} />
+            <GithubCardStatus project={project} number={number} />
             <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
                 <ImageStatus project={project} number={number} />
             </PermissionGate>

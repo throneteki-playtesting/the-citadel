@@ -214,6 +214,24 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
     const [showNew, setShowNew] = useState(true);
     const { data: previousCard } = useGetPreviousCardQuery({ project: card.project, number: card.number, version: card.version });
 
+    const implementChip = useMemo(() => {
+        if (card._metadata?.github?.status === "closed") {
+            if (card.implemented) {
+                return <TouchTooltip content={"Card is implemented & available on TiT"}>
+                    <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
+                </TouchTooltip>;
+            } else {
+                return <TouchTooltip content={"Card is implemented & will soon be available on TiT"}>
+                    <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Recently Implemented</Chip>
+                </TouchTooltip>;
+            }
+        }
+
+        return <TouchTooltip content={"Card is not implemented on TiT"}>
+            <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
+        </TouchTooltip>;
+    }, [card._metadata?.github?.status, card.implemented]);
+
     return (
         <Card className={classNames("border-1", factionBorderClasses[card.faction])}>
             <div className="grow flex flex-col max-sm:items-center sm:flex-row transition-all duration-300 overflow-hidden">
@@ -239,10 +257,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                 </CardStack>
             </div>
             <a href={card._metadata?.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100 p-2 font-sans">
-                {card._metadata?.github?.status === "closed"
-                    ? <Chip color="success" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Implemented</Chip>
-                    : <Chip color="warning" variant="bordered"><FontAwesomeIcon icon={faGithub}/> Not Implemented</Chip>
-                }
+                {implementChip}
             </a>
         </Card>
     );
@@ -250,6 +265,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
 type PlaytestingUpdateChangeNoteProps = {
     card: IPlaytestCard
 }
+
 
 function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
     const { data } = useGetPlaytestingUpdateImplementedQuery({ project: playtestingUpdate.project, version: playtestingUpdate.version });

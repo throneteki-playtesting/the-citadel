@@ -7,6 +7,8 @@ import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { getMostRecent, SemanticVersion } from "common/utils";
 import { useCardSync } from "../../hooks/useSync";
+import { usePermission } from "../../hooks/usePermission";
+import Permission from "common/models/permissions";
 
 export default function ImageStatus({ className, style, project, number, isIconOnly }: ImageStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
@@ -14,6 +16,8 @@ export default function ImageStatus({ className, style, project, number, isIconO
 
     const [syncCardImage, { isLoading: isSyncing }] = useSyncCardImageMutation();
     const { status, step, error } = useCardSync(card).image;
+    const hasSyncPermission = usePermission(Permission.SYNC_CARD_IMAGES);
+
     const data = useMemo<StatusData | null>(() => {
         const title = "Image URL";
         if (!card) {
@@ -33,13 +37,15 @@ export default function ImageStatus({ className, style, project, number, isIconO
             };
         }
 
-        const syncAsync = async () => await syncCardImage({ project: card.project, number: card.number, version: card.version }).unwrap();
+        const syncFn = () => syncCardImage({ project: card.project, number: card.number, version: card.version });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl"/>,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -49,7 +55,7 @@ export default function ImageStatus({ className, style, project, number, isIconO
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -58,10 +64,11 @@ export default function ImageStatus({ className, style, project, number, isIconO
         return {
             title,
             href: card._metadata.imageUrl,
+            longPressOptions,
             color: "success",
             description: "Synced"
         };
-    }, [card, error, isSyncing, status, step, syncCardImage]);
+    }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardImage]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

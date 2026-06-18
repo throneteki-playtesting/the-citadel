@@ -9,13 +9,18 @@ import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { getMostRecent, SemanticVersion } from "common/utils";
 import { useCardSync } from "../../hooks/useSync";
+import { usePermission } from "../../hooks/usePermission";
+import Permission from "common/models/permissions";
 
-export default function ImplementStatus({ className, style, project, number, version, isIconOnly }: ImplementStatusProps) {
+export default function GithubCardStatus({ className, style, project, number, version, isIconOnly }: GithubCardStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
 
     const [syncCardGithub, { isLoading: isSyncing }] = useSyncCardGithubMutation();
     const { status, step, error } = useCardSync(card).github;
+
+    const hasSyncPermission = usePermission(Permission.SYNC_CARD_GITHUB);
+
     const data = useMemo<StatusData | null>(() => {
         const title = "Online Platform";
         if (!card) {
@@ -34,13 +39,16 @@ export default function ImplementStatus({ className, style, project, number, ver
             };
         }
 
-        const syncAsync = async () => await syncCardGithub({ project: card.project, number: card.number, version: card.version }).unwrap();
+        const syncFn = () => syncCardGithub({ project: card.project, number: card.number, version: card.version });
+        const onPress = hasSyncPermission ? syncFn : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+
 
         if (status === "error") {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
             };
@@ -58,7 +66,7 @@ export default function ImplementStatus({ className, style, project, number, ver
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
-                onPress: syncAsync,
+                onPress,
                 color: "secondary",
                 description: "Requires Syncing"
             };
@@ -68,6 +76,7 @@ export default function ImplementStatus({ className, style, project, number, ver
                 title,
                 icon: <ThronesIcon name="power"/>,
                 description: "Implemented",
+                longPressOptions,
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
             };
@@ -80,6 +89,7 @@ export default function ImplementStatus({ className, style, project, number, ver
                     title,
                     icon,
                     description: "Github Issue Open",
+                    longPressOptions,
                     color: "warning",
                     href
                 };
@@ -89,18 +99,19 @@ export default function ImplementStatus({ className, style, project, number, ver
                     title,
                     icon,
                     description: "Github Issue Closed",
+                    longPressOptions,
                     color: "success",
                     href
                 };
             }
         }
         return null;
-    }, [card, error, isSyncing, status, step, syncCardGithub]);
+    }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardGithub]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
-type ImplementStatusProps = Omit<BaseElementProps, "children"> & {
+type GithubCardStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
     version?: SemanticVersion;
