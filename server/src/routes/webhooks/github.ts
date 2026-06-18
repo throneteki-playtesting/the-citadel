@@ -138,9 +138,7 @@ async function onPullRequestClosed({ pull_request: pullRequest, repository }: Pu
         type = "code";
     } else if (repository.name === DATA_REPO) {
         type = "data";
-    }
-
-    if (!type) {
+    } else {
         // Ignore invalid repositories
         return;
     }
@@ -148,6 +146,7 @@ async function onPullRequestClosed({ pull_request: pullRequest, repository }: Pu
     if (isAutomated(pullRequest)) {
         const lastSynced = new Date();
         await syncPlaytestingUpdatePR(pullRequest, type, isMerged, lastSynced);
+        await syncClosedCards(pullRequest, type, isMerged);
     } else if (isMerged && pullRequest.base.ref === "development") {
         // For regular Pull Requests into development, check any "closing" issues mentioned and manually close them
         const issueNumbers = extractClosedIssueNumbers(pullRequest.body ?? "");
@@ -169,10 +168,10 @@ async function onPullRequestClosed({ pull_request: pullRequest, repository }: Pu
 }
 
 async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull_request"], key: "code" | "data", isMerged: boolean, lastSynced: Date) {
-    const operation = `github.${key}` as const;
     let updates = await dataService.playtestingUpdates.read({ _metadata: { github: { [key]: { pullRequestUrl: pullRequest.html_url } } } });
     if (updates.length === 0) return;
 
+    const operation = `github.${key}` as const;
     for (const playtestingUpdate of updates) {
         const emitter = createSyncEmitter("playtestingUpdate", operation, playtestingUpdate);
         emitter.start();
@@ -185,6 +184,20 @@ async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull
     }
     updates = await dataService.playtestingUpdates.update(updates, false, false);
     logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github.${key} data for ${updates.length} playtesting updates`);
+}
+
+async function syncClosedCards(pullRequest: PullRequestClosedEvent["pull_request"], key: "code" | "data", isMerged: boolean) {
+    if (key !== "code" || !isMerged || pullRequest.base.ref !== "playtesting") return;
+
+    let cards = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
+    if (cards.length === 0) return;
+
+    for (const card of cards) {
+        card.implemented = true;
+    }
+
+    cards = await dataService.cards.update(cards, false);
+    logger.info(`[Github] Updated ${cards.length} cards as implemented`);
 }
 
 function isAutomated(data: { labels?: Label[] }) {
