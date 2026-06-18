@@ -162,7 +162,7 @@ export const migration: Migration = {
             delete newDoc.playtesting;
 
             const key = `${newDoc.project}-${newDoc.number}`;
-            if (!latestMap[key] || compareSemver(newDoc.version, latestMap[key].version) > 0) {
+            if (!newDoc.draft && (!latestMap[key] || compareSemver(newDoc.version, latestMap[key].version) > 0)) {
                 latestMap[key] = { key: `${newDoc.project}-${newDoc.number}-${newDoc.version}`, version: newDoc.version };
             }
 
