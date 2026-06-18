@@ -7,6 +7,7 @@ import { merge } from "lodash-es";
 import { dataService, logger } from "@/services";
 import { BatchRenderJobOptions } from "@/types";
 import { createSyncEmitter } from "@/services/sseService";
+import { Mutex } from "async-mutex";
 
 const baseUrl = process.env.S3_BASE_URL;
 const bucket = process.env.S3_BUCKET;
@@ -20,15 +21,12 @@ const client = new S3Client({
     }
 });
 
-let syncImageLock: Promise<void> = Promise.resolve();
+const syncImageMutex = new Mutex();
 
 export async function syncImage(card: IPlaytestCard): Promise<IPlaytestCard>
 export async function syncImage(cards: IPlaytestCard[]): Promise<IPlaytestCard[]>
 export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
-    const wait = syncImageLock;
-    let release!: () => void;
-    syncImageLock = new Promise(resolve => { release = resolve; });
-    await wait;
+    const release = await syncImageMutex.acquire();
     try {
         let cards = asArray(data);
         const uploaded: string[] = [];

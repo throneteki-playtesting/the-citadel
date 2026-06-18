@@ -9,8 +9,9 @@ import { capitalize, merge } from "lodash-es";
 import { getTimeLockedImageUrl } from "@/utils";
 import { User } from "common/models/auth";
 import { createSyncEmitter } from "@/services/sseService";
+import { Mutex } from "async-mutex";
 
-let syncCardForumLock: Promise<void> = Promise.resolve();
+const syncCardForumMutex = new Mutex();
 
 /**
  * Creates any new threads & messages for cards which are missing their discordMessageUrl.
@@ -18,10 +19,7 @@ let syncCardForumLock: Promise<void> = Promise.resolve();
  * @param cards Cards to sync
  */
 export async function syncCardForum(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
-    const wait = syncCardForumLock;
-    let release!: () => void;
-    syncCardForumLock = new Promise(resolve => { release = resolve; });
-    await wait;
+    const release = await syncCardForumMutex.acquire();
     try {
         const context = await getCardForumContext();
         const results: IPlaytestCard[] = [];

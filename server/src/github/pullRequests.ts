@@ -8,25 +8,23 @@ import { parseCardCode } from "common/utils";
 import { merge, sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter } from "@/services/sseService";
+import { Mutex } from "async-mutex";
 
 type PullRequest = Endpoints["GET /repos/{owner}/{repo}/pulls"]["response"]["data"][number];
 type BranchRef = Endpoints["GET /repos/{owner}/{repo}/git/ref/{ref}"]["response"]["data"];
 
-let syncCodePullRequestLock: Promise<void> = Promise.resolve();
-let syncDataPullRequestLock: Promise<void> = Promise.resolve();
+const syncCodePullRequestMutex = new Mutex();
+const syncDataPullRequestMutex = new Mutex();
 
 const DEVELOPMENT_BRANCH = "development";
 const PLAYTESTING_BRANCH = "playtesting";
 const STAGING_BRANCH = "development-updating";
 
 export async function syncCodePullRequests() {
-    const wait = syncCodePullRequestLock;
-    let release!: () => void;
-    syncCodePullRequestLock = new Promise(resolve => { release = resolve; });
-    await wait;
-
-    let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
+    const release = await syncCodePullRequestMutex.acquire();
+    let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
+        playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
         const newlyImplemented = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
         const context = githubService.getContext();
 
@@ -91,13 +89,10 @@ export async function syncCodePullRequests() {
 }
 
 export async function syncDataPullRequests() {
-    const wait = syncDataPullRequestLock;
-    let release!: () => void;
-    syncDataPullRequestLock = new Promise(resolve => { release = resolve; });
-    await wait;
-
-    let playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
+    const release = await syncDataPullRequestMutex.acquire();
+    let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
+        playtestingUpdates = await dataService.playtestingUpdates.read([{ _metadata: { github: { code: { status: { $exists: false } } } } }, { _metadata: { github: { code: { status: "open" } } } }]);
         const context = githubService.getContext("data");
 
         const emitters = new Map(

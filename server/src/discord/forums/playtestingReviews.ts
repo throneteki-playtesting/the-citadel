@@ -8,14 +8,12 @@ import { factionNames, isPreview, parseCardCode } from "common/utils";
 import { createSyncEmitter } from "@/services/sseService";
 import { syncImage } from "@/rendering/hosting";
 import { User } from "common/models/auth";
+import { Mutex } from "async-mutex";
 
-let syncReviewForumLock: Promise<void> = Promise.resolve();
+const syncReviewForumMutex = new Mutex();
 
 export async function syncReviewForum(reviews: IPlaytestReview[]): Promise<IPlaytestReview[]> {
-    const wait = syncReviewForumLock;
-    let release!: () => void;
-    syncReviewForumLock = new Promise(resolve => { release = resolve; });
-    await wait;
+    const release = await syncReviewForumMutex.acquire();
     try {
         const context = await getPlaytestingReviewContext();
         const results: IPlaytestReview[] = [];

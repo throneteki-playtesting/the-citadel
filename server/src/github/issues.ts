@@ -9,15 +9,13 @@ import { emojis } from "./utils";
 import { getTimeLockedImageUrl, pascalCase } from "@/utils";
 import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
+import { Mutex } from "async-mutex";
 
 
-let syncIssuesLock: Promise<void> = Promise.resolve();
+const syncIssuesMutex = new Mutex();
 
 export async function syncIssues(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
-    const wait = syncIssuesLock;
-    let release!: () => void;
-    syncIssuesLock = new Promise(resolve => { release = resolve; });
-    await wait;
+    const release = await syncIssuesMutex.acquire();
     try {
         const results: IPlaytestCard[] = [];
         for (const card of cards) {
