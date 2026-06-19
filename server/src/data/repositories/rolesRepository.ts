@@ -8,7 +8,7 @@ import { dataService } from "@/services";
 
 export default class RolesRepository extends BasicRepository<Role> {
     constructor(mongoClient: MongoClient) {
-        super(new MongoDataSource<Role>(mongoClient, "roles", { name: 1 }));
+        super(new MongoDataSource<Role>(mongoClient, "roles", { discordId: 1 }));
     }
 
 

@@ -6,7 +6,6 @@ import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore,
 import { Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
-import { Mutex } from "async-mutex";
 
 class DiscordService {
     private client: Client;
@@ -193,19 +192,12 @@ class DiscordService {
         return user;
     }
 
-    private static readonly roleSyncMutex = new Mutex();
-
     static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
-        (await DiscordService.roleSyncMutex.acquire())();
-
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser | User : (member as APIGuildMember | GuildMember).user;
 
-        // APIGuildMember.user is optional in the API type
-        if (!discordUser) return;
-
-        // Do not sync bots
-        if (discordUser.bot) return;
+        // Do not sync if user is missing or a bot
+        if (!discordUser || discordUser.bot) return;
 
         const nickname = !isUser
             ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
@@ -268,14 +260,7 @@ class DiscordService {
                 guild.members.fetch(),
                 guild.roles.fetch()
             ]);
-
-            const release = await DiscordService.roleSyncMutex.acquire();
-            try {
-                await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
-            } finally {
-                release();
-            }
-
+            await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
             await Promise.all(members.map((m) => DiscordService.syncUser(m)));
 
             logger.info("[Discord] Daily sync complete");
