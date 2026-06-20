@@ -202,6 +202,13 @@ const api = createApi({
             },
             invalidatesTags: (result) => mapTags(result, "role")
         }),
+        assignPlaytestingRole: builder.mutation<User, void>({
+            query: () => ({
+                url: buildUrl("roles/me/playtesting-team"),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => mapTags(result, "me", { includeList: false })
+        }),
         // Cards API
         getCards: builder.query<IGetResponse<IPlaytestCard>, IGetRequest<IPlaytestCard> | void>({
             query: (options) => {
@@ -544,6 +551,7 @@ export const {
 
     useGetRolesQuery,
     useUpdateRoleMutation,
+    useAssignPlaytestingRoleMutation,
 
     useGetCardsQuery,
     useGetCardQuery,

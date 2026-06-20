@@ -115,10 +115,11 @@ type PlaytestingUpdateDetailProps = {
     version: number
 }
 
+const BUG_REPORT_URL = import.meta.env.VITE_BUG_REPORT_URL;
+
 function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpdateHeaderProps) {
     const [renderPrintSheet, { isLoading: isRenderingPrintSheet }] = usePlaytestingUpdatePrintSheetMutation();
     const { format } = useTimezone();
-    const bugReportUrl = import.meta.env.VITE_BUG_REPORT_URL;
 
     const onExportPNG = async () => {
         try {
@@ -151,9 +152,9 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                                 <FontAwesomeIcon icon={faPrint} />
                             </Button>
                         </TouchTooltip>
-                        {bugReportUrl &&
+                        {BUG_REPORT_URL &&
                             <TouchTooltip content="Report a bug">
-                                <Button isIconOnly color="secondary" as={Link} href={bugReportUrl} target="_blank">
+                                <Button isIconOnly color="secondary" as={Link} href={BUG_REPORT_URL} target="_blank">
                                     <FontAwesomeIcon icon={faBug} />
                                 </Button>
                             </TouchTooltip>

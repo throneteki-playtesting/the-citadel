@@ -45,6 +45,8 @@ enum Permission {
     READ_ROLES = "READ_ROLES",
     /** Can edit all roles */
     EDIT_ROLES = "EDIT_ROLES",
+    /** Can assign the Playtesting Team Discord role to yourself */
+    ASSIGN_OWN_PLAYTESTING_ROLE = "ASSIGN_OWN_PLAYTESTING_ROLE",
     /** Can render cards to another format (eg. PDF, PNG)*/
     RENDER_CARDS = "RENDER_CARDS",
     /** Can view all card reviews */

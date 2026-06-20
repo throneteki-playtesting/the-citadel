@@ -17,6 +17,7 @@ declare namespace NodeJS {
         DISCORD_CLIENT_SECRET: string;
         DISCORD_GUILD_ID: string;
         DISCORD_AUTH_REDIRECT: string;
+        DISCORD_SERVER_INVITE_URL: string;
 
         THRONESDB_CLIENT_ID: string;
         THRONESDB_CLIENT_SECRET: string;

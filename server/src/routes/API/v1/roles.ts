@@ -1,4 +1,4 @@
-import { dataService } from "@/services";
+import { dataService, discordService } from "@/services";
 import { celebrate, Segments } from "celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
@@ -8,8 +8,11 @@ import { validateRequest } from "@/middleware/permissions";
 import { StatusCodes } from "http-status-codes";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
-import { Role } from "common/models/auth";
+import { Role, User } from "common/models/auth";
 import { getRequestSchema } from "@/schemas";
+import DiscordService from "@/discord";
+import { getContext } from "@/middleware/context";
+import { hasPermission } from "common/utils";
 
 const router = express.Router();
 
@@ -45,6 +48,26 @@ router.get("/",
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getRoles(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
+    })
+);
+
+// Assign the Playtesting Team Discord role to the authenticated user
+router.post("/me/playtesting-team",
+    validateRequest((principal) =>
+        hasPermission(principal, Permission.ASSIGN_OWN_PLAYTESTING_ROLE) && "discordId" in principal
+    ),
+    asyncHandler(async (_req, res) => {
+        const { principal } = getContext();
+        const { discordId } = principal as User;
+
+        const member = await discordService.assignPlaytestingTeamRole(discordId);
+        if (!member) {
+            res.status(StatusCodes.NOT_FOUND).json({ message: "User is not a member of the guild" });
+            return;
+        }
+
+        const user = await DiscordService.syncUser(member);
+        res.status(StatusCodes.OK).json(user);
     })
 );
 

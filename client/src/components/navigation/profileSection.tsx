@@ -16,7 +16,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     const { data: authUser, isLoading: isAuthLoading } = api.useGetMeQuery();
     const { user, isAuthenticating } = useSelector((state: RootState) => state.auth);
 
-    const [isLoggingIn, setIsProcessing] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     useEffect(() => {
@@ -46,8 +46,8 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     };
 
     if (!user && !isAuthenticating) {
-        const startContent = isLoggingIn ? <Spinner size="sm"/> : <FontAwesomeIcon icon={faDiscord} />;
-        return <Button startContent={startContent} isDisabled={isLoggingIn} onPress={onLogin} variant="flat">
+        const startContent = isProcessing ? <Spinner size="sm"/> : <FontAwesomeIcon icon={faDiscord} />;
+        return <Button startContent={startContent} isDisabled={isProcessing} onPress={onLogin} variant="flat" className="font-cinzel">
             <span className="max-sm:hidden">Log in with Discord</span>
             <span className="sm:hidden">Log in</span>
         </Button>;
@@ -73,7 +73,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
                         </DropdownItem>
                     )).concat(
                         <DropdownItem key="logout" onPress={async () => await onLogout()} color="danger">
-                        Log out
+                            Log out
                         </DropdownItem>
                     )}
                 </DropdownMenu>

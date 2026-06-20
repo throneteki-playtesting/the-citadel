@@ -8,6 +8,7 @@ import StatCards from "./statCards";
 import { hasPermission } from "common/utils";
 import SectionTitle from "../../components/sectionTitle";
 import usePageTitle from "../../hooks/usePageTitle";
+import WelcomeBanner from "./welcomeBanner";
 
 export default function Home() {
     usePageTitle("Home");
@@ -17,6 +18,7 @@ export default function Home() {
                 <div className="text-5xl font-cinzel font-semibold tracking-widest text-primary">The Citadel</div>
                 <div className="text-lg font-crimson italic text-secondary">— The archive of card design</div>
             </div>
+            <WelcomeBanner />
             <StatCards />
             <PermissionGate requires={Permission.READ_PROJECTS}>
                 <div className="space-y-2">

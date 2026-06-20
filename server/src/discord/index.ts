@@ -21,8 +21,10 @@ class DiscordService {
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
 
-        this.client.once(Events.ClientReady, (client) => {
+        this.client.once(Events.ClientReady, async (client) => {
             logger.info(`Discord connected with ${client.user.tag}`);
+
+            await this.validateRequiredRoles();
 
             // Syncs necessary data once on startup, then once a day
             logger.info("[Discord] Running daily sync...");
@@ -250,6 +252,41 @@ class DiscordService {
         });
         await dataService.users.syncEmbeddedRole(updated);
         return updated;
+    }
+
+    private async validateRequiredRoles() {
+        try {
+            const guild = await this.getGuild();
+            const roles = await guild.roles.fetch();
+
+            const requiredRoles = ["@everyone", "Playtesting Team"];
+            for (const name of requiredRoles) {
+                if (!roles.find((r) => r.name === name)) {
+                    logger.warn(`[Discord] Required role "${name}" is missing from the guild`);
+                }
+            }
+        } catch (err) {
+            logger.error("[Discord] Failed to validate required roles", err);
+        }
+    }
+
+    public async assignPlaytestingTeamRole(discordId: string): Promise<GuildMember | null> {
+        const guild = await this.getGuild();
+
+        let member: GuildMember;
+        try {
+            member = await guild.members.fetch(discordId);
+        } catch {
+            return null;
+        }
+
+        const role = await this.findRoleByName(guild, "Playtesting Team");
+        if (!role) {
+            throw new Error("Playtesting Team role not found in guild");
+        }
+
+        await member.roles.add(role);
+        return member;
     }
 
     private async syncAll() {

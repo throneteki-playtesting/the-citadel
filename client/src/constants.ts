@@ -36,6 +36,7 @@ const permissionMeta: Record<Permission, { label: string; group: string }> = {
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users" },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles" },
+    [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
     [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },
     [Permission.READ_DISCORD_REVIEW_FORUM]: { label: "View Review Forum", group: "Discord" },
     [Permission.SYNC_CARD_IMAGES]: { label: "Card Images", group: "Sync" },
