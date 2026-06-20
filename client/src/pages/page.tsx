@@ -7,7 +7,7 @@ import { RootState } from "../api/store";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLock } from "@fortawesome/free-solid-svg-icons";
 
-const Page = ({ children, required }: PageProps) => {
+export default function Page({ children, required }: PageProps) {
     const { user, isAuthenticating } = useSelector((state: RootState) => state.auth);
 
     if (isAuthenticating) {
@@ -26,6 +26,7 @@ const Page = ({ children, required }: PageProps) => {
 
     return <>{children}</>;
 };
-type PageProps = { children: ReactNode, required?: SingleOrArray<Permission> }
-
-export default Page;
+type PageProps = {
+    children: ReactNode;
+    required?: SingleOrArray<Permission>
+}

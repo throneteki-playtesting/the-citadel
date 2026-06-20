@@ -1,10 +1,16 @@
 import { HeroUIProvider, ToastProvider } from "@heroui/react";
 import NavigationBar from "../components/navigation";
-import { Outlet, useHref, useNavigate } from "react-router-dom";
+import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { SSEProvider } from "./sseProvider";
+import { useEffect } from "react";
 
 function App() {
     const navigate = useNavigate();
+    const { pathname } = useLocation();
+
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [pathname]);
 
     return (
         <SSEProvider>
