@@ -1,4 +1,5 @@
 import express from "express";
+import asyncHandler from "express-async-handler";
 import users from "./users";
 import roles from "./roles";
 import cards from "./cards";
@@ -10,6 +11,8 @@ import render from "./render";
 import suggestions from "./suggestions";
 import broadcast from "./broadcast";
 import { parseAPIRequest } from "@/middleware/filters";
+import { dataService } from "@/services";
+import { getContext } from "@/middleware/context";
 
 const router = express.Router();
 router.use("/users", parseAPIRequest, users);
@@ -27,18 +30,24 @@ router.post("/login", (req, res) => {
     res.redirect("/auth/discord");
 });
 
-router.post("/logout", (req, res) => {
-    res.clearCookie("accessToken", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
-    });
-    res.clearCookie("refreshToken", {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax"
-    });
+const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const
+};
+
+router.post("/logout", asyncHandler(async (req, res) => {
+    const { sessionId } = req.cookies;
+    const context = getContext();
+
+    if (sessionId && context.source === "client") {
+        await dataService.auth.deleteSession(context.principal.discordId, sessionId);
+    }
+
+    res.clearCookie("accessToken", cookieOptions);
+    res.clearCookie("refreshToken", cookieOptions);
+    res.clearCookie("sessionId", cookieOptions);
     res.sendStatus(200);
-});
+}));
 
 export default router;

@@ -3,6 +3,7 @@ import Permission from "./permissions";
 
 export interface RefreshToken {
     discordId: string,
+    sessionId: string,
     tokenHash: string,
     expiresAt: Date,
     createdAt: Date

@@ -61,7 +61,8 @@ router.get("/discord/callback",
             const user = await DiscordService.syncUser(discordDetails, true);
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
-            await applyTokensToResponse(res, user.discordId);
+            const sessionId = req.cookies.sessionId ?? randomUUID();
+            await applyTokensToResponse(res, user.discordId, sessionId);
 
             res.redirect(buildUrl(REDIRECT_URL, { status: "success" } as { status: AuthStatus }));
         } catch (err) {
@@ -73,7 +74,7 @@ router.get("/discord/callback",
 
 router.get("/refresh",
     asyncHandler<unknown, unknown, unknown, unknown>(async (req, res) => {
-        const { refreshToken } = req.cookies;
+        const { refreshToken, sessionId } = req.cookies;
         if (!refreshToken) {
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Refresh Token", "No refresh token provided");
         }
@@ -85,7 +86,7 @@ router.get("/refresh",
             throw new ApiErrorResponse(StatusCodes.FORBIDDEN, "Expired or Invalid Refresh Token", "Refresh token is either missing or expired");
         }
 
-        await applyTokensToResponse(res, stored.discordId);
+        await applyTokensToResponse(res, stored.discordId, sessionId ?? randomUUID());
 
         const response: RefreshAuthResponse = { status: "success" };
         res.json(response);
@@ -133,13 +134,14 @@ function createAccessToken(discordId: string) {
     return { token, expiresAt };
 }
 
-async function createRefreshToken(discordId: string) {
+async function createRefreshToken(discordId: string, sessionId: string) {
     const rawToken = randomUUID();
     const tokenHash = generateHash(rawToken);
     const expiresAt = new Date(Date.now() + Number.parseInt(process.env.REFRESH_TOKEN_TTL) * 1000);
     const createdAt = new Date();
     const refreshToken: RefreshToken = {
         discordId,
+        sessionId,
         tokenHash,
         expiresAt,
         createdAt
@@ -153,10 +155,16 @@ function generateHash(raw: string) {
     return createHash("sha256").update(raw).digest("hex");
 }
 
-async function applyTokensToResponse(res: Response, discordId: string) {
+async function applyTokensToResponse(res: Response, discordId: string, sessionId: string) {
     const { token: accessToken, expiresAt: accessExpiresAt } = createAccessToken(discordId);
-    const { token: refreshToken, expiresAt: refreshExpiresAt } = await createRefreshToken(discordId);
+    const { token: refreshToken, expiresAt: refreshExpiresAt } = await createRefreshToken(discordId, sessionId);
 
+    res.cookie("sessionId", sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        expires: refreshExpiresAt
+    });
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

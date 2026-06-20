@@ -1,6 +1,5 @@
 import { BulkWriteOptions, Collection, DeleteOptions, Filter as MongoFilter, FindOptions, IndexSpecification, MongoClient, OptionalUnlessRequiredId, WithId } from "mongodb";
 import { Filter, isOperatorObject, SingleOrArray } from "common/types";
-import { logger } from "@/services";
 import { asArray } from "common/utils";
 
 export default class MongoDataSource<T> {
