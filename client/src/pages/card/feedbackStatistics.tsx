@@ -1,4 +1,4 @@
-import { Accordion, AccordionItem, Alert, Avatar, Button, ButtonGroup, Card, Link, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ScrollShadow, Select, SelectItem, SharedSelection, Skeleton } from "@heroui/react";
+import { Accordion, AccordionItem, Alert, Avatar, Button, Card, Link, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ScrollShadow, Select, SelectItem, SharedSelection, Skeleton } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
 import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/utils";
@@ -214,8 +214,10 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                         </Button>
                     </div>
                 </PermissionGate>
-                <ScrollShadow className="max-h-[50rem] flex flex-col border border-content3 divide-y divide-content3">
-                    {dataSet?.map((review) => <ReviewSummary key={`${review.reviewer}|${review.version}`} review={review} onEdit={onEdit} />)}
+                <ScrollShadow className="max-h-[50rem]">
+                    <div className="flex flex-col border border-content3 divide-y divide-content3">
+                        {dataSet?.map((review) => <ReviewSummary key={`${review.reviewer}|${review.version}`} review={review} onEdit={onEdit} />)}
+                    </div>
                 </ScrollShadow>
             </div>
             <Modal isOpen={isOutdatedModalOpen} onOpenChange={setIsOutdatedModalOpen} placement="center">
@@ -314,10 +316,10 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
         <HighlightTarget targetId={highlightTarget.review(review)} className={classNames("bg-content1 p-4 flex flex-col ", className)} style={style}>
             <div className="flex gap-2 items-center">
                 <div className="flex-1 text-lg font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
-                <Timestamp className="my-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
-                <div>
-                    <ButtonGroup size="sm">
-                        <PermissionGate requires={(user) => hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer}>
+                <div className="flex flex-col-reverse md:flex-row">
+                    <Timestamp className="self-end px-2 md:mb-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
+                    <div className="flex flex-wrap gap-1">
+                        <PermissionGate requires={(user) => hasPermission(user, Permission.EDIT_REVIEWS) || hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer}>
                             <TouchTooltip content={
                                 <div className="max-w-64">
                                     <div className="text-sm">Amend your verdict</div>
@@ -349,8 +351,9 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                                 />
                             </TouchTooltip>
                         </PermissionGate>
-                    </ButtonGroup>
+                    </div>
                 </div>
+
             </div>
             <div className="flex gap-2">
                 <div className="flex gap-2 items-center">

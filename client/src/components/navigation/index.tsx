@@ -73,20 +73,20 @@ const NavigationBar = () => {
     }, [createItem, projectsItem, user]);
 
     return (
-        <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen} className="font-cinzel" >
-            <NavbarContent className="sm:hidden">
+        <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen}>
+            <NavbarContent className="md:hidden">
                 <NavbarMenuToggle
                     aria-label={isMenuOpen ? "Close menu" : "Open menu"}
                 />
             </NavbarContent>
-            <NavbarContent className="hidden sm:flex">
+            <NavbarContent className="hidden md:flex font-cinzel">
                 {items.map((navItem, index) => <NavbarItem key={index}>{navItem}</NavbarItem>)}
             </NavbarContent>
-            <span className="font-cinzel text-primary font-semibold">The Citadel</span>
+            <Link href="/" className="font-cinzel text-primary font-semibold lg:text-xl xl:text-2xl">The Citadel</Link>
             <ProfileSection>
                 {profileItems}
             </ProfileSection>
-            <NavbarMenu>
+            <NavbarMenu className="font-cinzel" >
                 {items.map((navItem, index) => <NavbarMenuItem key={index}>{navItem}</NavbarMenuItem>)}
             </NavbarMenu>
         </Navbar>);
