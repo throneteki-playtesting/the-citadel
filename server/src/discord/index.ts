@@ -218,9 +218,7 @@ class DiscordService {
                 ? [...guildMember.roles.cache.keys()]
                 : guildMember.roles;
 
-            roles = roleIds.length > 0
-                ? await dataService.roles.read(roleIds.map((id) => ({ discordId: id })))
-                : [];
+            roles = await dataService.roles.read([...roleIds.map((id) => ({ discordId: id })), { name: "@everyone" }]);
         }
 
         return await dataService.users.update({

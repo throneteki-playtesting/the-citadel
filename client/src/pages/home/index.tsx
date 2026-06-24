@@ -29,7 +29,7 @@ export default function Home() {
                 </div>
             </PermissionGate>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                <PermissionGate requires={Permission.READ_CARDS}>
+                <PermissionGate requires={Permission.READ_ALL_CARDS}>
                     <RecentCardChanges />
                 </PermissionGate>
                 <PermissionGate requires={(user) => hasPermission(user, Permission.READ_REVIEWS) || hasPermission(user, Permission.READ_SUGGESTIONS)}>

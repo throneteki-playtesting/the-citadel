@@ -1,7 +1,6 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { asArray, buildUrl, SemanticVersion } from "common/utils";
-import { clearUser } from "./authSlice";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
@@ -82,13 +81,10 @@ const baseQuery = fetchBaseQuery({
 const mutex = new Mutex();
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
     args,
-    api,
+    queryApi,
     extraOptions
 ) => {
-    // Wait if a refresh is already in progress, but don't lock yet
-    await mutex.waitForUnlock();
-
-    let result = await baseQuery(args, api, extraOptions);
+    let result = await baseQuery(args, queryApi, extraOptions);
 
     if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
         if (!mutex.isLocked()) {
@@ -102,12 +98,12 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
                     unknown,
                     FetchBaseQueryMeta
                 >;
-                const refreshResult = await baseAuthQuery("/refresh", api, extraOptions);
+                const refreshResult = await baseAuthQuery("/refresh", queryApi, extraOptions);
 
                 if (refreshResult.data?.status === "success") {
-                    result = await baseQuery(args, api, extraOptions);
+                    result = await baseQuery(args, queryApi, extraOptions);
                 } else {
-                    api.dispatch(clearUser());
+                    queryApi.dispatch(api.util.invalidateTags([{ type: "me" }]));
                     if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
                         window.location.href = "/auth/discord";
                     }
@@ -118,7 +114,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
         } else {
             // Another request is already refreshing — wait for it to finish, then retry
             await mutex.waitForUnlock();
-            result = await baseQuery(args, api, extraOptions);
+            result = await baseQuery(args, queryApi, extraOptions);
         }
     }
 

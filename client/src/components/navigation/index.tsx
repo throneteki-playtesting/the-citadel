@@ -5,18 +5,16 @@ import { isMenuItem, isPageItem, isVisibleFor, MenuItem as MenuItemType, NavItem
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronUp } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { useSelector } from "react-redux";
-import { RootState } from "../../api/store";
 import { useGetProjectsQuery } from "../../api";
+import { useAuth } from "../../hooks/useAuth";
 import Permission from "common/models/permissions";
 import { useLocation } from "react-router-dom";
-import { hasPermission } from "common/utils";
 
 const NavigationBar = () => {
-    const user = useSelector((state: RootState) => state.auth.user);
+    const { user } = useAuth();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const { data: projectData } = useGetProjectsQuery(!hasPermission(user, Permission.READ_ALL_PROJECTS) ? { filter: { active: true } } : {});
+    const { data: projectData } = useGetProjectsQuery();
 
     useEffect(() => {
         if (location) {
@@ -45,10 +43,7 @@ const NavigationBar = () => {
                 return {
                     path: `/project/${project.number}`,
                     label: `${project.number}. ${project.name}`,
-                    permission: [
-                        ...(!project.active ? [Permission.READ_ALL_PROJECTS] : []),
-                        Permission.READ_PROJECTS
-                    ]
+                    permission: Permission.READ_PROJECTS
                 };
             });
         return {
@@ -99,7 +94,7 @@ const PageItem = ({ item }: PageItemProps) => {
 type PageItemProps = { item: PageItemType }
 
 const MenuItem = ({ item, parents = [] }: MenuItemProps) => {
-    const user = useSelector((state: RootState) => state.auth.user);
+    const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
 
     return (

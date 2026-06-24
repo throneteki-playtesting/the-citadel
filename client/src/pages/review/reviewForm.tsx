@@ -7,9 +7,8 @@ import { IPlaytestReview } from "common/models/reviews";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeepPartial } from "common/types";
 import { PlaytestingReview } from "common/models/schemas";
-import { useSelector } from "react-redux";
-import { RootState } from "../../api/store";
 import { useCreateReviewMutation, useLazyGetReviewQuery, useUpdateReviewMutation } from "../../api";
+import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Wizard, WizardBack, WizardPage, WizardPages } from "../../components/wizard";
 import SubmitDecks from "./submittedDeck";
@@ -36,7 +35,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
     const [createReview, { isLoading: isCreating }] = useCreateReviewMutation();
     const [updateReview, { isLoading: isUpdating }] = useUpdateReviewMutation();
 
-    const user = useSelector((state: RootState) => state.auth.user);
+    const { user } = useAuth();
     const reviewer = user?.discordId;
 
     const [review, setReview] = useState<DeepPartial<IPlaytestReview>>(defaultData);

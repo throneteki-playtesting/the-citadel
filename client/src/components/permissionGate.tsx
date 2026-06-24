@@ -1,12 +1,11 @@
 import { ReactNode } from "react";
-import { useSelector } from "react-redux";
-import { RootState } from "../api/store";
 import { SingleOrArray } from "common/types";
 import { asArray, validate, ValidationStep } from "common/utils";
 import { User } from "common/models/auth";
+import { useAuth } from "../hooks/useAuth";
 
 export default function PermissionGate({ children, requires }: PermissionGateProps) {
-    const user = useSelector((state: RootState) => state.auth.user);
+    const { user } = useAuth();
     if (!requires) {
         return children;
     }

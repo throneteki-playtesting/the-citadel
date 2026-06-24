@@ -25,7 +25,10 @@ export const authMiddleware = asyncHandler(
             const { accessToken } = req.cookies;
 
             if (!accessToken) {
-                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "No access token provided");
+                const [guestUser] = await dataService.users.read({ discordId: "anonymous" });
+                const context = createContext("client", guestUser);
+                requestContext.run(context, next);
+                return;
             }
             try {
                 const { discordId } = jwt.verify(accessToken, process.env.JWT_SECRET) as AccessTokenPayload;

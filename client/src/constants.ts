@@ -9,7 +9,7 @@ export const availablePermissions = enumToArray(Permission);
 
 const permissionMeta: Record<Permission, { label: string; group: string }> = {
     [Permission.READ_PROJECTS]: { label: "Read", group: "Projects" },
-    [Permission.READ_ALL_PROJECTS]: { label: "Read All", group: "Projects" },
+    [Permission.READ_ARCHIVED_PROJECTS]: { label: "Read Archived", group: "Projects" },
     [Permission.CREATE_PROJECTS]: { label: "Create", group: "Projects" },
     [Permission.EDIT_PROJECTS]: { label: "Edit", group: "Projects" },
     [Permission.DELETE_PROJECTS]: { label: "Delete", group: "Projects" },
@@ -17,7 +17,8 @@ const permissionMeta: Record<Permission, { label: string; group: string }> = {
     [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects" },
     [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting" },
     [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting" },
-    [Permission.READ_CARDS]: { label: "Read", group: "Cards" },
+    [Permission.READ_ALL_CARDS]: { label: "Read All", group: "Cards" },
+    [Permission.READ_LATEST_CARDS]: { label: "Read Latest", group: "Cards" },
     [Permission.CREATE_CARDS]: { label: "Create", group: "Cards" },
     [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards" },
     [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards" },

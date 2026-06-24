@@ -64,7 +64,7 @@ const getQuerySchema = getRequestSchema(
 
 // Read all cards
 router.get("/",
-    validateRequest(Permission.READ_CARDS),
+    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
@@ -76,7 +76,7 @@ router.get("/",
 // Read cards for project
 router.get("/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
-    validateRequest(Permission.READ_CARDS),
+    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project } = req.params;
@@ -91,7 +91,7 @@ router.get("/:project",
 // Read all versions of a card in a project
 router.get("/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
-    validateRequest(Permission.READ_CARDS),
+    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project, number } = req.params;
@@ -106,7 +106,15 @@ router.get("/:project/:number",
 // Read specific version of a card, or "latest"
 router.get("/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
-    validateRequest(Permission.READ_CARDS),
+    validateRequest((principal, req) => {
+        if (hasPermission(principal, Permission.READ_ALL_CARDS)) {
+            return true;
+        }
+        if (hasPermission(principal, Permission.READ_LATEST_CARDS) && req.params.version === "latest") {
+            return true;
+        }
+        return false;
+    }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion | "latest" }, unknown, unknown, IPlaytestCard>(async (req, res) => {
         const { project, number, version } = req.params;
 
@@ -121,7 +129,7 @@ router.get("/:project/:number/:version",
 // Read previous version of a specific card
 router.get("/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
-    validateRequest(Permission.READ_CARDS),
+    validateRequest(Permission.READ_ALL_CARDS),
     asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
         const { project, number, version } = req.params;
 

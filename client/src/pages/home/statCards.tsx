@@ -16,9 +16,9 @@ import classNames from "classnames";
 export default function StatCards() {
     return (
         <div className="grid grid-cols-2 md:grid-cols-4 border border-content3 divide-x divide-content3 drop-shadow-lg">
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}><CardChangesStat /></PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}><CardChangesStat /></PermissionGate>
             <PermissionGate requires={Permission.READ_USERS}><ActivePlaytestersStat /></PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}><CardsInTestingStat /></PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}><CardsInTestingStat /></PermissionGate>
             <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}><ReviewsStat /></PermissionGate>
         </div>
     );

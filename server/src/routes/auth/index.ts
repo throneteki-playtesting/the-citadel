@@ -156,26 +156,23 @@ function generateHash(raw: string) {
 }
 
 async function applyTokensToResponse(res: Response, discordId: string, sessionId: string) {
-    const { token: accessToken, expiresAt: accessExpiresAt } = createAccessToken(discordId);
-    const { token: refreshToken, expiresAt: refreshExpiresAt } = await createRefreshToken(discordId, sessionId);
+    const { token: accessToken } = createAccessToken(discordId);
+    const { token: refreshToken } = await createRefreshToken(discordId, sessionId);
 
     res.cookie("sessionId", sessionId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        expires: refreshExpiresAt
+        sameSite: "lax"
     });
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        expires: accessExpiresAt
+        sameSite: "lax"
     });
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        expires: refreshExpiresAt
+        sameSite: "lax"
     });
 }
 

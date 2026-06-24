@@ -10,11 +10,10 @@ import { CardPreview } from "@agot/card-preview";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { CardSuggestion } from "common/models/schemas";
 import ComboBox from "../../components/combobox";
-import { RootState } from "../../api/store";
-import { useSelector } from "react-redux";
+import { useAuth } from "../../hooks/useAuth";
 
 const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClose = () => true, onSave = () => true }: EditSuggestionModalProps) => {
-    const user = useSelector((state: RootState) => state.auth.user);
+    const { user } = useAuth();
     const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
     const [updateSuggestion, { isLoading: isUpdating }] = useUpdateSuggestionMutation();
     const [suggestion, setSuggestion] = useState<DeepPartial<ICardSuggestion>>({});

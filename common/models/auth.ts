@@ -9,7 +9,11 @@ export interface RefreshToken {
     createdAt: Date
 }
 
-export type Principal = User | Integration;
+export interface Anonymous extends IPrincipal {
+    readonly id: "anonymous";
+}
+
+export type Principal = User | Integration | Anonymous;
 
 interface IPrincipal {
     id: string;

@@ -1,5 +1,5 @@
 import { Button, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, User as DisplayUser, Pagination, Input, Spinner } from "@heroui/react";
-import { useGetUsersQuery } from "../../../api";
+import { useGetUsersQuery, useGetUserQuery } from "../../../api";
 import { Key, useCallback, useMemo, useState } from "react";
 import Permission from "common/models/permissions";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -23,11 +23,12 @@ export default function Users() {
         const searchRegex = `(?i)${search}`;
 
         return [
-            { displayname: { $regex: searchRegex } },
-            { username: { $regex: searchRegex } }
+            { displayname: { $regex: searchRegex }, discordId: { $ne: "anonymous" } },
+            { username: { $regex: searchRegex }, discordId: { $ne: "anonymous" } }
         ];
     }, [search]);
     const { data: usersData, isLoading, isFetching } = useGetUsersQuery({ filter, page, perPage });
+    const { data: guestUser } = useGetUserQuery({ discordId: "anonymous" });
 
     // Reset to page 1 when search changes
     const handleSearch = (value: string) => {
@@ -92,6 +93,24 @@ export default function Users() {
             <div className="font-cinzel text-2xl">Citadel Users</div>
             <div className="text-sm md:text-base">User data is synced with Discord, prioritising the linked discord server information.</div>
             <div className="text-sm md:text-base">You may edit user permissions at a granular level here, or at a broader level via the Roles page.</div>
+            {canEdit && (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border border-content2 rounded-lg p-4">
+                    <div className="space-y-1">
+                        <div className="font-semibold text-sm">Guest / Anonymous Access</div>
+                        <div className="text-xs text-default-500">Controls the permissions granted to unauthenticated users. Any visitor without a login will be treated as this profile.</div>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="flat"
+                        className="shrink-0"
+                        startContent={<FontAwesomeIcon icon={faPencil} />}
+                        isDisabled={!guestUser || !!editingUser}
+                        onPress={() => setEditingUser(guestUser)}
+                    >
+                        Edit Guest Profile
+                    </Button>
+                </div>
+            )}
             <Table
                 topContent={
                     <Input

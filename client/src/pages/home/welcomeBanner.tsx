@@ -2,24 +2,16 @@ import { faScroll } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { addToast, Button, Spinner } from "@heroui/react";
 import { Link } from "react-router-dom";
-import { RootState } from "../../api/store";
-import { useSelector } from "react-redux";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
-import { useState } from "react";
 import { useAssignPlaytestingRoleMutation } from "../../api";
+import { useAuth } from "../../hooks/useAuth";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 
 const DISCORD_SERVER_INVITE_URL = import.meta.env.VITE_DISCORD_SERVER_INVITE_URL;
 
 export default function WelcomeBanner() {
-    const user = useSelector((state: RootState) => state.auth.user);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const { user, isAuthenticated, isProcessing, login } = useAuth();
     const [assignPlaytestingRole, { isLoading: isAssigning }] = useAssignPlaytestingRoleMutation();
-
-    const onLogin = async () => {
-        setIsProcessing(true);
-        window.location.href = "/auth/discord";
-    };
 
     const onBecomePlaytester = async () => {
         try {
@@ -37,7 +29,7 @@ export default function WelcomeBanner() {
         }
     };
 
-    if (!user) {
+    if (!isAuthenticated || !user) {
         return (
             <div className="border border-content3 bg-content1 p-4 flex flex-col md:flex-row md:items-center gap-3">
                 <div className="flex-1">
@@ -46,7 +38,7 @@ export default function WelcomeBanner() {
                         You are welcome to browse the public archives — active projects and their latest cards are open to all. Should you wish to delve deeper into the Citadel's records, please log in.
                     </div>
                 </div>
-                <Button startContent={isProcessing ? <Spinner color="secondary" size="sm"/> : <FontAwesomeIcon icon={faDiscord} />} isDisabled={isProcessing} color="primary" onPress={onLogin} className="font-cinzel shrink-0 font-semibold">
+                <Button startContent={isProcessing ? <Spinner color="secondary" size="sm"/> : <FontAwesomeIcon icon={faDiscord} />} isDisabled={isProcessing} color="primary" onPress={login} className="font-cinzel shrink-0 font-semibold">
                     Log in with Discord
                 </Button>
             </div>

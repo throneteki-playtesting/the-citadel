@@ -40,7 +40,7 @@ export const navItems: NavItem[] = [
     },
     {
         path: "/project/:project/:number",
-        permission: Permission.READ_CARDS,
+        permission: Permission.READ_ALL_CARDS,
         element: <Card />
     },
     {

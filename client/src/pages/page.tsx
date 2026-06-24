@@ -2,15 +2,14 @@ import Permission from "common/models/permissions";
 import { ReactNode } from "react";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
-import { useSelector } from "react-redux";
-import { RootState } from "../api/store";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLock } from "@fortawesome/free-solid-svg-icons";
+import { useAuth } from "../hooks/useAuth";
 
 export default function Page({ children, required }: PageProps) {
-    const { user, isAuthenticating } = useSelector((state: RootState) => state.auth);
+    const { user, isLoading } = useAuth();
 
-    if (isAuthenticating) {
+    if (isLoading) {
         return null;
     }
     const permissions = asArray(required ?? []);

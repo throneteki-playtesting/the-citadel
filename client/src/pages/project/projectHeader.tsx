@@ -79,10 +79,10 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
             {!project.draft && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
-                    <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
+                    <PermissionGate requires={Permission.READ_ALL_CARDS}><CardChangesStat project={project} /></PermissionGate>
                     <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                     <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                    <PermissionGate requires={Permission.READ_CARDS}><PacksStat project={project} /></PermissionGate>
+                    <PermissionGate requires={Permission.READ_ALL_CARDS}><PacksStat project={project} /></PermissionGate>
                 </div>
             )}
             {!project.draft && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

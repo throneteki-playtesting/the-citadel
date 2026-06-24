@@ -5,8 +5,8 @@ enum Permission {
     EDIT_PROJECTS = "EDIT_PROJECTS",
     /** Can delete draft projects */
     DELETE_PROJECTS = "DELETE_PROJECTS",
-    /** Can view all projects */
-    READ_ALL_PROJECTS = "READ_ALL_PROJECTS",
+    /** Can view archived projects */
+    READ_ARCHIVED_PROJECTS = "READ_ARCHIVED_PROJECTS",
     /** Can view active projects */
     READ_PROJECTS = "READ_PROJECTS",
     /** Can initialise draft projects (eg. confirm starting lineups) */
@@ -17,8 +17,10 @@ enum Permission {
     CREATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
     /** Can read playtesting updates for any project */
     READ_PLAYTESTING_UPDATES = "READ_PLAYTESTING_UPDATES",
-    /** Can view playtesting cards */
-    READ_CARDS = "READ_CARDS",
+    /** Can view all playtesting cards */
+    READ_ALL_CARDS = "READ_CARDS",
+    /** Can view latest playtesting cards */
+    READ_LATEST_CARDS = "READ_LATEST_CARDS",
     /** Can edit playtesting cards */
     EDIT_CARDS = "EDIT_CARDS",
     /** Can create playtesting cards or updates */
