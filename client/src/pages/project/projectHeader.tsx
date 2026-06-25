@@ -5,12 +5,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faBoxArchive, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
+import { hasPermission } from "common/utils";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
 import { useMemo, ReactNode } from "react";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import { TouchTooltip } from "../../components/touchTooltip";
+import StatsGrid from "../../components/statsGrid";
 
 const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
     const headerComponents = useMemo(() => {
@@ -78,17 +80,21 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
             {!project.draft && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
+                <StatsGrid>
                     <PermissionGate requires={Permission.READ_ALL_CARDS}><CardChangesStat project={project} /></PermissionGate>
                     <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                     <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                    <PermissionGate requires={Permission.READ_ALL_CARDS}><PacksStat project={project} /></PermissionGate>
+                    <PermissionGate requires={(user) => hasPermission(user, Permission.READ_ALL_CARDS) || hasPermission(user, Permission.READ_LATEST_CARDS)}>
+                        <PacksStat project={project} />
+                    </PermissionGate>
+                </StatsGrid>
+            )}
+            <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
+                {!project.draft && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <ProjectPlaytestingUpdates project={project} />
                 </div>
-            )}
-            {!project.draft && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <ProjectPlaytestingUpdates project={project} />
-            </div>
-            )}
+                )}
+            </PermissionGate>
         </div>
     );
 };

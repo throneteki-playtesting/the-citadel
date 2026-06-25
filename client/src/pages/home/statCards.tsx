@@ -3,11 +3,12 @@ import { ReactNode, useMemo } from "react";
 import { NoteType } from "common/models/cards";
 import { daysFromNow } from "../../utils";
 import { Skeleton } from "@heroui/react";
-import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { changeTypeClasses } from "../../constants";
 import { ChangeType } from "common/types";
 import classNames from "classnames";
+import PermissionGate from "../../components/permissionGate";
+import StatsGrid from "../../components/statsGrid";
 
 // TODO: Create a "statistics" endpoint in server, and call that rather than gathering data on front-end. For now, this is sufficient
 // Should also include new "statistics" related permissions, as a user could see total stats, but not the data creating those stats
@@ -15,12 +16,20 @@ import classNames from "classnames";
 
 export default function StatCards() {
     return (
-        <div className="grid grid-cols-2 md:grid-cols-4 border border-content3 divide-x divide-content3 drop-shadow-lg">
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}><CardChangesStat /></PermissionGate>
-            <PermissionGate requires={Permission.READ_USERS}><ActivePlaytestersStat /></PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}><CardsInTestingStat /></PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}><ReviewsStat /></PermissionGate>
-        </div>
+        <StatsGrid className="border border-content3 drop-shadow-lg">
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}>
+                <CardChangesStat />
+            </PermissionGate>
+            <PermissionGate requires={Permission.READ_USERS}>
+                <ActivePlaytestersStat />
+            </PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}>
+                <CardsInTestingStat />
+            </PermissionGate>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}>
+                <ReviewsStat />
+            </PermissionGate>
+        </StatsGrid>
     );
 }
 

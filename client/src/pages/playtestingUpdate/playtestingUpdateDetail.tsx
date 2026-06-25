@@ -22,6 +22,8 @@ import SectionTitle from "../../components/sectionTitle";
 import usePageTitle from "../../hooks/usePageTitle";
 import useTimezone from "../../hooks/useTimezone";
 import { useNavigate } from "react-router-dom";
+import PermissionedLink from "../../components/permissionedLink";
+import Permission from "common/models/permissions";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -135,9 +137,9 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
             <div className="flex flex-col sm:flex-row">
                 <div className="flex-1 flex items-center">
                     <div className="flex flex-col">
-                        <Link href={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150">
+                        <PermissionedLink to={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
                             <FontAwesomeIcon icon={faAngleLeft}/> {project.name}
-                        </Link>
+                        </PermissionedLink>
                         <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
                                 Playesting Update #{playtestingUpdate.version}
                         </div>

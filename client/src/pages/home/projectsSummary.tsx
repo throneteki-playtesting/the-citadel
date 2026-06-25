@@ -4,7 +4,9 @@ import { useNavigate } from "react-router-dom";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
 import Permission from "common/models/permissions";
+import { hasPermission } from "common/utils";
 import PermissionGate from "../../components/permissionGate";
+import StatsGrid from "../../components/statsGrid";
 import { dismoji } from "../../constants";
 
 export const ProjectsSummary = () => {
@@ -127,12 +129,14 @@ function ProjectCard({ project }: ProjectCardProps) {
                     </div>
                 )
             }
-            <div className="grid grid-cols-2 sm:grid-cols-4 max-sm:divide-y divide-x divide-content3">
+            <StatsGrid>
                 <PermissionGate requires={Permission.READ_ALL_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_ALL_CARDS}><PacksStat project={project} /></PermissionGate>
-            </div>
+                <PermissionGate requires={(user) => hasPermission(user, Permission.READ_ALL_CARDS) || hasPermission(user, Permission.READ_LATEST_CARDS)}>
+                    <PacksStat project={project} />
+                </PermissionGate>
+            </StatsGrid>
         </div>
     );
 }

@@ -1,11 +1,13 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Divider, Link, Skeleton } from "@heroui/react";
+import { Divider, Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
+import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import { useMemo } from "react";
+import PermissionedLink from "../../components/permissionedLink";
 import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
 import { IProject } from "common/models/projects";
@@ -56,7 +58,7 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
     }, [reviewsData?.items, reviewsData?.total]);
 
     return (
-        <div className={classNames("relative border border-content3 overflow-hidden")}>
+        <div className={classNames("relative border border-content3 bg-content1 overflow-hidden")}>
             <div className="absolute -top-8 right-48 flex items-center justify-center pointer-events-none select-none">
                 <ThronesIcon name={faction} className={classNames("text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>
             </div>
@@ -72,14 +74,13 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
             </div>
             <div className="relative">
                 <div className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-2 p-2">
-                    {
-                        cards.map((card) => (
-                            <Link key={parseCardCode(false, card.project, card.number)} href={`/project/${card.project}/${card.number}`}>
-                                <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
-                                    <ProjectContentCard card={card} />
-                                </div>
-                            </Link>))
-                    }
+                    {cards.map((card) => (
+                        <PermissionedLink key={parseCardCode(false, card.project, card.number)} to={`/project/${card.project}/${card.number}`} requires={Permission.READ_ALL_CARDS}>
+                            <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
+                                <ProjectContentCard card={card} />
+                            </div>
+                        </PermissionedLink>
+                    ))}
                 </div>
             </div>
         </div>

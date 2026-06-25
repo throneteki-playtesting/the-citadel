@@ -30,17 +30,19 @@ import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
+import PermissionedLink from "../../components/permissionedLink";
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
+
     return (
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="flex-1 flex flex-col sm:flex-row">
                 <div className="flex-1 flex flex-col">
-                    <Link href={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150">
+                    <PermissionedLink to={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
                         {isLoading ? <Skeleton className="h-8 w-98 rounded-md"/> : <><FontAwesomeIcon icon={faAngleLeft}/> {project?.name}</>}
-                    </Link>
+                    </PermissionedLink>
                     <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
                         Playtesting Card #{parseCardCode(false, projectNumber, number)}
                     </div>

@@ -62,10 +62,25 @@ const getQuerySchema = getRequestSchema(
     { project: "asc", number: "asc", version: "asc" }
 );
 
+function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boolean {
+    const filters = Array.isArray(filter) ? filter : [filter];
+    return filters.length > 0 && filters.every(f => f?.latest === true);
+}
+
+// Checks all filters to decide between READ_LATEST_CARDS and READ_ALL_CARDS being required
+const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(
+    (principal, req) => {
+        if (everyFilterHasLatest(req.query.filter)) {
+            return hasPermission(principal, Permission.READ_LATEST_CARDS);
+        }
+        return hasPermission(principal, Permission.READ_ALL_CARDS);
+    }
+);
+
 // Read all cards
 router.get("/",
-    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
+    validateCardQueryPermission,
     asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getCards(filter, orderBy, page, perPage);
@@ -76,8 +91,8 @@ router.get("/",
 // Read cards for project
 router.get("/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
-    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
+    validateCardQueryPermission,
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
@@ -91,8 +106,8 @@ router.get("/:project",
 // Read all versions of a card in a project
 router.get("/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
-    validateRequest(Permission.READ_ALL_CARDS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
+    validateCardQueryPermission,
     asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project, number } = req.params;
         const { filter, orderBy, page, perPage } = req.query;

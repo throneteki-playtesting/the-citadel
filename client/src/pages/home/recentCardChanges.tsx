@@ -1,5 +1,4 @@
 import { IPlaytestCard } from "common/models/cards";
-import { Link } from "react-router-dom";
 import { useGetCardsQuery, useGetProjectsQuery } from "../../api";
 import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
@@ -10,6 +9,8 @@ import { useMemo } from "react";
 import { Skeleton } from "@heroui/react";
 import { watermarkClasses } from "../../constants";
 import SectionTitle from "../../components/sectionTitle";
+import Permission from "common/models/permissions";
+import PermissionedLink from "../../components/permissionedLink";
 
 export default function RecentCardChanges() {
     const items = 5;
@@ -59,10 +60,9 @@ export default function RecentCardChanges() {
 
 function ChangeRow({ card, projects }: ChangeRowProps) {
     const project = projects?.find((project) => project.number === card.project);
-
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <Link to={`/project/${project?.number}/${card.number}`}>
+            <PermissionedLink to={`/project/${project?.number}/${card.number}`} requires={Permission.READ_ALL_CARDS}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
@@ -76,7 +76,7 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                         </div>
                     </div>
                 </div>
-            </Link>
+            </PermissionedLink>
         </div>
     );
 }

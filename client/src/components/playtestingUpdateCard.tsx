@@ -5,13 +5,14 @@ import classNames from "classnames";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
 import { useGetProjectQuery, useGetPlaytestingUpdateCardsQuery } from "../api";
 import { watermarkClasses } from "../constants";
 import ChangeTypeChip from "../pages/home/changeTypeChip";
 import ThronesIcon from "./thronesIcon";
 import Timestamp from "./timestamp";
 import { BaseElementProps } from "../types";
+import PermissionedLink from "./permissionedLink";
+import Permission from "common/models/permissions";
 
 export default function PlaytestingUpdateCard({ className, style, playtestingUpdate, maxCards }: PlaytestingUpdateCardProps) {
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: playtestingUpdate.project });
@@ -45,7 +46,7 @@ export default function PlaytestingUpdateCard({ className, style, playtestingUpd
     const isImplemented = playtestingUpdate._metadata?.github?.code?.status === "closed" && !!playtestingUpdate._metadata?.github?.code?.mergedAt;
 
     return (
-        <Link to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`}>
+        <PermissionedLink to={`/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`} requires={Permission.READ_PLAYTESTING_UPDATES}>
             <div className={classNames("p-4 space-y-1 hover:bg-content2 transition-colors", className)} style={style}>
                 <div className="flex gap-3">
                     <div className="min-w-0">
@@ -67,7 +68,7 @@ export default function PlaytestingUpdateCard({ className, style, playtestingUpd
                 </div>
                 <CardChangeList cards={cards} maxCards={maxCards} />
             </div>
-        </Link>
+        </PermissionedLink>
     );
 }
 type PlaytestingUpdateCardProps = Omit<BaseElementProps, "children"> & {

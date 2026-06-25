@@ -1,6 +1,5 @@
 import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../api";
 import Permission from "common/models/permissions";
-import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { ICardSuggestion } from "common/models/cards";
 import { IPlaytestReview, StatementAnswer, Statements } from "common/models/reviews";
@@ -13,6 +12,7 @@ import Timestamp from "../../components/timestamp";
 import { highlightTarget, watermarkClasses } from "../../constants";
 import SectionTitle from "../../components/sectionTitle";
 import { usePermission } from "../../hooks/usePermission";
+import PermissionedLink from "../../components/permissionedLink";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 
@@ -121,7 +121,7 @@ function ReviewRow({ review }: ReviewRowProps) {
 
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <Link to={`/project/${review.project}/${review.number}`} state={{ highlight: highlightTarget.review(review) }}>
+            <PermissionedLink to={`/project/${review.project}/${review.number}`} state={{ highlight: highlightTarget.review(review) }} requires={Permission.READ_REVIEWS}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>
@@ -143,7 +143,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                         </div>
                     </div>
                 </div>
-            </Link>
+            </PermissionedLink>
         </div>
     );
 }
@@ -172,9 +172,10 @@ const scoreBarClass: Record<StatementAnswer, string> = {
 
 function SuggestionRow({ suggestion }: SuggestionRowProps) {
     const isApproved = !!suggestion.approvedBy;
+
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <Link to="/suggestions">
+            <PermissionedLink to="/suggestions" requires={Permission.READ_SUGGESTIONS}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <div className="relative ml-32">
                         <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}/>
@@ -206,7 +207,7 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
                     </div>
                     {suggestion.tags.length > 0 && <TagList tags={suggestion.tags} />}
                 </div>
-            </Link>
+            </PermissionedLink>
         </div>
     );
 }

@@ -4,6 +4,7 @@ import { ProjectsSummary } from "./projectsSummary";
 import RecentCardChanges from "./recentCardChanges";
 import RecentPlaytestingUpdates from "./recentPlaytestingUpdates";
 import RecentSubmissions from "./recentSubmissions";
+import RecentSummary from "./recentSummary";
 import StatCards from "./statCards";
 import { hasPermission } from "common/utils";
 import SectionTitle from "../../components/sectionTitle";
@@ -28,7 +29,7 @@ export default function Home() {
                     <ProjectsSummary />
                 </div>
             </PermissionGate>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <RecentSummary>
                 <PermissionGate requires={Permission.READ_ALL_CARDS}>
                     <RecentCardChanges />
                 </PermissionGate>
@@ -38,7 +39,7 @@ export default function Home() {
                 <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
                     <RecentPlaytestingUpdates />
                 </PermissionGate>
-            </div>
+            </RecentSummary>
         </div>
     );
 };
