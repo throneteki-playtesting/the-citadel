@@ -130,10 +130,10 @@ function ProjectCard({ project }: ProjectCardProps) {
                 )
             }
             <StatsGrid>
-                <PermissionGate requires={Permission.READ_ALL_CARDS}><CardChangesStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                <PermissionGate requires={(user) => hasPermission(user, Permission.READ_ALL_CARDS) || hasPermission(user, Permission.READ_LATEST_CARDS)}>
+                <PermissionGate requires={(user) => hasPermission(user, Permission.READ_CARDS) || hasPermission(user, Permission.READ_LATEST_CARDS)}>
                     <PacksStat project={project} />
                 </PermissionGate>
             </StatsGrid>

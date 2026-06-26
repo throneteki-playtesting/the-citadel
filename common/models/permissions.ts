@@ -20,7 +20,7 @@ enum Permission {
     /** Can read playtesting updates for any project */
     READ_PLAYTESTING_UPDATES = "READ_PLAYTESTING_UPDATES",
     /** Can view all playtesting cards */
-    READ_ALL_CARDS = "READ_CARDS",
+    READ_CARDS = "READ_CARDS",
     /** Can view latest playtesting cards */
     READ_LATEST_CARDS = "READ_LATEST_CARDS",
     /** Can edit playtesting cards */
@@ -97,11 +97,11 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
     [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
-    [Permission.READ_ALL_CARDS]: { label: "Read All", group: "Cards", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_CARDS]: { label: "Read All", group: "Cards", dependencies: Permission.READ_PROJECTS },
     [Permission.READ_LATEST_CARDS]: { label: "Read Latest", group: "Cards", dependencies: Permission.READ_PROJECTS },
-    [Permission.CREATE_CARDS]: { label: "Create", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
-    [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
-    [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
+    [Permission.CREATE_CARDS]: { label: "Create", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
+    [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
+    [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
     [Permission.RENDER_CARDS]: { label: "Render", group: "Cards" },
     [Permission.READ_SUGGESTIONS]: { label: "Read", group: "Suggestions" },
     [Permission.MAKE_SUGGESTIONS]: { label: "Make Own", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },

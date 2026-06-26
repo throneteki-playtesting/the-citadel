@@ -62,7 +62,7 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
     const project = projects?.find((project) => project.number === card.project);
     return (
         <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <PermissionedLink to={`/project/${project?.number}/${card.number}`} requires={Permission.READ_ALL_CARDS}>
+            <PermissionedLink to={`/project/${project?.number}/${card.number}`} requires={Permission.READ_CARDS}>
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
                     <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
                 </div>

@@ -67,13 +67,13 @@ function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boo
     return filters.length > 0 && filters.every(f => f?.latest === true);
 }
 
-// Checks all filters to decide between READ_LATEST_CARDS and READ_ALL_CARDS being required
+// Checks all filters to decide between READ_LATEST_CARDS and READ_CARDS being required
 const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(
     (principal, req) => {
         if (everyFilterHasLatest(req.query.filter)) {
             return hasPermission(principal, Permission.READ_LATEST_CARDS);
         }
-        return hasPermission(principal, Permission.READ_ALL_CARDS);
+        return hasPermission(principal, Permission.READ_CARDS);
     }
 );
 
@@ -128,7 +128,7 @@ router.get("/:project/:number/:version",
     loadProjectByParam,
     validateProjectAccess,
     validateRequest<{ version: SemanticVersion | "latest" }, unknown, unknown, unknown>((principal, req) => {
-        if (hasPermission(principal, Permission.READ_ALL_CARDS)) {
+        if (hasPermission(principal, Permission.READ_CARDS)) {
             return true;
         }
         if (hasPermission(principal, Permission.READ_LATEST_CARDS) && req.params.version === "latest") {
@@ -152,7 +152,7 @@ router.get("/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
     loadProjectByParam,
     validateProjectAccess,
-    validateRequest(Permission.READ_ALL_CARDS),
+    validateRequest(Permission.READ_CARDS),
     asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
         const { project, number, version } = req.params;
 

@@ -75,7 +75,7 @@ function FactionCarousel({ faction, cards }: FactionCarouselProps) {
             <div className="relative">
                 <div className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-2 p-2">
                     {cards.map((card) => (
-                        <PermissionedLink key={parseCardCode(false, card.project, card.number)} to={`/project/${card.project}/${card.number}`} requires={Permission.READ_ALL_CARDS}>
+                        <PermissionedLink key={parseCardCode(false, card.project, card.number)} to={`/project/${card.project}/${card.number}`} requires={Permission.READ_CARDS}>
                             <div className={classNames("snap-start", card.type === "plot" ? "w-64 sm:w-72 md:w-80 aspect-[333/240]" : "h-full aspect-[240/333]")}>
                                 <ProjectContentCard card={card} />
                             </div>

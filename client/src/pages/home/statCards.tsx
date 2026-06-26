@@ -17,13 +17,13 @@ import StatsGrid from "../../components/statsGrid";
 export default function StatCards() {
     return (
         <StatsGrid className="border border-content3 drop-shadow-lg">
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
                 <CardChangesStat />
             </PermissionGate>
             <PermissionGate requires={Permission.READ_USERS}>
                 <ActivePlaytestersStat />
             </PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_ALL_CARDS]}>
+            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
                 <CardsInTestingStat />
             </PermissionGate>
             <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}>

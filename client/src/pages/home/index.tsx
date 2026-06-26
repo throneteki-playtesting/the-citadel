@@ -30,7 +30,7 @@ export default function Home() {
                 </div>
             </PermissionGate>
             <RecentSummary>
-                <PermissionGate requires={Permission.READ_ALL_CARDS}>
+                <PermissionGate requires={Permission.READ_CARDS}>
                     <RecentCardChanges />
                 </PermissionGate>
                 <PermissionGate requires={(user) => hasPermission(user, Permission.READ_REVIEWS) || hasPermission(user, Permission.READ_SUGGESTIONS)}>
