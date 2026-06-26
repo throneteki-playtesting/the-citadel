@@ -7,6 +7,13 @@ import { Principal } from "common/models/auth";
 import Permission from "common/models/permissions";
 import { permissionMeta } from "common/models/permissions";
 import { asArray, hasPermission } from "common/utils";
+import { IProject } from "common/models/projects";
+
+export class PermissionErrorResponse extends ApiErrorResponse {
+    constructor() {
+        super(StatusCodes.FORBIDDEN, "Access Denied", "Insufficient permissions to perform this action");
+    }
+}
 
 export function validateRequest<A, B, C, D>(validate: ((principal: Principal, req: Request<A, B, C, D>, res: Response) => boolean | Promise<boolean>) | Permission | Permission[]) {
     return asyncHandler<A, B, C, D>(async (req, res, next) => {
@@ -19,11 +26,21 @@ export function validateRequest<A, B, C, D>(validate: ((principal: Principal, re
             isValid = hasPermission(principal, ...permissions);
         }
         if (!isValid) {
-            throw new ApiErrorResponse(StatusCodes.FORBIDDEN, "Access Denied", "User has insufficient permissions to perform this action");
+            throw new PermissionErrorResponse();
         }
         next();
     });
 }
+
+export const validateProjectAccess = asyncHandler<unknown, unknown, unknown, unknown>(async (_req, res, next) => {
+    const { principal } = getContext();
+    const project = res.locals.project as IProject;
+
+    if (!project.active ? hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS) : hasPermission(principal, Permission.READ_PROJECTS)) {
+        throw new PermissionErrorResponse();
+    }
+    next();
+});
 
 // Reverse map: permission -> all permissions that declare it as a dependency
 const reverseDependencyMap = new Map<Permission, Permission[]>();

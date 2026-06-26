@@ -4,7 +4,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { validateRequest } from "@/middleware/permissions";
+import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
@@ -56,6 +56,8 @@ router.get("/:project/:version",
         [Segments.PARAMS]: { project: Joi.number().required(), version: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
+    loadProjectByParam,
+    validateProjectAccess,
     asyncHandler<{ project: number, version: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
         const { project, version } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
@@ -133,6 +135,7 @@ router.get("/:project/:version/cards",
         }
     }),
     loadProjectByParam,
+    validateProjectAccess,
     asyncHandler<{ project: number, version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
         const project = res.locals.project as IProject;
@@ -157,6 +160,7 @@ router.get("/:project/:version/print-sheet",
         }
     }),
     loadProjectByParam,
+    validateProjectAccess,
     asyncHandler<{ project: number, version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
         const project = res.locals.project as IProject;
@@ -186,6 +190,7 @@ router.get("/:project/:version/implemented",
         }
     }),
     loadProjectByParam,
+    validateProjectAccess,
     asyncHandler<{ project: number, version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
         const project = res.locals.project as IProject;

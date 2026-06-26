@@ -9,8 +9,8 @@ import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
-import { validateRequest } from "@/middleware/permissions";
-import { applyToFilter, generateGetResponse, NoteVersion } from "@/utils";
+import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
+import { applyToFilter, generateGetResponse, loadProjectByParam, NoteVersion } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
@@ -92,6 +92,8 @@ router.get("/",
 router.get("/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
+    loadProjectByParam,
+    validateProjectAccess,
     validateCardQueryPermission,
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project } = req.params;
@@ -107,6 +109,8 @@ router.get("/:project",
 router.get("/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
+    loadProjectByParam,
+    validateProjectAccess,
     validateCardQueryPermission,
     asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
         const { project, number } = req.params;
@@ -121,7 +125,9 @@ router.get("/:project/:number",
 // Read specific version of a card, or "latest"
 router.get("/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
-    validateRequest((principal, req) => {
+    loadProjectByParam,
+    validateProjectAccess,
+    validateRequest<{ version: SemanticVersion | "latest" }, unknown, unknown, unknown>((principal, req) => {
         if (hasPermission(principal, Permission.READ_ALL_CARDS)) {
             return true;
         }
@@ -144,6 +150,8 @@ router.get("/:project/:number/:version",
 // Read previous version of a specific card
 router.get("/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
+    loadProjectByParam,
+    validateProjectAccess,
     validateRequest(Permission.READ_ALL_CARDS),
     asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
         const { project, number, version } = req.params;
