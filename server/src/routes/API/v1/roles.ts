@@ -4,7 +4,7 @@ import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
 import Permission from "common/models/permissions";
-import { validateRequest } from "@/middleware/permissions";
+import { validatePermissionDependencies, validateRequest } from "@/middleware/permissions";
 import { StatusCodes } from "http-status-codes";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
@@ -73,6 +73,7 @@ router.post("/me/playtesting-team",
 
 // Update role
 router.put("/:discordId",
+    validatePermissionDependencies(),
     celebrate({ [Segments.BODY]: Schemas.Role.Full }),
     asyncHandler<{ discordId: string }, unknown, Role, unknown>(async (req, res) => {
         const { discordId } = req.params;

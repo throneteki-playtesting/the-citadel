@@ -1,21 +1,18 @@
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import CardDetail from "./cardDetail";
+import { parseParamNumber } from "../../utils";
 
 const Card = () => {
-    const { project: projectParam, number: numberParam } = useParams();
+    const params = useParams();
 
-    if (!projectParam || !numberParam) {
-        return <div>
-            Project or number is invalid!
-        </div>;
+    const project = parseParamNumber(params.project);
+    const number = parseParamNumber(params.number);
+
+    if (project === undefined || number === undefined) {
+        return <Navigate to="/" />;
     }
 
-    const project = parseInt(projectParam);
-    const number = parseInt(numberParam);
-
-    return (
-        <CardDetail key={`${project}|${number}`} project={project} number={number}/>
-    );
+    return <CardDetail key={`${project}|${number}`} project={project} number={number}/>;
 };
 
 export default Card;

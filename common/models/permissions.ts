@@ -1,3 +1,5 @@
+import { SingleOrArray } from "common/types";
+
 enum Permission {
     /** Can create new projects */
     CREATE_PROJECTS = "CREATE_PROJECTS",
@@ -78,3 +80,62 @@ enum Permission {
 }
 
 export default Permission;
+
+export type PermissionMeta = {
+    label: string;
+    group: string;
+    dependencies?: SingleOrArray<Permission>;
+};
+
+export const permissionMeta: Record<Permission, PermissionMeta> = {
+    [Permission.READ_PROJECTS]: { label: "Read", group: "Projects" },
+    [Permission.READ_ARCHIVED_PROJECTS]: { label: "Read Archived", group: "Projects" },
+    [Permission.CREATE_PROJECTS]: { label: "Create", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.EDIT_PROJECTS]: { label: "Edit", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.DELETE_PROJECTS]: { label: "Delete", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.ARCHIVE_PROJECTS]: { label: "Archive", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
+    [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_ALL_CARDS]: { label: "Read All", group: "Cards", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_LATEST_CARDS]: { label: "Read Latest", group: "Cards", dependencies: Permission.READ_PROJECTS },
+    [Permission.CREATE_CARDS]: { label: "Create", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
+    [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
+    [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_ALL_CARDS] },
+    [Permission.RENDER_CARDS]: { label: "Render", group: "Cards" },
+    [Permission.READ_SUGGESTIONS]: { label: "Read", group: "Suggestions" },
+    [Permission.MAKE_SUGGESTIONS]: { label: "Make Own", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
+    [Permission.EDIT_SUGGESTIONS]: { label: "Edit Others", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
+    [Permission.DELETE_SUGGESTIONS]: { label: "Delete Others", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
+    [Permission.IMPORT_SUGGESTIONS]: { label: "Import", group: "Suggestions" },
+    [Permission.EXPORT_SUGGESTIONS]: { label: "Export", group: "Suggestions" },
+    [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
+    [Permission.MAKE_REVIEWS]: { label: "Make Own", group: "Reviews", dependencies: Permission.READ_REVIEWS },
+    [Permission.EDIT_REVIEWS]: { label: "Edit Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
+    [Permission.DELETE_REVIEWS]: { label: "Delete Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
+    [Permission.READ_USERS]: { label: "Read", group: "Users" },
+    [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
+    [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
+    [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles", dependencies: Permission.READ_ROLES },
+    [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
+    [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },
+    [Permission.READ_DISCORD_REVIEW_FORUM]: { label: "View Review Forum", group: "Discord" },
+    [Permission.SYNC_CARD_IMAGES]: { label: "Card Images", group: "Sync", dependencies: Permission.EDIT_CARDS },
+    [Permission.SYNC_CARD_DISCORD]: { label: "Card Discord", group: "Sync", dependencies: Permission.EDIT_CARDS },
+    [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync", dependencies: Permission.EDIT_CARDS },
+    [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
+    [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA]: { label: "PT Update Github Data", group: "Sync" },
+    [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS }
+};
+
+export const permissionGroups = (Object.entries(permissionMeta) as [Permission, PermissionMeta][]).reduce<
+    { label: string; permissions: { value: Permission; label: string }[] }[]
+>((groups, [value, { label, group }]) => {
+    let existing = groups.find(g => g.label === group);
+    if (!existing) {
+        existing = { label: group, permissions: [] };
+        groups.push(existing);
+    }
+    existing.permissions.push({ value, label });
+    return groups;
+}, []);

@@ -31,9 +31,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     usePageTitle(project ? `${project.code} #${version}` : undefined);
     const navigate = useNavigate();
 
-    const isLoading = isPlaytestingUpdateLoading || isProjectLoading;
-
-    if (isLoading) {
+    if (isPlaytestingUpdateLoading || isProjectLoading) {
         return (
             <div className="space-y-4">
                 <div className="space-y-1">

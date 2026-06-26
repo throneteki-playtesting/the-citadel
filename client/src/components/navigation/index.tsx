@@ -8,13 +8,19 @@ import classNames from "classnames";
 import { useGetProjectsQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import Permission from "common/models/permissions";
+import { hasPermission } from "common/utils";
 import { useLocation } from "react-router-dom";
 
 const NavigationBar = () => {
     const { user } = useAuth();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const { data: projectData } = useGetProjectsQuery();
+    const canReadArchived = hasPermission(user, Permission.READ_ARCHIVED_PROJECTS);
+    const { data: projectData } = useGetProjectsQuery({ filter: { active: true } });
+    const { data: archivedProjectData } = useGetProjectsQuery(
+        { filter: { active: false } },
+        { skip: !canReadArchived }
+    );
 
     useEffect(() => {
         if (location) {
@@ -36,25 +42,39 @@ const NavigationBar = () => {
         if (!projectData || !projectsNavItem || !isMenuItem(projectsNavItem)) {
             return projectsNavItem;
         }
-        const projectsPageItems = projectData.items
+
+        const activeProjectItems = projectData.items
             .slice()
             .sort((a, b) => a.number - b.number)
-            .map((project) => {
-                return {
-                    path: `/project/${project.number}`,
-                    label: `${project.number}. ${project.name}`,
-                    permission: Permission.READ_PROJECTS
-                };
-            });
+            .map((project) => ({
+                path: `/project/${project.number}`,
+                label: `${project.number}. ${project.name}`,
+                permission: Permission.READ_PROJECTS
+            }));
+
+        const archivedProjectItems = (archivedProjectData?.items ?? [])
+            .slice()
+            .sort((a, b) => a.number - b.number)
+            .map((project) => ({
+                path: `/project/${project.number}`,
+                label: `${project.number}. ${project.name}`,
+                permission: Permission.READ_ARCHIVED_PROJECTS
+            }));
+
+        const archivedMenuItem: MenuItemType | undefined = archivedProjectItems.length > 0
+            ? { label: "Archived", permission: Permission.READ_ARCHIVED_PROJECTS, subPages: archivedProjectItems }
+            : undefined;
+
         return {
             label: projectsNavItem.label,
             permission: projectsNavItem.permission,
             subPages: [
-                ...projectsPageItems,
-                ...projectsNavItem.subPages
+                ...activeProjectItems,
+                ...projectsNavItem.subPages,
+                ...(archivedMenuItem ? [archivedMenuItem] : [])
             ]
         } as MenuItemType;
-    }, [projectData]);
+    }, [projectData, archivedProjectData]);
 
     const items = useMemo(() => {
         const newNavItems = navItems.map((item) => {
@@ -93,14 +113,19 @@ const PageItem = ({ item }: PageItemProps) => {
 
 type PageItemProps = { item: PageItemType }
 
-const MenuItem = ({ item, parents = [] }: MenuItemProps) => {
+const MenuItem = ({ item, parents = [], isNested = false, onClose }: MenuItemProps) => {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
 
+    const closeAll = () => {
+        setIsOpen(false);
+        onClose?.();
+    };
+
     return (
-        <Dropdown onOpenChange={setIsOpen} className="font-cinzel">
+        <Dropdown isOpen={isOpen} onOpenChange={setIsOpen} className="font-cinzel">
             <DropdownTrigger className="cursor-pointer">
-                <Link className="text-large flex gap-1">
+                <Link className={classNames("flex gap-1", { "text-large": !isNested })}>
                     <span>{item.label}</span>
                     <FontAwesomeIcon size="xs" className={classNames("duration-300", { "scale-y-[-1]": isOpen })} icon={faChevronUp}/>
                 </Link>
@@ -110,14 +135,14 @@ const MenuItem = ({ item, parents = [] }: MenuItemProps) => {
                     item.subPages.filter((subPage) => isVisibleFor(subPage, user) && subPage.label).map((subPage) => {
                         if (isMenuItem(subPage)) {
                             return (
-                                <DropdownItem key={subPage.label!} >
-                                    <MenuItem item={subPage} parents={parents.concat(item)}></MenuItem>
+                                <DropdownItem key={subPage.label!} closeOnSelect={false}>
+                                    <MenuItem item={subPage} parents={parents.concat(item)} isNested={true} onClose={closeAll}></MenuItem>
                                 </DropdownItem>
                             );
                         }
                         if (isPageItem(subPage)) {
                             return (
-                                <DropdownItem key={subPage.label!} as={Link} href={subPage.path}>
+                                <DropdownItem key={subPage.label!} as={Link} href={subPage.path} onPress={onClose}>
                                     {subPage.label}
                                 </DropdownItem>
                             );
@@ -130,6 +155,6 @@ const MenuItem = ({ item, parents = [] }: MenuItemProps) => {
     );
 };
 
-type MenuItemProps = { item: MenuItemType, parents?: MenuItemType[] }
+type MenuItemProps = { item: MenuItemType, parents?: MenuItemType[], isNested?: boolean, onClose?: () => void }
 
 export default NavigationBar;

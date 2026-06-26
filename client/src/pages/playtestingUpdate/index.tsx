@@ -4,11 +4,13 @@ import PlaytestingUpdateDetail from "./playtestingUpdateDetail";
 
 export default function PlaytestingUpdate() {
     const params = useParams();
+
     const project = parseParamNumber(params.project);
     const version = parseParamNumber(params.version);
 
-    if (!project || !version) {
+    if (project === undefined || version === undefined) {
         return <Navigate to="/" />;
     }
+
     return <PlaytestingUpdateDetail project={project} version={version}/>;
 }

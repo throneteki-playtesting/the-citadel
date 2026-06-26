@@ -5,7 +5,8 @@ import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
-import { Regex, SemanticVersion } from "common/utils";
+import { getContext } from "@/middleware/context";
+import { hasPermission, Regex, SemanticVersion } from "common/utils";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
@@ -21,6 +22,22 @@ const router = express.Router();
 const numberParams = {
     number: Joi.number().required()
 };
+
+const validateProjectQueryPermission = asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, _res, next) => {
+    const { principal } = getContext();
+
+    if (hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)) {
+        return next();
+    }
+
+    const filters = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter];
+    if (filters.some(f => f?.active === false)) {
+        throw new ApiErrorResponse(StatusCodes.FORBIDDEN, "Access Denied", "User has insufficient permissions to view archived projects");
+    }
+
+    req.query.filter = applyToFilter(req.query.filter, { active: true });
+    next();
+});
 
 async function getProjects(
     filter: IGetRequest<IProject>["filter"],
@@ -42,10 +59,10 @@ const getQuerySchema = getRequestSchema(
 
 // Read projects
 router.get("/",
-    validateRequest(Permission.READ_PROJECTS),
     celebrate({
         [Segments.QUERY]: getQuerySchema
     }),
+    validateProjectQueryPermission,
     asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getProjects(filter, orderBy, page, perPage);
@@ -55,11 +72,11 @@ router.get("/",
 
 // Read project by number
 router.get("/:number",
-    validateRequest(Permission.READ_PROJECTS),
     celebrate({
         [Segments.PARAMS]: numberParams,
         [Segments.QUERY]: getQuerySchema
     }),
+    validateProjectQueryPermission,
     asyncHandler<{ number: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
         const { number } = req.params;
         const { filter, orderBy, page, perPage } = req.query;

@@ -5,17 +5,6 @@ import { SemanticVersion } from "common/utils";
 import { valid } from "semver";
 import ThronesIcon, { Icon } from "./components/thronesIcon";
 
-export function enumToArray<T extends { [key: string]: string | number }>(
-    e: T
-): { key: T[keyof T]; value: Extract<keyof T, string> }[] {
-    return Object.keys(e)
-        .filter(k => isNaN(Number(k)))
-        .map(k => ({
-            key: e[k as keyof T],
-            value: k as Extract<keyof T, string>
-        }));
-}
-
 export function downloadBlob(blob: Blob, fallbackFilename?: string): void {
     const filename = fallbackFilename ?? crypto.randomUUID();
     const url = URL.createObjectURL(blob);

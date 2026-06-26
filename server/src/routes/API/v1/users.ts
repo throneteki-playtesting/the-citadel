@@ -4,7 +4,7 @@ import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
 import Permission from "common/models/permissions";
-import { validateRequest } from "@/middleware/permissions";
+import { validatePermissionDependencies, validateRequest } from "@/middleware/permissions";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
 import { StatusCodes } from "http-status-codes";
@@ -80,6 +80,7 @@ router.get("/:discordId",
 // Update user
 router.put("/:discordId",
     validateRequest(Permission.EDIT_USERS),
+    validatePermissionDependencies(),
     celebrate({ [Segments.BODY]: Schemas.User.Full }),
     asyncHandler<{ discordId: string }, unknown, User, unknown>(async (req, res) => {
         const { discordId } = req.params;

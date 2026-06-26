@@ -5,10 +5,10 @@ import EditProjectModal from "./editProjectModal";
 import { addToast } from "@heroui/react";
 
 export default function Project({ isCreating = false }: ProjectProps) {
-    const { number } = useParams();
+    const params = useParams();
     const navigate = useNavigate();
 
-    const project = parseParamNumber(number);
+    const project = parseParamNumber(params.number);
 
     if (isCreating) {
         return <EditProjectModal
@@ -23,12 +23,13 @@ export default function Project({ isCreating = false }: ProjectProps) {
                 }
             }}
         />;
-    } else if (!project) {
+    }
+
+    if (project === undefined) {
         return <Navigate to="/" />;
     }
-    return (
-        <ProjectDetail key={project} project={project}/>
-    );
+
+    return <ProjectDetail key={project} project={project}/>;
 };
 
 type ProjectProps = { isCreating?: boolean };

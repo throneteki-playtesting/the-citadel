@@ -1,7 +1,7 @@
 import { addToast, Button, Link, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useGetCardsQuery, useGetProjectQuery } from "../../api";
+import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery } from "../../api";
 import { IPlaytestCard } from "common/models/cards";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
@@ -31,17 +31,33 @@ import FeedbackStatistics from "./feedbackStatistics";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
 import PermissionedLink from "../../components/permissionedLink";
+import Error from "../../components/error";
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
-    const { data: project, isLoading } = useGetProjectQuery({ number: projectNumber });
+    const { data: project, isLoading: isLoadingProject } = useGetProjectQuery({ number: projectNumber });
+    const { data: card, isLoading: isLoadingCard } = useGetCardQuery({ project: projectNumber, number, version: "latest" });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
+
+
+    if (isLoadingProject || isLoadingCard) {
+        return (
+            <div>
+                <Skeleton className="w-full h-98 rounded-md"/>
+            </div>
+        );
+    }
+
+    if (!project || !card) {
+        return <Error label="No such card exists in the Citadel's archives..." content="This card could not be found. It may have been removed, archived, or you may have followed an incorrect link." />;
+    }
+
 
     return (
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="flex-1 flex flex-col sm:flex-row">
                 <div className="flex-1 flex flex-col">
                     <PermissionedLink to={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
-                        {isLoading ? <Skeleton className="h-8 w-98 rounded-md"/> : <><FontAwesomeIcon icon={faAngleLeft}/> {project?.name}</>}
+                        <FontAwesomeIcon icon={faAngleLeft}/> {project?.name}
                     </PermissionedLink>
                     <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
                         Playtesting Card #{parseCardCode(false, projectNumber, number)}
