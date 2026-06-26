@@ -36,7 +36,7 @@ export const validateProjectAccess = asyncHandler<unknown, unknown, unknown, unk
     const { principal } = getContext();
     const project = res.locals.project as IProject;
 
-    if (!project.active ? hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS) : hasPermission(principal, Permission.READ_PROJECTS)) {
+    if (project.active ? !hasPermission(principal, Permission.READ_PROJECTS) : !hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)) {
         throw new PermissionErrorResponse();
     }
     next();
