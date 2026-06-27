@@ -27,6 +27,18 @@ export const watermarkClasses: Record<string, string> = {
     neutral: "text-neutral opacity-30"
 };
 
+export const factionBarClasses: Record<Faction, string> = {
+    baratheon: "bg-baratheon/50",
+    greyjoy: "bg-greyjoy/50",
+    lannister: "bg-lannister/50",
+    martell: "bg-martell/50",
+    thenightswatch: "bg-thenightswatch/50",
+    stark: "bg-stark/50",
+    targaryen: "bg-targaryen/50",
+    tyrell: "bg-tyrell/50",
+    neutral: "bg-neutral/50"
+};
+
 export const changeTypeClasses: Record<ChangeType, string> = {
     new: "border-success-300 bg-success-100 text-success-700",
     draft: "border-secondary-300 bg-secondary-100 text-secondary-700",
