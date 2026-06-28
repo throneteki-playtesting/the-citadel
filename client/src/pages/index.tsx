@@ -4,6 +4,7 @@ import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
 import { ReactElement } from "react";
 import Suggestions from "./suggestions";
+import CardEditorPage from "./cardEditor";
 import Users from "./admin/users";
 import Roles from "./admin/roles";
 import AuthRedirect from "./authRedirect";
@@ -53,6 +54,12 @@ export const navItems: NavItem[] = [
                 element: <Project isCreating={true}/>
             }
         ]
+    },
+    {
+        path: "/card-editor",
+        label: "Card Editor",
+        permission: Permission.USE_CARD_EDITOR,
+        element: <CardEditorPage />
     },
     {
         path: "/suggestions",

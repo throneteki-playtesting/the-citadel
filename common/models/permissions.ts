@@ -53,6 +53,8 @@ enum Permission {
     ASSIGN_OWN_PLAYTESTING_ROLE = "ASSIGN_OWN_PLAYTESTING_ROLE",
     /** Can render cards to another format (eg. PDF, PNG)*/
     RENDER_CARDS = "RENDER_CARDS",
+    /** Can use the standalone card editor tool */
+    USE_CARD_EDITOR = "USE_CARD_EDITOR",
     /** Can view all card reviews */
     READ_REVIEWS = "READ_REVIEWS",
     /** Can create, edit and delete their own card reviews */
@@ -103,6 +105,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
     [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
     [Permission.RENDER_CARDS]: { label: "Render", group: "Cards" },
+    [Permission.USE_CARD_EDITOR]: { label: "Use Card Editor", group: "Cards" },
     [Permission.READ_SUGGESTIONS]: { label: "Read", group: "Suggestions" },
     [Permission.MAKE_SUGGESTIONS]: { label: "Make Own", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
     [Permission.EDIT_SUGGESTIONS]: { label: "Edit Others", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
