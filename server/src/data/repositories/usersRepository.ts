@@ -6,6 +6,8 @@ import { SingleOrArray } from "common/types";
 import { logger } from "@/services";
 
 export default class UsersRepository extends BasicRepository<User> {
+    private cachedGuestProfile: User | undefined;
+
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<User>(mongoClient, "users", { discordId: 1 }));
         this.initialiseGuestProfile();
@@ -25,6 +27,17 @@ export default class UsersRepository extends BasicRepository<User> {
             });
             logger.info("Created anonymous guest user profile");
         }
+    }
+
+    async getGuestProfile(): Promise<User | undefined> {
+        if (!this.cachedGuestProfile) {
+            [this.cachedGuestProfile] = await this.read({ discordId: "anonymous" });
+        }
+        return this.cachedGuestProfile;
+    }
+
+    invalidateGuestProfileCache() {
+        this.cachedGuestProfile = undefined;
     }
 
     async syncEmbeddedRole(roles: SingleOrArray<Role>) {

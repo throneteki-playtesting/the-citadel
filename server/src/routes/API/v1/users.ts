@@ -12,6 +12,7 @@ import { getContext } from "@/middleware/context";
 import { User } from "common/models/auth";
 import { getRequestSchema } from "@/schemas";
 import DiscordService from "@/discord";
+import { hasPermission } from "common/utils";
 
 const router = express.Router();
 
@@ -35,12 +36,9 @@ const getQuerySchema = getRequestSchema(
 
 // Fetch current user (for client)
 router.get("/me",
-    (req, res) => {
+    (_req, res) => {
         const { source, principal } = getContext();
-        let user: User = null;
-        if (source === "client") {
-            user = principal;
-        }
+        const user: User = source === "client" ? principal : null;
         res.status(StatusCodes.OK).json(user);
     }
 );
@@ -58,7 +56,7 @@ router.get("/",
 
 // Read user by discordId
 router.get("/:discordId",
-    validateRequest(Permission.READ_USERS),
+    validateRequest((principal) => hasPermission(principal, Permission.READ_USER) || hasPermission(principal, Permission.READ_USERS)),
     celebrate({ [Segments.PARAMS]: { discordId: Joi.string().required() } }),
     asyncHandler<{ discordId: string }, unknown, unknown, unknown>(async (req, res) => {
         const { discordId } = req.params;
@@ -89,6 +87,9 @@ router.put("/:discordId",
         user.discordId = discordId;
 
         const result = await dataService.users.update(user);
+        if (discordId === "anonymous") {
+            dataService.users.invalidateGuestProfileCache();
+        }
         res.status(StatusCodes.OK).json(result);
     })
 );

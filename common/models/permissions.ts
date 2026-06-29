@@ -41,6 +41,8 @@ enum Permission {
     IMPORT_SUGGESTIONS = "IMPORT SUGGESTIONS",
     /** Can export card suggestions in bulk */
     EXPORT_SUGGESTIONS = "EXPORT_SUGGESTIONS",
+    /** Can view a single user by ID */
+    READ_USER = "READ_USER",
     /** Can view all users */
     READ_USERS = "READ_USERS",
     /** Can edit all users */
@@ -116,7 +118,8 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.MAKE_REVIEWS]: { label: "Make Own", group: "Reviews", dependencies: Permission.READ_REVIEWS },
     [Permission.EDIT_REVIEWS]: { label: "Edit Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
     [Permission.DELETE_REVIEWS]: { label: "Delete Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
-    [Permission.READ_USERS]: { label: "Read", group: "Users" },
+    [Permission.READ_USER]: { label: "Read Single", group: "Users" },
+    [Permission.READ_USERS]: { label: "Read All", group: "Users" },
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles", dependencies: Permission.READ_ROLES },

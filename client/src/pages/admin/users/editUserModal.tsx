@@ -7,7 +7,7 @@ import { User } from "common/models/auth";
 import { cloneDeep } from "lodash-es";
 import PermissionCheckboxes from "../../../components/permissionCheckboxes";
 
-export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }: EditUserModalProps) {
+export default function EditUserModal({ user, guestUser, onOpenChange, onSave: onUserSave }: EditUserModalProps) {
     const [updateUser, { isLoading }] = useUpdateUserMutation();
     const [permissions, setPermissions] = useState(new Set<string>([]));
 
@@ -41,6 +41,18 @@ export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }
         return perms;
     }, [user]);
 
+    const guestProfilePermissions = useMemo(() => {
+        if (!guestUser || user?.discordId === "anonymous") return undefined;
+        const perms = new Set<string>();
+        for (const p of guestUser.permissions) perms.add(p.toString());
+        for (const role of guestUser.roles) {
+            for (const p of role.permissions) perms.add(p.toString());
+        }
+        return perms;
+    }, [guestUser, user?.discordId]);
+
+    const isGuestProfile = user?.discordId === "anonymous";
+
     useEffect(() => {
         setPermissions(new Set(user?.permissions.map((p) => p.toString()) ?? []));
     }, [user]);
@@ -50,9 +62,21 @@ export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }
             <ModalContent>
                 {(onClose) => (
                     <>
-                        <ModalHeader>Edit {user?.displayname}</ModalHeader>
+                        <ModalHeader>
+                            {isGuestProfile ? "Edit Guest Profile" : `Edit ${user?.displayname}`}
+                        </ModalHeader>
                         <ModalBody>
-                            <PermissionCheckboxes selectedPermissions={permissions} roleGrantedPermissions={roleGrantedPermissions} onChange={setPermissions} />
+                            {isGuestProfile && (
+                                <p className="text-sm text-default-500">
+                                    These permissions are granted as a default to all authenticated users, on top of their individual and role-based permissions.
+                                </p>
+                            )}
+                            <PermissionCheckboxes
+                                selectedPermissions={permissions}
+                                roleGrantedPermissions={roleGrantedPermissions}
+                                guestProfilePermissions={guestProfilePermissions}
+                                onChange={setPermissions}
+                            />
                         </ModalBody>
                         <ModalFooter>
                             <Button onPress={onClose}>
@@ -71,6 +95,7 @@ export default function EditUserModal({ user, onOpenChange, onSave: onUserSave }
 
 type EditUserModalProps = Omit<BaseElementProps, "children"> & {
     user?: User;
+    guestUser?: User;
     onOpenChange: (isOpen?: boolean) => void;
     onSave?: (user: User) => void;
 };

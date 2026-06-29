@@ -26,16 +26,12 @@ export default function RecentSubmissions() {
     const isLoading = useMemo(() => isReviewDataLoading || isSuggestionDataLoading, [isReviewDataLoading, isSuggestionDataLoading]);
 
     const submissions = useMemo(() => {
-        const reviews = reviewData?.items;
-        const suggestions = suggestionData?.items;
-        if (reviews && suggestions) {
-            return [
-                ...reviews.map((r) => ({ key: `${r.project}|${r.number}|${r.version}|${r.reviewer}`, type: "review", ...r }) as Submission),
-                ...suggestions.map((s) => ({ key: s.id, type: "suggestion", ...s }) as Submission)
-            ].sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()).slice(0, items);
-        } else {
-            return [];
-        }
+        const reviews = reviewData?.items ?? [];
+        const suggestions = suggestionData?.items ?? [];
+        return [
+            ...reviews.map((r) => ({ key: `${r.project}|${r.number}|${r.version}|${r.reviewer}`, type: "review", ...r }) as Submission),
+            ...suggestions.map((s) => ({ key: s.id, type: "suggestion", ...s }) as Submission)
+        ].sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime()).slice(0, items);
     }, [reviewData?.items, suggestionData?.items]);
 
     const content = useMemo(() => {

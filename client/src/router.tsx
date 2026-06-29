@@ -1,8 +1,10 @@
 import { createBrowserRouter, RouteObject } from "react-router-dom";
 import App from "./app/app";
+import AuthGuard from "./app/authGuard";
 import Error from "./components/error";
 import Page from "./pages/page";
 import { isPageItem, NavItem, navItems } from "./pages";
+import LoginPage from "./pages/login";
 import Render from "./pages/render";
 
 const router = createBrowserRouter([
@@ -11,9 +13,18 @@ const router = createBrowserRouter([
         element: <Render />
     },
     {
-        element: <App />,
-        errorElement: <Error content="An unknown error has occured. Please contact administrator." />,
-        children: pageItemRoutes()
+        path: "/login",
+        element: <LoginPage />
+    },
+    {
+        element: <AuthGuard />,
+        children: [
+            {
+                element: <App />,
+                errorElement: <Error content="An unknown error has occurred. Please contact administrator." />,
+                children: pageItemRoutes()
+            }
+        ]
     }
 ]);
 

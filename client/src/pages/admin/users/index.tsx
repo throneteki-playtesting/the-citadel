@@ -96,8 +96,8 @@ export default function Users() {
             {canEdit && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border border-content2 rounded-lg p-4">
                     <div className="space-y-1">
-                        <div className="font-semibold text-sm">Guest / Anonymous Access</div>
-                        <div className="text-xs text-default-500">Controls the permissions granted to unauthenticated users. Any visitor without a login will be treated as this profile.</div>
+                        <div className="font-semibold text-sm">Guest Profile</div>
+                        <div className="text-xs text-default-500">Defines the default permissions granted to all authenticated users, on top of their individual and role-based permissions.</div>
                     </div>
                     <Button
                         size="sm"
@@ -152,7 +152,7 @@ export default function Users() {
                     )}
                 </TableBody>
             </Table>
-            <EditUserModal user={editingUser} onOpenChange={() => setEditingUser(undefined)} />
+            <EditUserModal user={editingUser} guestUser={guestUser} onOpenChange={() => setEditingUser(undefined)} />
         </div>
     );
 };

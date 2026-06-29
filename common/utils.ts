@@ -209,6 +209,10 @@ export function hasPermission<T extends Principal>(principal?: T, ...permissions
         return true;
     }
 
+    if (principal.defaultPermissions && includesPermission(principal.defaultPermissions)) {
+        return true;
+    }
+
     return false;
 }
 

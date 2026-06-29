@@ -19,6 +19,7 @@ interface IPrincipal {
     id: string;
     permissions: Permission[];
     roles: Role[];
+    defaultPermissions?: Permission[];
 }
 
 export interface Role {

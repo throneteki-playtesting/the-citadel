@@ -32,14 +32,16 @@ for (const [permission, { dependencies }] of Object.entries(permissionMeta)) {
     }
 }
 
-export default function PermissionCheckboxes({ selectedPermissions, roleGrantedPermissions, onChange }: PermissionCheckboxesProps) {
-    const isChecked = (v: string) => selectedPermissions.has(v) || (roleGrantedPermissions?.has(v) ?? false);
-    const isRoleDisabled = (v: string) => roleGrantedPermissions?.has(v) ?? false;
+export default function PermissionCheckboxes({ selectedPermissions, roleGrantedPermissions, guestProfilePermissions, onChange }: PermissionCheckboxesProps) {
+    const isRoleLocked = (v: string) => roleGrantedPermissions?.has(v) ?? false;
+    const isGuestLocked = (v: string) => guestProfilePermissions?.has(v) ?? false;
+    const isLocked = (v: string) => isRoleLocked(v) || isGuestLocked(v);
+    const isChecked = (v: string) => selectedPermissions.has(v) || isLocked(v);
 
     // Permissions that are checked and depend on `value` — prevents unchecking
     const getBlockingDependents = (value: string): string[] => {
         const dependents = reverseDependencyMap.get(value) ?? [];
-        return dependents.filter(dep => isChecked(dep) && !isRoleDisabled(dep));
+        return dependents.filter(dep => isChecked(dep) && !isLocked(dep));
     };
 
     // Dependencies of `value` that are not yet checked — prevents checking
@@ -64,20 +66,26 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
         onChange(checked ? new Set(allPermissionValues) : new Set());
     };
 
-    const hasRoleGranted = (roleGrantedPermissions?.size ?? 0) > 0;
-    const allRoleGranted = hasRoleGranted && allPermissionValues.every(isRoleDisabled);
+    const hasRoleLocked = (roleGrantedPermissions?.size ?? 0) > 0;
+    const hasGuestLocked = (guestProfilePermissions?.size ?? 0) > 0;
+    const allLocked = allPermissionValues.every(isLocked);
+
+    const bannerSources = [
+        hasRoleLocked && "roles",
+        hasGuestLocked && "the guest profile"
+    ].filter(Boolean).join(" and ");
 
     const renderCheckbox = (perm: { value: string; label: string }) => {
-        const roleDisabled = isRoleDisabled(perm.value);
+        const locked = isLocked(perm.value);
         const checked = isChecked(perm.value);
-        const blocking = (!roleDisabled && checked) ? getBlockingDependents(perm.value) : [];
-        const missing = (!roleDisabled && !checked) ? getMissingDependencies(perm.value) : [];
+        const blocking = (!locked && checked) ? getBlockingDependents(perm.value) : [];
+        const missing = (!locked && !checked) ? getMissingDependencies(perm.value) : [];
 
         const checkbox = (
             <Checkbox
                 size="sm"
                 isSelected={checked}
-                isDisabled={roleDisabled || blocking.length > 0 || missing.length > 0}
+                isDisabled={locked || blocking.length > 0 || missing.length > 0}
                 onValueChange={(v) => toggle(perm.value, v)}
             >
                 {perm.label}
@@ -114,9 +122,9 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
 
     return (
         <div className="space-y-2">
-            {hasRoleGranted && (
+            {(hasRoleLocked || hasGuestLocked) && (
                 <div className="text-sm p-2 border border-default rounded-md animate-pulse">
-                    <FontAwesomeIcon icon={faExclamationCircle}/> Some permissions are being granted via roles, and cannot be removed here.
+                    <FontAwesomeIcon icon={faExclamationCircle}/> Some permissions are being granted via {bannerSources}, and cannot be removed here.
                 </div>
             )}
             <div>
@@ -124,7 +132,7 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
                     size="sm"
                     isSelected={allChecked}
                     isIndeterminate={someChecked}
-                    isDisabled={allRoleGranted}
+                    isDisabled={allLocked}
                     onValueChange={toggleAll}
                 >
                 Select All
@@ -144,5 +152,6 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
 type PermissionCheckboxesProps = {
     selectedPermissions: Set<string>;
     roleGrantedPermissions?: Set<string>;
+    guestProfilePermissions?: Set<string>;
     onChange: (permissions: Set<string>) => void;
 };

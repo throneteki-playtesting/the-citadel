@@ -25,16 +25,22 @@ export const authMiddleware = asyncHandler(
             const { accessToken } = req.cookies;
 
             if (!accessToken) {
-                const [guestUser] = await dataService.users.read({ discordId: "anonymous" });
-                const context = createContext("client", guestUser);
-                requestContext.run(context, next);
-                return;
+                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "No session");
             }
             try {
                 const { discordId } = jwt.verify(accessToken, process.env.JWT_SECRET) as AccessTokenPayload;
-                const [user] = await dataService.users.read({ discordId });
+                const [[user], guestProfile] = await Promise.all([
+                    dataService.users.read({ discordId }),
+                    dataService.users.getGuestProfile()
+                ]);
+                const defaultPermissions = guestProfile
+                    ? [...new Set([
+                        ...guestProfile.permissions,
+                        ...guestProfile.roles.flatMap((r) => r.permissions)
+                    ])]
+                    : [];
 
-                const context = createContext("client", user);
+                const context = createContext("client", { ...user, defaultPermissions });
                 requestContext.run(context, next);
             } catch (err) {
                 if ("name" in err && err.name === "TokenExpiredError") {

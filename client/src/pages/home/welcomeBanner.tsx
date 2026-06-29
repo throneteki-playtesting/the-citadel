@@ -1,11 +1,12 @@
 import { faScroll } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { addToast, Button, Spinner } from "@heroui/react";
-import { Link } from "react-router-dom";
+import { addToast, Button, Link, Spinner } from "@heroui/react";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { useAssignPlaytestingRoleMutation } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import PermissionGate from "../../components/permissionGate";
+import Permission from "common/models/permissions";
 
 const DISCORD_SERVER_INVITE_URL = import.meta.env.VITE_DISCORD_SERVER_INVITE_URL;
 
@@ -55,7 +56,7 @@ export default function WelcomeBanner() {
                     </div>
                 </div>
                 {DISCORD_SERVER_INVITE_URL && (
-                    <Button as={Link} href={DISCORD_SERVER_INVITE_URL} target="_blank" color="primary" className="font-cinzel shrink-0 font-semibold">
+                    <Button as={Link} href={DISCORD_SERVER_INVITE_URL} target="_blank" rel="noreferrer" color="primary" className="font-cinzel shrink-0 font-semibold">
                         <FontAwesomeIcon icon={faDiscord} /> Join the Server
                     </Button>)
                 }
@@ -72,15 +73,17 @@ export default function WelcomeBanner() {
                         You are welcome to browse the public archives — active projects and their latest cards are open to all. To access playtesting records, decks, reviews and statistics, you must become a playtester.
                     </div>
                 </div>
-                <Button
-                    startContent={isAssigning ? <Spinner color="secondary" size="sm" /> : <FontAwesomeIcon icon={faDiscord} />}
-                    isDisabled={isAssigning}
-                    color="primary"
-                    onPress={onBecomePlaytester}
-                    className="font-cinzel shrink-0 font-semibold"
-                >
+                <PermissionGate requires={Permission.ASSIGN_OWN_PLAYTESTING_ROLE}>
+                    <Button
+                        startContent={isAssigning ? <Spinner color="secondary" size="sm" /> : <FontAwesomeIcon icon={faDiscord} />}
+                        isDisabled={isAssigning}
+                        color="primary"
+                        onPress={onBecomePlaytester}
+                        className="font-cinzel shrink-0 font-semibold"
+                    >
                     Become a Playtester
-                </Button>
+                    </Button>
+                </PermissionGate>
             </div>
         );
     }

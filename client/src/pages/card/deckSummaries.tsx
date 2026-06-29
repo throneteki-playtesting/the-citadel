@@ -1,6 +1,6 @@
 import { faExclamationCircle, faExternalLink, faScroll, faCheckCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Skeleton, ScrollShadow, Card, Link, Avatar } from "@heroui/react";
+import { ScrollShadow, Card, Link, Avatar } from "@heroui/react";
 import { IPlaytestCard } from "common/models/cards";
 import { IDecklist } from "common/models/decks";
 import { IPlaytestReview } from "common/models/reviews";
@@ -13,7 +13,6 @@ import { useGetReviewsQuery, useGetCardsQuery, useGetUserQuery } from "../../api
 import { useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import CardImage from "../../components/cardImage";
 import CardStack from "../../components/cardStack";
-import LoadingCard from "../../components/loadingCard";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import Permission from "common/models/permissions";
@@ -80,6 +79,17 @@ export default function DeckSummaries({ className, style, project, number }: Dec
     }, [cardsData, deckGroups, fetchDeck, reviewsData]);
 
 
+    const hasContent = !isLoading && (!!deckGroups || loading.length === 0);
+    const [contentVisible, setContentVisible] = useState(false);
+    useEffect(() => {
+        if (hasContent) {
+            const frame = requestAnimationFrame(() => setContentVisible(true));
+            return () => cancelAnimationFrame(frame);
+        } else {
+            setContentVisible(false);
+        }
+    }, [hasContent]);
+
     const content = useMemo(() => {
         const sorted = deckGroups ? sortBy(Array.from(deckGroups?.entries()), ([, { deck }]) => deck.updated).reverse() : undefined;
 
@@ -114,7 +124,9 @@ export default function DeckSummaries({ className, style, project, number }: Dec
             <SectionTitle>
                 Decks for this card
             </SectionTitle>
-            {content}
+            <div className={classNames("flex flex-col flex-1 transition-opacity duration-800", contentVisible ? "opacity-100" : "opacity-0")}>
+                {content}
+            </div>
         </div>
     );
 };
@@ -130,32 +142,8 @@ function DeckSummary({ review, card, deck, url }: DeckSummaryProps) {
     const faction = deck.faction;
     const agendas = [...deck.agendas].reverse();
 
-    if (isLoading) {
-        return (
-            <Card className="p-0 w-full">
-                <div className="px-3 py-1 flex items-center">
-                    <Skeleton className="w-full h-8 rounded-md"/>
-                </div>
-                <Skeleton className="w-full h-8 rounded.md" />
-                <div className="flex items-center py-1">
-                    <CardStack cards={[undefined, undefined]} tilt={{ amount: -0.2, depth: 14 }} className="w-24 lg:w-32" shadow={false}>
-                        {() => <LoadingCard />}
-                    </CardStack>
-                    <div className="ml-16 flex-1 flex flex-col px-2 gap-1">
-                        <Skeleton className="w-32 h-6 rounded-md"/>
-                        <Skeleton className="w-12 h-6 rounded-md"/>
-                        <div className="flex flex-col md:flex-row mt-auto space-x-4 gap-1">
-                            <Skeleton className="h-4 rounded-md"/>
-                            <Skeleton className="h-4 rounded-md"/>
-                        </div>
-                    </div>
-                </div>
-            </Card>
-        );
-    }
-
     return (
-        <Link key={url} href={url} target="_blank">
+        <Link key={url} href={url} target="_blank" className={classNames("transition-opacity duration-500", isLoading ? "opacity-0" : "opacity-100")}>
             <Card className="p-0 w-full hover:ring-2 ring-content3 transition-shadow duration-200">
                 <div className="sm:hidden font-cinzel text-xl px-3 py-1 flex items-center min-w-0">
                     <span className='truncate'>{deck.name}</span>

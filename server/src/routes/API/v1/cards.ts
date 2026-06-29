@@ -70,10 +70,13 @@ function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boo
 // Checks all filters to decide between READ_LATEST_CARDS and READ_CARDS being required
 const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(
     (principal, req) => {
+        if (hasPermission(principal, Permission.READ_CARDS)) {
+            return true;
+        }
         if (everyFilterHasLatest(req.query.filter)) {
             return hasPermission(principal, Permission.READ_LATEST_CARDS);
         }
-        return hasPermission(principal, Permission.READ_CARDS);
+        return false;
     }
 );
 
