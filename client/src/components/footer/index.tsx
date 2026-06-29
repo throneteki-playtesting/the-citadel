@@ -3,10 +3,10 @@ import { Link as RouterLink } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 
-const Footer = () => {
+export default function Footer() {
     return (
-        <footer className="mt-8 border-t border-default-200 py-8">
-            <div className="mx-auto max-w-5xl px-3 grid grid-cols-1 sm:grid-cols-3 gap-8 text-small font-cinzel justify-items-center">
+        <footer className="border-t border-default-200 pt-4 pb-2 px-4 sm:pt-8 sm:pb-4 sm:px-8">
+            <div className="mx-auto max-w-5xl px-3 grid grid-cols-2 sm:grid-cols-3 gap-8 text-small font-cinzel sm:justify-items-center">
                 <div>
                     <p className="font-semibold text-default-600 mb-3">Resources</p>
                     <ul className="space-y-2">
@@ -59,5 +59,3 @@ const Footer = () => {
         </footer>
     );
 };
-
-export default Footer;

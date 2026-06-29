@@ -15,7 +15,7 @@ export default function Home() {
     usePageTitle("Home");
     return (
         <div className="flex flex-col gap-5">
-            <div>
+            <div className="p-2 md:p-0">
                 <div className="text-5xl font-cinzel font-semibold tracking-widest text-primary">The Citadel</div>
                 <div className="text-lg font-crimson italic text-secondary">— The archive of card design</div>
             </div>
