@@ -97,7 +97,7 @@ const CardEditor = ({ className, style, card: initial, inputOptions = {}, onUpda
             </div>
             <div className="flex gap-1 items-center">
                 {isVisible("cost") && <CostInput className="max-w-24" value={card.cost} setValue={(value) => handleChange("cost", value)} isDisabled={isDisabled("cost")}/>}
-                <div className="grow flex overflow-hidden">
+                <div className="grow flex">
                     {isVisible("unique") && <UniqueButton className="rounded-l-xl" value={card.unique} setValue={(value) => handleChange("unique", value)} isDisabled={isDisabled("unique")}/>}
                     {isVisible("name") && <Input name="name" className="grow" classNames={{ inputWrapper: isVisible("unique") ? "rounded-r-xl" : "rounded-xl" }} radius="none" label="Name" value={card.name ?? ""} onValueChange={(value) => handleChange("name", value)} isDisabled={isDisabled("name")}>
                         {card.name}

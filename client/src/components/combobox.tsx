@@ -44,8 +44,17 @@ const ComboBox = ({ name, className, style, classNames: classGroups, label, plac
         } else if (e.key === "Backspace" && inputValue === "" && values.length > 0) {
             e.preventDefault();
             removeItem(values.length - 1);
+        } else if (e.key === "Tab" && inputValue.trim() !== "") {
+            // Commit pending text before tabbing away without stealing focus back
+            const value = inputValue.trim();
+            setInputValue("");
+            if (allowDuplicates || !values.includes(value)) {
+                const newValues = [...values, value];
+                setValues(newValues);
+                onChange(newValues);
+            }
         }
-    }, [addItem, addKeys, inputValue, removeItem, values.length]);
+    }, [addItem, addKeys, allowDuplicates, inputValue, onChange, removeItem, values]);
 
     const renderInput = useCallback(() => {
         return (
@@ -106,9 +115,9 @@ const ComboBox = ({ name, className, style, classNames: classGroups, label, plac
                 }}
                 style={style}
                 isDisabled={isDisabled}
+                tabIndex={-1}
                 onClick={() => inputRef.current?.focus()}
-                onFocus={() => inputRef.current?.focus()}
-                endContent={<Button isIconOnly variant="ghost" onPress={() => addItem(inputValue)}><FontAwesomeIcon icon={faPlus}/></Button>}
+                endContent={<Button isIconOnly variant="ghost" tabIndex={-1} onPress={() => addItem(inputValue)}><FontAwesomeIcon icon={faPlus}/></Button>}
             >
                 {renderedItems.map((item) => <SelectItem key={item} textValue={item}>{item}</SelectItem>)}
             </Select>
