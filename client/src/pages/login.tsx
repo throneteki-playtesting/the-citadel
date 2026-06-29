@@ -59,7 +59,7 @@ export default function LoginPage() {
                         }
                         isDisabled={isProcessing}
                         onPress={login}
-                        className="font-cinzel tracking-widest uppercase px-10 border-primary/40 hover:border-primary"
+                        className="font-cinzel tracking-widest uppercase px-10 border-primary/40 hover:border-primary whitespace-normal sm:whitespace-nowrap h-auto sm:h-12 py-4 sm:py-0 text-center"
                     >
                         Log in with Discord
                     </Button>
