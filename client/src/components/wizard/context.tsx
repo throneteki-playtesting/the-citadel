@@ -22,6 +22,7 @@ export type WizardContextProps<T> = {
     isFirstPage: boolean,
     isLastPage: boolean,
     validationErrors: Record<string, string>,
+    setError: (name: string, errorMessage: string) => void,
     onPageSubmit: (data: Record<string, any>) => void,
     onPageBack: () => void
 }

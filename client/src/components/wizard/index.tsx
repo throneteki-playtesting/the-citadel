@@ -26,6 +26,12 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
         setCurrentPage(initialPage);
     }, [initialPage]);
 
+    const setError = useCallback((name: string, errorMessage: string) => setValidationErrors((prev) => {
+        const next = { ...prev };
+        next[name] = errorMessage;
+        return next;
+    }), []);
+
     const validate = useCallback((data: Record<string, any>, partial = false) => {
         const { error } = schema.validate(data, {
             allowUnknown: true,
@@ -97,17 +103,17 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
         isFirstPage,
         isLastPage,
         validationErrors,
+        setError,
         onPageSubmit,
         onPageBack
     }), [
         currentPage,
         totalPages,
-        setTotalPages,
         internalData,
-        setInternalData,
         isFirstPage,
         isLastPage,
         validationErrors,
+        setError,
         onPageSubmit,
         onPageBack
     ]);
@@ -244,7 +250,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
         }
 
         // Unflatten data before sending through (eg. "inner.data": "value" -> "inner" : { "data": "value" })
-        onPageSubmit(unflatten(formData));
+        onPageSubmit(unflatten(pageData));
     }, [controlledData, onPageSubmit, pageNo]);
 
     return (

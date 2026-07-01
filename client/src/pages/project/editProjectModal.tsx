@@ -9,6 +9,7 @@ import CardCountEditor from "./cardCountEditor";
 import { useCreateProjectMutation, useLazyGetProjectQuery, useLazyGetProjectsQuery, useUpdateProjectMutation } from "../../api";
 import { EmojiSelect } from "../../components/emojiSelect";
 import { factions } from "common/models/cards";
+import { useWizard } from "../../components/wizard/context";
 
 const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
@@ -20,10 +21,10 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
     const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
     const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
     const [project, setProject] = useState<DeepPartial<IProject>>(DefaultProjectValues);
-    const [cardCount, setCardCount] = useState<DeepPartial<FactionCardCount>>({ ...initial?.cardCount, ...Object.fromEntries(factions.map(f => [f, 0])) } as FactionCardCount);
+    const [cardCount, setCardCount] = useState<DeepPartial<FactionCardCount>>({});
 
     useEffect(() => {
-        setCardCount(initial?.cardCount ?? {});
+        setCardCount({ ...initial?.cardCount, ...Object.fromEntries(factions.map(f => [f, 0])) } as FactionCardCount);
     }, [initial]);
 
     useEffect(() => {
@@ -107,6 +108,7 @@ type EditProjectModalProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectNameInput({ className, style, name: initial }: ProjectNameInputProps) {
     const [name, setName] = useState(initial);
+    const { setError } = useWizard();
 
     const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
 
@@ -119,9 +121,11 @@ function ProjectNameInput({ className, style, name: initial }: ProjectNameInputP
         triggerFetchProjects({ filter: { name } });
     }, [name, initial, reset, triggerFetchProjects]);
 
-    const errorMessage = !isFetching && existingProjects && existingProjects.total > 0
-        ? "Project already exists with that name"
-        : undefined;
+    useEffect(() => {
+        if (!isFetching && existingProjects && existingProjects.total > 0) {
+            return setError("name", "Project already exists with that name");
+        }
+    }, [existingProjects, isFetching, setError]);
 
     return (
         <Input
@@ -131,8 +135,6 @@ function ProjectNameInput({ className, style, name: initial }: ProjectNameInputP
             label="Name"
             defaultValue={initial}
             onValueChange={setName}
-            isInvalid={!!errorMessage}
-            errorMessage={errorMessage}
         />
     );
 }
@@ -143,6 +145,7 @@ type ProjectNameInputProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectNumberInput({ className, style, number: initial }: ProjectNumberInputProps) {
     const [number, setNumber] = useState(initial);
+    const { setError } = useWizard();
 
     const [triggerFetchProject, { data: existingProject, isFetching, reset }] = useLazyGetProjectQuery();
 
@@ -156,9 +159,12 @@ function ProjectNumberInput({ className, style, number: initial }: ProjectNumber
         triggerFetchProject({ number });
     }, [number, initial, reset, triggerFetchProject]);
 
-    const errorMessage = !isFetching && existingProject
-        ? `Project ${existingProject.code} already exists with that number`
-        : undefined;
+    useEffect(() => {
+        if (!isFetching && existingProject) {
+            return setError("number", `Project ${existingProject.code} already exists with that number`);
+        }
+    }, [existingProject, isFetching, setError]);
+
     return (
         <NumberInput
             className={className}
@@ -168,8 +174,6 @@ function ProjectNumberInput({ className, style, number: initial }: ProjectNumber
             defaultValue={initial}
             minValue={0}
             onValueChange={setNumber}
-            isInvalid={!!errorMessage}
-            errorMessage={errorMessage}
         />
     );
 }
@@ -180,6 +184,7 @@ type ProjectNumberInputProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputProps) {
     const [code, setCode] = useState(initial);
+    const { setError } = useWizard();
 
     const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
 
@@ -192,9 +197,11 @@ function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputP
         triggerFetchProjects({ filter: { code } });
     }, [code, initial, reset, triggerFetchProjects]);
 
-    const errorMessage = !isFetching && existingProjects && existingProjects.total > 0
-        ? "Project already exists with that code"
-        : undefined;
+    useEffect(() => {
+        if (!isFetching && existingProjects && existingProjects.total > 0) {
+            return setError("code", "Project already exists with that code");
+        }
+    }, [existingProjects, isFetching, setError]);
 
     return (
         <Input
@@ -204,8 +211,6 @@ function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputP
             label="Code"
             defaultValue={initial}
             onValueChange={setCode}
-            isInvalid={!!errorMessage}
-            errorMessage={errorMessage}
         />
     );
 }
