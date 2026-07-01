@@ -56,7 +56,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="flex-1 flex flex-col sm:flex-row">
                 <div className="flex-1 flex flex-col">
-                    <PermissionedLink to={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
+                    <PermissionedLink to={`/project/${projectNumber}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit" requires={Permission.READ_PROJECTS}>
                         <FontAwesomeIcon icon={faAngleLeft}/> {project?.name}
                     </PermissionedLink>
                     <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
