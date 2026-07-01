@@ -37,7 +37,6 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
         // setProject(project);
         try {
             const newProject = isNew ? await createProject(project).unwrap() : await updateProject(project).unwrap();
-            console.log("POST resolved", newProject);
             // setProject(newProject);
             onSave?.(newProject);
             onModalClose?.(true);
