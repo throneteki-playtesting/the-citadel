@@ -1,15 +1,17 @@
-import MongoDataSource from "./dataSources/mongoDataSource";
+﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { Document, MongoClient } from "mongodb";
 import { Role, User } from "common/models/auth";
 import { BasicRepository } from "./shared";
 import { SingleOrArray } from "common/types";
 import { logger } from "@/services";
+import { broadcastResourceChange } from "@/services/sseService";
+import { asArray } from "common/utils";
 
-export default class UsersRepository extends BasicRepository<User> {
+export default class UsersRepository extends BasicRepository<"user"> {
     private cachedGuestProfile: User | undefined;
 
     constructor(mongoClient: MongoClient) {
-        super(new MongoDataSource<User>(mongoClient, "users", { discordId: 1 }));
+        super(new MongoDataSource<User>(mongoClient, "users", { discordId: 1 }), "user");
         this.initialiseGuestProfile();
     }
 
@@ -41,7 +43,7 @@ export default class UsersRepository extends BasicRepository<User> {
     }
 
     async syncEmbeddedRole(roles: SingleOrArray<Role>) {
-        const roleArray = Array.isArray(roles) ? roles : [roles];
+        const roleArray = asArray(roles);
         await this.database.collection.bulkWrite(
             roleArray.map((role) => ({
                 updateMany: {
@@ -51,5 +53,11 @@ export default class UsersRepository extends BasicRepository<User> {
                 }
             }))
         );
+        for (const role of roleArray) {
+            const affected = await this.read({ "roles.discordId": role.discordId } as never);
+            if (affected.length > 0) {
+                broadcastResourceChange("user", affected);
+            }
+        }
     }
 }

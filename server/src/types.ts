@@ -4,6 +4,7 @@ import { UUID } from "crypto";
 import { IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { IPlaytestReview } from "common/models/reviews";
+import { ResourceDataMap, ResourceType } from "common/resources";
 
 export interface AccessTokenPayload {
     discordId: string,
@@ -108,3 +109,17 @@ export type SyncEvent<K extends SyncType = SyncType> =
     | SyncProgressEvent<K>
     | SyncCompleteEvent<K>
     | SyncErrorEvent<K>;
+
+export interface ResourceUpdateEvent<K extends ResourceType = ResourceType> {
+    type: K;
+    status: "create" | "update" | "delete";
+    items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[];
+    originId?: string;
+}
+
+export interface ConnectedEvent {
+    status: "connected";
+    id: string;
+}
+
+export type SSEEvent = SyncEvent | ResourceUpdateEvent | ConnectedEvent;

@@ -27,6 +27,7 @@ router.get("/",
 
         const clientId = randomUUID();
         sseService.addBroadcastClient(clientId, res);
+        sseService.sendConnected(res, clientId);
         logger.verbose(`[SSE] Broadcast client connected: ${clientId}`);
 
         // Send a keepalive comment every 30 seconds

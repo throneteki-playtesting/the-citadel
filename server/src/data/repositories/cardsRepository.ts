@@ -1,4 +1,4 @@
-import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
+﻿import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
 import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
@@ -11,28 +11,28 @@ import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
 
-export default class CardsRepository extends BasicAuditableRepository<IPlaytestCard> {
+export default class CardsRepository extends BasicAuditableRepository<"card"> {
     declare protected database: CardMongoDataSource;
     constructor(mongoClient: MongoClient) {
-        super(new CardMongoDataSource(mongoClient));
+        super(new CardMongoDataSource(mongoClient), "card");
     }
 
-    public override async create(creating: IPlaytestCard, sync?: boolean): Promise<IPlaytestCard>;
-    public override async create(creating: IPlaytestCard[], sync?: boolean): Promise<IPlaytestCard[]>;
-    public override async create(creating: SingleOrArray<IPlaytestCard>, sync = true) {
+    public override async create(creating: IPlaytestCard, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard>;
+    public override async create(creating: IPlaytestCard[], sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard[]>;
+    public override async create(creating: SingleOrArray<IPlaytestCard>, sync = true, broadcast = true) {
         let data = asArray(creating);
-        data = await super.create(data);
+        data = await super.create(data, broadcast);
         if (sync) {
             data = await this.sync(data);
         }
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async update(updating: IPlaytestCard, upsert?: boolean, sync?: boolean): Promise<IPlaytestCard>;
-    public override async update(updating: IPlaytestCard[], upsert?: boolean, sync?: boolean): Promise<IPlaytestCard[]>;
-    public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true, sync = true) {
+    public override async update(updating: IPlaytestCard, upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard>;
+    public override async update(updating: IPlaytestCard[], upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard[]>;
+    public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true, sync = true, broadcast = true) {
         let data = asArray(updating);
-        data = await super.update(data, upsert);
+        data = await super.update(data, upsert, broadcast);
         if (sync) {
             data = await this.sync(data);
         }
@@ -40,7 +40,7 @@ export default class CardsRepository extends BasicAuditableRepository<IPlaytestC
     }
 
     public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>) {
-        let data = await this.database.destroy(destroying);
+        let data = await super.destroy(destroying);
         data = await this.desync(data);
         return data;
     }

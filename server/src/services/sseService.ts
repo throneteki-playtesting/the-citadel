@@ -1,8 +1,11 @@
 import { Response } from "express";
-import { SyncDataMap, SyncEvent, SyncOperation, SyncType } from "@/types";
-import { getDiff } from "common/utils";
+import { SSEEvent, SyncDataMap, SyncEvent, SyncOperation, SyncType } from "@/types";
+import { ResourceDataMap, ResourceType, resourceIdFuncs } from "common/resources";
+import { SingleOrArray } from "common/types";
+import { asArray, getDiff } from "common/utils";
 import { cloneDeep } from "lodash-es";
 import { logger } from "@/services";
+import { requestContext } from "@/middleware/context";
 
 interface SseClient {
     id: string;
@@ -12,7 +15,7 @@ interface SseClient {
 const broadcastClients = new Map<string, SseClient>();
 const progressClients = new Map<string, SseClient>();
 
-function sendEvent(res: Response, event: SyncEvent<SyncType>) {
+function sendEvent(res: Response, event: SSEEvent) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
 }
 
@@ -33,7 +36,7 @@ export const sseService = {
         progressClients.delete(id);
     },
 
-    broadcast(event: SyncEvent<SyncType>) {
+    broadcast(event: SSEEvent) {
         logger.verbose(`[SSE] Broadcasting to ${broadcastClients.size} client(s): ${JSON.stringify(event)}`);
         broadcastClients.forEach(({ res }) => sendEvent(res, event));
     },
@@ -41,6 +44,10 @@ export const sseService = {
     sendProgress(event: SyncEvent<SyncType>) {
         logger.verbose(`[SSE] Sending progress to ${progressClients.size} client(s): ${JSON.stringify(event)}`);
         progressClients.forEach(({ res }) => sendEvent(res, event));
+    },
+
+    sendConnected(res: Response, id: string) {
+        sendEvent(res, { status: "connected", id });
     }
 };
 
@@ -77,4 +84,18 @@ export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOp
         error: (error: string) =>
             emit({ type, id: resourceId, operation, status: "error", error })
     };
+}
+
+export function broadcastResourceChange<K extends ResourceType>(
+    type: K,
+    resources: SingleOrArray<ResourceDataMap[K]>,
+    status: "create" | "update" | "delete" = "update"
+): void {
+    const items = asArray(resources).map(resource => ({
+        id: resourceIdFuncs[type](resource),
+        data: resource
+    }));
+    const context = requestContext.getStore();
+    const originId = context?.source === "client" ? context.clientId : undefined;
+    sseService.broadcast({ type, status, items, originId });
 }

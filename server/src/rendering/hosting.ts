@@ -97,7 +97,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
             logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${errored > 0 ? `, ${errored} errored` : ""}`);
         }
 
-        cards = await dataService.cards.update(packages.map(({ card }) => card), false, false);
+        cards = await dataService.cards.update(packages.map(({ card }) => card), false, false, false);
         return Array.isArray(data) ? cards : cards[0];
     } finally {
         release();

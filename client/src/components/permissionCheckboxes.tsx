@@ -32,7 +32,7 @@ for (const [permission, { dependencies }] of Object.entries(permissionMeta)) {
     }
 }
 
-export default function PermissionCheckboxes({ selectedPermissions, roleGrantedPermissions, guestProfilePermissions, onChange }: PermissionCheckboxesProps) {
+export default function PermissionCheckboxes({ selectedPermissions, roleGrantedPermissions, guestProfilePermissions, getUserBlockers, onChange }: PermissionCheckboxesProps) {
     const isRoleLocked = (v: string) => roleGrantedPermissions?.has(v) ?? false;
     const isGuestLocked = (v: string) => guestProfilePermissions?.has(v) ?? false;
     const isLocked = (v: string) => isRoleLocked(v) || isGuestLocked(v);
@@ -79,26 +79,32 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
         const locked = isLocked(perm.value);
         const checked = isChecked(perm.value);
         const blocking = (!locked && checked) ? getBlockingDependents(perm.value) : [];
+        const userBlocking = (!locked && checked) ? (getUserBlockers?.(perm.value) ?? []) : [];
         const missing = (!locked && !checked) ? getMissingDependencies(perm.value) : [];
 
         const checkbox = (
             <Checkbox
                 size="sm"
                 isSelected={checked}
-                isDisabled={locked || blocking.length > 0 || missing.length > 0}
+                isDisabled={locked || blocking.length > 0 || userBlocking.length > 0 || missing.length > 0}
                 onValueChange={(v) => toggle(perm.value, v)}
             >
                 {perm.label}
             </Checkbox>
         );
 
-        if (blocking.length > 0) {
+        if (blocking.length > 0 || userBlocking.length > 0) {
             return (
                 <TouchTooltip
                     key={perm.value}
                     color="danger"
                     placement="top"
-                    content={<PermissionTooltipList label="Required by" items={blocking.map(d => permissionFullLabel.get(d) ?? d)} />}
+                    content={
+                        <div className="space-y-1">
+                            {blocking.length > 0 && <PermissionTooltipList label="Required by" items={blocking.map(d => permissionFullLabel.get(d) ?? d)} />}
+                            {userBlocking.length > 0 && <PermissionTooltipList label="Required by users" items={userBlocking} />}
+                        </div>
+                    }
                 >
                     <div className="inline-flex">{checkbox}</div>
                 </TouchTooltip>
@@ -153,5 +159,6 @@ type PermissionCheckboxesProps = {
     selectedPermissions: Set<string>;
     roleGrantedPermissions?: Set<string>;
     guestProfilePermissions?: Set<string>;
+    getUserBlockers?: (value: string) => string[];
     onChange: (permissions: Set<string>) => void;
 };

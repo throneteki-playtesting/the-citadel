@@ -1,4 +1,4 @@
-import MongoDataSource from "./dataSources/mongoDataSource";
+﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { IPlaytestReview } from "common/models/reviews";
 import { asArray } from "common/utils";
@@ -6,27 +6,27 @@ import { Filter, SingleOrArray } from "common/types";
 import { BasicAuditableRepository } from "./shared";
 import { deleteInitial, syncReviewForum } from "@/discord/forums/playtestingReviews";
 
-export default class ReviewsRepository extends BasicAuditableRepository<IPlaytestReview> {
+export default class ReviewsRepository extends BasicAuditableRepository<"review"> {
     constructor(mongoClient: MongoClient) {
-        super(new MongoDataSource<IPlaytestReview>(mongoClient, "reviews", { project: 1, number: 1, version: 1, reviewer: 1 }));
+        super(new MongoDataSource<IPlaytestReview>(mongoClient, "reviews", { project: 1, number: 1, version: 1, reviewer: 1 }), "review");
     }
 
-    public override async create(creating: IPlaytestReview, sync?: boolean): Promise<IPlaytestReview>;
-    public override async create(creating: IPlaytestReview[], sync?: boolean): Promise<IPlaytestReview[]>;
-    public override async create(creating: SingleOrArray<IPlaytestReview>, sync = true) {
+    public override async create(creating: IPlaytestReview, sync?: boolean, broadcast?: boolean): Promise<IPlaytestReview>;
+    public override async create(creating: IPlaytestReview[], sync?: boolean, broadcast?: boolean): Promise<IPlaytestReview[]>;
+    public override async create(creating: SingleOrArray<IPlaytestReview>, sync = true, broadcast = true) {
         let data = asArray(creating);
-        data = await super.create(data);
+        data = await super.create(data, broadcast);
         if (sync) {
             data = await this.sync(data);
         }
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async update(updating: IPlaytestReview, upsert?: boolean, sync?: boolean): Promise<IPlaytestReview>;
-    public override async update(updating: IPlaytestReview[], upsert?: boolean, sync?: boolean): Promise<IPlaytestReview[]>;
-    public override async update(updating: SingleOrArray<IPlaytestReview>, upsert = true, sync = true) {
+    public override async update(updating: IPlaytestReview, upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestReview>;
+    public override async update(updating: IPlaytestReview[], upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestReview[]>;
+    public override async update(updating: SingleOrArray<IPlaytestReview>, upsert = true, sync = true, broadcast = true) {
         let data = asArray(updating);
-        data = await super.update(data, upsert);
+        data = await super.update(data, upsert, broadcast);
         if (sync) {
             data = await this.sync(data);
         }

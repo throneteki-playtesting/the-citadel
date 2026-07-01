@@ -40,7 +40,7 @@ export const authMiddleware = asyncHandler(
                     ])]
                     : [];
 
-                const context = createContext("client", { ...user, defaultPermissions });
+                const context = createContext("client", { ...user, defaultPermissions }, req.header("X-Client-Id"));
                 requestContext.run(context, next);
             } catch (err) {
                 if ("name" in err && err.name === "TokenExpiredError") {

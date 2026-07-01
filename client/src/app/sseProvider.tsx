@@ -1,113 +1,23 @@
 import { useEffect, useRef } from "react";
-import { SyncCompleteEvent, SyncEvent, SyncType } from "server/types";
+import { useLocation } from "react-router-dom";
+import { SSEEvent } from "server/types";
+import { ResourceDataMap, ResourceType, resourceIdFuncs } from "common/resources";
+import { DeepPartial } from "common/types";
 import api from "../api";
 import { store } from "../api/store";
-import { SSEContext } from "./sseContext";
+import { setConnectionId } from "../api/connectionId";
+import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
+import { useRefreshToast } from "./refreshToast";
 import { mergeWith, isPlainObject } from "lodash-es";
-import { IPlaytestCard } from "common/models/cards";
-import { IPlaytestingUpdate } from "common/models/projects";
-import { DeepPartial } from "common/types";
-import { IPlaytestReview } from "common/models/reviews";
 
-type SyncHandlers = {
-    [K in SyncType]?: (event: SyncCompleteEvent<K>) => void;
-};
-
-/**
- * Handlers for SSE "complete" sync events, keyed by entity type.
- * When the server broadcasts a change, the relevant handler updates
- * any matching RTK Query cache entries in-place, avoiding a full refetch.
- */
-const syncCompleteHandlers: SyncHandlers = {
-    card: (event) => {
-        if (!event.data || Object.keys(event.data).length === 0) return;
-
-        const state = store.getState();
-        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "card", id: event.id }]);
-        const [project, number, version] = event.id.split("|");
-
-        invalidated.forEach(({ endpointName, originalArgs }) => {
-            try {
-                store.dispatch(
-                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                        updateCachedEntity<IPlaytestCard>(
-                            draft,
-                            (c) => c.project === Number(project) && c.number === Number(number) && c.version === version,
-                            event.data
-                        );
-                    })
-                );
-            } catch (error) {
-                console.error(
-                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
-                    error
-                );
-            }
-        });
-    },
-    review: (event) => {
-        if (!event.data || Object.keys(event.data).length === 0) return;
-
-        const state = store.getState();
-        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "review", id: event.id }]);
-        const [project, number, version, reviewer] = event.id.split("|");
-
-        invalidated.forEach(({ endpointName, originalArgs }) => {
-            try {
-                store.dispatch(
-                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                        updateCachedEntity<IPlaytestReview>(
-                            draft,
-                            (u) => u.project === Number(project) && u.number === Number(number) && u.version === version && u.reviewer === reviewer,
-                            event.data
-                        );
-                    })
-                );
-            } catch (error) {
-                console.error(
-                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
-                    error
-                );
-            }
-        });
-    },
-    playtestingUpdate: (event) => {
-        if (!event.data || Object.keys(event.data).length === 0) return;
-
-        const state = store.getState();
-        const invalidated = api.util.selectInvalidatedBy(state, [{ type: "playtestingUpdate", id: event.id }]);
-        const [project, version] = event.id.split("|");
-
-        invalidated.forEach(({ endpointName, originalArgs }) => {
-            try {
-                store.dispatch(
-                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                        updateCachedEntity<IPlaytestingUpdate>(
-                            draft,
-                            (u) => u.project === Number(project) && u.version === Number(version),
-                            event.data
-                        );
-                    })
-                );
-            } catch (error) {
-                console.error(
-                    `SSE cache update failed: received "${endpointName}" update for id "${event.id}" but could not apply patch to cache.`,
-                    error
-                );
-            }
-        });
-    }
-};
-// Generic helper to update a matching entity across any cache draft shape
-const updateCachedEntity = <T extends object>(
+function updateCachedEntity<T extends object>(
     draft: unknown,
     matchFn: (entity: T) => boolean,
     data: DeepPartial<T>
-) => {
+) {
     const update = (entity: T) => mergeWith(entity, data, (_entityVal, dataVal) => {
-        if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) {
-            return {};
-        }
+        if (Array.isArray(dataVal)) return dataVal;
+        if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) return {};
     });
 
     if (Array.isArray(draft)) {
@@ -117,21 +27,134 @@ const updateCachedEntity = <T extends object>(
         const entity = (draft as { items: T[] }).items.find(matchFn);
         if (entity) update(entity);
     } else {
-        update(draft as unknown as T);
+        update(draft as T);
     }
-};
+}
+
+function handlePatch<K extends ResourceType>(
+    type: K,
+    items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[]
+) {
+    const idFunc = resourceIdFuncs[type];
+
+    items.forEach(({ id, data }) => {
+        if (!data || Object.keys(data).length === 0) return;
+
+        const invalidated = api.util.selectInvalidatedBy(store.getState(), [{ type, id }]);
+        invalidated.forEach(({ endpointName, originalArgs }) => {
+            try {
+                store.dispatch(
+                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
+                        updateCachedEntity(
+                            draft,
+                            (entity) => idFunc(entity as ResourceDataMap[K]) === id,
+                            data
+                        );
+                    })
+                );
+            } catch (error) {
+                console.error(`SSE cache update failed for "${type}" id "${id}"`, error);
+            }
+        });
+    });
+}
+
+function handleMePatch(data: DeepPartial<ResourceDataMap["user"]>) {
+    if (!data || Object.keys(data).length === 0) return;
+
+    const invalidated = api.util.selectInvalidatedBy(store.getState(), [{ type: "me" }]);
+    invalidated.forEach(({ endpointName, originalArgs }) => {
+        try {
+            store.dispatch(
+                api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
+                    updateCachedEntity<ResourceDataMap["user"]>(draft, () => true, data);
+                })
+            );
+        } catch (error) {
+            console.error("SSE cache update failed for \"me\"", error);
+        }
+    });
+}
+
+const reconnectTags = tagTypes.map(type => ({ type }));
 
 export function SSEProvider({ children }: { children: React.ReactNode }) {
     const esRef = useRef<EventSource | null>(null);
+    const hasConnected = useRef(false);
+    const myConnectionId = useRef<string | undefined>(undefined);
+    const { pathname } = useLocation();
+    const isFirstRender = useRef(true);
+
+    useRefreshToast();
+
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        flushPending();
+    }, [pathname]);
 
     useEffect(() => {
         const es = new EventSource("/api/v1/broadcast", { withCredentials: true });
         esRef.current = es;
 
+        es.addEventListener("open", () => {
+            if (hasConnected.current) {
+                store.dispatch(api.util.invalidateTags(reconnectTags));
+            }
+            hasConnected.current = true;
+        });
+
         es.addEventListener("message", (e) => {
-            const event = JSON.parse(e.data) as SyncEvent;
+            const event = JSON.parse(e.data) as SSEEvent;
+
+            if (event.status === "connected") {
+                myConnectionId.current = event.id;
+                setConnectionId(event.id);
+                return;
+            }
+
             if (event.status === "complete") {
-                handleComplete(event);
+                handlePatch(event.type as ResourceType, [{ id: event.id, data: event.data as DeepPartial<ResourceDataMap[ResourceType]> }]);
+                return;
+            }
+
+            if (
+                (event.status === "create" || event.status === "update" || event.status === "delete") &&
+                event.originId !== undefined &&
+                event.originId === myConnectionId.current
+            ) {
+                return;
+            }
+
+            if (event.status === "update") {
+                const type = event.type as ResourceType;
+                const items = event.items as { id: string; data: DeepPartial<ResourceDataMap[ResourceType]> }[];
+
+                if (event.type === "user") {
+                    const me = api.endpoints.getMe.select()(store.getState()).data;
+                    if (me) {
+                        const myItem = items.find(({ id }) => id === resourceIdFuncs.user(me));
+                        if (myItem) handleMePatch(myItem.data as DeepPartial<ResourceDataMap["user"]>);
+                    }
+                }
+
+                items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
+            } else if (event.status === "create") {
+                const type = event.type as ResourceType;
+                event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
+            } else if (event.status === "delete") {
+                const type = event.type as ResourceType;
+
+                if (event.type === "user") {
+                    const me = api.endpoints.getMe.select()(store.getState()).data;
+                    if (me && event.items.some(({ id }) => id === resourceIdFuncs.user(me))) {
+                        store.dispatch(api.util.invalidateTags([{ type: "me" }]));
+                    }
+                }
+
+                event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
             }
         });
 
@@ -140,10 +163,5 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
         };
     }, []);
 
-    return <SSEContext.Provider value={undefined}>{children}</SSEContext.Provider>;
-}
-
-function handleComplete<K extends SyncType>(event: SyncCompleteEvent<K>) {
-    const handler = syncCompleteHandlers[event.type] as ((event: SyncCompleteEvent<K>) => void) | undefined;
-    handler?.(event);
+    return children;
 }

@@ -1,13 +1,13 @@
-import MongoDataSource from "./dataSources/mongoDataSource";
+﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { SingleOrArray } from "common/types";
 import { ICardSuggestion } from "common/models/cards";
 import { asArray } from "common/utils";
 import { BasicAuditableRepository } from "./shared";
 
-export default class SuggestionsRepository extends BasicAuditableRepository<ICardSuggestion> {
+export default class SuggestionsRepository extends BasicAuditableRepository<"suggestion"> {
     constructor(mongoClient: MongoClient) {
-        super(new MongoDataSource<ICardSuggestion>(mongoClient, "suggestions", { id: 1 }));
+        super(new MongoDataSource<ICardSuggestion>(mongoClient, "suggestions", { id: 1 }), "suggestion");
     }
 
     public override async create(creating: ICardSuggestion): Promise<ICardSuggestion>;

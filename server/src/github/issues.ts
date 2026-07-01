@@ -84,7 +84,7 @@ async function syncIssue(card: IPlaytestCard): Promise<IPlaytestCard> {
                     }
                 }
             }
-            [card] = await dataService.cards.update([card], false, false);
+            [card] = await dataService.cards.update([card], false, false, false);
         }
         emitter.complete(card);
     } catch (err) {

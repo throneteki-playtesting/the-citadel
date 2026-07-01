@@ -75,7 +75,7 @@ export async function syncCodePullRequests() {
             emitters.forEach((e, pt) => e.complete(pt));
 
             if (toUpdate.length > 0) {
-                playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
+                playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false, false);
             }
         } catch (err) {
             emitters.forEach((e) => e.error("Failure"));
@@ -178,7 +178,7 @@ export async function syncDataPullRequests() {
         emitters.forEach((e, pu) => e.complete(pu));
 
         // But updates all playtesting updates as some may just have their lastSynced updated, and nothing else
-        playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false);
+        playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false, false);
     } finally {
         release();
     }

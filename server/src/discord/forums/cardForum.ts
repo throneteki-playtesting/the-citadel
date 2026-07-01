@@ -78,7 +78,7 @@ async function syncCardThread(card: IPlaytestCard, context?: CardForumContext): 
                     logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
                 }
             }
-            [card] = await dataService.cards.update([card], false, false);
+            [card] = await dataService.cards.update([card], false, false, false);
         }
         emitter.complete(card);
     } catch (err) {
@@ -261,7 +261,7 @@ export async function onCardForumMessageDeleted(messageUrl: string) {
         }
         emitter.complete(card);
     }
-    cards = await dataService.cards.update(cards, false, false);
+    cards = await dataService.cards.update(cards, false, false, false);
 
     logger.info(`[Discord] Removed discord metadata for ${cards.length} card(s)`);
 }

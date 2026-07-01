@@ -1,4 +1,4 @@
-import MongoDataSource from "./dataSources/mongoDataSource";
+﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { Role } from "common/models/auth";
 import { BasicRepository } from "./shared";
@@ -6,9 +6,9 @@ import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 import { dataService } from "@/services";
 
-export default class RolesRepository extends BasicRepository<Role> {
+export default class RolesRepository extends BasicRepository<"role"> {
     constructor(mongoClient: MongoClient) {
-        super(new MongoDataSource<Role>(mongoClient, "roles", { discordId: 1 }));
+        super(new MongoDataSource<Role>(mongoClient, "roles", { discordId: 1 }), "role");
     }
 
 

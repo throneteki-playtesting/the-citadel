@@ -58,7 +58,7 @@ async function syncReviewThread(review: IPlaytestReview, context?: PlaytestingRe
                 }
             }
             logger.verbose(`[Discord] Synced ${parseCardCode(false, review.project, review.number)} (${review.version}) review by ${review.reviewer}: ${review._metadata?.discord?.messageUrl}`);
-            [review] = await dataService.reviews.update([review], false, false);
+            [review] = await dataService.reviews.update([review], false, false, false);
         }
         emitter.complete(review);
     } catch (err) {
@@ -150,7 +150,7 @@ export async function onReviewForumMessageDeleted(messageUrl: string) {
         }
         emitter.complete(review);
     }
-    reviews = await dataService.reviews.update(reviews, false, false);
+    reviews = await dataService.reviews.update(reviews, false, false, false);
 
     logger.info(`[Discord] Removed discord metadata for ${reviews.length} review(s)`);
 }

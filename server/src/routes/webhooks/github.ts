@@ -47,7 +47,7 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
             merge(card, { _metadata: { github: { status: issue.state, ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }), lastSynced } } });
             emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false, false);
+        cards = await dataService.cards.update(cards, false, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -70,7 +70,7 @@ async function onIssueReopened({ issue }: IssuesReopenedEvent) {
             merge(card, { _metadata: { github: { status: issue.state, lastSynced } } });
             emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false, false);
+        cards = await dataService.cards.update(cards, false, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
     }
@@ -91,7 +91,7 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
             }
             emitter.complete(card);
         }
-        cards = await dataService.cards.update(cards, false, false);
+        cards = await dataService.cards.update(cards, false, false, false);
 
         logger.info(`[Github] Deleted github data for ${cards.length} cards`);
     }
@@ -182,7 +182,7 @@ async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull
         }
         emitter.complete(playtestingUpdate);
     }
-    updates = await dataService.playtestingUpdates.update(updates, false, false);
+    updates = await dataService.playtestingUpdates.update(updates, false, false, false);
     logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github.${key} data for ${updates.length} playtesting updates`);
 }
 

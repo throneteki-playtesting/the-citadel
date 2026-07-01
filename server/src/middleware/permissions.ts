@@ -3,11 +3,12 @@ import { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import asyncHandler from "express-async-handler";
 import { getContext } from "./context";
-import { Principal } from "common/models/auth";
+import { Principal, Role } from "common/models/auth";
 import Permission from "common/models/permissions";
 import { permissionMeta } from "common/models/permissions";
 import { asArray, hasPermission } from "common/utils";
 import { IProject } from "common/models/projects";
+import { dataService } from "@/services";
 
 export class PermissionErrorResponse extends ApiErrorResponse {
     constructor() {
@@ -54,20 +55,30 @@ for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [
 }
 
 export function validatePermissionDependencies() {
-    return asyncHandler(async (req, _res, next) => {
-        const permissions: Permission[] | undefined = req.body?.permissions;
+    return asyncHandler<unknown, unknown, Principal | Role, unknown>(async (req, _res, next) => {
+        const { permissions } = req.body;
         if (!permissions || !Array.isArray(permissions)) {
             return next();
         }
 
         const permissionSet = new Set<Permission>(permissions);
+        const effectivePermissions = new Set<Permission>([...permissions]);
+
+        // For Principal updates, include permissions granted by roles so dependency checks don't
+        // require explicitly adding a permission that is already covered by a role.
+        if ("roles" in req.body) {
+            const { roles } = req.body;
+            const rolePermissions = roles?.flatMap(r => r.permissions) ?? [];
+            rolePermissions.forEach((rolePermission) => effectivePermissions.add(rolePermission));
+        }
+
         const errors: string[] = [];
 
         // Cannot add a permission without its dependencies
         for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [Permission, { dependencies?: Permission | Permission[] }][]) {
             if (!permissionSet.has(permission) || !dependencies) continue;
             const required = Array.isArray(dependencies) ? dependencies : [dependencies];
-            const missing = required.filter(dep => !permissionSet.has(dep));
+            const missing = required.filter(dep => !effectivePermissions.has(dep));
             for (const dep of missing) {
                 errors.push(`Cannot grant ${permission} without also granting ${dep}`);
             }
@@ -75,10 +86,51 @@ export function validatePermissionDependencies() {
 
         // Cannot remove a permission that another granted permission depends on
         for (const [dep, dependents] of reverseDependencyMap) {
-            if (permissionSet.has(dep)) continue;
-            const blocking = dependents.filter(p => permissionSet.has(p));
+            if (effectivePermissions.has(dep)) continue;
+            const blocking = dependents.filter(p => effectivePermissions.has(p));
             for (const blocker of blocking) {
                 errors.push(`Cannot remove ${dep} while ${blocker} is still granted`);
+            }
+        }
+
+        if (errors.length > 0) {
+            throw new ApiErrorResponse(
+                StatusCodes.UNPROCESSABLE_ENTITY,
+                "Invalid Permissions",
+                errors.join("; ")
+            );
+        }
+
+        next();
+    });
+}
+
+export function validateRolePermissionDependenciesForUsers() {
+    return asyncHandler<{ discordId: string }, unknown, Role, unknown>(async (req, _res, next) => {
+        const { discordId } = req.params;
+        const { permissions: newPermissions } = req.body;
+        if (!newPermissions || !Array.isArray(newPermissions)) {
+            return next();
+        }
+
+        const updatedRolePermissions = new Set<Permission>(newPermissions);
+        const affectedUsers = await dataService.users.read({ "roles.discordId": discordId } as never);
+        const errors: string[] = [];
+
+        for (const user of affectedUsers) {
+            const effectivePermissions = new Set<Permission>(user.permissions);
+            for (const role of user.roles) {
+                const rolePermissions = role.discordId === discordId ? updatedRolePermissions : role.permissions;
+                for (const permission of rolePermissions) effectivePermissions.add(permission);
+            }
+
+            for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [Permission, { dependencies?: Permission | Permission[] }][]) {
+                if (!user.permissions.includes(permission) || !dependencies) continue;
+                const required = Array.isArray(dependencies) ? dependencies : [dependencies];
+                const missing = required.filter(dep => !effectivePermissions.has(dep));
+                for (const dep of missing) {
+                    errors.push(`Cannot remove ${dep} from role while ${user.displayname} still requires it for ${permission}`);
+                }
             }
         }
 

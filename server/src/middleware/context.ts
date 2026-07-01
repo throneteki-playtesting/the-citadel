@@ -4,21 +4,22 @@ import { Anonymous, Integration, User } from "common/models/auth";
 type RequestSource = "client" | "api" | "webhook" | "internal" | "anonymous";
 
 type RequestContext =
-    | { source: "client"; principal: User; timestamp: Date; traceId: string }
+    | { source: "client"; principal: User; timestamp: Date; traceId: string; clientId?: string }
     | { source: "anonymous"; principal: Anonymous; timestamp: Date; traceId: string }
     | { source: Exclude<RequestSource, "client" | "anonymous">; principal: User | Integration; timestamp: Date; traceId: string }
 
 export const requestContext = new AsyncLocalStorage<RequestContext>();
 
-export function createContext(source: "client", principal: User): RequestContext;
+export function createContext(source: "client", principal: User, clientId?: string): RequestContext;
 export function createContext(source: "anonymous", principal: Anonymous): RequestContext;
 export function createContext(source: Exclude<RequestSource, "client" | "anonymous">, principal: User | Integration): RequestContext;
-export function createContext(source: RequestSource, principal: User | Integration | Anonymous): RequestContext {
+export function createContext(source: RequestSource, principal: User | Integration | Anonymous, clientId?: string): RequestContext {
     return {
         source,
         principal,
         timestamp: new Date(),
-        traceId: crypto.randomUUID()
+        traceId: crypto.randomUUID(),
+        ...(source === "client" ? { clientId } : {})
     } as RequestContext;
 }
 
