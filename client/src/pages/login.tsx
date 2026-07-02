@@ -24,7 +24,7 @@ export default function LoginPage() {
         <HeroUIProvider navigate={navigate} useHref={useHref}>
             <ToastProvider placement="top-right" />
             <div
-                className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
+                className="min-h-screen flex flex-col items-center justify-center p-2"
                 style={{ background: "radial-gradient(ellipse at center, #1C1C24 0%, #0A0A0C 70%)" }}
             >
                 <div className="flex flex-col items-center border border-divider rounded-2xl bg-content1/30 px-10 py-12 sm:px-16 sm:py-14 w-full max-w-md">
