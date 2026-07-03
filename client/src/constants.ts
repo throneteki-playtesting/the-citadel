@@ -74,7 +74,8 @@ export const emojis = {
 } as { [emoji: string]: string };
 
 export const highlightTarget = {
-    review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`
+    review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
+    factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`
 } as const;
 
 export const statementOptions: { value: StatementAnswer; color: "danger" | "warning" | "default" | "secondary" | "success" }[] = [

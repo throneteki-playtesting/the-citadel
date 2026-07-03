@@ -9,6 +9,7 @@ import { hasPermission } from "common/utils";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
+import ProjectPlaytestingFocus from "./projectPlaytestingFocus";
 import { useMemo, ReactNode } from "react";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -89,12 +90,16 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                     </PermissionGate>
                 </StatsGrid>
             )}
-            <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
-                {!project.draft && (<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <ProjectPlaytestingUpdates project={project} />
+            {!project.draft && (
+                <div className="flex flex-col md:flex-row gap-2 md:gap-4">
+                    <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
+                        <ProjectPlaytestingUpdates project={project} className="md:flex-1 min-w-0" />
+                    </PermissionGate>
+                    <PermissionGate requires={[Permission.READ_REVIEWS, Permission.READ_CARDS]}>
+                        <ProjectPlaytestingFocus project={project} className="md:flex-1 min-w-0" />
+                    </PermissionGate>
                 </div>
-                )}
-            </PermissionGate>
+            )}
         </div>
     );
 };
