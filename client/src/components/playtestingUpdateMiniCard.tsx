@@ -15,7 +15,7 @@ import { TouchTooltip } from "./touchTooltip";
 import { ChangeType } from "common/types";
 import ThronesIcon from "./thronesIcon";
 
-export default function PlaytestingUpdateMiniCard({ className, style, playtestingUpdate, detailed = false }: PlaytestingUpdateMiniCardProps) {
+export default function PlaytestingUpdateMiniCard({ className, style, playtestingUpdate, detailed = false, pinched = false }: PlaytestingUpdateMiniCardProps) {
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: playtestingUpdate.project });
     const { data: cards, isLoading: isCardsLoading } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate.project, version: playtestingUpdate.version });
 
@@ -82,7 +82,7 @@ export default function PlaytestingUpdateMiniCard({ className, style, playtestin
                         </div>
                         <Timestamp className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none font-sans" date={new Date(playtestingUpdate.updated)} />
                     </div>
-                    <div className="flex flex-col gap-2 px-5">
+                    <div className={classNames("flex flex-col gap-2", { "px-5": pinched })}>
                         <div className="flex gap-0.5 flex-wrap">
                             {Object.entries(noteMap).filter(([, count]) => Number(count) > 0).map(([type, count]) => (<div key={type} className={classNames("bg-content3/50 px-2 text-xs rounded-full font-sans opacity-50 border-1", changeTypeClasses[type as ChangeType])}>{String(count)} {type}</div>))}
                         </div>
@@ -108,6 +108,7 @@ export default function PlaytestingUpdateMiniCard({ className, style, playtestin
 type PlaytestingUpdateMiniCardProps = Omit<BaseElementProps, "children"> & {
     playtestingUpdate: IPlaytestingUpdate;
     detailed?: boolean;
+    pinched?: boolean;
 }
 
 function TestingProgress({ playtestingUpdate }: TestingProgressProps) {

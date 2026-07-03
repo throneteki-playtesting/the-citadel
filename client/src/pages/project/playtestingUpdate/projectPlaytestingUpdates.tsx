@@ -76,7 +76,7 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
                 <CreateCard project={project} draftCards={cardsData?.items}/>
                 {playtestingData.items.map((playtestingUpdate) => (
                     <div key={playtestingUpdate.version} className="shrink-0 w-full snap-start">
-                        <PlaytestingUpdateMiniCard className="h-full" playtestingUpdate={playtestingUpdate} detailed />
+                        <PlaytestingUpdateMiniCard className="h-full" playtestingUpdate={playtestingUpdate} detailed pinched />
                     </div>
                 ))}
             </div>
