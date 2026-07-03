@@ -8,6 +8,7 @@ services:
         - VITE_NODE_ENV=${NODE_ENV}
         - VITE_VERBOSE=${VERBOSE}
         - VITE_BUG_REPORT_URL=${BUG_REPORT_URL}
+        - VITE_SENTRY_DSN=${SENTRY_CLIENT_DSN}
     restart: always
     container_name: citadel_client
     ports:
@@ -26,6 +27,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV}
       - VERBOSE=${VERBOSE}
+
+      - SENTRY_SERVER_DSN=${SENTRY_SERVER_DSN}
 
       - SERVER_PORT=${SERVER_PORT}
       - SERVER_HOST=${SERVER_HOST}

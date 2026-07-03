@@ -1,3 +1,5 @@
+import "./instrument";
+import * as Sentry from "@sentry/node";
 import express from "express";
 import partials from "express-partials";
 import compression from "compression";
@@ -11,6 +13,8 @@ import swaggerRouter from "./swagger";
 import cookieParser from "cookie-parser";
 import { errorHandler } from "./errors";
 import { StatusCodes } from "http-status-codes";
+import { isCelebrateError } from "celebrate";
+import { isApiError } from "./types";
 
 const app = express();
 
@@ -35,6 +39,9 @@ app.use(swaggerRouter);
 app.use(compression());
 
 // Handle errors & catch-all not found
+Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError: (err) => !isCelebrateError(err) && !isApiError(err)
+});
 app.use(errorHandler);
 app.use((req, res) => {
     res.status(StatusCodes.NOT_FOUND).send("Not Found");

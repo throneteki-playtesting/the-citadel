@@ -7,9 +7,12 @@ import type { AppEnv } from "./env.d.ts";
 const proxyPaths = ["/api/", "/auth/", "/thronesdb/"];
 
 // https://vite.dev/config/
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
     const env = loadEnv(mode, process.cwd(), "") as unknown as AppEnv;
     const serverHost = env.VITE_SERVER_HOST || "http://localhost:8080";
+    if (command === "build" && !env.VITE_SENTRY_DSN) {
+        throw new Error("VITE_SENTRY_DSN must be provided when building for production");
+    }
     return {
         plugins: [
             tailwindcss(),

@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouteObject } from "react-router-dom";
 import App from "./app/app";
 import AuthGuard from "./app/authGuard";
-import Error from "./components/error";
+import RouteError from "./components/routeError";
 import Page from "./pages/page";
 import { isPageItem, NavItem, navItems } from "./pages";
 import LoginPage from "./pages/login";
@@ -21,7 +21,7 @@ const router = createBrowserRouter([
         children: [
             {
                 element: <App />,
-                errorElement: <Error content="An unknown error has occurred. Please contact administrator." />,
+                errorElement: <RouteError />,
                 children: pageItemRoutes()
             }
         ]
