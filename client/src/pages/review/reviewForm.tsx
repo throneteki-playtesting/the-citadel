@@ -109,7 +109,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                             <WizardBack onCancel={() => true} startContent={<FontAwesomeIcon icon={faCircleArrowLeft}/>}>
                                 Change Card
                             </WizardBack>
-                            <Button color="secondary" isDisabled={!card} endContent={<FontAwesomeIcon icon={faExternalLink}/>} onPress={() => card && navigate(`/project/${card.project}/${card.number}`)}>
+                            <Button as="a" color="secondary" isDisabled={!card} endContent={<FontAwesomeIcon icon={faExternalLink}/>} href={card ? `/project/${card.project}/${card.number}` : undefined} target="_blank" rel="noopener noreferrer">
                                 View Card Page
                             </Button>
                         </div>
