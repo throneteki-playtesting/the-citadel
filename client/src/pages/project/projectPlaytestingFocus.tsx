@@ -1,5 +1,5 @@
 import { IProject } from "common/models/projects";
-import { Faction } from "common/models/cards";
+import { Faction, factions } from "common/models/cards";
 import { IPlaytestReview } from "common/models/reviews";
 import { factionNames } from "common/utils";
 import { useMemo } from "react";
@@ -75,7 +75,7 @@ function FactionFocusList({ project }: FactionFocusListProps) {
     if (isLoadingReviews || isLoadingCards) {
         return (
             <div className="divide-y divide-content3">
-                {[...Array(5)].map((_, i) => (
+                {[...Array(factions.length)].map((_, i) => (
                     <div key={i} className="flex items-center gap-2 p-2">
                         <Skeleton className="w-32 h-5 rounded-sm"/>
                         <Skeleton className="ml-auto w-24 h-4 rounded-sm"/>
