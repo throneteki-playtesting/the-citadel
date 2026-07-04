@@ -46,4 +46,8 @@ export interface Integration extends IAuditable, IPrincipal {
     name: string;
     lastUsedAt?: Date;
     enabled: boolean;
+    ownerIds?: string[];
+    internal?: boolean;
 }
+
+export type SafeIntegration = Omit<Integration, "tokenHash">;

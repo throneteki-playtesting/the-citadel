@@ -49,6 +49,16 @@ enum Permission {
     EDIT_USERS = "EDIT_USERS",
     /** Can view all roles */
     READ_ROLES = "READ_ROLES",
+    /** Can view all integrations */
+    READ_INTEGRATIONS = "READ_INTEGRATIONS",
+    /** Can create new integrations */
+    CREATE_INTEGRATIONS = "CREATE_INTEGRATIONS",
+    /** Can edit all integrations */
+    EDIT_INTEGRATIONS = "EDIT_INTEGRATIONS",
+    /** Can delete integrations */
+    DELETE_INTEGRATIONS = "DELETE_INTEGRATIONS",
+    /** Can refresh the token of any integration */
+    REFRESH_INTEGRATION_TOKENS = "REFRESH_INTEGRATION_TOKENS",
     /** Can edit all roles */
     EDIT_ROLES = "EDIT_ROLES",
     /** Can assign the Playtesting Team Discord role to yourself */
@@ -122,6 +132,11 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.READ_USERS]: { label: "Read All", group: "Users" },
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
+    [Permission.READ_INTEGRATIONS]: { label: "Read", group: "Integrations" },
+    [Permission.CREATE_INTEGRATIONS]: { label: "Create", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
+    [Permission.EDIT_INTEGRATIONS]: { label: "Edit", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
+    [Permission.DELETE_INTEGRATIONS]: { label: "Delete", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
+    [Permission.REFRESH_INTEGRATION_TOKENS]: { label: "Refresh Tokens", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
     [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles", dependencies: Permission.READ_ROLES },
     [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
     [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },

@@ -47,6 +47,10 @@ apiVersions.forEach((apiVersion) => {
                     },
                     review: {
                         full: j2s(Schemas.PlaytestingReview.Full).swagger
+                    },
+                    integration: {
+                        full: j2s(Schemas.Integration.Full).swagger,
+                        partial: j2s(Schemas.Integration.Partial).swagger
                     }
                 }
             },

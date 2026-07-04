@@ -6,7 +6,7 @@ import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
 import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestReview } from "common/models/reviews";
-import { Role, User } from "common/models/auth";
+import { Role, SafeIntegration, User } from "common/models/auth";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
@@ -147,6 +147,44 @@ const api = createApi({
                 method: "POST"
             }),
             invalidatesTags: (result) => generateFor(result, "me", { includeList: false })
+        }),
+        // Integrations API
+        getIntegrations: builder.query<IGetResponse<SafeIntegration>, IGetRequest<SafeIntegration> | void>({
+            query: (options) => {
+                const url = buildUrl("integrations", options);
+                return { url, method: "GET" };
+            },
+            providesTags: (results) => generateFor(results?.items, "integration")
+        }),
+        createIntegration: builder.mutation<{ token: string, integration: SafeIntegration }, Pick<SafeIntegration, "name" | "enabled" | "permissions" | "ownerIds">>({
+            query: (integration) => {
+                const url = buildUrl("integrations");
+                const body = integration;
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => generateFor(result?.integration, "integration")
+        }),
+        updateIntegration: builder.mutation<SafeIntegration, Pick<SafeIntegration, "id" | "name" | "enabled" | "permissions" | "ownerIds">>({
+            query: (integration) => {
+                const { id, ...body } = integration;
+                const url = buildUrl(`integrations/${id}`);
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "integration")
+        }),
+        deleteIntegration: builder.mutation<SafeIntegration, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`integrations/${options.id}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => generateFor(result, "integration")
+        }),
+        recycleIntegrationToken: builder.mutation<{ token: string, integration: SafeIntegration }, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`integrations/${options.id}/token`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result?.integration, "integration")
         }),
         // Cards API
         getCards: builder.query<IGetResponse<IPlaytestCard>, IGetRequest<IPlaytestCard> | void>({
@@ -491,6 +529,12 @@ export const {
     useGetRolesQuery,
     useUpdateRoleMutation,
     useAssignPlaytestingRoleMutation,
+
+    useGetIntegrationsQuery,
+    useCreateIntegrationMutation,
+    useUpdateIntegrationMutation,
+    useDeleteIntegrationMutation,
+    useRecycleIntegrationTokenMutation,
 
     useGetCardsQuery,
     useGetCardQuery,

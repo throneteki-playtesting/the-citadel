@@ -553,3 +553,22 @@ export const User = {
         roles: Joi.array().items(Role.Partial)
     })
 };
+
+export const Integration = {
+    Full: Joi.object({
+        id: Joi.string(),
+        name: Joi.string().required(),
+        enabled: Joi.boolean().default(true),
+        lastUsedAt: Joi.date(),
+        ownerIds: Joi.array().items(Joi.string()).default([]),
+        permissions: Joi.array().items(Permission).default([])
+    }),
+    Partial: Joi.object({
+        id: Joi.string(),
+        name: Joi.string(),
+        enabled: Joi.boolean(),
+        lastUsedAt: Joi.date(),
+        ownerIds: Joi.array().items(Joi.string()),
+        permissions: Joi.array().items(Permission)
+    })
+};

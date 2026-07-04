@@ -7,6 +7,7 @@ import Suggestions from "./suggestions";
 import CardEditorPage from "./cardEditor";
 import Users from "./admin/users";
 import Roles from "./admin/roles";
+import Integrations from "./admin/integrations";
 import AuthRedirect from "./authRedirect";
 import Project from "./project";
 import Card from "./card";
@@ -97,6 +98,12 @@ export const navItems: NavItem[] = [
                 label: "Roles",
                 permission: Permission.READ_ROLES,
                 element: <Roles />
+            },
+            {
+                path: "/integrations",
+                label: "Integrations",
+                permission: Permission.READ_INTEGRATIONS,
+                element: <Integrations />
             }
         ]
     }
