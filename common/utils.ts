@@ -157,8 +157,8 @@ export function isPlaytestingCode(code: Cards.Code) {
     return remainder >= 500 && remainder <= 999;
 }
 /**
-     * Creates the full url for the specified request, converting query parameters into JSON
-     */
+ * Creates the full url for the specified request, converting query parameters into JSON
+ */
 export function buildUrl<T>(baseUrl: string, queryParameters?: T) {
     let url = baseUrl;
     if (queryParameters && Object.keys(queryParameters).length > 0) {
@@ -254,6 +254,32 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
         type,
         unique,
         quantity
+    };
+}
+
+export function toJSONExportCard(card: Cards.IPlaytestCard) {
+    const imageUrl = card.release ? generateReleaseImageUrl(card.release.short, card.release.number, card.name) : card._metadata?.imageUrl;
+    return {
+        code: card.code,
+        version: card.version,
+        type: card.type,
+        name: card.name,
+        octgnId: null,
+        quantity: card.quantity,
+        unique: card.unique,
+        faction: card.faction,
+        loyal: card.loyal,
+        cost: card.cost,
+        icons: card.icons,
+        strength: card.strength,
+        plotStats: card.plotStats,
+        traits: card.traits,
+        text: card.text,
+        flavor: card.flavor,
+        deckLimit: card.deckLimit,
+        illustrator: card.illustrator ?? "?",
+        designer: card.designer,
+        imageUrl
     };
 }
 

@@ -6,6 +6,7 @@ import { IPack, IPlaytestPack, ReleaseDate } from "common/models/pack";
 import { IProject } from "common/models/projects";
 import { loadProjectByParam } from "@/utils";
 import { StatusCodes } from "http-status-codes";
+import { toJSONExportCard } from "common/utils";
 
 const router = express.Router();
 
@@ -26,7 +27,7 @@ router.get("/:project/development",
             name: project.name,
             releaseDate: null,
             workInProgress: true,
-            cards
+            cards: cards.map(toJSONExportCard)
         };
 
         res.status(StatusCodes.OK).json(pack);
@@ -55,7 +56,7 @@ router.get("/:project/release",
             code: short,
             name,
             releaseDate,
-            cards
+            cards: cards.map(toJSONExportCard)
         };
 
         res.status(StatusCodes.OK).json(pack);

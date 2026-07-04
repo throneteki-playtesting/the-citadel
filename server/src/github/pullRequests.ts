@@ -4,7 +4,7 @@ import { GithubContext } from ".";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { syncImage } from "@/rendering/hosting";
 import { emojis } from "./utils";
-import { parseCardCode } from "common/utils";
+import { parseCardCode, toJSONExportCard } from "common/utils";
 import { merge, sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter } from "@/services/sseService";
@@ -126,7 +126,7 @@ export async function syncDataPullRequests() {
 
                 // Builds the new data file & compares it to current development file
                 const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true, release: null }));
-                const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map(toExportCard) };
+                const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map(toJSONExportCard) };
                 const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
                 const devContent = await getDataFileContent(context, `packs/${project.code}.json`, DEVELOPMENT_BRANCH);
 
@@ -394,31 +394,6 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
     const implementedLine = `${emojis.implemented} ${implementedCount}/${cards.length} cards in this update were implemented.`;
 
     return [...typeLines, "", implementedLine].join("\n");
-}
-
-function toExportCard(card: IPlaytestCard) {
-    return {
-        code: card.code,
-        version: card.version,
-        type: card.type,
-        name: card.name,
-        octgnId: null,
-        quantity: card.quantity,
-        unique: card.unique,
-        faction: card.faction,
-        loyal: card.loyal,
-        cost: card.cost,
-        icons: card.icons,
-        strength: card.strength,
-        plotStats: card.plotStats,
-        traits: card.traits,
-        text: card.text,
-        flavor: card.flavor,
-        deckLimit: card.deckLimit,
-        illustrator: card.illustrator ?? "?",
-        designer: card.designer,
-        imageUrl: card._metadata?.imageUrl
-    };
 }
 
 async function buildDataUpdateLinks(playtestingUpdates: IPlaytestingUpdate[]) {

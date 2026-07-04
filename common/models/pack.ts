@@ -1,4 +1,5 @@
-import { ICard, IPlaytestCard } from "./cards";
+import { SemanticVersion } from "common/utils";
+import { ICard } from "./cards";
 
 export type ReleaseDate = `${number}-${number}-${number}`;
 
@@ -13,5 +14,5 @@ export interface IPack {
 
 export interface IPlaytestPack extends IPack {
     workInProgress: true,
-    cards: IPlaytestCard[]
+    cards: (ICard & { version: SemanticVersion })[]
 }
