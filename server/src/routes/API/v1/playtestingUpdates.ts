@@ -203,7 +203,8 @@ router.get("/:project/:version/implemented",
         const fromDate = previous?._metadata?.github?.code?.mergedAt;
         const toDate = playtestingUpdate._metadata?.github?.code?.mergedAt ?? playtestingUpdate.updated;
 
-        const cards = await dataService.cards.read([{ _metadata: { github: { closedAt: { $gt: fromDate, $lte: toDate } } } }]);
+        // Only return recently implemented for this project
+        const cards = await dataService.cards.read([{ project: project.number, _metadata: { github: { closedAt: { $gt: fromDate, $lte: toDate } } } }]);
 
         res.status(StatusCodes.OK).json(cards);
     })
