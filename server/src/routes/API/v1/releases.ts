@@ -5,7 +5,8 @@ import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { ReleaseDate } from "common/models/shared";
-import { getReleaseOffset, Regex } from "common/utils";
+import { getReleaseCapacity, getReleaseOffset, Regex } from "common/utils";
+import { isEqual } from "lodash-es";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
@@ -43,12 +44,18 @@ router.post("/",
             throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", `Release "${code}" already exists for project #${project.number}`);
         }
 
+        const capacity = getReleaseCapacity(req.body.slots);
+        if (capacity < 1) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", "A release must have at least one slot");
+        }
+
         const { principal } = getContext();
         const now = new Date();
         // New releases are always appended to the end of the sequence - reordering happens exclusively via PATCH /reorder
         const nextNumber = project.releases.reduce((max, r) => Math.max(max, r.number), 0) + 1;
         const release: IProjectRelease = {
             ...req.body,
+            capacity,
             number: nextNumber,
             status: req.body.status ?? "planning",
             created: now,
@@ -121,9 +128,14 @@ router.put("/:code",
             throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", `Release "${newCode}" already exists for project #${project.number}`);
         }
 
+        const capacity = getReleaseCapacity(req.body.slots);
+        if (capacity < 1) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", "A release must have at least one slot");
+        }
+
         // A capacity change shifts the derived printed numbers of every later release in sequence -
         // reject if any later release has already been published, as that would silently move its printed numbers
-        if (req.body.capacity !== existing.capacity) {
+        if (capacity !== existing.capacity) {
             const laterPublished = project.releases.find((r) => r.number > existing.number && !!r.releasedDate);
             if (laterPublished) {
                 throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Release", `Cannot change capacity - release "${laterPublished.code}" is already released and its derived numbers would shift`);
@@ -134,18 +146,45 @@ router.put("/:code",
         const updatedRelease: IProjectRelease = {
             ...existing,
             ...req.body,
+            capacity,
             created: existing.created,
             createdBy: existing.createdBy,
             updated: new Date(),
             updatedBy: principal.id
         };
 
+        // A layout change re-places every assigned card under the new position->faction partition:
+        // each faction keeps its cards in order up to its new count, and any card that no longer fits
+        // (shrunk or removed faction) is evicted back to the development pool
         let evictedSlots: ISlot[] = [];
-        if (updatedRelease.capacity < existing.capacity) {
-            const releaseSlots = await dataService.slots.read({ project: project.number, release: { code } });
-            const overflow = releaseSlots.filter((slot) => slot.release!.position > updatedRelease.capacity);
+        if (!isEqual(existing.slots, updatedRelease.slots)) {
+            const releaseSlots = (await dataService.slots.read({ project: project.number, release: { code } }))
+                .sort((a, b) => a.release!.position - b.release!.position);
+            const byFaction = new Map<string, ISlot[]>();
+            for (const slot of releaseSlots) {
+                byFaction.set(slot.faction, [...(byFaction.get(slot.faction) ?? []), slot]);
+            }
+
+            const moved: ISlot[] = [];
+            const placed = new Set<number>();
+            let start = 1;
+            for (const { faction, count } of updatedRelease.slots) {
+                byFaction.get(faction)?.slice(0, count).forEach((slot, index) => {
+                    placed.add(slot.number);
+                    const position = start + index;
+                    if (slot.release!.position !== position) {
+                        moved.push({ ...slot, release: { ...slot.release!, position } });
+                    }
+                });
+                start += count;
+            }
+            const overflow = releaseSlots.filter((slot) => !placed.has(slot.number)).map(clearRelease);
+
+            if (moved.length > 0) {
+                await dataService.slots.update(moved);
+            }
             if (overflow.length > 0) {
-                evictedSlots = await dataService.slots.update(overflow.map(clearRelease));
+                evictedSlots = await dataService.slots.update(overflow);
             }
         }
 

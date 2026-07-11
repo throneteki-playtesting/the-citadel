@@ -8,12 +8,13 @@ import { CSS } from "@dnd-kit/utilities";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faChevronRight, faEllipsisVertical, faGripVertical, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { IPlaytestCard } from "common/models/cards";
+import { Faction, IPlaytestCard } from "common/models/cards";
+import { getPositionFaction } from "common/utils";
 import { useDeleteReleaseMutation } from "../../../api";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
-import { releaseStatusColors } from "../../../constants";
+import { factionBorderClasses, releaseStatusColors } from "../../../constants";
 import { noReorderPreview, reorderItemId, slotNumberFromItemId } from "./releaseDnd";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
@@ -75,7 +76,7 @@ function ReleaseBlockHeader({ release, filledCount, isCollapsed, isReorderDraggi
         <div className="flex items-center gap-2 px-4 py-3 bg-content2 border-b border-content3 cursor-pointer" onClick={onToggleCollapse}>
             {showDragHandle && (
                 <span
-                    className={classNames("px-1 text-foreground/40 touch-none select-none", canEditReleases ? "cursor-grab" : "cursor-default")}
+                    className={classNames("px-1 text-foreground/40 touch-manipulation select-none", canEditReleases ? "cursor-grab" : "cursor-default")}
                     onClick={(e) => e.stopPropagation()}
                     {...dragHandleListeners}
                     {...dragHandleAttributes}
@@ -86,7 +87,7 @@ function ReleaseBlockHeader({ release, filledCount, isCollapsed, isReorderDraggi
             <span className={classNames("flex items-center shrink-0 transition-all duration-200", isReorderDragging ? "w-0 -mr-2 opacity-0" : "w-2.5 opacity-100")}>
                 <FontAwesomeIcon icon={faChevronRight} className={classNames("text-foreground/50 transition-transform duration-200", { "rotate-90": !isCollapsed })}/>
             </span>
-            <div className="flex-1 min-w-0 flex flex-col items-start gap-1 md:flex-row md:items-center md:gap-2">
+            <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
                 <span className="min-w-0 max-w-full truncate text-lg font-cinzel tracking-wide">{release.name}</span>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Chip size="sm" variant="bordered">{release.code}</Chip>
@@ -239,17 +240,16 @@ export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEdit
                         animate={{ height: "auto", opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        // Expanding/collapsing shifts every zone below, but dnd-kit only re-measures
-                        // droppables when they register/unregister - force a re-measure once settled
+                        // Forces DnD kit to remeasure containers once block expands/collapses
                         onAnimationComplete={() => measureDroppableContainers(droppableContainers.getEnabled().map((container) => container.id))}
                     >
                         <SortableContext items={itemIds} strategy={noReorderPreview}>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 p-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 p-3">
                                 {itemIds.map((id, index) => {
                                     const slotNumber = slotNumberFromItemId(id);
                                     const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
                                     return (
-                                        <ReleasePositionSlot key={id} id={id} position={index + 1} card={card} disabled={disabled}/>
+                                        <ReleasePositionSlot key={id} id={id} position={index + 1} faction={getPositionFaction(release.slots, index + 1)} card={card} disabled={disabled}/>
                                     );
                                 })}
                             </div>
@@ -294,18 +294,23 @@ export type ReleaseBlockProps = {
     dragHandleAttributes?: ReturnType<typeof useSortable>["attributes"];
 }
 
-function ReleasePositionSlot({ id, position, card, disabled }: ReleasePositionSlotProps) {
-    const { attributes, listeners, setNodeRef, isDragging, isOver } = useSortable({ id, disabled: disabled || !card });
+function ReleasePositionSlot({ id, position, faction, card, disabled }: ReleasePositionSlotProps) {
+    const { attributes, listeners, setNodeRef, isDragging, isOver } = useSortable({ id, disabled: disabled || !card, data: { faction: card?.faction } });
+    const { active } = useDndContext();
     const showBackground = !card || isDragging;
+    // Slots are faction-locked; while a card is dragged, slots of other factions dim and never highlight
+    const activeFaction = active?.data.current?.faction as Faction | undefined;
+    const isFactionMismatch = !!faction && !!activeFaction && activeFaction !== faction;
     // Hovering an occupied slot only shrinks/darkens the occupant - the swap is confirmed on drop
-    const isPendingReplacement = isOver && !isDragging && !!card;
+    const isPendingReplacement = isOver && !isDragging && !!card && !isFactionMismatch;
 
     return (
-        <div ref={setNodeRef} className="relative h-9">
+        <div ref={setNodeRef} className="relative h-8">
             {showBackground && (
                 <div className={classNames(
-                    "absolute inset-1 flex items-center justify-center font-cinzel text-sm rounded-md border-2 border-dashed transition-colors pointer-events-none text-foreground/25",
-                    isOver ? "border-primary" : "border-content3"
+                    "absolute inset-1 flex items-center justify-center gap-1 font-cinzel text-sm rounded-md border-2 border-dashed transition-[colors,opacity] pointer-events-none text-foreground/25",
+                    isOver && !isFactionMismatch ? "border-primary" : faction ? factionBorderClasses[faction] : "border-content3",
+                    { "opacity-30": isFactionMismatch }
                 )}>
                     {position}
                 </div>
@@ -326,6 +331,7 @@ function ReleasePositionSlot({ id, position, card, disabled }: ReleasePositionSl
 type ReleasePositionSlotProps = {
     id: string;
     position: number;
+    faction?: Faction;
     card?: IPlaytestCard;
     disabled: boolean;
 }

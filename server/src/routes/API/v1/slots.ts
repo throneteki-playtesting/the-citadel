@@ -5,6 +5,7 @@ import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { DefaultSlotStatuses, ISlot } from "common/models/slots";
 import { factions } from "common/models/cards";
+import { factionNames, getPositionFaction } from "common/utils";
 import { IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
@@ -207,6 +208,10 @@ router.patch("/:slot/release",
             }
             if (position < 1 || position > targetRelease.capacity) {
                 throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Position must be between 1 and ${targetRelease.capacity} for release "${code}"`);
+            }
+            const positionFaction = getPositionFaction(targetRelease.slots, position);
+            if (positionFaction && positionFaction !== slot.faction) {
+                throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Position ${position} of release "${code}" is reserved for ${factionNames[positionFaction]} cards`);
             }
 
             // If another slot already occupies this position, either swap it into the dragged slot's

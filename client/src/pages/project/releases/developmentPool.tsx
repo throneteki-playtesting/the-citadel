@@ -28,7 +28,7 @@ export default function DevelopmentPool({ itemIds, cardsByNumber, isCollapsed, o
                         transition={{ duration: 0.2 }}
                     >
                         <SortableContext items={itemIds} strategy={noReorderPreview}>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 min-h-9 mt-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 min-h-8 mt-2">
                                 {itemIds.map((id) => {
                                     const slotNumber = slotNumberFromItemId(id)!;
                                     const card = cardsByNumber.get(slotNumber);
@@ -51,11 +51,11 @@ type DevelopmentPoolProps = {
 }
 
 function PoolCapsule({ id, card }: PoolCapsuleProps) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, data: { faction: card.faction } });
     const style = { transform: CSS.Transform.toString(transform), transition };
 
     if (isDragging) {
-        return <div ref={setNodeRef} style={style} className="h-9 rounded-md border-2 border-dashed border-content3"/>;
+        return <div ref={setNodeRef} style={style} className="h-8 rounded-md border-2 border-dashed border-content3"/>;
     }
 
     return (
@@ -65,7 +65,7 @@ function PoolCapsule({ id, card }: PoolCapsuleProps) {
             forwardRef={setNodeRef}
             listeners={listeners}
             attributes={attributes}
-            className="h-9"
+            className="h-8"
             flipSlot={card.number}
         />
     );

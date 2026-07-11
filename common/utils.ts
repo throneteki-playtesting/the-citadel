@@ -5,7 +5,7 @@ import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
-import type { IProject } from "./models/projects";
+import type { IProject, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
@@ -258,6 +258,51 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
         unique,
         quantity
     };
+}
+
+export type ReleaseTemplateDefinition = {
+    name: string,
+    description: string,
+    /** Preset allocations; omitted for templates whose allocations are user-defined */
+    slots?: ReleaseSlotAllocation[]
+}
+
+export const releaseTemplates: Record<"chapterPack" | "custom", ReleaseTemplateDefinition> = {
+    chapterPack: {
+        name: "Chapter Pack",
+        description: "2 slots per faction, plus 4 neutral (20 cards)",
+        slots: Cards.factions.map((faction) => ({ faction, count: faction === "neutral" ? 4 : 2 }))
+    },
+    custom: {
+        name: "Custom",
+        description: "Define & order each faction's slots yourself"
+    }
+};
+export type ReleaseTemplate = keyof typeof releaseTemplates;
+
+/** Matches allocations against template presets (ignoring empty factions); falls back to "custom" */
+export function inferReleaseTemplate(slots?: ReleaseSlotAllocation[]): ReleaseTemplate {
+    const normalized = (slots ?? []).filter((allocation) => allocation.count > 0);
+    const preset = Object.entries(releaseTemplates).find(([, template]) =>
+        template.slots && isEqual(template.slots.filter((allocation) => allocation.count > 0), normalized)
+    );
+    return (preset?.[0] as ReleaseTemplate) ?? "custom";
+}
+
+export function getReleaseCapacity(slots?: ReleaseSlotAllocation[]): number {
+    return (slots ?? []).reduce((sum, allocation) => sum + allocation.count, 0);
+}
+
+/** Faction owning the given 1-based position under the release's ordered allocations, if any */
+export function getPositionFaction(slots: ReleaseSlotAllocation[] | undefined, position: number): Cards.Faction | undefined {
+    let start = 1;
+    for (const { faction, count } of slots ?? []) {
+        if (position < start + count) {
+            return position >= start ? faction : undefined;
+        }
+        start += count;
+    }
+    return undefined;
 }
 
 /** Sum of capacities of every release sequenced before the given release code */

@@ -1,4 +1,5 @@
 import { SemanticVersion } from "common/utils";
+import type { Faction } from "./cards";
 import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
@@ -33,8 +34,10 @@ export interface IProjectRelease extends IAuditable {
     name: string,
     /** Pack sequence within the project (1, 2, 3...); always 1 for expansions */
     number: number,
-    /** Target pack size - drives placeholder count and printed-number derivation */
+    /** Target pack size - derived from slots; drives placeholder count and printed-number derivation */
     capacity: number,
+    /** Ordered faction allocations - positions 1..capacity are partitioned by faction in this order */
+    slots: ReleaseSlotAllocation[],
     plannedDate?: ReleaseDate,
     /** Set by publish; once set, the whole release is immutable */
     releasedDate?: ReleaseDate,
@@ -43,6 +46,11 @@ export interface IProjectRelease extends IAuditable {
         url?: string,
         status: typeof articleStatuses[number]
     }
+}
+
+export type ReleaseSlotAllocation = {
+    faction: Faction,
+    count: number
 }
 
 export type FactionCardCount = {

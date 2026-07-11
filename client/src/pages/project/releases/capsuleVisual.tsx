@@ -13,14 +13,14 @@ export default function CapsuleVisual({ card, className, style, forwardRef, list
             {...listeners}
             {...attributes}
             className={classNames(
-                "flex items-center gap-1.5 px-2 rounded-md border-2 select-none touch-none z-20",
+                "flex items-center gap-1 px-1.5 rounded-md border-2 select-none touch-manipulation z-20",
                 draggable ? "cursor-grab" : "cursor-default",
                 factionBorderClasses[card.faction],
                 factionBgClasses[card.faction],
                 className
             )}
         >
-            <ThronesIcon name={card.type} className="shrink-0 text-sm opacity-60"/>
+            <ThronesIcon name={card.type} className="shrink-0 text-xs opacity-60"/>
             <span className="flex-1 min-w-0 truncate whitespace-nowrap text-xs font-sans leading-tight">{card.name}</span>
         </div>
     );

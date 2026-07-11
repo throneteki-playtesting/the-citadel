@@ -24,7 +24,7 @@ import RadialMenu from "../../../components/radialMenu";
 import { watermarkClasses } from "../../../constants";
 import { BaseElementProps } from "../../../types";
 import { usePermission } from "../../../hooks/usePermission";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, MouseSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { dropAnimation } from "../releases/releaseDnd";
 
 type DraftSlot = {
@@ -48,7 +48,8 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const dispatch = useDispatch<AppDispatch>();
 
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+        useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
     );
 
     const factionSlots = useMemo(() => {
@@ -245,7 +246,7 @@ function DraggableTopCard({ card, slotNumber, children }: { card: IPlaytestCard;
         data: { card, slotNumber } satisfies DragData
     });
     return (
-        <div ref={setNodeRef} {...listeners} {...attributes} className={classNames("h-full touch-none cursor-grab", { "opacity-0": isDragging })}>
+        <div ref={setNodeRef} {...listeners} {...attributes} className={classNames("h-full touch-manipulation cursor-grab", { "opacity-0": isDragging })}>
             <div className={classNames()}>
                 {children}
             </div>

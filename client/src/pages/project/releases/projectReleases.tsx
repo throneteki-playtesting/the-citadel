@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch } from "react-redux";
 import { addToast, Button, Skeleton } from "@heroui/react";
-import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, MeasuringStrategy, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, MeasuringStrategy, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -19,6 +19,8 @@ import { ReleaseBlock, ReleaseBlockOverlay, ReleaseBlockProps, SortableReleaseBl
 import { buildContainers, codeFromReorderItemId, collisionDetection, dropAnimation, findContainer, HOVER_EXPAND_DELAY, POOL_ID, reorderItemId, slotNumberFromItemId, withHover } from "./releaseDnd";
 import { useCapsuleFlip } from "./releaseFlip";
 import { DeepPartial } from "common/types";
+import { getPositionFaction } from "common/utils";
+import SectionTitle from "../../../components/sectionTitle";
 
 export default function ProjectReleases({ project }: ProjectReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
@@ -43,8 +45,11 @@ export default function ProjectReleases({ project }: ProjectReleasesProps) {
     const lastHoverContainerRef = useRef<string>(undefined);
     const captureFlip = useCapsuleFlip();
 
+    // TouchSensor (unlike PointerSensor) can preventDefault on touchmove during an active drag,
+    // which lets capsules use touch-manipulation so swipes on them still scroll the page
     const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { delay: 0, distance: 0 } })
+        useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
     );
 
     const cardsByNumber = useMemo(() => new Map((cardsData?.items ?? []).map((card) => [card.number, card])), [cardsData]);
@@ -295,6 +300,16 @@ export default function ProjectReleases({ project }: ProjectReleasesProps) {
         }
 
         const originalSlot = slots.find((s) => s.number === slotNumber);
+
+        // Positions are faction-locked - silently ignore drops onto another faction's slots
+        if (code !== null) {
+            const targetRelease = releases.find((release) => release.code === code);
+            const positionFaction = getPositionFaction(targetRelease?.slots, position!);
+            if (positionFaction && originalSlot && positionFaction !== originalSlot.faction) {
+                return;
+            }
+        }
+
         const unchanged = code === null
             ? !originalSlot?.release
             : originalSlot?.release?.code === code && originalSlot.release.position === position;
@@ -337,40 +352,46 @@ export default function ProjectReleases({ project }: ProjectReleasesProps) {
                         ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
                         : "Publishing a pack locks its contents permanently."}
                 </div>
-                {canMoveCapsules && (
-                    <DevelopmentPool
-                        itemIds={containers[POOL_ID] ?? []}
-                        cardsByNumber={cardsByNumber}
-                        isCollapsed={isPoolCollapsed}
-                        onToggle={() => setIsPoolCollapsed((prev) => !prev)}
-                        isHovered={hoveredContainer === POOL_ID}
-                    />
-                )}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <div className="flex-1 text-xl font-cinzel tracking-wide">Releases</div>
-                    <PermissionGate requires={Permission.CREATE_RELEASES}>
-                        <Button size="sm" variant="flat" className="w-full sm:w-auto" startContent={<FontAwesomeIcon icon={faPlus}/>} onPress={() => setEditing({})}>
-                                Add Release
-                        </Button>
-                    </PermissionGate>
-                </div>
-                {releases.length === 0 ? (
-                    <div className="border border-dashed border-content3 bg-content1/50 py-10 px-4 text-center">
-                        <div className="text-lg font-cinzel tracking-wide text-foreground/60">No packs have yet been chronicled for this project</div>
-                        <div className="text-sm text-foreground/40 mt-1">Add a release to begin assembling one from the development pool.</div>
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
+                    {canMoveCapsules && (
+                        <div className="md:w-2/5 md:shrink-0">
+                            <DevelopmentPool
+                                itemIds={containers[POOL_ID] ?? []}
+                                cardsByNumber={cardsByNumber}
+                                isCollapsed={isPoolCollapsed}
+                                onToggle={() => setIsPoolCollapsed((prev) => !prev)}
+                                isHovered={hoveredContainer === POOL_ID}
+                            />
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-0 flex flex-col gap-2 md:sticky md:top-20">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <SectionTitle size="lg" className="flex-1">Releases</SectionTitle>
+                            <PermissionGate requires={Permission.CREATE_RELEASES}>
+                                <Button size="sm" variant="flat" className="w-full sm:w-auto" startContent={<FontAwesomeIcon icon={faPlus}/>} onPress={() => setEditing({})}>
+                                    Add Release
+                                </Button>
+                            </PermissionGate>
+                        </div>
+                        {releases.length === 0 ? (
+                            <div className="border border-dashed border-content3 bg-content1/50 py-10 px-4 text-center">
+                                <div className="text-lg font-cinzel tracking-wide text-foreground/60">No packs have yet been chronicled for this project</div>
+                                <div className="text-sm text-foreground/40 mt-1">Add a release to begin assembling one from the development pool.</div>
+                            </div>
+                        ) : (
+                            <>
+                                {releases.filter((release) => release.releasedDate).map((release) => (
+                                    <ReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
+                                ))}
+                                <SortableContext items={orderedUnreleased.map((release) => reorderItemId(release.code))} strategy={verticalListSortingStrategy}>
+                                    {orderedUnreleased.map((release) => (
+                                        <SortableReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
+                                    ))}
+                                </SortableContext>
+                            </>
+                        )}
                     </div>
-                ) : (
-                    <>
-                        {releases.filter((release) => release.releasedDate).map((release) => (
-                            <ReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
-                        ))}
-                        <SortableContext items={orderedUnreleased.map((release) => reorderItemId(release.code))} strategy={verticalListSortingStrategy}>
-                            {orderedUnreleased.map((release) => (
-                                <SortableReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
-                            ))}
-                        </SortableContext>
-                    </>
-                )}
+                </div>
             </div>
             <DragOverlay dropAnimation={dropAnimation}>
                 {activeCard && <CapsuleVisual card={activeCard} className="h-full shadow-lg"/>}

@@ -285,12 +285,18 @@ export const CardSuggestion = {
     })
 };
 
+const ReleaseSlots = Joi.array().items(Joi.object({
+    faction: Joi.string().required().valid(...Cards.factions),
+    count: Joi.number().integer().min(0).required()
+}));
+
 export const Release = {
     Full: Joi.object({
         code: Joi.string().required(),
         name: Joi.string().required(),
         number: Joi.number().required(),
         capacity: Joi.number().required(),
+        slots: ReleaseSlots.required(),
         plannedDate: Joi.string().regex(Regex.ReleaseDate),
         releasedDate: Joi.string().regex(Regex.ReleaseDate),
         status: Joi.string().required().valid(...Projects.releaseStatuses),
@@ -308,6 +314,7 @@ export const Release = {
         name: Joi.string(),
         number: Joi.number(),
         capacity: Joi.number(),
+        slots: ReleaseSlots,
         plannedDate: Joi.string().regex(Regex.ReleaseDate),
         releasedDate: Joi.string().regex(Regex.ReleaseDate),
         status: Joi.string().valid(...Projects.releaseStatuses),
@@ -320,12 +327,13 @@ export const Release = {
         updated: Joi.date(),
         updatedBy: Joi.string()
     }),
-    // Used for create/edit bodies - number & releasedDate are server-managed (number via sequence assignment/reorder, the rest via the publish action)
+    // Used for create/edit bodies - number, capacity & releasedDate are server-managed (number via sequence assignment/reorder, capacity derived from slots, the rest via the publish action)
     Draft: Joi.object({
         code: Joi.string().required(),
         name: Joi.string().required(),
         number: Joi.forbidden(),
-        capacity: Joi.number().required(),
+        capacity: Joi.forbidden(),
+        slots: ReleaseSlots.min(1).required(),
         plannedDate: Joi.string().regex(Regex.ReleaseDate),
         releasedDate: Joi.forbidden(),
         status: Joi.string().valid(...Projects.releaseStatuses),

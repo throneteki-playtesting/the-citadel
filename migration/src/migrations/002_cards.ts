@@ -324,14 +324,15 @@ export const migration: Migration = {
             }
         }
 
-        // Determine each project's release sequence from the lowest absolute printed number seen per pack code
-        const releaseInfoByProject = new Map<number, Map<string, { minNumber: number; count: number }>>();
+        // Determine each project's release sequence from the lowest absolute printed number seen per pack code,
+        // and its ordered faction slot allocations from the factions of its cards in printed order
+        const releaseInfoByProject = new Map<number, Map<string, { minNumber: number; cards: { number: number; faction: string }[] }>>();
         for (const slot of bySlotKey.values()) {
             if (!slot.release) continue;
             const projectMap = releaseInfoByProject.get(slot.project) ?? new Map();
-            const entry = projectMap.get(slot.release.short) ?? { minNumber: Infinity, count: 0 };
+            const entry = projectMap.get(slot.release.short) ?? { minNumber: Infinity, cards: [] };
             entry.minNumber = Math.min(entry.minNumber, slot.release.number);
-            entry.count += 1;
+            entry.cards.push({ number: slot.release.number, faction: slot.faction });
             projectMap.set(slot.release.short, entry);
             releaseInfoByProject.set(slot.project, projectMap);
         }
@@ -339,15 +340,25 @@ export const migration: Migration = {
         const releaseDocsByProject = new Map<number, Record<string, any>[]>();
         for (const [project, codes] of releaseInfoByProject) {
             const ordered = [...codes.entries()].sort((a, b) => a[1].minNumber - b[1].minNumber);
-            releaseDocsByProject.set(project, ordered.map(([code, { count }], index) => {
+            releaseDocsByProject.set(project, ordered.map(([code, { cards }], index) => {
                 const releaseData = releasePackData[code];
                 const name = releaseData?.name ?? code;
                 const releasedDate = releaseData?.released.toISOString().split("T")[0] ?? undefined;
+                const slots: { faction: string; count: number }[] = [];
+                for (const card of [...cards].sort((a, b) => a.number - b.number)) {
+                    const allocation = slots.find((s) => s.faction === card.faction);
+                    if (allocation) {
+                        allocation.count += 1;
+                    } else {
+                        slots.push({ faction: card.faction, count: 1 });
+                    }
+                }
                 return {
                     code,
                     name,
                     number: index + 1,
-                    capacity: count,
+                    capacity: cards.length,
+                    slots,
                     status: "released",
                     releasedDate,
                     created: releasedDate ?? now,
