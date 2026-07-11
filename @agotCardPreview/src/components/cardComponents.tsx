@@ -10,11 +10,19 @@ import ThronesIcon, { Icon } from "./thronesIcon";
 
 export const CardWrapper = memo(({ children, scale = 1, orientation = "vertical", rounded = false, className, classNames: classGroups, style, styles: styleGroups, ...props }: CardWrapperProps) => {
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const [renderedWidth, setRenderedWidth] = useState<number>(BASE_WIDTH * scale);
+    // Starts unmeasured (scale 0); the layout effect below seeds the real width before first paint
+    const [renderedWidth, setRenderedWidth] = useState<number>(0);
 
     useLayoutEffect(() => {
         const element = wrapperRef.current;
         if (!element) return;
+
+        // Seed the width before the browser paints; the observer's first callback lands a frame later,
+        // which would flash the card at base size on mount
+        const initialWidth = element.getBoundingClientRect().width;
+        if (initialWidth > 0) {
+            setRenderedWidth(initialWidth * scale);
+        }
 
         const observer = new ResizeObserver((entries) => {
             for (const entry of entries) {
@@ -206,7 +214,7 @@ export const Strength = memo(({ children: strength, className, style }: Strength
             style={{
                 display: "flex",
                 justifyContent: "center",
-                alignItems: "cneter",
+                alignItems: "center",
                 boxSizing: "border-box",
                 backgroundColor: "#e5e7eb",
                 borderColor: "black",
@@ -440,10 +448,9 @@ export const DeckLimit = memo(({ type, alignment = "left", children: limit, clas
 });
 type DeckLimitProps = Omit<BaseElementProps, "children"> & { type?: TypeType, alignment?: "left" | "right", children?: number };
 
-// TODO: Convert into AutoSize, and eliminate "height" requirement of autosize
 export const Watermark = memo(({ children: watermark, className, style }: WatermarkProps) => {
     return (
-        <div
+        <AutoSize
             className={className}
             style={{
                 display: "flex",
@@ -461,7 +468,7 @@ export const Watermark = memo(({ children: watermark, className, style }: Waterm
             <span>{watermark?.top}</span>
             <span style={{ fontSize: px(36), lineHeight: 1 }}>{watermark?.middle}</span>
             <span>{watermark?.bottom}</span>
-        </div>
+        </AutoSize>
     );
 });
 type WatermarkProps = Omit<BaseElementProps, "children"> & { children?: Partial<WatermarkType> };

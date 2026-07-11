@@ -1,6 +1,6 @@
 {
   "name": "@agot/card-preview",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "Stephen Patane",
   "license": "ISC",
   "description": "A React component library for rendering \"A Game of Thrones LCG 2nd Edition\" cards.",
@@ -27,6 +27,7 @@
     "classnames": "^2.5.1"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
     "@types/react": "^19.2.2",
     "tsup": "^8.5.0",
     "typescript": "~5.8.3"
