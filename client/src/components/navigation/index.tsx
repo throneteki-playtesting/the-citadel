@@ -1,9 +1,10 @@
 import { Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Navbar, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CollectionElement } from "@react-types/shared";
 import ProfileSection from "./profileSection";
 import { isMenuItem, isPageItem, isVisibleFor, MenuItem as MenuItemType, NavItem, navItems, PageItem as PageItemType, profileItems } from "../../pages";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronUp } from "@fortawesome/free-solid-svg-icons";
+import { faChevronUp, faFeather } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { useGetProjectsQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
@@ -43,18 +44,21 @@ const NavigationBar = () => {
             return projectsNavItem;
         }
 
-        const activeProjectItems = projectData.items
-            .slice()
-            .sort((a, b) => a.number - b.number)
+        const draftProjects = (archivedProjectData?.items ?? []).filter((project) => project.draft);
+
+        const mainProjectItems = projectData.items
+            .concat(draftProjects)
+            .sort((a, b) => b.number - a.number)
             .map((project) => ({
                 path: `/project/${project.number}`,
                 label: `${project.number}. ${project.name}`,
-                permission: Permission.READ_PROJECTS
+                permission: project.draft ? Permission.READ_ARCHIVED_PROJECTS : Permission.READ_PROJECTS,
+                endContent: project.draft ? <FontAwesomeIcon className="animate-pulse" size="sm" icon={faFeather}/> : undefined
             }));
 
         const archivedProjectItems = (archivedProjectData?.items ?? [])
-            .slice()
-            .sort((a, b) => a.number - b.number)
+            .filter((project) => !project.draft)
+            .sort((a, b) => b.number - a.number)
             .map((project) => ({
                 path: `/project/${project.number}`,
                 label: `${project.number}. ${project.name}`,
@@ -69,7 +73,7 @@ const NavigationBar = () => {
             label: projectsNavItem.label,
             permission: projectsNavItem.permission,
             subPages: [
-                ...activeProjectItems,
+                ...mainProjectItems,
                 ...projectsNavItem.subPages,
                 ...(archivedMenuItem ? [archivedMenuItem] : [])
             ]
@@ -108,53 +112,78 @@ const NavigationBar = () => {
 };
 
 const PageItem = ({ item }: PageItemProps) => {
-    return <Link href={item.path} className="text-large">{item.label}</Link>;
+    return (
+        <Link href={item.path} className="text-large flex gap-2 items-center">
+            <span>{item.label}</span>
+            {item.endContent}
+        </Link>
+    );
 };
 
 type PageItemProps = { item: PageItemType }
 
-const MenuItem = ({ item, parents = [], isNested = false, onClose }: MenuItemProps) => {
+const MenuItem = ({ item }: MenuItemProps) => {
     const { user } = useAuth();
     const [isOpen, setIsOpen] = useState(false);
+    const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-    const closeAll = () => {
-        setIsOpen(false);
-        onClose?.();
+    const onOpenChange = (open: boolean) => {
+        setIsOpen(open);
+        if (!open) {
+            setExpanded({});
+        }
+    };
+
+    const buildItems = (subPages: NavItem[], depth: number): CollectionElement<object>[] => {
+        return subPages.filter((subPage) => isVisibleFor(subPage, user) && subPage.label).flatMap((subPage) => {
+            const indentStyle = depth > 0 ? { paddingLeft: `${0.5 + depth * 0.75}rem` } : undefined;
+            if (isMenuItem(subPage)) {
+                const isExpanded = !!expanded[subPage.label!];
+                const header = (
+                    <DropdownItem
+                        key={subPage.label!}
+                        closeOnSelect={false}
+                        style={indentStyle}
+                        endContent={<FontAwesomeIcon size="xs" className={classNames("duration-300", { "scale-y-[-1]": isExpanded })} icon={faChevronUp}/>}
+                        onPress={() => setExpanded((prev) => ({ ...prev, [subPage.label!]: !prev[subPage.label!] }))}
+                    >
+                        {subPage.label}
+                    </DropdownItem>
+                );
+                return isExpanded ? [header, ...buildItems(subPage.subPages, depth + 1)] : [header];
+            }
+            if (isPageItem(subPage)) {
+                return [(
+                    <DropdownItem
+                        key={subPage.path}
+                        as={Link}
+                        href={subPage.path}
+                        style={indentStyle}
+                        endContent={subPage.endContent}
+                    >
+                        {subPage.label}
+                    </DropdownItem>
+                )];
+            }
+            return [];
+        });
     };
 
     return (
-        <Dropdown isOpen={isOpen} onOpenChange={setIsOpen} className="font-cinzel">
+        <Dropdown isOpen={isOpen} onOpenChange={onOpenChange} className="font-cinzel">
             <DropdownTrigger className="cursor-pointer">
-                <Link className={classNames("flex gap-1", { "text-large": !isNested })}>
+                <Link className="flex gap-1 text-large">
                     <span>{item.label}</span>
                     <FontAwesomeIcon size="xs" className={classNames("duration-300", { "scale-y-[-1]": isOpen })} icon={faChevronUp}/>
                 </Link>
             </DropdownTrigger>
             <DropdownMenu>
-                {
-                    item.subPages.filter((subPage) => isVisibleFor(subPage, user) && subPage.label).map((subPage) => {
-                        if (isMenuItem(subPage)) {
-                            return (
-                                <DropdownItem key={subPage.label!} closeOnSelect={false}>
-                                    <MenuItem item={subPage} parents={parents.concat(item)} isNested={true} onClose={closeAll}></MenuItem>
-                                </DropdownItem>
-                            );
-                        }
-                        if (isPageItem(subPage)) {
-                            return (
-                                <DropdownItem key={subPage.label!} as={Link} href={subPage.path} onPress={onClose}>
-                                    {subPage.label}
-                                </DropdownItem>
-                            );
-                        }
-                        return null;
-                    })
-                }
+                {buildItems(item.subPages, 0)}
             </DropdownMenu>
         </Dropdown>
     );
 };
 
-type MenuItemProps = { item: MenuItemType, parents?: MenuItemType[], isNested?: boolean, onClose?: () => void }
+type MenuItemProps = { item: MenuItemType }
 
 export default NavigationBar;

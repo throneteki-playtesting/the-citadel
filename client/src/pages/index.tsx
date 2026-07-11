@@ -17,7 +17,7 @@ import PlaytestingUpdate from "./playtestingUpdate";
 import Privacy from "./privacy";
 
 export type NavItem = PageItem | MenuItem;
-export type PageItem = BaseNav & { path: string, element?: ReactElement };
+export type PageItem = BaseNav & { path: string, element?: ReactElement, endContent?: ReactElement };
 export type MenuItem = BaseNav & { subPages: NavItem[] }
 type BaseNav = { label?: string, permission?: SingleOrArray<Permission> }
 
