@@ -62,8 +62,8 @@ async function main() {
 
             const alreadyApplied = applied.has(migration.name);
             if (alreadyApplied) {
-                // With source->dest copy, re-running is safe (drops dest collection first),
-                // but we still skip by default to avoid unintentional overwrites.
+                // Re-running is safe: migrated documents are replaced in place (matched on natural
+                // keys) and dest-only documents are untouched — but we still skip by default.
                 log.info(`Skipping "${migration.name}" (already applied) — use --dry-run to preview or clear _migrations to re-run`);
                 continue;
             }

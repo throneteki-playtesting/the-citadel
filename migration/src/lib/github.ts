@@ -232,7 +232,8 @@ export function parsePRTitle(title: string): { projectCode: string; updateNumber
 export function parsePRBody(body: string, prNumber: number): ParsedCardChange[] {
     const changes: ParsedCardChange[] = [];
 
-    const sectionMatch = body.match(/##\s+.*?Card Change Notes([\s\S]*?)(?=\n##\s+|$)/i);
+    // Section ends at the next heading, a horizontal rule (the "_Last Updated_" footer), or end of body
+    const sectionMatch = body.match(/##\s+.*?Card Change Notes([\s\S]*?)(?=\n##\s+|\n-{3,}\s*\r?\n|$)/i);
     if (!sectionMatch) {
         log.verbose(`PR #${prNumber}: no 'Card Change Notes' section found`);
         return changes;

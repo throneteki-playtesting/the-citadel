@@ -134,12 +134,10 @@ export const migration: Migration = {
 
                 if (issueData) {
                     newDoc._metadata.github = {
-                        github: {
-                            status: issueData.status,
-                            issueUrl: issueData.issueUrl,
-                            closedAt: issueData.closedAt ?? undefined,
-                            lastSynced: now
-                        }
+                        status: issueData.status,
+                        issueUrl: issueData.issueUrl,
+                        closedAt: issueData.closedAt ?? undefined,
+                        lastSynced: now
                     };
                     newDoc.created = issueData.created;
                     newDoc.updated = issueData.created;
@@ -260,29 +258,30 @@ export const migration: Migration = {
         let upserted = 0, modified = 0;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
+            // Full replace so fields absent from the source (e.g. note) don't linger from earlier runs.
+            // Docs without a source counterpart are never matched, so they stay untouched;
+            // created/createdBy carry over from the existing doc when the source has no real date.
+            const existing = await dest.find(
+                { $or: batch.map(doc => ({ project: doc.project, number: doc.number, version: doc.version })) },
+                { projection: { project: 1, number: 1, version: 1, created: 1, createdBy: 1 } }
+            ).toArray();
+            const existingMap = new Map(existing.map((e: any) => [`${e.project}|${e.number}|${e.version}`, e]));
             const ops = batch.map(doc => {
                 // position within the pack moves to the slots collection (derived below) - only the
                 // permanent stamp of what actually shipped stays on the card itself, see IPlaytestCard.released
                 const { created, release, ...restDoc } = doc;
-                const setFields: Record<string, any> = {
+                const current = existingMap.get(`${doc.project}|${doc.number}|${doc.version}`);
+                const replacement: Record<string, any> = {
                     ...restDoc,
                     updated: restDoc.updated ?? now,
-                    ...(release && { released: { code: release.short, number: release.number } })
+                    ...(release && { released: { code: release.short, number: release.number } }),
+                    created: created ?? current?.created ?? now,
+                    createdBy: current?.createdBy ?? userId
                 };
-                // created goes in $set only when we have real data; otherwise falls back to now via $setOnInsert
-                const insertOnlyFields: Record<string, any> = { _id: new ObjectId(), createdBy: userId };
-                if (created) {
-                    setFields.created = created;
-                } else {
-                    insertOnlyFields.created = now;
-                }
                 return {
-                    updateOne: {
+                    replaceOne: {
                         filter: { project: doc.project, number: doc.number, version: doc.version },
-                        update: {
-                            $set: setFields,
-                            $setOnInsert: insertOnlyFields
-                        },
+                        replacement,
                         upsert: true
                     }
                 };
