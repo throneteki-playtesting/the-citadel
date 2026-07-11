@@ -357,7 +357,7 @@ export default function ProjectReleases({ project }: ProjectReleasesProps) {
                 {releases.length === 0 ? (
                     <div className="border border-dashed border-content3 bg-content1/50 py-10 px-4 text-center">
                         <div className="text-lg font-cinzel tracking-wide text-foreground/60">No packs have yet been chronicled for this project</div>
-                        <div className="text-sm text-foreground/40 mt-1">Add a release below to begin assembling one from the development pool.</div>
+                        <div className="text-sm text-foreground/40 mt-1">Add a release to begin assembling one from the development pool.</div>
                     </div>
                 ) : (
                     <>
