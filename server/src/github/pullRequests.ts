@@ -20,7 +20,7 @@ const DEVELOPMENT_BRANCH = "development";
 const PLAYTESTING_BRANCH = "playtesting";
 const STAGING_BRANCH = "development-updating";
 
-export async function syncCodePullRequests() {
+export async function syncCodePullRequests(forced?: boolean) {
     const release = await syncCodePullRequestMutex.acquire();
     let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
@@ -54,7 +54,7 @@ export async function syncCodePullRequests() {
 
                 const needsPullRequest = playtestingUpdates.length > 0 || newlyImplemented.length > 0;
                 if (needsPullRequest) {
-                    if (isPROutdated(existingPR, playtestingUpdates, newlyImplemented)) {
+                    if (forced || isPROutdated(existingPR, playtestingUpdates, newlyImplemented)) {
                         emitters.forEach((e) => e.progress("Syncing"));
                         const { syncedAt, url, status, mergedAt } = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
                         for (const playtestingUpdate of playtestingUpdates) {
@@ -88,7 +88,7 @@ export async function syncCodePullRequests() {
     return playtestingUpdates;
 }
 
-export async function syncDataPullRequests() {
+export async function syncDataPullRequests(forced?: boolean) {
     const release = await syncDataPullRequestMutex.acquire();
     let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
@@ -125,12 +125,12 @@ export async function syncDataPullRequests() {
                 }
 
                 // Builds the new data file & compares it to current development file
-                const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true, release: null }));
-                const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map(toJSONExportCard) };
+                const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true }));
+                const pack = { cgdbId: null, code: project.code, name: `${project.name} (Unreleased)`, releaseDate: null, workInProgress: true, cards: cards.map((card) => toJSONExportCard(card)) };
                 const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
                 const devContent = await getDataFileContent(context, `packs/${project.code}.json`, DEVELOPMENT_BRANCH);
 
-                if (devContent?.trim() === content.trim()) {
+                if (!forced && devContent?.trim() === content.trim()) {
                     playtestingUpdate._metadata.github.data = { lastSynced: new Date() };
                     continue;
                 }
@@ -219,7 +219,7 @@ function isPROutdated(pullRequest: PullRequest | undefined, playtestingUpdates: 
 
     // Final "expensive" check to scan the list of implemented codes and compare to newly implemented
     const existingCodes = extractImplementedCodes(pullRequest);
-    const newCodes = newlyImplemented.map(card => parseCardCode(!!card.release, card.project, card.release ? card.release.number : card.number) as string);
+    const newCodes = newlyImplemented.map(card => parseCardCode(false, card.project, card.number) as string);
     return existingCodes.length !== newCodes.length || existingCodes.some(code => !newCodes.includes(code));
 }
 
@@ -332,7 +332,7 @@ async function buildImplementedCards(cards: IPlaytestCard[]) {
     const rows: string[] = [];
     for (const card of cards) {
         const project = projectMap[card.project];
-        const row = `\n| :${project.emoji}: ${project.code} | ${parseCardCode(!!card.release, card.project, card.release ? card.release.number : card.number)} | ${card.name} | ${card.version} |`;
+        const row = `\n| :${project.emoji}: ${project.code} | ${parseCardCode(false, card.project, card.number)} | ${card.name} | ${card.version} |`;
         rows.push(row);
     }
 

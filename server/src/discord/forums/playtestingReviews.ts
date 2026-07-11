@@ -12,13 +12,13 @@ import { Mutex } from "async-mutex";
 
 const syncReviewForumMutex = new Mutex();
 
-export async function syncReviewForum(reviews: IPlaytestReview[]): Promise<IPlaytestReview[]> {
+export async function syncReviewForum(reviews: IPlaytestReview[], forced?: boolean): Promise<IPlaytestReview[]> {
     const release = await syncReviewForumMutex.acquire();
     try {
         const context = await getPlaytestingReviewContext();
         const results: IPlaytestReview[] = [];
         for (const review of reviews) {
-            results.push(await syncReviewThread(review, context));
+            results.push(await syncReviewThread(review, context, forced));
         }
         return results;
     } finally {
@@ -26,7 +26,7 @@ export async function syncReviewForum(reviews: IPlaytestReview[]): Promise<IPlay
     }
 }
 
-async function syncReviewThread(review: IPlaytestReview, context?: PlaytestingReviewContext): Promise<IPlaytestReview> {
+async function syncReviewThread(review: IPlaytestReview, context?: PlaytestingReviewContext, forced: boolean = false): Promise<IPlaytestReview> {
     context = context ?? await getPlaytestingReviewContext();
     const emitter = createSyncEmitter("review", "discord", review);
     try {
@@ -49,7 +49,7 @@ async function syncReviewThread(review: IPlaytestReview, context?: PlaytestingRe
                 }
             }
             // Check outdated again, in case it was mapped from above code
-            if (isMessageOutdated(review)) {
+            if (forced || isMessageOutdated(review)) {
                 emitter.progress("Syncing");
                 if (initialExists) {
                     review = await updateInitial(review, card, user, context);

@@ -1,7 +1,8 @@
 import { SemanticVersion } from "common/utils";
 import { ICard } from "./cards";
+import { ReleaseDate } from "./shared";
 
-export type ReleaseDate = `${number}-${number}-${number}`;
+export type { ReleaseDate };
 
 export interface IPack {
     cgdbId?: string,

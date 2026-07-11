@@ -9,6 +9,7 @@ import PlaytestingUpdateRepository from "./repositories/playtestingUpdateReposit
 import ProjectsRepository from "./repositories/projectsRepository";
 import ReviewsRepository from "./repositories/reviewRepository";
 import RolesRepository from "./repositories/rolesRepository";
+import SlotsRepository from "./repositories/slotsRepository";
 import SuggestionsRepository from "./repositories/suggestionsRepository";
 import UsersRepository from "./repositories/usersRepository";
 import { Database } from "./repositories/shared";
@@ -24,6 +25,7 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "projects", ctor: ProjectsRepository },
     { key: "playtestingUpdates", ctor: PlaytestingUpdateRepository },
     { key: "cards", ctor: CardsRepository },
+    { key: "slots", ctor: SlotsRepository },
     { key: "reviews", ctor: ReviewsRepository },
     { key: "users", ctor: UsersRepository },
     { key: "roles", ctor: RolesRepository },
@@ -94,6 +96,7 @@ class DataService {
     get projects() { return this.getRepository<ProjectsRepository>("projects"); }
     get playtestingUpdates() { return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates"); }
     get cards() { return this.getRepository<CardsRepository>("cards"); }
+    get slots() { return this.getRepository<SlotsRepository>("slots"); }
     get reviews() { return this.getRepository<ReviewsRepository>("reviews"); }
     get users() { return this.getRepository<UsersRepository>("users"); }
     get roles() { return this.getRepository<RolesRepository>("roles"); }

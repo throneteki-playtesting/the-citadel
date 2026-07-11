@@ -22,11 +22,11 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
         }
         const latest = cardsData?.items.find((card) => card.latest);
         if (latest) {
-            if (latest.release) {
-                const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.release.number)}`;
+            if (latest.released) {
+                const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.released.number)}`;
                 return {
                     title,
-                    description: `Released (${latest.release.short})`,
+                    description: `Released (${latest.released.code})`,
                     color: "success",
                     href
                 };

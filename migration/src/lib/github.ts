@@ -218,7 +218,7 @@ export type ParsedCardChange = {
 const PR_TITLE_RE = /^(.+?)\s*\|\s*Playtesting Update\s+(\d+)$/i;
 
 // Matches a card change heading. Version is required — entries without a semver are not card changes.
-const CARD_CHANGE_RE = /^\*\*([^*]+?)\s+(\d{5})\s*\|\s*.+?\s+v(\d+\.\d+\.\d+)\*\*\s*$/;
+const CARD_CHANGE_RE = /^\*\*([^*]*?)\s*(\d{5})\s*\|\s*.+?\s+v(\d+\.\d+\.\d+)\*\*\s*$/;
 
 export function parsePRTitle(title: string): { projectCode: string; updateNumber: number } | null {
     const match = title.match(PR_TITLE_RE);

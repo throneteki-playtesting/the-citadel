@@ -15,6 +15,22 @@ enum Permission {
     INITIALISE_PROJECTS = "INITIALISE_PROJECTS",
     /** Can archive active projects */
     ARCHIVE_PROJECTS = "ARCHIVE_PROJECTS",
+    /** Can view slots for a project */
+    READ_SLOTS = "READ_SLOTS",
+    /** Can create new slots (draft projects only) */
+    CREATE_SLOTS = "CREATE_SLOTS",
+    /** Can delete empty slots (draft projects only) */
+    DELETE_SLOTS = "DELETE_SLOTS",
+    /** Can edit slot statuses, type & notes */
+    EDIT_SLOTS = "EDIT_SLOTS",
+    /** Can view releases (packs) for a project */
+    READ_RELEASES = "READ_RELEASES",
+    /** Can create new releases */
+    CREATE_RELEASES = "CREATE_RELEASES",
+    /** Can edit, publish, and reorder releases, and assign slots to them */
+    EDIT_RELEASES = "EDIT_RELEASES",
+    /** Can delete unpublished releases */
+    DELETE_RELEASES = "DELETE_RELEASES",
     /** Can create playtesting updates for a specific project */
     CREATE_PLAYTESTING_UPDATES = "CREATE_PLAYTESTING_UPDATES",
     /** Can read playtesting updates for any project */
@@ -109,6 +125,14 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.DELETE_PROJECTS]: { label: "Delete", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.ARCHIVE_PROJECTS]: { label: "Archive", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_SLOTS]: { label: "Read Slots", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
+    [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
+    [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
+    [Permission.READ_RELEASES]: { label: "Read Releases", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.CREATE_RELEASES]: { label: "Create Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
+    [Permission.EDIT_RELEASES]: { label: "Edit Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
+    [Permission.DELETE_RELEASES]: { label: "Delete Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
     [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
     [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
     [Permission.READ_CARDS]: { label: "Read All", group: "Cards", dependencies: Permission.READ_PROJECTS },

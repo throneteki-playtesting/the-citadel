@@ -46,7 +46,7 @@ function CardChangesStat() {
         const noteMap = cardsData?.items.reduce<Record<NoteType, number>>((map, card) => {
             if (card.note) map[card.note.type]++;
             return map;
-        }, { updated: 0, reworked: 0, replaced: 0 }) ?? {};
+        }, { updated: 0, reworked: 0, replaced: 0, wording: 0 }) ?? {};
 
         return (
             <div className="flex gap-0.5 flex-wrap">
@@ -82,7 +82,7 @@ function ActivePlaytestersStat() {
 
 function CardsInTestingStat() {
     const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, release: { $exists: false } })) }, { skip: !projectsData });
+    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, released: { $exists: false } })) }, { skip: !projectsData });
 
     const isLoading = isLoadingProjectsData || isLoadingCardsData;
 

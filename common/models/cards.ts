@@ -4,7 +4,7 @@ import { IAuditable } from "./shared";
 
 export const factions = ["baratheon", "greyjoy", "lannister", "martell", "thenightswatch", "stark", "targaryen", "tyrell", "neutral"] as const;
 export const types = ["character", "location", "attachment", "event", "plot", "agenda"] as const;
-export const noteTypes = ["updated", "reworked", "replaced"] as const;
+export const noteTypes = ["updated", "reworked", "replaced", "wording"] as const;
 export const githubStatuses = ["open", "closed"] as const;
 export const challengeIcons = ["military", "intrigue", "power"] as const;
 export const plotStats = ["income", "initiative", "claim", "reserve"] as const;
@@ -76,9 +76,13 @@ export interface IPlaytestCard extends ICard, IAuditable {
     draft: boolean,
     note?: NoteDetails,
     playtesting?: SemanticVersion,
-    release?: ReleaseDetails,
     implemented: boolean,
     suggestionId?: string,
+    /** Stamped once, permanently, by the publish action - presence means this exact card version shipped in a published pack */
+    released?: {
+        code: string,
+        number: number
+    },
     _metadata?: {
         github?: {
             status?: typeof githubStatuses[number],
@@ -97,11 +101,6 @@ export interface IPlaytestCard extends ICard, IAuditable {
 export interface NoteDetails {
     type: NoteType,
     text: string
-}
-
-export interface ReleaseDetails {
-    short: string,
-    number: number
 }
 
 export interface IRenderCard extends ICard {

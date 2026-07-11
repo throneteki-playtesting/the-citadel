@@ -97,7 +97,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
         }
         return [...cardsData.items].sort((a, b) => {
             const rank = (card: IPlaytestCard): number => {
-                if (card.latest && card.release) return 0;
+                if (card.latest && card.released) return 0;
                 if (card.draft) return 1;
                 if (card.latest) return 2;
                 return 3;
@@ -140,7 +140,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
 
     const tabs = useMemo(() => sortedCards.map((card, index) => {
         let label: string = card.version;
-        if (card.release) {
+        if (card.latest && card.released) {
             label = "Release";
         } else if (card.latest) {
             label = "Latest";
@@ -207,7 +207,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
                 </div>
                 <CardStack cards={sortedCards} selectedIndex={selectedIndex} tilt={-1} className={classNames(sortedCards.some((card) => card.type === "plot") ? "w-full" : "h-full", widthClass)}>
                     {(card) => {
-                        if (card.release) {
+                        if (card.latest && card.released) {
                             return <CardImage card={card} />;
                         }
                         return <CardPreview card={renderPlaytestingCard(card)} />;
@@ -233,7 +233,6 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
         delete draft.note;
-        delete draft.release;
         draft.latest = false;
         draft.implemented = false;
         delete draft._metadata;
@@ -275,7 +274,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                     </TouchTooltip>
                 }
             </PermissionGate>
-            {!latest?.release && (
+            {!(latest && latest.released) && (
                 <>
                     <PermissionGate requires={Permission.MAKE_REVIEWS}>
                         <TouchTooltip content="Submit Review">

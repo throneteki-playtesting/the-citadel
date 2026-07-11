@@ -1,5 +1,5 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
-import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft } from "@fortawesome/free-solid-svg-icons";
+import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faSpellCheck } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
 import { valid } from "semver";
@@ -38,7 +38,8 @@ export function getFactionCardImage(faction: Faction) {
 export const noteTypeIcon: Record<NoteType, IconDefinition> = {
     updated: faAnglesUp,
     reworked: faArrowRotateLeft,
-    replaced: faArrowRightArrowLeft
+    replaced: faArrowRightArrowLeft,
+    wording: faSpellCheck
 };
 
 export function daysFromNow(days: number): Date {

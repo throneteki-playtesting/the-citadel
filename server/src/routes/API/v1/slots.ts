@@ -1,0 +1,234 @@
+import express from "express";
+import { celebrate, Joi, Segments } from "celebrate";
+import asyncHandler from "express-async-handler";
+import { dataService } from "@/services";
+import * as Schemas from "common/models/schemas";
+import { DefaultSlotStatuses, ISlot } from "common/models/slots";
+import { factions } from "common/models/cards";
+import { IProject } from "common/models/projects";
+import { validateRequest } from "@/middleware/permissions";
+import Permission from "common/models/permissions";
+import { StatusCodes } from "http-status-codes";
+import { ApiErrorResponse } from "@/errors";
+import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
+import { IGetRequest, IGetResponse } from "@/types";
+import { getRequestSchema } from "@/schemas";
+
+const router = express.Router({ mergeParams: true });
+
+const SlotParams = {
+    number: Joi.number().required(),
+    slot: Joi.number().required()
+};
+
+async function getSlots(
+    filter: IGetRequest<ISlot>["filter"],
+    orderBy: IGetRequest<ISlot>["orderBy"],
+    page: IGetRequest<ISlot>["page"],
+    perPage: IGetRequest<ISlot>["perPage"]
+): Promise<IGetResponse<ISlot>> {
+    const [result, count] = await Promise.all([
+        dataService.slots.read(filter, orderBy, page, perPage),
+        dataService.slots.count(filter)
+    ]);
+    return generateGetResponse(result, count);
+}
+
+const getQuerySchema = getRequestSchema(
+    Schemas.Slot.Full,
+    { project: "asc", number: "asc" }
+);
+
+// Read slots for project
+router.get("/",
+    celebrate({
+        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.QUERY]: getQuerySchema
+    }),
+    validateRequest(Permission.READ_SLOTS),
+    loadProjectByNumber,
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+        const { number: project } = req.params;
+        const { filter, orderBy, page, perPage } = req.query;
+        const normalizedFilter = applyToFilter(filter, { project });
+        const response = await getSlots(normalizedFilter, orderBy, page, perPage);
+        res.status(StatusCodes.OK).json(response);
+    })
+);
+
+// Read single slot
+router.get("/:slot",
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    validateRequest(Permission.READ_SLOTS),
+    asyncHandler<{ number: number, slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { number: project, slot } = req.params;
+        const [result] = await dataService.slots.read({ project, number: slot });
+        if (!result) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Slot #${slot} does not exist for project #${project}`);
+        }
+        res.status(StatusCodes.OK).json(result);
+    })
+);
+
+// Create a new slot for a faction (draft projects only) - always appended after the current highest slot number
+router.post("/",
+    validateRequest(Permission.CREATE_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.BODY]: { faction: Joi.string().required().valid(...factions) }
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number }, unknown, { faction: typeof factions[number] }, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { faction } = req.body;
+
+        if (!project.draft) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Slots can only be added while a project is in draft");
+        }
+
+        const existingSlots = await dataService.slots.read({ project: project.number });
+        const nextNumber = existingSlots.reduce((max, slot) => Math.max(max, slot.number), 0) + 1;
+
+        const slot = await dataService.slots.create({
+            project: project.number,
+            number: nextNumber,
+            faction,
+            statuses: DefaultSlotStatuses
+        } as ISlot);
+
+        await syncProjectCardCount(project.number);
+
+        res.status(StatusCodes.OK).json(slot);
+    })
+);
+
+// Delete an empty slot (draft projects only) - must be the highest-numbered slot within its own faction
+router.delete("/:slot",
+    validateRequest(Permission.DELETE_SLOTS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number, slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+
+        if (!project.draft) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Slots can only be removed while a project is in draft");
+        }
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Slot #${slotNumber} does not exist for project #${project.number}`);
+        }
+
+        const factionSlots = await dataService.slots.read({ project: project.number, faction: slot.faction });
+        const highestForFaction = Math.max(...factionSlots.map((s) => s.number));
+        if (slotNumber !== highestForFaction) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Slot", "Only the last slot in a faction can be removed");
+        }
+
+        const cardCount = await dataService.cards.count({ project: project.number, number: slotNumber });
+        if (cardCount > 0) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Slot", "Cannot remove a slot which has cards assigned to it");
+        }
+
+        const [deleted] = await dataService.slots.destroy({ project: project.number, number: slotNumber });
+
+        await syncProjectCardCount(project.number);
+
+        res.status(StatusCodes.OK).json(deleted);
+    })
+);
+
+// Edit slot status/type/notes
+router.patch("/:slot",
+    validateRequest(Permission.EDIT_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.Partial
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number, slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+        const { type, notes, statuses } = req.body;
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Slot #${slotNumber} does not exist for project #${project.number}`);
+        }
+
+        const updated = await dataService.slots.update({
+            ...slot,
+            ...(type !== undefined && { type }),
+            ...(notes !== undefined && { notes }),
+            ...(statuses && { statuses: { ...slot.statuses, ...statuses } })
+        });
+
+        res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Assign or clear a slot's release placement
+router.patch("/:slot/release",
+    validateRequest([Permission.EDIT_SLOTS, Permission.EDIT_RELEASES]),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Joi.object({
+            code: Joi.string().required().allow(null),
+            position: Joi.number().when("code", { is: Joi.valid(null), then: Joi.forbidden(), otherwise: Joi.required() })
+        })
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number, slot: number }, unknown, { code: string | null, position?: number }, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+        const { code, position } = req.body;
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Slot #${slotNumber} does not exist for project #${project.number}`);
+        }
+
+        if (slot.release?.released) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Release", `Release "${slot.release.code}" has already been released and cannot be modified`);
+        }
+
+        const updates: ISlot[] = [];
+
+        if (code === null) {
+            updates.push(clearRelease(slot));
+        } else {
+            const targetRelease = project.releases.find((r) => r.code === code);
+            if (!targetRelease) {
+                throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Release "${code}" does not exist for project #${project.number}`);
+            }
+            if (targetRelease.releasedDate) {
+                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Release", `Release "${code}" has already been released and cannot be modified`);
+            }
+            if (position < 1 || position > targetRelease.capacity) {
+                throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Position must be between 1 and ${targetRelease.capacity} for release "${code}"`);
+            }
+
+            // If another slot already occupies this position, either swap it into the dragged slot's
+            // previous release position (if it had one), or evict it back to the development pool
+            const occupyingSlots = await dataService.slots.read({ project: project.number, release: { code } });
+            const occupant = occupyingSlots.find((s) => s.release?.position === position && s.number !== slotNumber);
+            if (occupant) {
+                if (slot.release) {
+                    updates.push({ ...occupant, release: slot.release });
+                } else {
+                    updates.push(clearRelease(occupant));
+                }
+            }
+
+            updates.push({ ...slot, release: { code, position } });
+        }
+
+        const updated = await dataService.slots.update(updates);
+        const primary = updated.find((s) => s.number === slotNumber);
+        const evicted = updated.find((s) => s.number !== slotNumber);
+        res.status(StatusCodes.OK).json({ slot: primary, evictedSlot: evicted });
+    })
+);
+
+export default router;

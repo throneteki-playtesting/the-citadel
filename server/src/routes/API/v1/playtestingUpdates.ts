@@ -216,6 +216,9 @@ router.post("/:project/:version/sync/github/:type",
             project: Joi.number().required(),
             version: Joi.number().required(),
             type: Joi.string().valid("code", "data").required()
+        },
+        [Segments.QUERY]: {
+            forced: Joi.boolean()
         }
     }),
     validateRequest<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, unknown>((principal, req) => {
@@ -238,18 +241,19 @@ router.post("/:project/:version/sync/github/:type",
         res.locals.playtestingUpdate = playtestingUpdate;
         next();
     }),
-    asyncHandler<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
         const { type } = req.params;
+        const { forced } = req.query;
         let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
 
         switch (type) {
             case "code": {
-                const updates = await syncCodePullRequests();
+                const updates = await syncCodePullRequests(forced);
                 playtestingUpdate = updates.find((pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version) ?? playtestingUpdate;
                 break;
             }
             case "data": {
-                const updates = await syncDataPullRequests();
+                const updates = await syncDataPullRequests(forced);
                 playtestingUpdate = updates.find((pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version) ?? playtestingUpdate;
                 break;
             }

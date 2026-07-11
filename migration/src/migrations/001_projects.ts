@@ -47,6 +47,8 @@ export const migration: Migration = {
                     tyrell: project.perFaction,
                     neutral: project.neutral
                 },
+                // Overwritten by 002_cards with counts/releases derived from actual migrated slots where applicable
+                releases: [],
                 emoji: project.emoji ? (project.emoji as string).replaceAll(":", "") : "",
                 // Carry through any remaining fields not explicitly remapped
                 ...(project.active !== undefined && { active: project.active }),

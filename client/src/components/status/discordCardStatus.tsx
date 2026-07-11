@@ -37,9 +37,9 @@ export default function DiscordCardStatus({ className, style, project, number, v
             };
         }
 
-        const syncFn = () => syncCardDiscord({ project: card.project, number: card.number, version: card.version });
-        const onPress = hasSyncPermission ? syncFn : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+        const syncFn = (forced?: boolean) => syncCardDiscord({ project: card.project, number: card.number, version: card.version, forced });
+        const onPress = hasSyncPermission ? () => syncFn() : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: () => syncFn(true) }] : undefined;
 
         if (status === "error") {
             return {

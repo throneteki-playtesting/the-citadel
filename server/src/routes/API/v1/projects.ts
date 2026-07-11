@@ -3,21 +3,26 @@ import { celebrate, Joi, Segments } from "celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { IProject } from "common/models/projects";
+import { FactionCardCount, IProject } from "common/models/projects";
 import { validateRequest, validateProjectAccess, PermissionErrorResponse } from "@/middleware/permissions";
 import { getContext } from "@/middleware/context";
 import { hasPermission, Regex, SemanticVersion } from "common/utils";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { cloneDeep, isEqual } from "lodash-es";
+import { cloneDeep } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter, loadProjectByNumber } from "@/utils";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
+import slots from "./slots";
+import releases from "./releases";
 
 const router = express.Router();
+
+router.use("/:number/slots", slots);
+router.use("/:number/releases", releases);
 
 const numberParams = {
     number: Joi.number().required()
@@ -99,6 +104,8 @@ router.post("/",
     }),
     asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
         const body = req.body;
+        body.cardCount = factions.reduce((acc, faction) => ({ ...acc, [faction]: 0 }), {} as FactionCardCount);
+        body.releases = [];
         const project = await dataService.projects.create(body);
         res.status(StatusCodes.OK).json(project);
     })
@@ -115,7 +122,7 @@ router.post("/:number/initialise",
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Only draft projects can be initialised");
         }
         const cards = await dataService.cards.read({ project: project.number });
-        const totalSlots = Object.values(project.cardCount).reduce((acc, num) => acc + num, 0);
+        const totalSlots = await dataService.slots.count({ project: project.number });
         if (cards.length < totalSlots) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Slots", "Project is missing cards for allocated slots; either provide cards, or adjust card slots");
         }
@@ -173,49 +180,17 @@ router.put("/:number",
         project.number = number;
 
         const [previous] = await dataService.projects.read({ number: project.number });
+        // cardCount & releases are server-maintained caches (kept in sync via the slots/releases endpoints) -
+        // never trust or overwrite them from a general project edit body
+        project.cardCount = previous.cardCount;
+        project.releases = previous.releases;
+
         // If the project number changes, we need to destroy + create, as its a primary key
         if (newNumber) {
             await dataService.projects.destroy({ number });
             project = await dataService.projects.create(project);
         } else {
             project = await dataService.projects.update(project);
-        }
-
-        // If card counts changed, we need to adjust existing card numbers to ensure they move with the faction adjustments.
-        // This means dynamically updating each card number based on the slots each previous faction should have.
-        // NOTE: When a faction loses slots, any cards which can no longer fit are deleted.
-        if (!isEqual(project.cardCount, previous.cardCount)) {
-            const toDelete: IPlaytestCard[] = [];
-            const toUpsert: IPlaytestCard[] = [];
-            const shifts: Record<string, { offset: number; newMax: number }> = {};
-            let previousLimit = 0;
-            let totalShift = 0;
-
-            for (const faction of factions) {
-                const oldVal = previous.cardCount[faction];
-                const newVal = project.cardCount[faction];
-                previousLimit += oldVal;
-                const newMax = previousLimit + totalShift + (newVal - oldVal);
-
-                shifts[faction] = { offset: totalShift, newMax };
-                totalShift += (newVal - oldVal);
-            }
-
-            const cards = await dataService.cards.read({ project: project.number });
-            for (const card of cards) {
-                const { offset, newMax } = shifts[card.faction];
-                const newNumber = card.number + offset;
-
-                if (newNumber > newMax) {
-                    toDelete.push(card);
-                } else if (offset !== 0) {
-                    toDelete.push(card);
-                    toUpsert.push({ ...card, number: newNumber });
-                }
-            }
-
-            await dataService.cards.destroy(toDelete);
-            await dataService.cards.update(toUpsert, true);
         }
 
         res.status(StatusCodes.OK).json(project);
@@ -241,6 +216,7 @@ router.delete("/:number",
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);
         }
         await dataService.cards.destroy({ project: number });
+        await dataService.slots.destroy({ project: number });
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -278,16 +254,17 @@ router.post("/:number/sync/image",
         [Segments.QUERY]: {
             number: Joi.number(),
             version: Joi.string().regex(Regex.SemanticVersion),
-            latest: Joi.boolean()
+            latest: Joi.boolean(),
+            forced: Joi.boolean()
         }
     }),
     loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, { number?: number, version?: SemanticVersion, latest?: boolean }>(async (req, res) => {
+    asyncHandler<{ number: number }, unknown, unknown, { number?: number, version?: SemanticVersion, latest?: boolean, forced?: boolean }>(async (req, res) => {
         const project = res.locals.project as IProject;
-        const { number, version, latest } = req.query;
+        const { number, version, latest, forced } = req.query;
         let cards = await dataService.cards.read({ project: project.number, number, version, latest });
 
-        cards = await syncImage(cards);
+        cards = await syncImage(cards, forced);
 
         res.status(StatusCodes.OK).json(cards);
     })

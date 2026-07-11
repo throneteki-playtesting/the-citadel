@@ -4,7 +4,7 @@ import { Alert, Skeleton } from "@heroui/react";
 import { getFactionCardImage } from "../utils";
 import { useEffect, useMemo, useState } from "react";
 import classNames from "classnames";
-import { generateReleaseImageUrl, isFaction } from "common/utils";
+import { isFaction } from "common/utils";
 import { BaseElementProps } from "../types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleExclamation } from "@fortawesome/free-solid-svg-icons";
@@ -28,25 +28,29 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
             setDefaultOrientation(fetched.type === "plot" ? "horizontal" : "vertical");
             setAlt(fetched.name);
         };
-        if (typeof identifier === "string") {
-            if (isFaction(identifier)) {
-                // If faction code is provided, simply generate faction image url
-                const factionImageUrl = getFactionCardImage(identifier);
-                setImageUrl(factionImageUrl);
-                setDefaultOrientation("vertical");
-                setAlt(identifier);
+        try {
+            if (typeof identifier === "string") {
+                if (isFaction(identifier)) {
+                    // If faction code is provided, simply generate faction image url
+                    const factionImageUrl = getFactionCardImage(identifier);
+                    setImageUrl(factionImageUrl);
+                    setDefaultOrientation("vertical");
+                    setAlt(identifier);
+                } else {
+                    // Otherwise, card code needs to be used to fetch actual card data from ThronesDB
+                    fetchCardAsync(identifier);
+                }
+            } else if (identifier._metadata?.imageUrl) {
+                // If a playtesting card is provided, it MUST have a synced imageUrl to grab an actual image
+                setImageUrl(identifier._metadata.imageUrl);
+                setDefaultOrientation(identifier.type === "plot" ? "horizontal" : "vertical");
+                setAlt(identifier.name);
             } else {
-                // Otherwise, card code needs to be used to fetch actual card data from ThronesDB
-                fetchCardAsync(identifier);
+                console.error(`Image URL data is missing for ${identifier?.name ?? identifier ?? "Unknown Card"}`);
+                setIsError(true);
             }
-        } else if (identifier._metadata?.imageUrl || identifier.release) {
-            // If a playtesting card is provided, it MUST have imageUrl or release to grab an actual image
-            const cardImageUrl = identifier._metadata?.imageUrl ?? generateReleaseImageUrl(identifier.release!.short, identifier.release!.number, identifier.name);
-            setImageUrl(cardImageUrl);
-            setDefaultOrientation(identifier.type === "plot" ? "horizontal" : "vertical");
-            setAlt(identifier.name);
-        } else {
-            console.error(`Failed to load CardImage: ${identifier}`);
+        } finally {
+            setIsLoading(false);
         }
     }, [fetchCard, identifier]);
 

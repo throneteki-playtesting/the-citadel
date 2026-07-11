@@ -148,6 +148,9 @@ router.post("/:project/:number/:version/:reviewer/sync/:type",
         [Segments.PARAMS]: {
             ...reviewParams,
             type: Joi.string().valid("discord")
+        },
+        [Segments.QUERY]: {
+            forced: Joi.boolean()
         }
     }),
     validateRequest((principal, req) => {
@@ -157,14 +160,15 @@ router.post("/:project/:number/:version/:reviewer/sync/:type",
             default: return false;
         }
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string, type: "discord" }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string, type: "discord" }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
         const { project, number, version, reviewer, type } = req.params;
+        const { forced } = req.query;
 
         let [review] = await dataService.reviews.read({ project, number, version, reviewer });
 
         switch (type) {
             case "discord": {
-                [review] = await syncReviewForum([review]);
+                [review] = await syncReviewForum([review], forced);
                 break;
             }
         }

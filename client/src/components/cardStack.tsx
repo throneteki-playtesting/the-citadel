@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import classNames from "classnames";
 
 export default function CardStack<T>({
@@ -49,6 +49,15 @@ function StackedCard<T>({
     const isDismissed = index > selectedIndex;
     const isBase = index === 0;
 
+    const animateNew = typeof tilt === "object" ? tilt.animateNew ?? true : true;
+    const hasRevealed = useRef(!isDismissed);
+    useEffect(() => {
+        if (!isDismissed) {
+            hasRevealed.current = true;
+        }
+    }, [isDismissed]);
+    const fadeOnly = !animateNew && isDismissed && !hasRevealed.current;
+
     const cardTilt = useMemo(() => {
         if (typeof tilt === "number") {
             return tilt;
@@ -69,7 +78,7 @@ function StackedCard<T>({
                 "size-full transition-all duration-400 ease-in-out",
                 {
                     "absolute inset-0": !isBase,
-                    "translate-x-[150%] rotate-10 opacity-0": isDismissed && !isBase,
+                    "translate-x-[150%] rotate-10 opacity-0": isDismissed && !isBase && !fadeOnly,
                     "brightness-50": shadow && !isDismissed && !isTop
                 }
             )}
@@ -94,4 +103,5 @@ type TiltOptions = number | {
     variance?: number;
     alternate?: boolean;
     depth?: number;
+    animateNew?: boolean;
 };

@@ -1,6 +1,7 @@
 import Joi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
+import * as Slots from "./slots";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
@@ -132,11 +133,11 @@ export const PlaytestingCard = {
         }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean().required(),
-        release: Joi.object({
-            short: Joi.string().required(),
+        suggestionId: Joi.string(),
+        released: Joi.object({
+            code: Joi.string().required(),
             number: Joi.number().required()
         }),
-        suggestionId: Joi.string(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
             discord: DiscordMetadata,
@@ -159,11 +160,11 @@ export const PlaytestingCard = {
         }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean(),
-        release: Joi.object({
-            short: Joi.string(),
-            number: Joi.number()
-        }),
         suggestionId: Joi.string(),
+        released: Joi.object({
+            code: Joi.string().required(),
+            number: Joi.number().required()
+        }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
             discord: DiscordMetadata,
@@ -189,11 +190,8 @@ export const PlaytestingCard = {
         }).when("version", { not: Joi.string().pattern(/^0\.0\.\d+$/), then: Joi.required() }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean(),
-        release: Joi.object({
-            short: Joi.string().required(),
-            number: Joi.number().required()
-        }),
         suggestionId: Joi.string(),
+        released: Joi.forbidden(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
             discord: DiscordMetadata,
@@ -287,9 +285,111 @@ export const CardSuggestion = {
     })
 };
 
+export const Release = {
+    Full: Joi.object({
+        code: Joi.string().required(),
+        name: Joi.string().required(),
+        number: Joi.number().required(),
+        capacity: Joi.number().required(),
+        plannedDate: Joi.string().regex(Regex.ReleaseDate),
+        releasedDate: Joi.string().regex(Regex.ReleaseDate),
+        status: Joi.string().required().valid(...Projects.releaseStatuses),
+        article: Joi.object({
+            url: Joi.string().uri(),
+            status: Joi.string().valid(...Projects.articleStatuses)
+        }),
+        created: Joi.date().required(),
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
+    }),
+    Partial: Joi.object({
+        code: Joi.string(),
+        name: Joi.string(),
+        number: Joi.number(),
+        capacity: Joi.number(),
+        plannedDate: Joi.string().regex(Regex.ReleaseDate),
+        releasedDate: Joi.string().regex(Regex.ReleaseDate),
+        status: Joi.string().valid(...Projects.releaseStatuses),
+        article: Joi.object({
+            url: Joi.string().uri(),
+            status: Joi.string().valid(...Projects.articleStatuses)
+        }),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
+    }),
+    // Used for create/edit bodies - number & releasedDate are server-managed (number via sequence assignment/reorder, the rest via the publish action)
+    Draft: Joi.object({
+        code: Joi.string().required(),
+        name: Joi.string().required(),
+        number: Joi.forbidden(),
+        capacity: Joi.number().required(),
+        plannedDate: Joi.string().regex(Regex.ReleaseDate),
+        releasedDate: Joi.forbidden(),
+        status: Joi.string().valid(...Projects.releaseStatuses),
+        article: Joi.object({
+            url: Joi.string().uri(),
+            status: Joi.string().valid(...Projects.articleStatuses)
+        }),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
+    })
+};
+
+export const Slot = {
+    Full: Joi.object({
+        project: Joi.number().required(),
+        number: Joi.number().required(),
+        faction: Joi.string().required().valid(...Cards.factions),
+        type: Joi.string().valid(...Cards.types),
+        notes: Joi.string().allow(""),
+        statuses: Joi.object({
+            development: Joi.string().required().valid(...Slots.developmentStatuses),
+            wording: Joi.string().required().valid(...Slots.wordingStatuses),
+            artwork: Joi.string().required().valid(...Slots.artworkStatuses),
+            production: Joi.string().required().valid(...Slots.productionStatuses)
+        }).required(),
+        release: Joi.object({
+            code: Joi.string().required(),
+            position: Joi.number().required(),
+            released: Joi.boolean()
+        }),
+        created: Joi.date().required(),
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
+    }),
+    Partial: Joi.object({
+        project: Joi.number(),
+        number: Joi.number(),
+        faction: Joi.string().valid(...Cards.factions),
+        type: Joi.string().valid(...Cards.types),
+        notes: Joi.string().allow(""),
+        statuses: Joi.object({
+            development: Joi.string().valid(...Slots.developmentStatuses),
+            wording: Joi.string().valid(...Slots.wordingStatuses),
+            artwork: Joi.string().valid(...Slots.artworkStatuses),
+            production: Joi.string().valid(...Slots.productionStatuses)
+        }),
+        release: Joi.object({
+            code: Joi.string().required(),
+            position: Joi.number().required(),
+            released: Joi.boolean()
+        }).allow(null),
+        created: Joi.date(),
+        createdBy: Joi.string(),
+        updated: Joi.date(),
+        updatedBy: Joi.string()
+    })
+};
+
 export const Project = {
     Full: Joi.object({
-        number: Joi.number().required(),
+        number: Joi.number().integer().max(99).required(),
         name: Joi.string().required(),
         code: Joi.string().required(),
         active: Joi.boolean().required(),
@@ -313,13 +413,14 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        releases: Joi.array().items(Release.Full).required(),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
         updated: Joi.date().required(),
         updatedBy: Joi.string().required()
     }),
     Partial: Joi.object({
-        number: Joi.number(),
+        number: Joi.number().integer().max(99),
         name: Joi.string(),
         code: Joi.string(),
         active: Joi.boolean(),
@@ -343,13 +444,14 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        releases: Joi.array().items(Release.Partial),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),
         updatedBy: Joi.string()
     }),
     Draft: Joi.object({
-        number: Joi.number().required(),
+        number: Joi.number().integer().max(99).required(),
         name: Joi.string().required(),
         code: Joi.string().required(),
         active: Joi.boolean().required(),
@@ -358,16 +460,17 @@ export const Project = {
         script: Joi.string(),
         type: Joi.string().required().valid(...Projects.types),
         cardCount: Joi.object({
-            baratheon: Joi.number().required(),
-            greyjoy: Joi.number().required(),
-            lannister: Joi.number().required(),
-            martell: Joi.number().required(),
-            thenightswatch: Joi.number().required(),
-            stark: Joi.number().required(),
-            targaryen: Joi.number().required(),
-            tyrell: Joi.number().required(),
-            neutral: Joi.number().required()
-        }).required(),
+            baratheon: Joi.number(),
+            greyjoy: Joi.number(),
+            lannister: Joi.number(),
+            martell: Joi.number(),
+            thenightswatch: Joi.number(),
+            stark: Joi.number(),
+            targaryen: Joi.number(),
+            tyrell: Joi.number(),
+            neutral: Joi.number()
+        }),
+        releases: Joi.array().items(Release.Partial),
         version: Joi.number().required(),
         milestone: Joi.number(),
         mandateUrl: Joi.string(),

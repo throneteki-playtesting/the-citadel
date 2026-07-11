@@ -18,13 +18,13 @@ const syncCardForumMutex = new Mutex();
  * Note: Will not update the content of these messages - only create if missing
  * @param cards Cards to sync
  */
-export async function syncCardForum(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
+export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
     const release = await syncCardForumMutex.acquire();
     try {
         const context = await getCardForumContext();
         const results: IPlaytestCard[] = [];
         for (const card of cards) {
-            results.push(await syncCardThread(card, context));
+            results.push(await syncCardThread(card, context, forced));
         }
         return results;
     } finally {
@@ -32,12 +32,12 @@ export async function syncCardForum(cards: IPlaytestCard[]): Promise<IPlaytestCa
     }
 }
 
-async function syncCardThread(card: IPlaytestCard, context?: CardForumContext): Promise<IPlaytestCard> {
+async function syncCardThread(card: IPlaytestCard, context?: CardForumContext, forced: boolean = false): Promise<IPlaytestCard> {
     context = context ?? await getCardForumContext();
     const emitter = createSyncEmitter("card", "discord", card);
     try {
         emitter.start();
-        if (isMessageOutdated(card)) {
+        if (forced || isMessageOutdated(card)) {
             // Drafts & Regular releases are treated differently:
             // - Draft will send a new message to the existing thread, and can be incrementally updated (sends as new message)
             // - Regular will send a new thread, and shouldn't ever be updated (that's what drafts are for!)

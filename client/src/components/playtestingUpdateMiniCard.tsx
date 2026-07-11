@@ -30,7 +30,7 @@ export default function PlaytestingUpdateMiniCard({ className, style, playtestin
         const noteMap = cards?.reduce<Record<NoteType, number>>((map, card) => {
             if (card.note) map[card.note.type]++;
             return map;
-        }, { updated: 0, reworked: 0, replaced: 0 }) ?? {};
+        }, { updated: 0, reworked: 0, replaced: 0, wording: 0 }) ?? {};
         return { factionCounts, total, noteMap };
     }, [cards]);
 

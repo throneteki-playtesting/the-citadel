@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
 import Permission from "common/models/permissions";
-import { hasPermission } from "common/utils";
 import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
 import { dismoji } from "../../constants";
@@ -61,8 +60,6 @@ export const ProjectsSummary = () => {
 };
 
 function ProjectCard({ project }: ProjectCardProps) {
-    const { data: releasedData, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, release: { $exists: true } } });
-
     const navigate = useNavigate();
     const progress = useMemo(() => {
         if (!project) {
@@ -70,10 +67,10 @@ function ProjectCard({ project }: ProjectCardProps) {
         }
         // TODO: Improve this once we have better tracking metrics (eg. wording, art, etc.)
         const total = Object.values(project.cardCount).reduce((total, faction) => total + faction);
-        const released = releasedData?.total ?? 0;
+        const released = project.releases.filter((release) => release.releasedDate).reduce((sum, release) => sum + release.capacity, 0);
 
-        return (released / total) * 100;
-    }, [project, releasedData?.total]);
+        return total > 0 ? (released / total) * 100 : 0;
+    }, [project]);
 
     const statusChip = useMemo(() => {
         if (!project.active) {
@@ -90,52 +87,31 @@ function ProjectCard({ project }: ProjectCardProps) {
 
     return (
         <div
-            onClick={() => !isLoading && navigate(`/project/${project.number}`)}
+            onClick={() => navigate(`/project/${project.number}`)}
             className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors drop-shadow-lg"
         >
-            {isLoading
-                ? (
-                    <div className="bg-content1 border border-content3">
-                        <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2 space-y-2">
-                            <div className="flex-1 space-y-2">
-                                <Skeleton className="h-4 w-20 rounded-sm"/>
-                                <Skeleton className="h-8 w-56 rounded-sm"/>
-                                <Skeleton className="h-4 w-42 rounded-sm"/>
-                            </div>
-                            <div className="flex items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
-                                <Skeleton className="h-8 w-18 rounded-sm"/>
-                                <Skeleton className="h-8 w-64 rounded-sm"/>
-                            </div>
+            <div className="relative overflow-hidden">
+                <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
+                    <span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>
+                </div>
+                <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
+                    <div className="flex-1">
+                        <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
+                            #{project.number} · <span className="uppercase">{project.type} · Version {project.version}</span>
                         </div>
+                        <h2 className="text-xl sm:text-2xl tracking-widest font-cinzel text-foreground">{project.name}</h2>
                     </div>
-                )
-                : (
-                    <div className="relative overflow-hidden">
-                        <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
-                            <span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>
-                        </div>
-                        <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
-                            <div className="flex-1">
-                                <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
-                                    #{project.number} · <span className="uppercase">{project.type} · Version {project.version}</span>
-                                </div>
-                                <h2 className="text-xl sm:text-2xl tracking-widest font-cinzel text-foreground">{project.name}</h2>
-                            </div>
-                            <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
-                                {statusChip}
-                                <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
-                            </div>
-                        </div>
+                    <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                        {statusChip}
+                        <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
                     </div>
-                )
-            }
+                </div>
+            </div>
             <StatsGrid>
                 <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                <PermissionGate requires={(user) => hasPermission(user, Permission.READ_CARDS) || hasPermission(user, Permission.READ_LATEST_CARDS)}>
-                    <PacksStat project={project} />
-                </PermissionGate>
+                <ReleasesStat project={project} />
             </StatsGrid>
         </div>
     );
@@ -166,16 +142,18 @@ function ActiveDecksStat({ project }: ProjectStatProps) {
     return <StatCard label="Submitted Decks" value={decks.size} footer="through reviews" isLoading={isLoading}/>;
 }
 
-function PacksStat({ project }: ProjectStatProps) {
-    // TODO: Improve this when we have WIP packs implemented
-    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true, release: { $exists: true } } });
-    const packs = useMemo(() => [...new Set(data?.items.map((card) => card.release!.short))], [data?.items]);
-    const packChips = packs.length > 0 ? (
+function ReleasesStat({ project }: ProjectStatProps) {
+    if (project.type === "expansion") {
+        const isReleased = project.releases[0]?.status === "released";
+        return <StatCard label="Released" value={isReleased ? "Yes" : "No"} />;
+    }
+
+    const packChips = project.releases.length > 0 ? (
         <div className="flex flex-wrap gap-1">
-            {packs.map((pack) => <Chip key={pack} size="sm" variant="bordered">{pack}</Chip>)}
+            {project.releases.map((release) => <Chip key={release.code} size="sm" variant="bordered" className="">{release.code}</Chip>)}
         </div>) : <span className="text-lg font-crimson tracking-wider">None</span>;
 
-    return <StatCard label="Released Packs" value={packChips} isLoading={isLoading} />;
+    return <StatCard label="Releases" value={packChips} />;
 }
 type ProjectStatProps = {
     project: IProject;

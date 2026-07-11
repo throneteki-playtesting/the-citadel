@@ -5,6 +5,8 @@ import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
+import type { IProject } from "./models/projects";
+import type { ISlot } from "./models/slots";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -26,6 +28,7 @@ export const Regex = {
         }
     },
     SemanticVersion: /^\d+\.\d+\.\d+$/,
+    ReleaseDate: /^\d{4}-\d{2}-\d{2}$/,
     UUID: /^[0-9a-fA-F]{8}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{4}\b-[0-9a-fA-F]{12}$/,
     ThronesDB: {
         DeckLink: /^https:\/\/thronesdb\.com\/deck\/view\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
@@ -257,8 +260,32 @@ export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
     };
 }
 
-export function toJSONExportCard(card: Cards.IPlaytestCard) {
-    const imageUrl = card.release ? generateReleaseImageUrl(card.release.short, card.release.number, card.name) : card._metadata?.imageUrl;
+/** Sum of capacities of every release sequenced before the given release code */
+export function getReleaseOffset(project: Pick<IProject, "releases">, code: string): number {
+    const release = project.releases.find(r => r.code === code);
+    if (!release) {
+        return 0;
+    }
+    return project.releases
+        .filter(r => r.number < release.number)
+        .reduce((sum, r) => sum + r.capacity, 0);
+}
+
+/** Derived preview of a slot's printed number; the permanent value is stamped on the card at publish (IPlaytestCard.released) */
+export function getFinalCardNumber(project: Pick<IProject, "releases">, slot: Pick<ISlot, "release">): number | undefined {
+    if (!slot.release) {
+        return undefined;
+    }
+    return getReleaseOffset(project, slot.release.code) + slot.release.position;
+}
+
+/** A slot is only truly released once its pack has been published */
+export function isReleased(slot: Pick<ISlot, "release">): boolean {
+    return !!slot.release?.released;
+}
+
+export function toJSONExportCard(card: Cards.IPlaytestCard, release?: { short: string, number: number }) {
+    const imageUrl = release ? generateReleaseImageUrl(release.short, release.number, card.name) : card._metadata?.imageUrl;
     return {
         code: card.code,
         version: card.version,

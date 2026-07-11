@@ -37,6 +37,10 @@ export default defineConfig(({ command, mode }) => {
         },
         optimizeDeps: {
             exclude: ["@agot/card-preview"]
+        },
+        resolve: {
+            // A file:-linked @agot/card-preview has its own react copy in node_modules; force a single instance
+            dedupe: ["react", "react-dom"]
         }
     };
 });

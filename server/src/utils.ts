@@ -1,4 +1,6 @@
-import { ILabeledCard, IPlaytestCard, NoteType } from "common/models/cards";
+import { ILabeledCard, IPlaytestCard, NoteType, factions } from "common/models/cards";
+import { FactionCardCount } from "common/models/projects";
+import { ISlot } from "common/models/slots";
 import { IGetResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
@@ -11,8 +13,31 @@ import { SingleOrArray } from "common/types";
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     "replaced": "major",
     "reworked": "minor",
-    "updated": "patch"
+    "updated": "patch",
+    "wording": "patch"
 };
+
+/**
+ * Recalculates and persists IProject.cardCount from the actual slots collection.
+ * cardCount is a read cache only - slots are the source of truth for per-faction counts.
+ */
+export async function syncProjectCardCount(projectNumber: number) {
+    const slots = await dataService.slots.read({ project: projectNumber });
+    const cardCount = factions.reduce((acc, faction) => {
+        acc[faction] = slots.filter((slot) => slot.faction === faction).length;
+        return acc;
+    }, {} as FactionCardCount);
+
+    const [project] = await dataService.projects.read({ number: projectNumber });
+    return dataService.projects.update({ ...project, cardCount });
+}
+
+/** Evicts a slot back to the development pool by removing its release placement */
+export function clearRelease(slot: ISlot): ISlot {
+    const cleared = { ...slot };
+    delete cleared.release;
+    return cleared;
+}
 
 export function generateGetResponse<T>(items: T[], total?: number): IGetResponse<T> {
     return {

@@ -46,6 +46,13 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                         <span className="text-xs italic">Example: Removing a Winterfell card entirely to make room for a new White Harbor card.</span>
                     </div>
                 );
+            case "wording":
+                return (
+                    <div className="flex flex-col gap-1 p-1">
+                        <span className="text-sm">The card's gameplay and direction are unchanged - only its final text or traits have been refined for clarity, rules accuracy or print.</span>
+                        <span className="text-xs italic">Example: Rewording a trigger condition to match official templating ahead of release.</span>
+                    </div>
+                );
         }
     };
 

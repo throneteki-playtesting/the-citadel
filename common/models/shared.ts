@@ -1,3 +1,5 @@
+export type ReleaseDate = `${number}-${number}-${number}`;
+
 export interface IAuditable {
     created: Date,
     updated: Date,

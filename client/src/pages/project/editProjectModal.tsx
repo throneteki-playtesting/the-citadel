@@ -1,14 +1,12 @@
-import { FactionCardCount, IProject, types } from "common/models/projects";
+import { IProject, types } from "common/models/projects";
 import { addToast, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem, Textarea } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { Project } from "common/models/schemas";
-import CardCountEditor from "./cardCountEditor";
 import { useCreateProjectMutation, useLazyGetProjectQuery, useLazyGetProjectsQuery, useUpdateProjectMutation } from "../../api";
 import { EmojiSelect } from "../../components/emojiSelect";
-import { factions } from "common/models/cards";
 import { useWizard } from "../../components/wizard/context";
 
 const DefaultProjectValues: DeepPartial<IProject> = {
@@ -21,11 +19,6 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
     const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
     const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
     const [project, setProject] = useState<DeepPartial<IProject>>(DefaultProjectValues);
-    const [cardCount, setCardCount] = useState<DeepPartial<FactionCardCount>>({});
-
-    useEffect(() => {
-        setCardCount({ ...initial?.cardCount, ...Object.fromEntries(factions.map(f => [f, 0])) } as FactionCardCount);
-    }, [initial]);
 
     useEffect(() => {
         setProject(initial ?? DefaultProjectValues);
@@ -34,10 +27,8 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
     const isNew = useMemo(() => !initial?.number, [initial?.number]);
 
     const onSubmit = useCallback(async (project: IProject) => {
-        // setProject(project);
         try {
             const newProject = isNew ? await createProject(project).unwrap() : await updateProject(project).unwrap();
-            // setProject(newProject);
             onSave?.(newProject);
             onModalClose?.(true);
         } catch (err) {
@@ -60,7 +51,7 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
                             <WizardPage>
                                 <ProjectNameInput name={project.name} />
                                 <div className="grid grid-cols-2 gap-2 w-full">
-                                    <ProjectNumberInput number={project.number} />
+                                    <ProjectNumberInput number={project.number} isDisabled={!isNew}/>
                                     <Select
                                         name="type"
                                         label="Type"
@@ -74,11 +65,6 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
                                 </div>
                                 <Textarea name="description" label="Description" defaultValue={project.description}/>
                             </WizardPage>
-                            {project.draft === true &&
-                                <WizardPage controlledData={{ cardCount }}>
-                                    <CardCountEditor cardCount={cardCount} onChange={setCardCount}/>
-                                </WizardPage>
-                            }
                             <WizardPage>
                                 <span className="text-xl">Additional Details</span>
                                 <div className="text-sm">These details are not required, but help improve the quality and direction of a project.</div>
@@ -142,7 +128,7 @@ type ProjectNameInputProps = Omit<BaseElementProps, "children"> & {
     name?: string;
 }
 
-function ProjectNumberInput({ className, style, number: initial }: ProjectNumberInputProps) {
+function ProjectNumberInput({ className, style, number: initial, isDisabled }: ProjectNumberInputProps) {
     const [number, setNumber] = useState(initial);
     const { setError } = useWizard();
 
@@ -172,13 +158,16 @@ function ProjectNumberInput({ className, style, number: initial }: ProjectNumber
             label="Number"
             defaultValue={initial}
             minValue={0}
+            maxValue={99}
             onValueChange={setNumber}
+            isDisabled={isDisabled}
         />
     );
 }
 
 type ProjectNumberInputProps = Omit<BaseElementProps, "children"> & {
     number?: number;
+    isDisabled: boolean;
 }
 
 function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputProps) {

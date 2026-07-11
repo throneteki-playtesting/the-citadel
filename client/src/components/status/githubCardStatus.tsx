@@ -39,9 +39,9 @@ export default function GithubCardStatus({ className, style, project, number, ve
             };
         }
 
-        const syncFn = () => syncCardGithub({ project: card.project, number: card.number, version: card.version });
-        const onPress = hasSyncPermission ? syncFn : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+        const syncFn = (forced?: boolean) => syncCardGithub({ project: card.project, number: card.number, version: card.version, forced });
+        const onPress = hasSyncPermission ? () => syncFn() : undefined;
+        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: () => syncFn(true) }] : undefined;
 
 
         if (status === "error") {
@@ -53,7 +53,7 @@ export default function GithubCardStatus({ className, style, project, number, ve
                 description: error ?? "Failed to Sync"
             };
         }
-        if (card.release) {
+        if (card.latest && card.released) {
             return {
                 title,
                 icon: <ThronesIcon name="power"/>,

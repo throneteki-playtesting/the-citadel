@@ -14,12 +14,12 @@ import { Mutex } from "async-mutex";
 
 const syncIssuesMutex = new Mutex();
 
-export async function syncIssues(cards: IPlaytestCard[]): Promise<IPlaytestCard[]> {
+export async function syncIssues(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
     const release = await syncIssuesMutex.acquire();
     try {
         const results: IPlaytestCard[] = [];
         for (const card of cards) {
-            results.push(await syncIssue(card));
+            results.push(await syncIssue(card, forced));
         }
         return results;
     } finally {
@@ -27,7 +27,7 @@ export async function syncIssues(cards: IPlaytestCard[]): Promise<IPlaytestCard[
     }
 }
 
-async function syncIssue(card: IPlaytestCard): Promise<IPlaytestCard> {
+async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<IPlaytestCard> {
     const [project] = await dataService.projects.read({ number: card.project });
     const context = githubService.getContext();
     const emitter = createSyncEmitter("card", "github", card);
@@ -61,7 +61,7 @@ async function syncIssue(card: IPlaytestCard): Promise<IPlaytestCard> {
                 logger.info(`[Github] Missing issue found & attached to ${card.name} (${card.version})`);
             }
         }
-        if (isMissing || isIssueOutdated(card)) {
+        if (forced || isMissing || isIssueOutdated(card)) {
             emitter.progress("Syncing");
             if (isInitial(card)) {
                 card = await syncInitial(card, project);

@@ -1,10 +1,12 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
-import { IPlaytestingUpdate, IProject } from "common/models/projects";
+import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
+import { ReleaseDate } from "common/models/shared";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
-import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
+import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
+import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
 import { Role, SafeIntegration, User } from "common/models/auth";
 import { Mutex } from "async-mutex";
@@ -223,6 +225,13 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
+        moveCard: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, to: number }>({
+            query: ({ project, number, version, to }) => {
+                const url = buildUrl(`cards/${project}/${number}/${version}/move`);
+                return { url, method: "POST", body: { to } };
+            },
+            invalidatesTags: (result) => generateFor(result, "card")
+        }),
         // Suggestions API
         getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetRequest<ICardSuggestion> | void>({
             query: (options) => {
@@ -365,6 +374,98 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
+        // Slots API
+        getSlot: builder.query<ISlot, { project: number, number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}`);
+                return { url, method: "GET" };
+            },
+            providesTags: (result, _error, args) => generateFor(result, "slot", { includeList: false, args })
+        }),
+        getSlots: builder.query<IGetResponse<ISlot>, { project: number } & IGetRequest<ISlot>>({
+            query: ({ project, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots`, options);
+                return { url, method: "GET" };
+            },
+            providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
+        }),
+        createSlot: builder.mutation<ISlot, { project: number, faction: Faction }>({
+            query: ({ project, faction }) => {
+                const url = buildUrl(`projects/${project}/slots`);
+                return { url, method: "POST", body: { faction } };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        deleteSlot: builder.mutation<ISlot, { project: number, number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        updateSlot: builder.mutation<ISlot, { project: number, number: number } & Partial<Pick<ISlot, "type" | "notes" | "statuses">>>({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        assignSlotRelease: builder.mutation<{ slot: ISlot, evictedSlot?: ISlot }, { project: number, number: number, code: string | null, position?: number }>({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/release`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => [
+                ...generateFor(result?.slot, "slot"),
+                ...generateFor(result?.evictedSlot, "slot")
+            ]
+        }),
+        // Releases API
+        createRelease: builder.mutation<IProject, { project: number } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number">>({
+            query: ({ project, ...body }) => {
+                const url = buildUrl(`projects/${project}/releases`);
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "project")
+        }),
+        updateRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number">>({
+            query: ({ project, ...body }) => {
+                const url = buildUrl(`projects/${project}/releases/${body.code}`);
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (result) => [
+                ...generateFor(result?.project, "project"),
+                ...generateFor(result?.evictedSlots, "slot")
+            ]
+        }),
+        reorderReleases: builder.mutation<IProject, { project: number, codes: string[] }>({
+            query: ({ project, codes }) => {
+                const url = buildUrl(`projects/${project}/releases/reorder`);
+                return { url, method: "PATCH", body: { codes } };
+            },
+            invalidatesTags: (result) => generateFor(result, "project")
+        }),
+        publishRelease: builder.mutation<IProject, { project: number, code: string, releasedDate: ReleaseDate }>({
+            query: ({ project, code, ...body }) => {
+                const url = buildUrl(`projects/${project}/releases/${code}/publish`);
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => [
+                ...generateFor(result, "project"),
+                { type: "slot" as const, id: "LIST" },
+                { type: "card" as const, id: "LIST" }
+            ]
+        }),
+        deleteRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number, code: string }>({
+            query: ({ project, code }) => {
+                const url = buildUrl(`projects/${project}/releases/${code}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => [
+                ...generateFor(result?.project, "project"),
+                ...generateFor(result?.evictedSlots, "slot")
+            ]
+        }),
         // Playtesting Update API
         getPlaytestingUpdates: builder.query<IGetResponse<IPlaytestingUpdate>, IGetRequest<IPlaytestingUpdate> | void>({
             query: (options) => {
@@ -423,37 +524,37 @@ const api = createApi({
             providesTags: (results) => generateFor(results, "card")
         }),
         // Syncing API
-        syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean }>({
-            query: (options) => {
-                const url = buildUrl(`projects/${options.project}/sync/image`, { number: options.number, version: options.version, latest: options.latest });
+        syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean, forced?: boolean }>({
+            query: ({ project, number, version, latest, forced }) => {
+                const url = buildUrl(`projects/${project}/sync/image`, { number, version, latest, forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardImage: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
-            query: (options) => {
-                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/image`);
+        syncCardImage: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+            query: ({ project, number, version, forced }) => {
+                const url = buildUrl(`cards/${project}/${number}/${version}/sync/image`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardDiscord: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
-            query: (options) => {
-                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/discord`);
+        syncCardDiscord: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+            query: ({ project, number, version, forced }) => {
+                const url = buildUrl(`cards/${project}/${number}/${version}/sync/discord`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardGithub: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
-            query: (options) => {
-                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/sync/github`);
+        syncCardGithub: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+            query: ({ project, number, version, forced }) => {
+                const url = buildUrl(`cards/${project}/${number}/${version}/sync/github`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncPlaytestingUpdateGithub: builder.mutation<IPlaytestingUpdate[], { project: number, version: number, type: "code" | "data" }>({
-            query: ({ project, version, type }) => {
-                const url = buildUrl(`playtesting-updates/${project}/${version}/sync/github/${type}`);
+        syncPlaytestingUpdateGithub: builder.mutation<IPlaytestingUpdate[], { project: number, version: number, type: "code" | "data", forced?: boolean }>({
+            query: ({ project, version, type, forced }) => {
+                const url = buildUrl(`playtesting-updates/${project}/${version}/sync/github/${type}`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => {
@@ -470,9 +571,9 @@ const api = createApi({
                 return tags;
             }
         }),
-        syncReviewDiscord: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
-            query: (options) => {
-                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}/sync/discord`);
+        syncReviewDiscord: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string, forced?: boolean }>({
+            query: ({ project, number, version, reviewer, forced }) => {
+                const url = buildUrl(`reviews/${project}/${number}/${version}/${reviewer}/sync/discord`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "review")
@@ -542,6 +643,7 @@ export const {
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
     useDeleteDraftMutation,
+    useMoveCardMutation,
 
     useGetSuggestionsQuery,
     useGetSuggestionsByQuery,
@@ -563,6 +665,20 @@ export const {
     useUpdateProjectMutation,
     useDeleteProjectMutation,
     useArchiveProjectMutation,
+
+    useGetSlotQuery,
+    useGetSlotsQuery,
+    useLazyGetSlotsQuery,
+    useCreateSlotMutation,
+    useDeleteSlotMutation,
+    useUpdateSlotMutation,
+    useAssignSlotReleaseMutation,
+
+    useCreateReleaseMutation,
+    useUpdateReleaseMutation,
+    useReorderReleasesMutation,
+    usePublishReleaseMutation,
+    useDeleteReleaseMutation,
 
     useGetPlaytestingUpdatesQuery,
     useGetPlaytestingUpdateQuery,

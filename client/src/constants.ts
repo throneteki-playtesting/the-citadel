@@ -2,6 +2,7 @@ import { Faction } from "common/models/cards";
 import { ChangeType } from "common/types";
 import * as discordEmojis from "discord-emoji";
 import { IPlaytestReview, StatementAnswer } from "common/models/reviews";
+import { ReleaseStatus } from "common/models/projects";
 
 export const factionBorderClasses: Record<Faction, string> = {
     baratheon: "border-baratheon/30",
@@ -13,6 +14,18 @@ export const factionBorderClasses: Record<Faction, string> = {
     targaryen: "border-targaryen",
     tyrell: "border-tyrell/30",
     neutral: "border-neutral/30"
+};
+
+export const factionBgClasses: Record<Faction, string> = {
+    baratheon: "bg-baratheon/10",
+    greyjoy: "bg-greyjoy/10",
+    lannister: "bg-lannister/10",
+    martell: "bg-martell/10",
+    thenightswatch: "bg-thenightswatch/10",
+    stark: "bg-stark/10",
+    targaryen: "bg-targaryen/10",
+    tyrell: "bg-tyrell/10",
+    neutral: "bg-neutral/10"
 };
 
 export const watermarkClasses: Record<string, string> = {
@@ -39,13 +52,21 @@ export const factionBarClasses: Record<Faction, string> = {
     neutral: "bg-neutral/50"
 };
 
+export const releaseStatusColors: Record<ReleaseStatus, "default" | "warning" | "secondary" | "success"> = {
+    planning: "default",
+    confirming: "warning",
+    approved: "secondary",
+    released: "success"
+};
+
 export const changeTypeClasses: Record<ChangeType, string> = {
     new: "border-success-300 bg-success-100 text-success-700",
     draft: "border-secondary-300 bg-secondary-100 text-secondary-700",
     preview: "border-secondary-300 bg-secondary-100 text-secondary-700",
     updated: "border-secondary-300 bg-secondary-100 text-secondary-700",
     reworked: "border-warning-300 bg-warning-100 text-warning-700",
-    replaced: "border-danger-300 bg-danger-100 text-danger-700"
+    replaced: "border-danger-300 bg-danger-100 text-danger-700",
+    wording: "border-primary-300 bg-primary-100 text-primary-700"
 };
 
 
@@ -69,6 +90,7 @@ export const emojis = {
     replaced: "twisted_rightwards_arrows",
     reworked: "arrows_clockwise",
     updated: "arrow_double_up",
+    wording: "pencil2",
     bugfixed: "wrench",
     other: "eight_spoked_asterisk"
 } as { [emoji: string]: string };

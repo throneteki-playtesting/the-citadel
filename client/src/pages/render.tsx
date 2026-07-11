@@ -22,11 +22,14 @@ const Render = () => {
     const generateSingleSheet = (job: SingleRenderJob) => {
         const orientation = job.options?.orientation;
         const rounded = job.options?.rounded;
-        return job.data.map(({ id, card }) =>
-            <div key={id} data-card-id={id} className="w-[240px] h-[333px]">
-                <CardPreview card={card} rounded={rounded ?? false} orientation={orientation}/>
-            </div>
-        );
+        return job.data.map(({ id, card }) => {
+            const wrapperOrientation = orientation ?? card.type === "plot" ? "horizontal" : "vertical";
+            return (
+                <div key={id} data-card-id={id} className={wrapperOrientation === "horizontal" ? "w-[333px] h-[240px]" : "w-[240px] h-[333px]"}>
+                    <CardPreview card={card} rounded={rounded ?? false} orientation={orientation}/>
+                </div>
+            );
+        });
     };
 
     const generateBatchSheet = (job: BatchRenderJob) => {

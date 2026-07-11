@@ -39,9 +39,11 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
         return Array.isArray(updating) ? data : data[0];
     }
 
-    public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>) {
+    public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>, sync: boolean = true) {
         let data = await super.destroy(destroying);
-        data = await this.desync(data);
+        if (sync) {
+            data = await this.desync(data);
+        }
         return data;
     }
 

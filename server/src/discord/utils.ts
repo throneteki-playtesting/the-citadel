@@ -24,6 +24,7 @@ export const emojis = {
     replaced: ":twisted_rightwards_arrows:",
     reworked: ":arrows_clockwise:",
     updated: ":arrow_double_up:",
+    wording: ":pencil2:",
     bugfixed: ":wrench:",
     other: ":eight_spoked_asterisk:",
     "strongly agree": ":thumbsup::thumbsup:",

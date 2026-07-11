@@ -1,10 +1,13 @@
 import { SemanticVersion } from "common/utils";
-import { IAuditable } from "./shared";
+import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
 export const githubStatuses = ["open", "closed"] as const;
+export const releaseStatuses = ["planning", "confirming", "approved", "released"] as const;
+export const articleStatuses = ["pending", "drafted", "published"] as const;
 export type Type = typeof types[number];
 export type Code = `${number}`;
+export type ReleaseStatus = typeof releaseStatuses[number];
 
 export interface IProject extends IAuditable {
     number: number,
@@ -15,12 +18,31 @@ export interface IProject extends IAuditable {
     description?: string,
     type: Type,
     script?: string, // TODO: Remove legacy script
+    /** Server-maintained cache of slot counts per faction - not directly user-editable */
     cardCount: FactionCardCount
     version: number,
     milestone?: number,
     mandateUrl?: string,
     formUrl?: string,
-    emoji?: string
+    emoji?: string,
+    releases: IProjectRelease[]
+}
+
+export interface IProjectRelease extends IAuditable {
+    code: string,
+    name: string,
+    /** Pack sequence within the project (1, 2, 3...); always 1 for expansions */
+    number: number,
+    /** Target pack size - drives placeholder count and printed-number derivation */
+    capacity: number,
+    plannedDate?: ReleaseDate,
+    /** Set by publish; once set, the whole release is immutable */
+    releasedDate?: ReleaseDate,
+    status: ReleaseStatus,
+    article?: {
+        url?: string,
+        status: typeof articleStatuses[number]
+    }
 }
 
 export type FactionCardCount = {

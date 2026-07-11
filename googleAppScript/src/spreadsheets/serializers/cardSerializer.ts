@@ -38,13 +38,9 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
                 text: values[CardColumn.NoteText]
             } : undefined,
             // playtesting: values[CardColumn.PlaytestVersion] || undefined,
-            _metadata: this.extractLinkText(values[CardColumn.GithubIssue], (link, text) => ({ github: { status: text, issueUrl: link } })) || undefined,
-            release: values[CardColumn.PackShort] ? {
-                short: values[CardColumn.PackShort],
-                number: parseInt(values[CardColumn.ReleaseNumber])
-            } : undefined
+            _metadata: this.extractLinkText(values[CardColumn.GithubIssue], (link, text) => ({ github: { status: text, issueUrl: link } })) || undefined
         } as Card.IPlaytestCard;
-        model.code = parseCardCode(!!model.release, project, model.number);
+        model.code = parseCardCode(false, project, model.number);
 
         switch (model.type) {
             case "character":
@@ -94,8 +90,9 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
         values[CardColumn.NoteText] = model.note?.text || "";
         // values[CardColumn.PlaytestVersion] = model.playtesting || "";
         values[CardColumn.GithubIssue] = model._metadata?.github ? `<a href="${model._metadata.github.issueUrl}">${model._metadata.github.status}</a>` : "";
-        values[CardColumn.PackShort] = model.release?.short || "";
-        values[CardColumn.ReleaseNumber] = model.release?.number.toString() || "";
+        // Release columns are no longer mapped (release info lives on slots/releases)
+        values[CardColumn.PackShort] = "";
+        values[CardColumn.ReleaseNumber] = "";
 
         switch (model.type) {
             case "character":
@@ -174,8 +171,6 @@ class CardSerializer extends DataSerializer<Card.IPlaytestCard> {
             && compare(filter.note?.type, values[CardColumn.NoteType])
             && compare(filter.note?.text, values[CardColumn.NoteText])
             && compare(filter._metadata?.github?.status, values[CardColumn.GithubIssue])
-            && compare(filter.release?.short, values[CardColumn.PackShort])
-            && compare(filter.release?.number, values[CardColumn.ReleaseNumber])
             // More expensive checks at the end
             && (!filter.icons || filter.icons?.military && values[CardColumn.Icons].includes("M"))
             && (!filter.icons || filter.icons?.intrigue && values[CardColumn.Icons].includes("I"))

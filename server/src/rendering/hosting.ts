@@ -23,13 +23,15 @@ const client = new S3Client({
 
 const syncImageMutex = new Mutex();
 
-export async function syncImage(card: IPlaytestCard): Promise<IPlaytestCard>
-export async function syncImage(cards: IPlaytestCard[]): Promise<IPlaytestCard[]>
-export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
-    const release = await syncImageMutex.acquire();
+export async function syncImage(card: IPlaytestCard, forced?: boolean): Promise<IPlaytestCard>
+export async function syncImage(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]>
+export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: boolean = false) {
+    const unlock = await syncImageMutex.acquire();
     try {
         let cards = asArray(data);
         const uploaded: string[] = [];
+
+        const releaseFor = (card: IPlaytestCard) => card.released && { short: card.released.code, number: card.released.number };
 
         const packages = await Promise.all(
             cards.map(async (card) => {
@@ -37,13 +39,14 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
                 try {
                     emitter.start();
                     emitter.progress("Checking");
-                    const isOutdated = await isImageOutdated(card);
+                    const isOutdated = forced ? true : await isImageOutdated(card);
                     emitter.progress("Processing");
                     const render = isOutdated ? renderPlaytestingCard(card) : null;
                     const key = render?.key ?? `${card.code}@${card.version}`;
                     return {
                         key,
                         card,
+                        release: releaseFor(card),
                         render,
                         emitter
                     };
@@ -54,7 +57,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
             })
         );
         const renders = packages
-            .filter(({ card, render }) => render && !card.release)
+            .filter(({ render, release }) => render && !release)
             .map(({ render }) => render);
 
         const buffers = (await asPNG(renders)).reduce<Record<string, Buffer<ArrayBufferLike>>>((all, response) => {
@@ -62,10 +65,10 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
             return all;
         }, {});
 
-        const promises = packages.map(async ({ key, card, emitter }) => {
+        const promises = packages.map(async ({ key, card, release, emitter }) => {
             try {
-                if (card.release) {
-                    const releaseImageUrl = generateReleaseImageUrl(card.release.short, card.release.number, card.name);
+                if (release) {
+                    const releaseImageUrl = generateReleaseImageUrl(release.short, release.number, card.name);
                     merge(card, { _metadata: { imageUrl: releaseImageUrl } });
                     const response = await fetch(releaseImageUrl, { method: "HEAD" });
                     if (!response.ok) {
@@ -100,7 +103,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>) {
         cards = await dataService.cards.update(packages.map(({ card }) => card), false, false, false);
         return Array.isArray(data) ? cards : cards[0];
     } finally {
-        release();
+        unlock();
     }
 }
 

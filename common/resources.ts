@@ -2,8 +2,9 @@ import { ICardSuggestion, IPlaytestCard } from "./models/cards";
 import { IPlaytestingUpdate, IProject } from "./models/projects";
 import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
+import { ISlot } from "./models/slots";
 
-export type ResourceType = "user" | "role" | "integration" | "card" | "suggestion" | "project" | "playtestingUpdate" | "review";
+export type ResourceType = "user" | "role" | "integration" | "card" | "suggestion" | "project" | "playtestingUpdate" | "review" | "slot";
 
 export interface ResourceDataMap {
     user: User;
@@ -14,6 +15,7 @@ export interface ResourceDataMap {
     project: IProject;
     playtestingUpdate: IPlaytestingUpdate;
     review: IPlaytestReview;
+    slot: ISlot;
 }
 
 export const resourceIdFuncs: { [K in ResourceType]: (resource: ResourceDataMap[K]) => string } = {
@@ -24,5 +26,6 @@ export const resourceIdFuncs: { [K in ResourceType]: (resource: ResourceDataMap[
     suggestion: (s) => String(s.id),
     project: (p) => String(p.number),
     playtestingUpdate: (u) => `${u.project}|${u.version}`,
-    review: (r) => `${r.project}|${r.number}|${r.version}|${r.reviewer}`
+    review: (r) => `${r.project}|${r.number}|${r.version}|${r.reviewer}`,
+    slot: (s) => `${s.project}|${s.number}`
 };

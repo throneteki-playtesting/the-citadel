@@ -1,24 +1,29 @@
 import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
-import { addToast, Skeleton } from "@heroui/react";
+import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import EditProjectModal from "./editProjectModal";
 import { useNavigate } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
-import ProjectContent from "./projectContent";
+import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
+import ProjectReleases from "./releases/projectReleases";
 import classNames from "classnames";
 import { dismoji } from "../../constants";
 import Error from "../../components/error";
 import usePageTitle from "../../hooks/usePageTitle";
+import Permission from "common/models/permissions";
+import { usePermission } from "../../hooks/usePermission";
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number });
     usePageTitle(project ? project.code : undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [tab, setTab] = useState<"development" | "releases">("development");
     const navigate = useNavigate();
+    const canViewReleases = usePermission(Permission.READ_SLOTS);
 
     if (isLoading) {
         return (
@@ -38,11 +43,27 @@ export default function ProjectDetail({ className, style, project: number }: Pro
         </div>
         <div className="relative space-y-2">
             <ProjectHeader project={project} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
-            {
-                project?.draft
-                    ? <ProjectDrafting project={project} />
-                    : <ProjectContent project={project} />
-            }
+            {project.draft ? (
+                <ProjectDrafting project={project} />
+            ) : canViewReleases ? (
+                <Tabs
+                    selectedKey={tab}
+                    onSelectionChange={(key) => setTab(key as "development" | "releases")}
+                    aria-label="Project Sections"
+                    variant="underlined"
+                    color="primary"
+                    destroyInactiveTabPanel={false}
+                >
+                    <Tab key="development" title="Development">
+                        <ProjectDevelopment project={project} />
+                    </Tab>
+                    <Tab key="releases" title="Releases">
+                        <ProjectReleases project={project} />
+                    </Tab>
+                </Tabs>
+            ) : (
+                <ProjectDevelopment project={project} />
+            )}
         </div>
         <EditProjectModal isOpen={isEditing} project={project} onClose={() => setIsEditing(false)} onSave={(project) => addToast({ title: "Successfully saved", color: "success", description: `${project.name} has been updated` })}/>
         {project && <DeleteProjectModal isOpen={isDeleting} project={project} onClose={() => setIsDeleting(false)} onDelete={(project) => {

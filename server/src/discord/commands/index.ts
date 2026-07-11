@@ -53,7 +53,9 @@ export class AutoCompleteHelper {
                 // Choices should be cards
                 let cards = await dataService.cards.read({ project });
                 // Manually filter out released cards (as their codes are different to dev version)
-                cards = cards.filter((card) => !card.release);
+                const slots = cards.length > 0 ? await dataService.slots.read(cards.map((card) => ({ project: card.project, number: card.number }))) : [];
+                const releasedSlots = new Set(slots.filter((slot) => slot.release).map((slot) => `${slot.project}|${slot.number}`));
+                cards = cards.filter((card) => !releasedSlots.has(`${card.project}|${card.number}`));
                 // Reverse to ensure the latest cards are added first
                 choices = sortBy(cards, ["project", "number"])
                     .reduce((chs, card) => {
