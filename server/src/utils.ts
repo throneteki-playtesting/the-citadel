@@ -1,6 +1,7 @@
 import { ILabeledCard, IPlaytestCard, NoteType, factions } from "common/models/cards";
-import { FactionCardCount } from "common/models/projects";
+import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
+import { getReleaseCapacity } from "common/utils";
 import { IGetResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
@@ -30,6 +31,41 @@ export async function syncProjectCardCount(projectNumber: number) {
 
     const [project] = await dataService.projects.read({ number: projectNumber });
     return dataService.projects.update({ ...project, cardCount });
+}
+
+/**
+ * Builds the single fixed release for an expansion project, with every slot assigned a position -
+ * faction blocks follow the canonical faction order, and slots are ordered by number within each.
+ */
+export function buildExpansionRelease(project: IProject, slots: ISlot[], principalId: string): { release: IProjectRelease, assignedSlots: ISlot[] } {
+    const allocations = factions
+        .map((faction) => ({ faction, count: slots.filter((slot) => slot.faction === faction).length }))
+        .filter((allocation) => allocation.count > 0);
+
+    const now = new Date();
+    const release: IProjectRelease = {
+        code: project.code,
+        name: project.name,
+        number: 1,
+        capacity: getReleaseCapacity(allocations),
+        slots: allocations,
+        status: "planning",
+        created: now,
+        createdBy: principalId,
+        updated: now,
+        updatedBy: principalId
+    };
+
+    let position = 1;
+    const assignedSlots: ISlot[] = [];
+    for (const { faction } of allocations) {
+        const factionSlots = slots.filter((slot) => slot.faction === faction).sort((a, b) => a.number - b.number);
+        for (const slot of factionSlots) {
+            assignedSlots.push({ ...slot, release: { code: release.code, position: position++ } });
+        }
+    }
+
+    return { release, assignedSlots };
 }
 
 /** Evicts a slot back to the development pool by removing its release placement */

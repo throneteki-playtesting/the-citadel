@@ -4,37 +4,34 @@ import PermissionGate from "../../../components/permissionGate";
 import { IProject } from "common/models/projects";
 import { BaseElementProps } from "../../../types";
 import { useCallback, useMemo, useState } from "react";
-import { useGetCardsQuery, useInitialiseProjectMutation } from "../../../api";
+import { useGetCardsQuery, useGetSlotsQuery, useInitialiseProjectMutation } from "../../../api";
 import { faCrow, faExclamationCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 
 export default function ProjectHeaderDraftNotice({ className, style, project }: ProjectHeaderDraftNoticeProps) {
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, draft: true } });
+    const { data: slotsData } = useGetSlotsQuery({ project: project.number });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [initialiseProject, { isLoading: isInitialising }] = useInitialiseProjectMutation();
 
     const errorMessage = useMemo(() => {
-        if (!project || !project.draft || !cardsData) {
+        if (!project || !project.draft || !cardsData || !slotsData) {
             return false;
         }
 
-        const totalSlots = Object.values(project.cardCount).reduce((arr, num) => arr + num, 0);
-        const slotCounts = Array.from({ length: totalSlots }, (_, i) => i + 1).reduce((acc, num) => {
-            acc[num] = cardsData.items.filter(item => item.number === num).length;
-            return acc;
-        }, {} as Record<number, number>);
+        const slotCounts = slotsData.items.map((slot) => cardsData.items.filter((item) => item.number === slot.number).length);
 
-        if (Object.entries(slotCounts).some(([, count]) => count === 0)) {
+        if (slotCounts.some((count) => count === 0)) {
             return "You cannot initialise a project without filling all available card slots. Either add cards to all missing slots, or remove empty slots.";
         }
 
-        if (Object.entries(slotCounts).some(([, count]) => count > 1)) {
+        if (slotCounts.some((count) => count > 1)) {
             return "You cannot initialise a project with multiple card options available. Ensure each card slot has only have a single card remaining.";
         }
 
         return null;
-    }, [cardsData, project]);
+    }, [cardsData, slotsData, project]);
 
     const onSubmit = useCallback(async () => {
         try {

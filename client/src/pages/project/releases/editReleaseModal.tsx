@@ -39,8 +39,14 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
     const [release, setRelease] = useState<DeepPartial<IProjectRelease>>({});
     const [template, setTemplate] = useState<ReleaseTemplate>("chapterPack");
 
+    // An expansion's release has fixed server-maintained slot counts - only the faction order is
+    // editable, so zero-count factions are never padded in
+    const isExpansion = project.type === "expansion";
+
     useEffect(() => {
-        const slots = normalizeSlots(initial?.slots);
+        const slots = isExpansion
+            ? (initial?.slots ?? []).filter((allocation): allocation is ReleaseSlotAllocation => !!allocation?.faction && (allocation.count ?? 0) > 0)
+            : normalizeSlots(initial?.slots);
         setRelease({
             code: initial?.code,
             name: initial?.name,
@@ -50,7 +56,7 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
             article: initial?.article
         });
         setTemplate(inferReleaseTemplate(slots));
-    }, [initial, project]);
+    }, [initial, project, isExpansion]);
 
     const isNew = !initial?.code;
 
@@ -68,7 +74,9 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
                 project: project.number,
                 ...release
             };
-            const result = isNew ? await createRelease(body).unwrap() : await updateRelease(body).unwrap();
+            const result = isNew
+                ? await createRelease(body).unwrap()
+                : await updateRelease({ ...body, originalCode: initial!.code! }).unwrap();
             onSave?.(result);
             onModalClose?.(true);
         } catch {
@@ -95,26 +103,28 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
                                         value={release.name ?? ""}
                                         onValueChange={(name) => setRelease((prev) => ({ ...prev, name }))}
                                     />
-                                    <div className="grid grid-cols-2 gap-2 w-full">
+                                    <div className={classNames("gap-2 w-full", isExpansion ? "flex" : "grid grid-cols-2")}>
                                         <Input
                                             name="code"
                                             label="Code"
                                             description="Short pack code, eg. WoW"
                                             value={release.code ?? ""}
-                                            isDisabled={!isNew}
+                                            isDisabled={!isNew && !isExpansion}
                                             onValueChange={(code) => setRelease((prev) => ({ ...prev, code }))}
                                         />
-                                        <Select
-                                            label="Template"
-                                            description="Determines each faction's slots in this pack"
-                                            disallowEmptySelection
-                                            selectedKeys={[template]}
-                                            onSelectionChange={(keys) => onSelectTemplate([...keys][0] as ReleaseTemplate)}
-                                        >
-                                            {Object.entries(releaseTemplates).map(([key, { name, description }]) => (
-                                                <SelectItem key={key} classNames={{ description: "whitespace-normal" }} description={description}>{name}</SelectItem>
-                                            ))}
-                                        </Select>
+                                        {!isExpansion && (
+                                            <Select
+                                                label="Template"
+                                                description="Determines each faction's slots in this pack"
+                                                disallowEmptySelection
+                                                selectedKeys={[template]}
+                                                onSelectionChange={(keys) => onSelectTemplate([...keys][0] as ReleaseTemplate)}
+                                            >
+                                                {Object.entries(releaseTemplates).map(([key, { name, description }]) => (
+                                                    <SelectItem key={key} classNames={{ description: "whitespace-normal" }} description={description}>{name}</SelectItem>
+                                                ))}
+                                            </Select>
+                                        )}
                                     </div>
                                     <Select
                                         name="status"
@@ -134,10 +144,11 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
                                         onChange={(date) => setRelease((prev) => ({ ...prev, plannedDate: date ? date.toString() as ReleaseDate : undefined }))}
                                     />
                                 </WizardPage>
-                                {template === "custom" && (
+                                {(isExpansion || template === "custom") && (
                                     <WizardPage controlledData={{ slots: release.slots }}>
                                         <FactionSlotsEditor
-                                            slots={normalizeSlots(release.slots)}
+                                            slots={isExpansion ? (release.slots ?? []) as ReleaseSlotAllocation[] : normalizeSlots(release.slots)}
+                                            lockCounts={isExpansion}
                                             onChange={(slots) => setRelease((prev) => ({ ...prev, slots }))}
                                         />
                                     </WizardPage>
@@ -165,7 +176,7 @@ type EditReleaseModalProps = Omit<BaseElementProps, "children"> & {
 
 // Orderable per-faction slot allocations - drag to set the faction order within the pack, with
 // positions assigned top-to-bottom
-function FactionSlotsEditor({ slots, onChange }: FactionSlotsEditorProps) {
+function FactionSlotsEditor({ slots, lockCounts = false, onChange }: FactionSlotsEditorProps) {
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 3 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
@@ -190,7 +201,11 @@ function FactionSlotsEditor({ slots, onChange }: FactionSlotsEditorProps) {
 
     return (
         <div className="w-full flex flex-col gap-2">
-            <div className="text-sm text-foreground/50">Set how many slots each faction gets, and drag to order them within the pack.</div>
+            <div className="text-sm text-foreground/50">
+                {lockCounts
+                    ? "Drag to order each faction within the release - slot counts are fixed by the project's cards. Reordering moves every card to its newly calculated position."
+                    : "Set how many slots each faction gets, and drag to order them within the pack."}
+            </div>
             <DndContext sensors={sensors} modifiers={[restrictToVerticalAxis, restrictToParentElement]} onDragEnd={onDragEnd}>
                 <SortableContext items={slots.map((allocation) => allocation.faction)} strategy={verticalListSortingStrategy}>
                     <div className="flex flex-col gap-1">
@@ -198,6 +213,7 @@ function FactionSlotsEditor({ slots, onChange }: FactionSlotsEditorProps) {
                             <FactionSlotRow
                                 key={allocation.faction}
                                 allocation={allocation}
+                                lockCount={lockCounts}
                                 onCountChange={(count) => onCountChange(allocation.faction, count)}
                             />
                         ))}
@@ -210,10 +226,11 @@ function FactionSlotsEditor({ slots, onChange }: FactionSlotsEditorProps) {
 }
 type FactionSlotsEditorProps = {
     slots: ReleaseSlotAllocation[];
+    lockCounts?: boolean;
     onChange: (slots: ReleaseSlotAllocation[]) => void;
 }
 
-function FactionSlotRow({ allocation, onCountChange }: FactionSlotRowProps) {
+function FactionSlotRow({ allocation, lockCount, onCountChange }: FactionSlotRowProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: allocation.faction });
     const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -239,6 +256,7 @@ function FactionSlotRow({ allocation, onCountChange }: FactionSlotRowProps) {
                 className="w-24 shrink-0"
                 minValue={0}
                 value={allocation.count}
+                isDisabled={lockCount}
                 onValueChange={onCountChange}
             />
         </div>
@@ -246,5 +264,6 @@ function FactionSlotRow({ allocation, onCountChange }: FactionSlotRowProps) {
 }
 type FactionSlotRowProps = {
     allocation: ReleaseSlotAllocation;
+    lockCount?: boolean;
     onCountChange: (count: number) => void;
 }

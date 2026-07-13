@@ -11,13 +11,15 @@ import { migration as cardsMigration } from "./migrations/002_cards";
 import { migration as reviewsMigration } from "./migrations/003_reviews";
 import { migration as playtestingUpdatesMigration } from "./migrations/004_playtestingUpdates";
 import { migration as metadataMigration } from "./migrations/005_metadata";
+import { migration as expansionReleasesMigration } from "./migrations/006_expansionReleases";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
     cardsMigration,
     reviewsMigration,
     playtestingUpdatesMigration,
-    metadataMigration
+    metadataMigration,
+    expansionReleasesMigration
 ];
 
 const args = process.argv.slice(2);

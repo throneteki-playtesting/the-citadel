@@ -197,6 +197,9 @@ router.patch("/:slot/release",
         const updates: ISlot[] = [];
 
         if (code === null) {
+            if (project.type === "expansion") {
+                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Expansion cards cannot be removed from the release - expansions have no development pool");
+            }
             updates.push(clearRelease(slot));
         } else {
             const targetRelease = project.releases.find((r) => r.code === code);

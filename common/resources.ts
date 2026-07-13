@@ -18,7 +18,19 @@ export interface ResourceDataMap {
     slot: ISlot;
 }
 
-export const resourceIdFuncs: { [K in ResourceType]: (resource: ResourceDataMap[K]) => string } = {
+type ResourceIdKeys = {
+    user: "discordId";
+    role: "discordId";
+    integration: "id";
+    card: "project" | "number" | "version";
+    suggestion: "id";
+    project: "number";
+    playtestingUpdate: "project" | "version";
+    review: "project" | "number" | "version" | "reviewer";
+    slot: "project" | "number";
+};
+
+export const resourceIdFuncs: { [K in ResourceType]: (resource: Pick<ResourceDataMap[K], Extract<ResourceIdKeys[K], keyof ResourceDataMap[K]>>) => string } = {
     user: (u) => u.discordId,
     role: (r) => r.discordId,
     integration: (i) => i.id,

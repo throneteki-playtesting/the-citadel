@@ -4,6 +4,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IProject, IProjectRelease } from "common/models/projects";
+import { factions } from "common/models/cards";
 import { ReleaseDate } from "common/models/shared";
 import { getReleaseCapacity, getReleaseOffset, Regex } from "common/utils";
 import { isEqual } from "lodash-es";
@@ -28,6 +29,12 @@ function assertNotLocked(release: IProjectRelease | undefined, code: string) {
     }
 }
 
+function assertNotExpansion(project: IProject, action: string) {
+    if (project.type === "expansion") {
+        throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", `Expansion projects have a single fixed release which cannot be ${action}`);
+    }
+}
+
 // Create a new release (pack)
 router.post("/",
     validateRequest(Permission.CREATE_RELEASES),
@@ -39,6 +46,8 @@ router.post("/",
     asyncHandler<{ number: number }, unknown, IProjectRelease, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.body;
+
+        assertNotExpansion(project, "added to");
 
         if (project.releases.some((r) => r.code === code)) {
             throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", `Release "${code}" already exists for project #${project.number}`);
@@ -82,6 +91,8 @@ router.patch("/reorder",
     asyncHandler<{ number: number }, unknown, { codes: string[] }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { codes } = req.body;
+
+        assertNotExpansion(project, "reordered");
 
         const unreleased = project.releases.filter((r) => !r.releasedDate);
         const unreleasedCodes = new Set(unreleased.map((r) => r.code));
@@ -128,7 +139,16 @@ router.put("/:code",
             throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", `Release "${newCode}" already exists for project #${project.number}`);
         }
 
-        const capacity = getReleaseCapacity(req.body.slots);
+        // An expansion's slot counts are fixed by the project's cards - only the faction order is user-editable
+        let slots = req.body.slots;
+        if (project.type === "expansion") {
+            const ordered = [...new Set([...slots.map((allocation) => allocation.faction), ...factions])];
+            slots = ordered
+                .map((faction) => ({ faction, count: project.cardCount[faction] }))
+                .filter((allocation) => allocation.count > 0);
+        }
+
+        const capacity = getReleaseCapacity(slots);
         if (capacity < 1) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", "A release must have at least one slot");
         }
@@ -146,6 +166,7 @@ router.put("/:code",
         const updatedRelease: IProjectRelease = {
             ...existing,
             ...req.body,
+            slots,
             capacity,
             created: existing.created,
             createdBy: existing.createdBy,
@@ -155,9 +176,11 @@ router.put("/:code",
 
         // A layout change re-places every assigned card under the new position->faction partition:
         // each faction keeps its cards in order up to its new count, and any card that no longer fits
-        // (shrunk or removed faction) is evicted back to the development pool
+        // (shrunk or removed faction) is evicted back to the development pool. A code change must
+        // also be stamped onto every assigned slot, which store the release code by value
+        const codeChanged = updatedRelease.code !== code;
         let evictedSlots: ISlot[] = [];
-        if (!isEqual(existing.slots, updatedRelease.slots)) {
+        if (codeChanged || !isEqual(existing.slots, updatedRelease.slots)) {
             const releaseSlots = (await dataService.slots.read({ project: project.number, release: { code } }))
                 .sort((a, b) => a.release!.position - b.release!.position);
             const byFaction = new Map<string, ISlot[]>();
@@ -172,8 +195,8 @@ router.put("/:code",
                 byFaction.get(faction)?.slice(0, count).forEach((slot, index) => {
                     placed.add(slot.number);
                     const position = start + index;
-                    if (slot.release!.position !== position) {
-                        moved.push({ ...slot, release: { ...slot.release!, position } });
+                    if (slot.release!.position !== position || codeChanged) {
+                        moved.push({ ...slot, release: { ...slot.release!, code: updatedRelease.code, position } });
                     }
                 });
                 start += count;
@@ -260,6 +283,8 @@ router.delete("/:code",
     asyncHandler<{ number: number, code: string }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.params;
+
+        assertNotExpansion(project, "deleted");
 
         const release = project.releases.find((r) => r.code === code);
         if (!release) {

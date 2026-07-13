@@ -13,7 +13,7 @@ import { ApiErrorResponse } from "@/errors";
 import { cloneDeep } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
-import { generateGetResponse, applyToFilter, loadProjectByNumber } from "@/utils";
+import { generateGetResponse, applyToFilter, loadProjectByNumber, buildExpansionRelease } from "@/utils";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
 import slots from "./slots";
@@ -137,6 +137,18 @@ router.post("/:number/initialise",
         const suggestionNumbers: Record<string, number> = {};
 
         project.draft = false;
+
+        // Expansions ship as one release containing every card - seed it now, as slots are fixed once initialised
+        if (project.type === "expansion") {
+            const { principal } = getContext();
+            const slots = await dataService.slots.read({ project: project.number });
+            const { release, assignedSlots } = buildExpansionRelease(project, slots, principal.id);
+            project.releases = [release];
+            if (assignedSlots.length > 0) {
+                await dataService.slots.update(assignedSlots);
+            }
+        }
+
         for (const card of cards) {
             const newCard: IPlaytestCard = { ...cloneDeep(card), version: "1.0.0", draft: false };
             if (newCard.suggestionId) {

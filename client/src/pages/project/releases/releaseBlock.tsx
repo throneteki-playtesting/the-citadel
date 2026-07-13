@@ -294,7 +294,7 @@ export type ReleaseBlockProps = {
     dragHandleAttributes?: ReturnType<typeof useSortable>["attributes"];
 }
 
-function ReleasePositionSlot({ id, position, faction, card, disabled }: ReleasePositionSlotProps) {
+export function ReleasePositionSlot({ id, position, faction, card, disabled }: ReleasePositionSlotProps) {
     const { attributes, listeners, setNodeRef, isDragging, isOver } = useSortable({ id, disabled: disabled || !card, data: { faction: card?.faction } });
     const { active } = useDndContext();
     const showBackground = !card || isDragging;

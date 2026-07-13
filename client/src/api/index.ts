@@ -349,7 +349,8 @@ const api = createApi({
             },
             invalidatesTags: (result) => [
                 ...generateFor(result?.project, "project"),
-                ...generateFor(result?.cards, "card")
+                ...generateFor(result?.cards, "card"),
+                ...generateFor(undefined, "slot", { includeList: true })
             ]
         }),
         updateProject: builder.mutation<IProject, IProject>({
@@ -428,9 +429,9 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
-        updateRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity">>({
-            query: ({ project, ...body }) => {
-                const url = buildUrl(`projects/${project}/releases/${body.code}`);
+        updateRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number, originalCode: string } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity">>({
+            query: ({ project, originalCode, ...body }) => {
+                const url = buildUrl(`projects/${project}/releases/${originalCode}`);
                 return { url, method: "PUT", body };
             },
             invalidatesTags: (result) => [
