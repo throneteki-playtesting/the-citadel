@@ -11,6 +11,7 @@ import { watermarkClasses } from "../../constants";
 import SectionTitle from "../../components/sectionTitle";
 import Permission from "common/models/permissions";
 import PermissionedLink from "../../components/permissionedLink";
+import Watermark from "../../components/watermark";
 
 export default function RecentCardChanges() {
     const items = 5;
@@ -61,11 +62,12 @@ export default function RecentCardChanges() {
 function ChangeRow({ card, projects }: ChangeRowProps) {
     const project = projects?.find((project) => project.number === card.project);
     return (
-        <div className="relative overflow-hidden bg-content1 hover:bg-content3">
+        <Watermark
+            position="center"
+            icon={<ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>}
+            containerClassName="bg-content1 hover:bg-content3"
+        >
             <PermissionedLink to={`/project/${project?.number}/${card.number}`} requires={Permission.READ_CARDS}>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
-                </div>
                 <div className="relative grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
                     <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
                     <div className="min-w-0">
@@ -77,7 +79,7 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
                     </div>
                 </div>
             </PermissionedLink>
-        </div>
+        </Watermark>
     );
 }
 type ChangeRowProps = { card: IPlaytestCard, projects?: IProject[] };

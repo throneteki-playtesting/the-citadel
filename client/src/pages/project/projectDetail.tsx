@@ -15,6 +15,7 @@ import Error from "../../components/error";
 import usePageTitle from "../../hooks/usePageTitle";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
+import Watermark from "../../components/watermark";
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number });
@@ -37,10 +38,12 @@ export default function ProjectDetail({ className, style, project: number }: Pro
         return <Error label="No such project exists in the Citadel's archives..." content="This project could not be found. It may have been removed, or you may have followed an incorrect link." />;
     }
 
-    return <div className={classNames("relative", className)} style={style}>
-        <div className={classNames("absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}>
-            {project && <span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
-        </div>
+    return <div className={classNames("relative overflow-hidden", className)} style={style}>
+        <Watermark
+            position="top-right"
+            className={classNames("transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}
+            icon={project && <span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
+        />
         <div className="relative space-y-2">
             <ProjectHeader project={project} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
             {project.draft ? (

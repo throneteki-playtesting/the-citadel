@@ -206,7 +206,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
 
     return (
         <>
-            <div className={classNames("space-y-2", className)} style={style}>
+            <div className={classNames("space-y-2 min-w-0", className)} style={style}>
                 <PermissionGate requires={Permission.MAKE_REVIEWS}>
                     <div className="pt-2 flex justify-center md:justify-end">
                         <Button className="text-lg" color="primary" onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}>
@@ -214,7 +214,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                         </Button>
                     </div>
                 </PermissionGate>
-                <ScrollShadow className="max-h-[50rem]">
+                <ScrollShadow className="max-h-[50rem] overflow-x-hidden">
                     <div className="flex flex-col border border-content3 divide-y divide-content3">
                         {dataSet?.map((review) => <ReviewSummary key={`${review.reviewer}|${review.version}`} review={review} onEdit={onEdit} />)}
                     </div>
@@ -376,12 +376,12 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                     <span>Balanced: <StatementAnswerIcon answer={review.statements.balanced}/></span>
                     <span>Releasable: <StatementAnswerIcon answer={review.statements.releasable}/></span>
                 </div>
-                <div className="px-2 py-1">
+                <div className="px-2 py-1 min-w-0 flex-1">
                     <div className="font-crimson italic text-lg">Additional Comments</div>
                     <div className="relative">
                         <div
                             ref={additionalRef}
-                            className="text-sm leading-tight whitespace-pre-wrap overflow-hidden transition-all duration-300"
+                            className="text-sm leading-tight whitespace-pre-wrap break-words overflow-hidden transition-all duration-300"
                             style={{ maxHeight: isExpanded ? additionalRef.current?.scrollHeight : "8rem" }}
                         >
                             {review.additional ?? "No comments provided."}

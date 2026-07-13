@@ -27,6 +27,7 @@ import { usePermission } from "../../../hooks/usePermission";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, MouseSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors } from "@dnd-kit/core";
 import { rotatingDropAnimation } from "../../../animations";
 import { resourceIdFuncs } from "common/resources";
+import Watermark from "../../../components/watermark";
 
 const CARD_ROW_HEIGHT_CLASS = "h-64 sm:h-72 md:h-80";
 const PLOT_ONLY_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
@@ -212,10 +213,8 @@ function FactionCarousel({ className, style, project, faction, slots, totalSlots
     };
 
     return (
-        <div className={classNames("relative border border-content3 overflow-hidden")}>
-            <div className="absolute -top-8 right-48 flex items-center justify-center pointer-events-none select-none">
-                <ThronesIcon name={faction} className={classNames("text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>
-            </div>
+        <div className="relative border border-content3 overflow-hidden">
+            <Watermark position="top-right" icon={<ThronesIcon name={faction} className={classNames("-mt-8 mr-48 text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>}/>
             <div className="relative flex h-20 items-center">
                 <div className={classNames("text-2xl sm:text-3xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow", className)} style={style}>
                     {factionNames[faction]}

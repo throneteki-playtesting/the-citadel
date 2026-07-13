@@ -179,14 +179,14 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
             <Tabs className="flex-row-reverse justify-end" selectedKey={String(selectedIndex)} onSelectionChange={(index) => setSelectedIndex(Number(index))} aria-label="Card Versions" variant="underlined" color="primary" destroyInactiveTabPanel={false}>
                 {tabs}
             </Tabs>
-            <div className="flex flex-col-reverse items-center justify-center sm:flex-row-reverse md:flex-col-reverse" {...swipeHandlers}>
+            <div className="flex flex-col-reverse items-center justify-center sm:flex-row-reverse md:flex-col-reverse py-4" {...swipeHandlers}>
                 <div className={classNames("grid md:max-w-full -sm:ml-2 sm:mt-2 sm:self-start md:self-auto transition-all duration-600", selectedCard?.note ? "opacity-100 sm:max-w-1/2" : "opacity-0 max-h-0 sm:max-w-0 sm:max-h-full md:max-h-0")}>
                     {sortedCards.map((card) =>
                         card.note && (
                             <div
                                 key={card.version}
                                 className={classNames(
-                                    "col-start-1 row-start-1",
+                                    "grid col-start-1 row-start-1 overflow-hidden",
                                     selectedCard === card ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
                                 )}
                             >

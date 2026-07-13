@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateImplementedQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../api";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { addToast, Alert, Button, Card, Chip, Link, Skeleton } from "@heroui/react";
+import { addToast, Alert, Button, Card, Chip, Input, Link, Skeleton } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
@@ -11,7 +11,7 @@ import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
-import { faAngleLeft, faBug, faCheck, faChevronLeft, faChevronRight, faInfoCircle, faPrint } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faBug, faCheck, faChevronLeft, faChevronRight, faInfoCircle, faMagnifyingGlass, faPrint, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import CodeUpdateStatus from "../../components/status/codeUpdateStatus";
 import DataUpdateStatus from "../../components/status/dataUpdateStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -24,6 +24,7 @@ import useTimezone from "../../hooks/useTimezone";
 import { useNavigate } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
+import Watermark from "../../components/watermark";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -57,17 +58,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                         <Skeleton className="h-4 w-72 rounded-md" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                            <div key={i} className="flex gap-2 p-3">
-                                <div className="flex-1 space-y-2">
-                                    <Skeleton className="h-3 w-16 rounded-md" />
-                                    <Skeleton className="h-6 w-48 rounded-md" />
-                                    <Skeleton className="h-6 w-full rounded-md" />
-                                    <Skeleton className="h-16 w-full rounded-md" />
-                                </div>
-                                <Skeleton className="h-52 w-36 rounded-md shrink-0" />
-                            </div>
-                        ))}
+                        {Array.from({ length: 4 }).map((_, i) => <PlaytestingUpdateChangeNoteSkeleton key={i}/>)}
                     </div>
                 </div>
             </div>
@@ -79,10 +70,10 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     }
 
     return (
-        <div className="relative">
-            <div className="absolute right-0 top-0 flex items-center justify-center pointer-events-none select-none">
-                <span className="-mt-24 mr-1/4 text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>
-            </div>
+        <Watermark
+            position="top-right"
+            icon={<span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
+        >
             <div className="space-y-1 md:space-y-4">
                 <PlaytestingUpdateHeader project={project} playtestingUpdate={playtestingUpdate}/>
                 <PlaytestingUpdateChangeNotes playtestingUpdate={playtestingUpdate} />
@@ -107,7 +98,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                         </Button>}
                 </div>
             </div>
-        </div>
+        </Watermark>
     );
 }
 type PlaytestingUpdateDetailProps = {
@@ -178,14 +169,25 @@ type PlaytestingUpdateHeaderProps = {
 
 function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateChangeNotesProps) {
     const { data: cards, isLoading } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate.project, version: playtestingUpdate.version });
+    const [search, setSearch] = useState("");
 
-    if (isLoading) {
-        // TODO: Improve
-        return <Skeleton />;
-    }
+    const filteredCards = useMemo(() => {
+        if (!cards || !search) {
+            return cards;
+        }
 
-    if (!cards) {
-        return ;
+        const lowerSearch = search.toLowerCase();
+        return cards.filter((card) =>
+            card.name.toLowerCase().includes(lowerSearch) ||
+            card.text?.toLowerCase().includes(lowerSearch) ||
+            card.faction.toLowerCase().includes(lowerSearch) ||
+            card.type.toLowerCase().includes(lowerSearch) ||
+            card.note?.type.toLowerCase().includes(lowerSearch) ||
+            card.note?.text.toLowerCase().includes(lowerSearch));
+    }, [cards, search]);
+
+    if (!isLoading && !cards) {
+        return;
     }
 
     return (
@@ -193,17 +195,35 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
             <SectionTitle size="xl" indent="md">
                 Card Changes
             </SectionTitle>
-            <div className="text-base text-foreground space-y-1">
-                <p>Cards have changes to review, and will be applied together in this update.</p>
-                <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
-            </div>
-            {cards && cards.length > 0
-                ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {cards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
+            <div className="flex flex-col gap-2 md:flex-row md:justify-between">
+                <div className="text-base text-foreground space-y-1">
+                    <p>Cards have changes to review, and will be applied together in this update.</p>
+                    <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>
                 </div>
-                : <Error label="The raven arrived, but carried no news..." content="This update contains no changed cards — an uncommon occurrence & usually indicates this is a legacy update." />
+                <Input
+                    placeholder="Filter by name, faction, text, etc...."
+                    value={search}
+                    onValueChange={setSearch}
+                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
+                    endContent={search
+                        ? <button onClick={() => setSearch("")}>
+                            <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                        </button>
+                        : null}
+                    className="max-w-98 md:max-w-72"
+                    isDisabled={!cards || isLoading}
+                />
+            </div>
+            {isLoading
+                ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Array.from({ length: Object.keys(playtestingUpdate.cardChanges).length || 4 }).map((_, i) => <PlaytestingUpdateChangeNoteSkeleton key={i}/>)}
+                </div>
+                : filteredCards && filteredCards.length > 0
+                    ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {filteredCards.map((card) => <PlaytestingUpdateChangeNote key={card.code} card={card}/>)}
+                    </div>
+                    : <Error label="The raven arrived, but carried no news..." content={search ? "No cards match your search." : "This update contains no changed cards — an uncommon occurrence & usually indicates this is a legacy update."} />
             }
-
         </div>
     );
 }
@@ -235,11 +255,9 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
 
     return (
         <Card className={classNames("border-1", factionBorderClasses[card.faction])}>
-            <div className="grow flex flex-col max-sm:items-center sm:flex-row transition-all duration-300 overflow-hidden">
+            <div className="grow flex flex-col max-sm:items-center sm:flex-row sm:items-start transition-all duration-300 overflow-hidden">
                 <div className="relative size-full">
-                    <div className="absolute bottom-0 left-0 flex items-center justify-center pointer-events-none select-none">
-                        <ThronesIcon name={card.faction} className={classNames("ml-8 mb-12 text-9xl", watermarkClasses[card.faction])}/>
-                    </div>
+                    <Watermark position="bottom-left" icon={<ThronesIcon name={card.faction} className={classNames("ml-8 mb-12 text-9xl", watermarkClasses[card.faction])}/>}/>
                     <div className="relative flex flex-col h-full pb-2">
                         <div className="text-xxs font-cinzel ml-4 mt-1 leading-none text-foreground/40">Card #{card.number}</div>
                         <div className="text-lg font-cinzel text-foreground font-semibold px-4 py-2 leading-tight">{card.name} <span className="text-foreground/50 font-semibold">{card.version}</span></div>
@@ -253,7 +271,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                         </div>
                     </div>
                 </div>
-                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className={classNames("cursor-pointer", card.type === "plot" || previousCard?.type === "plot" ? "max-sm:w-72 sm:h-42 lg:h-52" : "max-sm:w-52 sm:h-62 lg:h-72")} onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
+                <CardStack cards={[previousCard, card]} selectedIndex={showNew ? 1 : 0} className={classNames("cursor-pointer shrink-0", card.type === "plot" || previousCard?.type === "plot" ? "w-72 sm:w-60 lg:w-72 aspect-[333/240]" : "w-52 sm:w-44 lg:w-52 aspect-[240/333]")} onClick={() => setShowNew((prev) => !prev)} tilt={-2} >
                     {(card) => card ? <CardPreview card={renderPlaytestingCard(card)} className="select-none" rounded /> : <LoadingCard />}
                 </CardStack>
             </div>
@@ -265,6 +283,31 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
 }
 type PlaytestingUpdateChangeNoteProps = {
     card: IPlaytestCard
+}
+
+function PlaytestingUpdateChangeNoteSkeleton() {
+    return (
+        <Card className="border-1 border-content3">
+            <div className="grow flex flex-col max-sm:items-center sm:flex-row sm:items-start overflow-hidden">
+                <div className="relative size-full">
+                    <div className="relative flex flex-col h-full pb-2 gap-2">
+                        <Skeleton className="h-3 w-16 rounded-md ml-4 mt-1" />
+                        <Skeleton className="h-6 w-40 rounded-md mx-4" />
+                        <div className="flex-1 space-y-2 px-4">
+                            <Skeleton className="h-6 w-full rounded-md" />
+                            <Skeleton className="h-16 w-full rounded-md" />
+                        </div>
+                    </div>
+                </div>
+                <CardStack cards={[undefined, undefined]} className="shrink-0 w-52 sm:w-44 lg:w-52 aspect-[240/333]" tilt={-2}>
+                    {() => <LoadingCard />}
+                </CardStack>
+            </div>
+            <div className="p-2">
+                <Skeleton className="h-6 w-40 rounded-md" />
+            </div>
+        </Card>
+    );
 }
 
 
@@ -295,9 +338,7 @@ function ImplementedCards({ playtestingUpdate }: ImplementedCardsProps) {
                 {otherImplemented.map((card) =>
                     <a key={`${card.project}|${card.number}|${card.version}`} href={card._metadata?.github?.issueUrl} target="_blank" className={classNames("border-2 px-2 py-1 rounded-xl hover:brightness-150 select-none overflow-hidden", factionBorderClasses[card.faction])}>
                         <div className="relative size-full">
-                            <div className="absolute right-0 flex items-center justify-center pointer-events-none select-none">
-                                <ThronesIcon name={card.faction} className={classNames("mr-8 text-5xl", watermarkClasses[card.faction])}/>
-                            </div>
+                            <Watermark position="top-right" icon={<ThronesIcon name={card.faction} className={classNames("mr-8 text-5xl", watermarkClasses[card.faction])}/>}/>
                             <div className="flex items-center gap-2">
                                 <FontAwesomeIcon icon={faCheck} className="m-2 text-success" size="lg"/>
                                 <div className="text-base font-cinzel text-foreground">{card.name} <span className="text-foreground font-semibold">{card.version}</span></div>

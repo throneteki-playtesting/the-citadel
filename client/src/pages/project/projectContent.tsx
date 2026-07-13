@@ -19,6 +19,7 @@ import Error from "../../components/error";
 import { faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
+import Watermark from "../../components/watermark";
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
@@ -131,9 +132,7 @@ function FactionCarousel({ faction, cards, cardStats, isLoadingReviews }: Factio
 
     return (
         <HighlightTarget targetId={highlightTarget.factionCarousel(cards[0].project, faction)} className="relative border border-content3 bg-content1 overflow-hidden">
-            <div className="absolute -top-8 right-48 flex items-center justify-center pointer-events-none select-none">
-                <ThronesIcon name={faction} className={classNames("text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>
-            </div>
+            <Watermark position="top-right" icon={<ThronesIcon name={faction} className={classNames("-mt-8 mr-48 text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}/>}/>
             <div className="relative flex h-20">
                 <div className={classNames("text-2xl sm:text-3xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow")}>
                     {factionNames[faction]}

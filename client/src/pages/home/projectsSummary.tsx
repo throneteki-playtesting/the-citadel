@@ -7,6 +7,7 @@ import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
 import { dismoji } from "../../constants";
+import Watermark from "../../components/watermark";
 
 export const ProjectsSummary = () => {
     const { data, isLoading } = useGetProjectsQuery({ filter: { active: true }, orderBy: { number: "desc" } });
@@ -90,10 +91,7 @@ function ProjectCard({ project }: ProjectCardProps) {
             onClick={() => navigate(`/project/${project.number}`)}
             className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors drop-shadow-lg"
         >
-            <div className="relative overflow-hidden">
-                <div className="absolute left-0 flex items-center justify-center pointer-events-none select-none">
-                    <span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>
-                </div>
+            <Watermark position="left" icon={<span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>}>
                 <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
                     <div className="flex-1">
                         <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
@@ -106,7 +104,7 @@ function ProjectCard({ project }: ProjectCardProps) {
                         <Progress color="primary" label="Progress" value={progress} maxValue={100} size="sm" formatOptions={{ style: "percent" }} showValueLabel />
                     </div>
                 </div>
-            </div>
+            </Watermark>
             <StatsGrid>
                 <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>

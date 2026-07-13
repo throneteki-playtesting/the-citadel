@@ -13,6 +13,7 @@ import { highlightTarget, watermarkClasses } from "../../constants";
 import SectionTitle from "../../components/sectionTitle";
 import { usePermission } from "../../hooks/usePermission";
 import PermissionedLink from "../../components/permissionedLink";
+import Watermark from "../../components/watermark";
 
 type Submission = { key: string, type: "suggestion" } & ICardSuggestion | { key: string, type: "review" } & IPlaytestReview;
 
@@ -116,11 +117,12 @@ function ReviewRow({ review }: ReviewRowProps) {
     }
 
     return (
-        <div className="relative overflow-hidden bg-content1 hover:bg-content3">
+        <Watermark
+            position="center"
+            icon={<FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>}
+            containerClassName="bg-content1 hover:bg-content3"
+        >
             <PermissionedLink to={`/project/${review.project}/${review.number}`} state={{ highlight: highlightTarget.review(review) }} requires={Permission.READ_REVIEWS}>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <FontAwesomeIcon icon={faFeatherPointed} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>
-                </div>
                 <div className="relative min-w-0 space-y-0.5 px-4 py-2">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
                         <div className="text-md font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
@@ -140,7 +142,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                     </div>
                 </div>
             </PermissionedLink>
-        </div>
+        </Watermark>
     );
 }
 type ReviewRowProps = { review: IPlaytestReview };
@@ -170,14 +172,17 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
     const isApproved = !!suggestion.approvedBy;
 
     return (
-        <div className="relative overflow-hidden bg-content1 hover:bg-content3">
-            <PermissionedLink to="/suggestions" requires={Permission.READ_SUGGESTIONS}>
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                    <div className="relative ml-32">
-                        <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}/>
-                        <FontAwesomeIcon icon={isApproved ? faCheckCircle : faCircleQuestion} className="absolute right-0 bottom-0 text-2xl opacity-20"/>
-                    </div>
+        <Watermark
+            position="center"
+            icon={
+                <div className="relative ml-32">
+                    <ThronesIcon name={suggestion.card.faction} className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}/>
+                    <FontAwesomeIcon icon={isApproved ? faCheckCircle : faCircleQuestion} className="absolute right-0 bottom-0 text-2xl opacity-20"/>
                 </div>
+            }
+            containerClassName="bg-content1 hover:bg-content3"
+        >
+            <PermissionedLink to="/suggestions" requires={Permission.READ_SUGGESTIONS}>
                 <div className="relative z-10 px-4 py-3 space-y-1">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
                         <div className="min-w-0">
@@ -204,7 +209,7 @@ function SuggestionRow({ suggestion }: SuggestionRowProps) {
                     {suggestion.tags.length > 0 && <TagList tags={suggestion.tags} />}
                 </div>
             </PermissionedLink>
-        </div>
+        </Watermark>
     );
 }
 type SuggestionRowProps = {

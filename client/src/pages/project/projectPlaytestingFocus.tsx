@@ -15,6 +15,7 @@ import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import { factionBarClasses, highlightTarget, watermarkClasses } from "../../constants";
 import { BaseElementProps } from "../../types";
+import Watermark from "../../components/watermark";
 
 export default function ProjectPlaytestingFocus({ className, style, project }: ProjectTestingFocusProps) {
     return (
@@ -103,10 +104,7 @@ function FactionFocusList({ project }: FactionFocusListProps) {
                     state={{ highlight: highlightTarget.factionCarousel(project.number, faction), sortBy: "priority" }}
                     requires={Permission.READ_CARDS}
                 >
-                    <div className="relative overflow-hidden hover:bg-content2 transition-colors">
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-                            <ThronesIcon name={faction} className={classNames("ml-32 text-6xl", watermarkClasses[faction])}/>
-                        </div>
+                    <Watermark position="center" icon={<ThronesIcon name={faction} className={classNames("ml-32 text-6xl", watermarkClasses[faction])}/>} containerClassName="hover:bg-content2 transition-colors">
                         <div className="relative flex items-center gap-2 p-2">
                             <div className="w-6 shrink-0 text-xs font-cinzel text-foreground/40">#{rank}</div>
                             <div className="flex-1 text-sm font-cinzel text-foreground truncate">{factionNames[faction]}</div>
@@ -138,7 +136,7 @@ function FactionFocusList({ project }: FactionFocusListProps) {
                                 <div className="flex-1 bg-content3/50 hover:brightness-150 hover:border-1 border-white transition-all cursor-default"/>
                             </TouchTooltip>
                         </div>
-                    </div>
+                    </Watermark>
                 </PermissionedLink>
             ))}
         </div>
