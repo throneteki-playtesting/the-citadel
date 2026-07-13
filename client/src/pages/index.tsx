@@ -79,7 +79,7 @@ export const navItems: NavItem[] = [
         element: <Suggestions />
     },
     {
-        path: "review/submit",
+        path: "/review/submit",
         element: <SubmitReview />,
         label: "Submit Review",
         permission: Permission.MAKE_REVIEWS
