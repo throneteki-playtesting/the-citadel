@@ -137,6 +137,7 @@ router.post("/:number/initialise",
         const suggestionNumbers: Record<string, number> = {};
 
         project.draft = false;
+        project.active = true;
 
         // Expansions ship as one release containing every card - seed it now, as slots are fixed once initialised
         if (project.type === "expansion") {
