@@ -1,6 +1,6 @@
 import { addToast, Button, Link, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery } from "../../api";
 import { IPlaytestCard } from "common/models/cards";
 import { cloneDeep } from "lodash-es";
@@ -198,7 +198,7 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
                                         <div className={classNames("pl-6 pr-3 py-2 text-lg tracking-wider font-cinzel uppercase w-full", changeTypeClasses[card.note.type])}>
                                             <FontAwesomeIcon icon={noteTypeIcon[card.note.type]} /> {card.note.type}
                                         </div>
-                                        <div className="pl-6 pr-3 py-4 text-sm tracking-wide text-foreground font-sans">{convertToNode(card.note.text)}</div>
+                                        <NoteText text={card.note.text} />
                                     </div>
                                 </div>
                             </div>
@@ -217,6 +217,41 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
         </div>
     );
 };
+
+function NoteText({ text }: { text: string }) {
+    const textRef = useRef<HTMLDivElement>(null);
+    const [isOverflowing, setIsOverflowing] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        if (textRef.current) {
+            setIsOverflowing(textRef.current.scrollHeight > textRef.current.clientHeight);
+        }
+    }, [text]);
+
+    return (
+        <div className="pl-6 pr-3 py-4">
+            <div className="relative">
+                <div
+                    ref={textRef}
+                    className="text-sm tracking-wide text-foreground font-sans overflow-hidden transition-all duration-300"
+                    // Collapsed height cap; tweak "8rem" to change how much note text shows before truncating.
+                    style={{ maxHeight: isExpanded ? textRef.current?.scrollHeight : "8rem" }}
+                >
+                    {convertToNode(text)}
+                </div>
+                {!isExpanded && isOverflowing && (
+                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-content2 to-transparent pointer-events-none" />
+                )}
+            </div>
+            {isOverflowing && (
+                <button className="text-xs text-foreground/50 hover:text-default-600 mt-1" onClick={() => setIsExpanded((prev) => !prev)}>
+                    {isExpanded ? "Show less" : "Read more..."}
+                </button>
+            )}
+        </div>
+    );
+}
 
 type CardVersionsProps = Omit<BaseElementProps, "children"> & {
     selected?: SemanticVersion;
