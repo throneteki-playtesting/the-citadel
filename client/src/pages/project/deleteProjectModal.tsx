@@ -1,9 +1,9 @@
-import { addToast } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useArchiveProjectMutation, useDeleteProjectMutation } from "../../api";
 import { useCallback } from "react";
 import { IProject } from "common/models/projects";
 import ConfirmModal from "../../components/confirmModal";
+import { showApiErrorToast } from "../../api/errors";
 
 export default function DeleteProjectModal({ isOpen, project, onClose: onModalClose = () => true, onDelete = () => true }: DeleteProjectModalProps) {
     const [deleteProject, { isLoading: isDeleting }] = useDeleteProjectMutation();
@@ -21,8 +21,7 @@ export default function DeleteProjectModal({ isOpen, project, onClose: onModalCl
             onDelete(project);
             onModalClose();
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to delete", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err, { title: "Failed to Delete" });
         }
     }, [archiveProject, deleteProject, isDraft, onDelete, onModalClose, project]);
 

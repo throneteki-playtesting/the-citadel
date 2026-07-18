@@ -12,6 +12,7 @@ import { Role, SafeIntegration, User } from "common/models/auth";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
+import { toNormalizedError } from "./errors";
 
 const baseQuery = fetchBaseQuery({
     baseUrl: "/api/v1",
@@ -61,6 +62,10 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
             await mutex.waitForUnlock();
             result = await baseQuery(args, queryApi, extraOptions);
         }
+    }
+
+    if (result.error && typeof result.error.status === "number") {
+        result = { ...result, error: { ...result.error, data: toNormalizedError(result.error) } };
     }
 
     return result;

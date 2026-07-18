@@ -2,7 +2,7 @@ import { isCelebrateError } from "celebrate";
 import { StatusCodes } from "http-status-codes";
 import { logger } from "./services";
 import { NextFunction, Request, Response } from "express";
-import { ApiError, isApiError } from "./types";
+import { ApiError, ApiFieldError, isApiError } from "./types";
 
 export class ApiErrorResponse extends Error implements ApiError {
     constructor(public code: StatusCodes, public error: string, public message: string, public cause?: unknown) {
@@ -19,15 +19,24 @@ export const errorHandler = (
 ) => {
     // Celebrate error
     if (isCelebrateError(err)) {
-        const details: string[] = [];
+        const summary: string[] = [];
+        const fields: ApiFieldError[] = [];
         for (const [segment, joiError] of err.details.entries()) {
-            details.push(`${segment}: ${joiError.message}`);
+            const segmentMessages: string[] = [];
+            for (const detail of joiError.details) {
+                const path = detail.path.join(".");
+
+                segmentMessages.push(path ? `${path} ${detail.message}` : detail.message);
+                fields.push({ path, message: detail.message.replace(/^\w/, (c) => c.toUpperCase()) });
+            }
+            summary.push(`${segment}: ${segmentMessages.join(", ")}`);
         }
 
         const apiError: ApiError = {
             code: StatusCodes.BAD_REQUEST,
             error: "Validation Error",
-            message: details.join("; ")
+            message: summary.join("; "),
+            fields
         };
 
         logger.verbose(`API Validation Error returned: ${JSON.stringify(apiError)}`);
@@ -43,14 +52,19 @@ export const errorHandler = (
     logger.error(err);
 
     if (process.env.NODE_ENV !== "production") {
-        return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-            name: err.name,
-            message: err.message,
-            cause: err.cause,
-            stack: err.stack
-        });
+        const apiError: ApiError = {
+            code: StatusCodes.INTERNAL_SERVER_ERROR,
+            error: "Internal Server Error",
+            message: err.message
+        };
+        return res.status(apiError.code).json(apiError);
     }
 
-    // Unhandled error (for production)
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).send("Internal Server Error");
+    // Unhandled error (for production) — same shape as above, without leaking internals
+    const apiError: ApiError = {
+        code: StatusCodes.INTERNAL_SERVER_ERROR,
+        error: "Internal Server Error",
+        message: "An internal server error has occurred"
+    };
+    return res.status(apiError.code).json(apiError);
 };

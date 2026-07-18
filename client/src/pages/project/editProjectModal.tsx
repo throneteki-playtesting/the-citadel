@@ -1,9 +1,9 @@
 import { IProject, types } from "common/models/projects";
-import { addToast, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem, Textarea } from "@heroui/react";
+import { Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem, Textarea } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
+import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import { Project } from "common/models/schemas";
 import { useCreateProjectMutation, useLazyGetProjectQuery, useLazyGetProjectsQuery, useUpdateProjectMutation } from "../../api";
 import { EmojiSelect } from "../../components/emojiSelect";
@@ -26,15 +26,11 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
 
     const isNew = useMemo(() => !initial?.number, [initial?.number]);
 
-    const onSubmit = useCallback(async (project: IProject) => {
-        try {
-            const newProject = isNew ? await createProject(project).unwrap() : await updateProject(project).unwrap();
-            onSave?.(newProject);
-            onModalClose?.(true);
-        } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
-        }
+    const onSubmit = useCallback(async (validProject: IProject) => {
+        setProject(validProject);
+        const newProject = isNew ? await createProject(validProject).unwrap() : await updateProject(validProject).unwrap();
+        onSave?.(newProject);
+        onModalClose?.(true);
     }, [createProject, isNew, onModalClose, onSave, updateProject]);
 
     return <Modal isOpen={isOpen} placement="center" onOpenChange={(isOpen) => !isOpen && onModalClose?.(false) } >
@@ -47,6 +43,7 @@ export default function EditProjectModal({ isOpen, project: initial, onClose: on
                 >
                     <ModalHeader>Project Editor</ModalHeader>
                     <ModalBody>
+                        <ValidationSummary />
                         <WizardPages>
                             <WizardPage>
                                 <ProjectNameInput name={project.name} />
@@ -93,9 +90,9 @@ type EditProjectModalProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectNameInput({ className, style, name: initial }: ProjectNameInputProps) {
     const [name, setName] = useState(initial);
-    const { setError } = useWizard();
+    const { setError, clearError } = useWizard();
 
-    const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
+    const [triggerFetchProjects, { currentData: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
 
     useEffect(() => {
         if (!name) {
@@ -107,10 +104,15 @@ function ProjectNameInput({ className, style, name: initial }: ProjectNameInputP
     }, [name, initial, reset, triggerFetchProjects]);
 
     useEffect(() => {
-        if (!isFetching && existingProjects && existingProjects.total > 0) {
-            return setError("name", "Project already exists with that name");
+        if (isFetching) {
+            return;
         }
-    }, [existingProjects, isFetching, setError]);
+        if (existingProjects && existingProjects.total > 0) {
+            setError("name", "Project already exists with that name");
+        } else {
+            clearError("name");
+        }
+    }, [existingProjects, isFetching, setError, clearError]);
 
     return (
         <Input
@@ -130,9 +132,9 @@ type ProjectNameInputProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectNumberInput({ className, style, number: initial, isDisabled }: ProjectNumberInputProps) {
     const [number, setNumber] = useState(initial);
-    const { setError } = useWizard();
+    const { setError, clearError } = useWizard();
 
-    const [triggerFetchProject, { data: existingProject, isFetching, reset }] = useLazyGetProjectQuery();
+    const [triggerFetchProject, { currentData: existingProject, isFetching, reset }] = useLazyGetProjectQuery();
 
 
     useEffect(() => {
@@ -145,10 +147,15 @@ function ProjectNumberInput({ className, style, number: initial, isDisabled }: P
     }, [number, initial, reset, triggerFetchProject]);
 
     useEffect(() => {
-        if (!isFetching && existingProject) {
-            return setError("number", `Project ${existingProject.code} already exists with that number`);
+        if (isFetching) {
+            return;
         }
-    }, [existingProject, isFetching, setError]);
+        if (existingProject) {
+            setError("number", `Project ${existingProject.code} already exists with that number`);
+        } else {
+            clearError("number");
+        }
+    }, [existingProject, isFetching, setError, clearError]);
 
     return (
         <NumberInput
@@ -172,9 +179,9 @@ type ProjectNumberInputProps = Omit<BaseElementProps, "children"> & {
 
 function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputProps) {
     const [code, setCode] = useState(initial);
-    const { setError } = useWizard();
+    const { setError, clearError } = useWizard();
 
-    const [triggerFetchProjects, { data: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
+    const [triggerFetchProjects, { currentData: existingProjects, isFetching, reset }] = useLazyGetProjectsQuery();
 
     useEffect(() => {
         if (!code) {
@@ -186,10 +193,15 @@ function ProjectCodeInput({ className, style, code: initial }: ProjectCodeInputP
     }, [code, initial, reset, triggerFetchProjects]);
 
     useEffect(() => {
-        if (!isFetching && existingProjects && existingProjects.total > 0) {
-            return setError("code", "Project already exists with that code");
+        if (isFetching) {
+            return;
         }
-    }, [existingProjects, isFetching, setError]);
+        if (existingProjects && existingProjects.total > 0) {
+            setError("code", "Project already exists with that code");
+        } else {
+            clearError("code");
+        }
+    }, [existingProjects, isFetching, setError, clearError]);
 
     return (
         <Input

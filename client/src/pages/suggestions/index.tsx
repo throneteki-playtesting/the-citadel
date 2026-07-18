@@ -17,6 +17,7 @@ import usePageTitle from "../../hooks/usePageTitle";
 import { groupBy } from "lodash-es";
 import { usePermission } from "../../hooks/usePermission";
 import PermissionGate from "../../components/permissionGate";
+import { showApiErrorToast } from "../../api/errors";
 
 type DropdownItemDef = {
     key: string;
@@ -49,8 +50,7 @@ export default function Suggestions() {
             const blob = await renderImage(cardRender).unwrap();
             downloadBlob(blob, `${suggestion.id ?? crypto.randomUUID()}.png`);
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to download", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err, { title: "Failed to Download" });
         }
     };
     const onDelete = async (suggestion: ICardSuggestion) => {
@@ -61,8 +61,7 @@ export default function Suggestions() {
             await deleteSuggestion({ id: suggestion.id }).unwrap();
             addToast({ title: "Successfully deleted", color: "success", description: "Successfully deleted suggestion" });
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to delete", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err, { title: "Failed to Delete" });
         }
     };
     return (

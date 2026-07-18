@@ -1,10 +1,14 @@
-import Joi from "joi";
+import BaseJoi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
 import * as Slots from "./slots";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
+
+// Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
+// `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
+const Joi = BaseJoi.defaults((schema) => schema.options({ abortEarly: false }));
 
 const DiscordMetadata = Joi.object({
     messageUrl: Joi.string().uri(),
@@ -36,9 +40,9 @@ const JoiXDashNumber = Joi.alternatives().try(
 
 const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
-export type SchemaType = Joi.ObjectSchema<unknown>;
+export type SchemaType = BaseJoi.ObjectSchema<unknown>;
 
-export const SingleOrArray = (object: Joi.ObjectSchema) => Joi.alternatives().try(object, Joi.array().items(object));
+export const SingleOrArray = (object: BaseJoi.ObjectSchema) => Joi.alternatives().try(object, Joi.array().items(object));
 
 export const Card = {
     Full: Joi.object({

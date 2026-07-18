@@ -12,10 +12,16 @@ export interface AccessTokenPayload {
 }
 export type AuthStatus = "success" | "error" | "cancelled";
 
+export interface ApiFieldError {
+    path: string,
+    message: string
+}
+
 export interface ApiError {
     code: StatusCodes,
     error: string,
     message: string,
+    fields?: ApiFieldError[]
 }
 
 export function isApiError(err: unknown): err is ApiError {

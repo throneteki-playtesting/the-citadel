@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateImplementedQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../api";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { addToast, Alert, Button, Card, Chip, Input, Link, Skeleton } from "@heroui/react";
+import { Alert, Button, Card, Chip, Input, Link, Skeleton } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import Watermark from "../../components/watermark";
+import { showApiErrorToast } from "../../api/errors";
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({ project: projectNumber, version });
@@ -117,8 +118,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
             const blob = await renderPrintSheet(playtestingUpdate).unwrap();
             downloadBlob(blob, `${project.code}_v${playtestingUpdate.version}_changes.pdf`);
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to download", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err, { title: "Failed to Download" });
         }
     };
     return (

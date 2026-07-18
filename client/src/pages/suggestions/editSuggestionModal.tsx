@@ -1,13 +1,13 @@
 import { ICardSuggestion } from "common/models/cards";
 import { BaseElementProps } from "../../types";
-import { addToast, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import { useCreateSuggestionMutation, useUpdateSuggestionMutation } from "../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import { renderCardSuggestion } from "common/utils";
 import { CardPreview } from "@agot/card-preview";
-import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
+import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import { CardSuggestion } from "common/models/schemas";
 import ComboBox from "../../components/combobox";
 import { useAuth } from "../../hooks/useAuth";
@@ -27,15 +27,10 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
     const onSubmit = useCallback(async (validSuggestion: ICardSuggestion) => {
         setSuggestion(validSuggestion);
 
-        try {
-            const newSuggestion = isNew ? await createSuggestion(validSuggestion).unwrap() : await updateSuggestion(validSuggestion).unwrap();
-            setSuggestion(newSuggestion);
-            onSave(newSuggestion);
-            onModalClose();
-        } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
-        }
+        const newSuggestion = isNew ? await createSuggestion(validSuggestion).unwrap() : await updateSuggestion(validSuggestion).unwrap();
+        setSuggestion(newSuggestion);
+        onSave(newSuggestion);
+        onModalClose();
     }, [isNew, createSuggestion, updateSuggestion, onSave, onModalClose]);
 
     return <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose() } size="3xl">
@@ -48,6 +43,7 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
                 >
                     <ModalHeader>Card Suggestion Editor</ModalHeader>
                     <ModalBody>
+                        <ValidationSummary />
                         <div className="flex flex-col md:flex-row gap-2">
                             <CardPreview card={renderCardSuggestion(suggestion)} className="self-center md:self-start shrink-0 max-w-64"/>
                             <WizardPages>

@@ -1,5 +1,5 @@
 import express from "express";
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import { IPack, IPlaytestPack } from "common/models/pack";

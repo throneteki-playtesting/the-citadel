@@ -46,6 +46,7 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                     <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
                 </div>
                 <div className="self-end sm:self-start flex gap-1">
+                    {(project.draft || project.active) &&
                     <PermissionGate requires={Permission.EDIT_PROJECTS}>
                         <TouchTooltip content="Edit Project">
                             <Button isIconOnly onPress={onEdit}>
@@ -53,6 +54,7 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                             </Button>
                         </TouchTooltip>
                     </PermissionGate>
+                    }
                     {project.draft && !project.active &&
                     <PermissionGate requires={Permission.DELETE_PROJECTS}>
                         <TouchTooltip content="Delete Project">

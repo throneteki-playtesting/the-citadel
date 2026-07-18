@@ -1,9 +1,9 @@
 import { Faction, ICardSuggestion, IPlaytestCard } from "common/models/cards";
 import { DeepPartial } from "common/types";
 import { BaseElementProps } from "../../../types";
-import { addToast, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import { useCallback, useEffect, useState } from "react";
-import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../../components/wizard";
+import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
 import { PlaytestingCard } from "common/models/schemas";
 import { CardPreview } from "@agot/card-preview";
 import { renderCardSuggestion, renderPlaytestingCard, suggestionToPlaytestCard } from "common/utils";
@@ -24,16 +24,10 @@ const SelectSuggestionModal = ({ isOpen, project, number, faction, unselectable 
 
     const onSubmit = useCallback(async (validCard: IPlaytestCard) => {
         setCard(validCard);
-        try {
-            const newCard = await putDraft(validCard).unwrap();
-            // Saves the version
-            setCard(newCard);
-            onSave(newCard);
-            onModalClose();
-        } catch (err) {
-        // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
-        }
+        const newCard = await putDraft(validCard).unwrap();
+        setCard(newCard);
+        onSave(newCard);
+        onModalClose();
     }, [onModalClose, onSave, putDraft]);
 
     return (
@@ -46,6 +40,7 @@ const SelectSuggestionModal = ({ isOpen, project, number, faction, unselectable 
                     >
                         <ModalHeader><div className="space-x-1">{faction && <ThronesIcon name={faction}/>}<span>#{number} Select Suggestion</span></div></ModalHeader>
                         <ModalBody>
+                            <ValidationSummary />
                             <WizardPages>
                                 <WizardPage>
                                     <SuggestionsGrid filter={{ faction: faction ? [faction] : undefined }} hideFilters={{ faction: true }}>

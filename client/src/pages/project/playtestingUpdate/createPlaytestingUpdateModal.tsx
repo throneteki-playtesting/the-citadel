@@ -1,7 +1,7 @@
 import { CardPreview } from "@agot/card-preview";
-import { Accordion, AccordionItem, addToast, Alert, Card, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton, Textarea } from "@heroui/react";
+import { Accordion, AccordionItem, Alert, Card, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton, Textarea } from "@heroui/react";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../../components/wizard";
+import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
 import { PlaytestingUpdate } from "common/models/schemas";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -57,14 +57,9 @@ export default function CreatePlaytestingUpdateModal({ isOpen, project, onClose:
 
     const onSubmit = useCallback(async (playtestingUpdate: IPlaytestingUpdate) => {
         setPlaytestingUpdate(playtestingUpdate);
-        try {
-            const { playtestingUpdate: newPlaytestingUpdate } = await createPlaytestingUpdate(playtestingUpdate).unwrap();
-            onSave(newPlaytestingUpdate);
-            onModalClose();
-        } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
-        }
+        const { playtestingUpdate: newPlaytestingUpdate } = await createPlaytestingUpdate(playtestingUpdate).unwrap();
+        onSave(newPlaytestingUpdate);
+        onModalClose();
     }, [createPlaytestingUpdate, onModalClose, onSave]);
 
     const draftCardSelectors = useMemo(() => {
@@ -93,6 +88,7 @@ export default function CreatePlaytestingUpdateModal({ isOpen, project, onClose:
                     >
                         <ModalHeader className="font-cinzel">{`Create PT Update - ${project.code} #${project.version + 1}`}</ModalHeader>
                         <ModalBody>
+                            <ValidationSummary />
                             <div>
                                 <WizardPages>
                                     <WizardPage className="flex flex-col p-2 gap-2 font-crimson">

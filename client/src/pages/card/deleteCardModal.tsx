@@ -1,9 +1,9 @@
-import { addToast } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { IPlaytestCard } from "common/models/cards";
 import { useDeleteDraftMutation } from "../../api";
 import { useCallback } from "react";
 import ConfirmModal from "../../components/confirmModal";
+import { showApiErrorToast } from "../../api/errors";
 
 const DeleteCardModal = ({ isOpen, card, onClose: onModalClose = () => true, onDelete = () => true }: DeleteCardModalProps) => {
     const [deleteDraft, { isLoading: isDeleting }] = useDeleteDraftMutation();
@@ -17,8 +17,7 @@ const DeleteCardModal = ({ isOpen, card, onClose: onModalClose = () => true, onD
             onDelete(card);
             onModalClose();
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Error", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err);
         }
     }, [card, deleteDraft, onDelete, onModalClose]);
 

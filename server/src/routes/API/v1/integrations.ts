@@ -1,5 +1,5 @@
 import { dataService } from "@/services";
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";

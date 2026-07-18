@@ -1,7 +1,7 @@
 import { dataService } from "@/services";
 import { OAuthTokenResponse } from "@/types";
 import { convertTDBCard, convertTDBDeck } from "@/utils";
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import { Code, ILabeledCard } from "common/models/cards";
 import { IDecklist } from "common/models/decks";
 import { Regex } from "common/utils";

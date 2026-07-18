@@ -1,4 +1,4 @@
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import express, { Response } from "express";
 import asyncHandler from "express-async-handler";
 import { dataService, discordService, logger } from "@/services";

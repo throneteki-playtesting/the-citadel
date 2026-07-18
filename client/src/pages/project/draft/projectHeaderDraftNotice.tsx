@@ -8,6 +8,7 @@ import { useGetCardsQuery, useGetSlotsQuery, useInitialiseProjectMutation } from
 import { faCrow, faExclamationCircle } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
+import { showApiErrorToast } from "../../../api/errors";
 
 export default function ProjectHeaderDraftNotice({ className, style, project }: ProjectHeaderDraftNoticeProps) {
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, draft: true } });
@@ -39,8 +40,7 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
             setIsModalOpen(false);
             addToast({ title: "Successfully initialised", color: "success", description: `${project.name} has been initialised` });
         } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to delete", color: "danger", description: "An unknown error has occurred" });
+            showApiErrorToast(err, { title: "Failed to Initialise" });
         }
     }, [initialiseProject, project]);
 

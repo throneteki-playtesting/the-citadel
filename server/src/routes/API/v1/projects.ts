@@ -1,5 +1,5 @@
 import express from "express";
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
@@ -193,6 +193,9 @@ router.put("/:number",
         project.number = number;
 
         const [previous] = await dataService.projects.read({ number: project.number });
+        if (!previous.draft && !previous.active) {
+            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Archived projects cannot be edited");
+        }
         // cardCount & releases are server-maintained caches (kept in sync via the slots/releases endpoints) -
         // never trust or overwrite them from a general project edit body
         project.cardCount = previous.cardCount;

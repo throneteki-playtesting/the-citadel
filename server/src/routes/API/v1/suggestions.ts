@@ -1,5 +1,5 @@
 import * as Schemas from "common/models/schemas";
-import { celebrate, Joi, Segments } from "celebrate";
+import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express from "express";

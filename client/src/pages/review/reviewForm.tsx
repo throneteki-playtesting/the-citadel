@@ -10,7 +10,7 @@ import { PlaytestingReview } from "common/models/schemas";
 import { useCreateReviewMutation, useLazyGetReviewQuery, useUpdateReviewMutation } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-import { Wizard, WizardBack, WizardPage, WizardPages } from "../../components/wizard";
+import { Wizard, WizardBack, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
@@ -73,21 +73,16 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
     }, [card, readReview, reviewer]);
 
     const onSubmit = useCallback(async (review: IPlaytestReview) => {
-        try {
-            const newReview = isNew ? await createReview(review).unwrap() : await updateReview(review).unwrap();
-            // Saves the version
-            setReview(newReview);
-            navigate(`/project/${newReview.project}/${newReview.number}`);
-            addToast({ title: "Successfully saved", color: "success", description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}` });
-        } catch (err) {
-            // TODO: Better error handling from redux (eg. use ApiError.message for description)
-            addToast({ title: "Failed to save", color: "danger", description: "An unknown error has occurred" });
-        }
+        const newReview = isNew ? await createReview(review).unwrap() : await updateReview(review).unwrap();
+        setReview(newReview);
+        navigate(`/project/${newReview.project}/${newReview.number}`);
+        addToast({ title: "Successfully saved", color: "success", description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}` });
     }, [card?.name, createReview, isNew, navigate, updateReview]);
 
     return (
         <div className="space-y-2">
             <Wizard schema={PlaytestingReview.Draft} onSubmit={onSubmit} data={review} page={initialCard ? 2 : 1}>
+                <ValidationSummary />
                 <WizardPages>
                     <WizardPage>
                         <div className="font-cinzel text-3xl">
