@@ -163,11 +163,13 @@ router.put("/:code",
         }
 
         const { principal } = getContext();
+        const { plannedDate, ...release } = req.body;
         const updatedRelease: IProjectRelease = {
             ...existing,
-            ...req.body,
+            ...release,
             slots,
             capacity,
+            plannedDate,
             created: existing.created,
             createdBy: existing.createdBy,
             updated: new Date(),
