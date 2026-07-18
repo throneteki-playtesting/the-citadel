@@ -1,4 +1,4 @@
-import { addToast, DatePicker, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from "@heroui/react";
+import { addToast, Button, DatePicker, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, NumberInput, Select, SelectItem } from "@heroui/react";
 import { parseDate } from "@internationalized/date";
 import { useEffect, useState } from "react";
 import classNames from "classnames";
@@ -7,7 +7,7 @@ import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifi
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faGripVertical } from "@fortawesome/free-solid-svg-icons";
+import { faGripVertical, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import { IProject, IProjectRelease, ReleaseSlotAllocation } from "common/models/projects";
 import { factions } from "common/models/cards";
 import { ReleaseDate } from "common/models/shared";
@@ -142,6 +142,17 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
                                         label="Planned Release Date"
                                         value={release.plannedDate ? parseDate(release.plannedDate) : null}
                                         onChange={(date) => setRelease((prev) => ({ ...prev, plannedDate: date ? date.toString() as ReleaseDate : undefined }))}
+                                        endContent={release.plannedDate && (
+                                            <Button
+                                                isIconOnly
+                                                size="sm"
+                                                variant="light"
+                                                aria-label="Clear planned release date"
+                                                onPress={() => setRelease((prev) => ({ ...prev, plannedDate: undefined }))}
+                                            >
+                                                <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400"/>
+                                            </Button>
+                                        )}
                                     />
                                 </WizardPage>
                                 {(isExpansion || template === "custom") && (

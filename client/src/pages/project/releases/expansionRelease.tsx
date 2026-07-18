@@ -130,7 +130,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                 <Chip size="sm" variant="bordered">{release.code}</Chip>
                                 <Chip size="sm" variant="flat" className="capitalize" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
                                 <span className="text-xs text-foreground/50">{filledCount}/{release.capacity}</span>
-                                {release.plannedDate && <span className="text-xs text-foreground/50">{release.plannedDate}</span>}
+                                {canEditReleases && release.plannedDate && <span className="text-xs text-foreground/50">{release.plannedDate}</span>}
                                 {release.article?.url && <a href={release.article.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Article</a>}
                             </div>
                         </div>
