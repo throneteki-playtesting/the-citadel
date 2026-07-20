@@ -77,19 +77,8 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
         const inputErrors: Record<string, string> = {};
         if (error) {
             error.details.forEach((detail) => {
-                if (partial) {
-                    try {
-                        let currentLevel = data;
-                        for (const path of detail.path) {
-                            if (currentLevel && typeof currentLevel === "object" && path in currentLevel) {
-                                currentLevel = currentLevel[path];
-                            } else {
-                                throw new Error("Path not found!");
-                            }
-                        }
-                    } catch {
-                        return;
-                    }
+                if (partial && !(detail.path[0] in data)) {
+                    return;
                 }
                 const inputId = detail.path.join(".");
                 const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
