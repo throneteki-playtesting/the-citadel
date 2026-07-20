@@ -11,9 +11,12 @@ services:
         - VITE_SENTRY_DSN=${SENTRY_CLIENT_DSN}
     restart: always
     container_name: citadel_client_${NODE_ENV}
+    depends_on:
+      - server
     ports:
       - ${CLIENT_PORT}:${CLIENT_PORT}
     environment:
+      - CLIENT_PORT=${CLIENT_PORT}
       - SERVER_HOST=${SERVER_HOST}
       - SERVER_INTERNAL_HOST=http://server:8080
   server:

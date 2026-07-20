@@ -1,5 +1,7 @@
+resolver 127.0.0.11 valid=30s;
+
 server {
-    listen 5173;
+    listen ${CLIENT_PORT};
 
     root /usr/share/nginx/html;
     index index.html;
@@ -9,7 +11,8 @@ server {
     }
 
     location /api/ {
-        proxy_pass ${SERVER_INTERNAL_HOST}/api/;
+        set $server_upstream ${SERVER_INTERNAL_HOST};
+        proxy_pass $server_upstream/api/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -17,7 +20,8 @@ server {
     }
 
     location /auth/ {
-        proxy_pass ${SERVER_INTERNAL_HOST}/auth/;
+        set $server_upstream ${SERVER_INTERNAL_HOST};
+        proxy_pass $server_upstream/auth/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -25,7 +29,8 @@ server {
     }
 
     location /thronesdb/ {
-        proxy_pass ${SERVER_INTERNAL_HOST}/thronesdb/;
+        set $server_upstream ${SERVER_INTERNAL_HOST};
+        proxy_pass $server_upstream/thronesdb/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
