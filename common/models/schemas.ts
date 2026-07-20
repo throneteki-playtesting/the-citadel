@@ -5,6 +5,7 @@ import * as Slots from "./slots";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
+import { logCategories, logSeverities } from "./logs";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
@@ -685,5 +686,22 @@ export const Integration = {
         lastUsedAt: Joi.date(),
         ownerIds: Joi.array().items(Joi.string()),
         permissions: Joi.array().items(Permission)
+    })
+};
+
+export const Log = {
+    Full: Joi.object({
+        id: Joi.string().required(),
+        category: Joi.string().required().valid(...logCategories),
+        action: Joi.string().required(),
+        principal: Joi.object({
+            type: Joi.string().required().valid("user", "integration", "anonymous", "system"),
+            id: Joi.string().required()
+        }).required(),
+        message: Joi.string().required(),
+        context: Joi.object().pattern(Joi.string(), Joi.string()).default({}),
+        details: Joi.object().unknown(true),
+        severity: Joi.string().required().valid(...logSeverities),
+        created: Joi.date().required()
     })
 };

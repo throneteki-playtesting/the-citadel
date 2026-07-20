@@ -67,6 +67,8 @@ enum Permission {
     READ_ROLES = "READ_ROLES",
     /** Can view all integrations */
     READ_INTEGRATIONS = "READ_INTEGRATIONS",
+    /** Can view the system activity logs */
+    READ_LOGS = "READ_LOGS",
     /** Can create new integrations */
     CREATE_INTEGRATIONS = "CREATE_INTEGRATIONS",
     /** Can edit all integrations */
@@ -157,6 +159,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.READ_INTEGRATIONS]: { label: "Read", group: "Integrations" },
+    [Permission.READ_LOGS]: { label: "Read", group: "Logs" },
     [Permission.CREATE_INTEGRATIONS]: { label: "Create", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
     [Permission.EDIT_INTEGRATIONS]: { label: "Edit", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
     [Permission.DELETE_INTEGRATIONS]: { label: "Delete", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },

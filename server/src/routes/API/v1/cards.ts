@@ -17,6 +17,8 @@ import { syncCardForum } from "@/discord/forums/cardForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
 import { IProject } from "common/models/projects";
+import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -233,10 +235,19 @@ router.put("/:project/:number/draft",
         const process = async (action: "create" | "update") => {
             switch (action) {
                 case "create":
-                    return dataService.cards.create(card, !project.draft);
+                    await dataService.cards.create(card, !project.draft);
+                    break;
                 case "update":
-                    return dataService.cards.update(card, !project.draft);
+                    await dataService.cards.update(card, !project.draft);
+                    break;
             }
+
+            await logActivity(
+                LogCategory.CARD,
+                action === "create" ? "card.draft.created" : "card.draft.updated",
+                `<principal> ${action === "create" ? "created" : "updated"} draft <card>`,
+                { context: { card: cardSnapshot(`${project.number}|${number}|${card.version}`, card) } }
+            );
         };
 
         if (project.draft) {
@@ -286,6 +297,14 @@ router.delete("/:project/:number/draft/:version?",
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Draft card for #${number} in project #${project} does not exist`);
         }
+
+        await logActivity(
+            LogCategory.CARD,
+            "card.draft.deleted",
+            "<principal> deleted draft <card>",
+            { context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -327,6 +346,15 @@ router.post("/:project/:number/:version/sync/:type",
                 [card] = await syncIssues([card], forced);
                 break;
             }
+        }
+
+        if (forced) {
+            await logActivity(
+                LogCategory.CARD,
+                "card.synced",
+                `<principal> forced a ${type} sync for <card>`,
+                { context: { card: cardSnapshot(`${project}|${number}|${version}`, card) } }
+            );
         }
 
         res.status(StatusCodes.OK).json(card);
@@ -382,6 +410,13 @@ router.post("/:project/:number/:version/move",
         // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
         await dataService.cards.destroy({ project: projectNumber, number, version }, false);
         const [created] = await dataService.cards.create([movedCard], false);
+
+        await logActivity(
+            LogCategory.CARD,
+            "card.moved",
+            `<principal> moved <card> from slot ${number} to slot ${to} in <project>`,
+            { context: { card: cardSnapshot(`${projectNumber}|${to}|${newVersion}`, movedCard), project: projectSnapshot(project) } }
+        );
 
         res.status(StatusCodes.OK).json(created);
     })

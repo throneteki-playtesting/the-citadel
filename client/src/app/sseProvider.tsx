@@ -9,6 +9,8 @@ import { setConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
 import { mergeWith, isPlainObject } from "lodash-es";
+import { emitLogCreate, hasLogListeners } from "../pages/admin/logs/logStream";
+import { ILogEntry } from "common/models/logs";
 
 function updateCachedEntity<T extends object>(
     draft: unknown,
@@ -143,7 +145,15 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
                 items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
             } else if (event.status === "create") {
                 const type = event.type as ResourceType;
-                event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
+
+                event.items.forEach(({ data }) => {
+                    // Mounted Logs page merges live; otherwise fall back to cache invalidation.
+                    if (type === "log" && hasLogListeners()) {
+                        emitLogCreate(data as ILogEntry);
+                    } else {
+                        invalidateFor(type, data as ResourceDataMap[typeof type]);
+                    }
+                });
             } else if (event.status === "delete") {
                 const type = event.type as ResourceType;
 
@@ -154,7 +164,7 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
                     }
                 }
 
-                event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
+                event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[typeof type]));
             }
         });
 

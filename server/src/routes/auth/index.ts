@@ -11,6 +11,8 @@ import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { AccessTokenPayload, AuthStatus, RefreshAuthResponse } from "@/types";
 import DiscordService from "@/discord";
+import { logActivity } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -63,6 +65,10 @@ router.get("/discord/callback",
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             const sessionId = req.cookies.sessionId ?? randomUUID();
             await applyTokensToResponse(res, user.discordId, sessionId);
+
+            await logActivity(LogCategory.AUTH, "auth.login", "<principal> logged in", {
+                principal: { type: "user", id: user.discordId, displayname: user.displayname, avatarUrl: user.avatarUrl }
+            });
 
             res.redirect(buildUrl(REDIRECT_URL, { status: "success" } as { status: AuthStatus }));
         } catch (err) {

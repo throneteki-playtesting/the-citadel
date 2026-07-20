@@ -13,6 +13,8 @@ import { User } from "common/models/auth";
 import { getRequestSchema } from "@/schemas";
 import DiscordService from "@/discord";
 import { hasPermission } from "common/utils";
+import { logActivity, userSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -90,6 +92,14 @@ router.put("/:discordId",
         if (discordId === "anonymous") {
             dataService.users.invalidateGuestProfileCache();
         }
+
+        await logActivity(
+            LogCategory.USER,
+            "user.updated",
+            "<principal> updated permissions for <targetUser>",
+            { context: { targetUser: userSnapshot(result) }, details: { updated: result } }
+        );
+
         res.status(StatusCodes.OK).json(result);
     })
 );

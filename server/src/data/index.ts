@@ -5,6 +5,7 @@ import { createClient, RedisClientType } from "redis";
 import AuthRepository from "./repositories/authRepository";
 import CardsRepository from "./repositories/cardsRepository";
 import IntegrationRepository from "./repositories/integrationRepository";
+import LogsRepository from "./repositories/logsRepository";
 import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
 import ProjectsRepository from "./repositories/projectsRepository";
 import ReviewsRepository from "./repositories/reviewRepository";
@@ -31,7 +32,8 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "roles", ctor: RolesRepository },
     { key: "suggestions", ctor: SuggestionsRepository },
     { key: "auth", ctor: AuthRepository },
-    { key: "integrations", ctor: IntegrationRepository }
+    { key: "integrations", ctor: IntegrationRepository },
+    { key: "logs", ctor: LogsRepository }
 ];
 
 class DataService {
@@ -103,6 +105,7 @@ class DataService {
     get suggestions() { return this.getRepository<SuggestionsRepository>("suggestions"); }
     get auth() { return this.getRepository<AuthRepository>("auth"); }
     get integrations() { return this.getRepository<IntegrationRepository>("integrations"); }
+    get logs() { return this.getRepository<LogsRepository>("logs"); }
 }
 
 export default DataService;

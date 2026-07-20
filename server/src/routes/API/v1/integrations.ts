@@ -15,6 +15,8 @@ import { asArray, hasPermission } from "common/utils";
 import { ApiErrorResponse } from "@/errors";
 import { Filter } from "common/types";
 import { omit } from "lodash-es";
+import { integrationSnapshot, logActivity } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -69,6 +71,14 @@ router.post("/",
         const { name, enabled, permissions, ownerIds } = req.body;
 
         const { rawToken, integration } = await dataService.integrations.generate({ name, enabled, permissions, ownerIds });
+
+        await logActivity(
+            LogCategory.INTEGRATION,
+            "integration.created",
+            "<principal> created integration <integration>",
+            { context: { integration: integrationSnapshot(integration) } }
+        );
+
         res.status(StatusCodes.CREATED).json({ token: rawToken, integration: sanitize(integration) });
     })
 );
@@ -99,6 +109,14 @@ router.put("/:id",
             ownerIds,
             permissions: canEdit ? permissions : existing.permissions
         });
+
+        await logActivity(
+            LogCategory.INTEGRATION,
+            "integration.updated",
+            "<principal> updated integration <integration>",
+            { context: { integration: integrationSnapshot(result) }, details: { updated: result } }
+        );
+
         res.status(StatusCodes.OK).json(sanitize(result));
     })
 );
@@ -117,6 +135,14 @@ router.post("/:id/token",
         }
 
         const { rawToken, integration } = await dataService.integrations.recycleToken(existing);
+
+        await logActivity(
+            LogCategory.INTEGRATION,
+            "integration.token_rotated",
+            "<principal> rotated the token for integration <integration>",
+            { context: { integration: integrationSnapshot(existing) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json({ token: rawToken, integration: sanitize(integration) });
     })
 );
@@ -132,6 +158,14 @@ router.delete("/:id",
         if (!destroyed) {
             throw notFound();
         }
+
+        await logActivity(
+            LogCategory.INTEGRATION,
+            "integration.deleted",
+            "<principal> deleted integration <integration>",
+            { context: { integration: integrationSnapshot(destroyed) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(sanitize(destroyed));
     })
 );

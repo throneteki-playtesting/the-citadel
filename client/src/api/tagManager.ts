@@ -25,15 +25,13 @@ const defaultIdFuncs: { [K in ApiTag]: (result: TagEntity[K]) => string | number
 
 export type PendingTag = { type: ApiTag; id: string | number | undefined };
 
-// Resource types whose id encodes a hierarchy (eg. card -> "project|number|version") can have their
-// "list" queries scoped to that hierarchy. Field order must match the id's own prefix order.
+// Resource types whose id encodes a hierarchy can have their "list" queries scoped to it; field order must match the id's prefix order.
 const listScopeFields: Partial<Record<ApiTag, string[]>> = {
     card: ["project", "number"],
     slot: ["project"]
 };
 
-// Stops at the first missing/non-exact field (eg. a { $ne: ... } operator), since only exact
-// equality can be folded into a scope key.
+// Stops at the first non-exact field (eg. a { $ne: ... } operator), since only exact equality folds into a scope key.
 function scopeKeyFromFilter(fields: string[], filter: Record<string, unknown>): string | undefined {
     const values: string[] = [];
     for (const field of fields) {
@@ -46,8 +44,7 @@ function scopeKeyFromFilter(fields: string[], filter: Record<string, unknown>): 
     return values.length > 0 ? values.join("|") : undefined;
 }
 
-// Falls back to flat "LIST" if there's no scope config, no filter, or any filter entry can't be
-// resolved to an exact scope.
+// Falls back to flat "LIST" if there's no scope config, no filter, or any filter entry isn't an exact scope.
 function listScopeTagsFromArgs(tag: ApiTag, args: { filter?: SingleOrArray<Record<string, unknown>> } | undefined): PendingTag[] {
     const fields = listScopeFields[tag];
     const filters = args?.filter !== undefined ? asArray(args.filter) : undefined;
@@ -72,10 +69,7 @@ function listScopeTagsFromId(tag: ApiTag, id: string): PendingTag[] {
     ];
 }
 
-// providesTags (args given): the single narrowest scope matching this query's own filter.
-// invalidatesTags (no args, results given): the full ancestor-scope chain for every result entity —
-// a mutation always has full entities, never raw filter args, so this is the only way to correctly
-// invalidate every differently-scoped query the result could belong to.
+// providesTags (args given) uses the narrowest matching scope; invalidatesTags (results given) uses the full ancestor chain.
 function listTagsFor<T>(
     tag: ApiTag,
     results: T | T[] | undefined,
@@ -140,8 +134,7 @@ function tagsForResource<K extends ResourceType>(type: K, resource: ResourceData
     ];
 }
 
-// Pending-tag queue driving the "data outdated" toast — an external store since invalidateFor
-// queues from outside React. refreshToast.tsx subscribes to show/hide the toast.
+// Pending-tag queue driving the "data outdated" toast; refreshToast.tsx subscribes to show/hide it.
 const pendingTags = new Set<string>();
 const pendingListeners = new Set<() => void>();
 
@@ -163,8 +156,7 @@ function queuePending(tags: PendingTag[]) {
     notifyPendingListeners();
 }
 
-// Unlike flushPending, doesn't notify listeners — used by the refresh toast button, which manages
-// its own close timing and would otherwise have its toast closed immediately by that notification.
+// Unlike flushPending, doesn't notify listeners - used by the refresh toast button, which closes its own toast.
 export function dispatchPendingTags(): void {
     if (pendingTags.size === 0) {
         return;
@@ -191,12 +183,32 @@ function hasActiveSubscriber(tags: PendingTag[]): boolean {
     return affectedQueries.some(({ queryCacheKey }) => Object.keys(subscriptions[queryCacheKey] ?? {}).length > 0);
 }
 
-// Queues tags for user-confirmed refresh if something on screen is subscribed to one, otherwise
-// invalidates immediately in the background.
+// Per-component overrides of tag-manager behaviour
+export type TagManagerOverrides = {
+    autoRefresh?: boolean;
+};
+
+const activeOverrides: TagManagerOverrides[] = [];
+
+export function registerTagManagerOverride(overrides: TagManagerOverrides): () => void {
+    activeOverrides.push(overrides);
+    return () => {
+        const index = activeOverrides.indexOf(overrides);
+        if (index !== -1) activeOverrides.splice(index, 1);
+    };
+}
+
+function getTagManagerOverrides(): Required<TagManagerOverrides> {
+    return {
+        autoRefresh: activeOverrides.some((overrides) => overrides.autoRefresh === true)
+    };
+}
+
+// Queues for user-confirmed refresh if subscribed, otherwise invalidates immediately (always immediate under autoRefresh).
 export function invalidateFor<K extends ResourceType>(type: K, resource: ResourceDataMap[K]): void {
     const tags = tagsForResource(type, resource);
 
-    if (hasActiveSubscriber(tags)) {
+    if (!getTagManagerOverrides().autoRefresh && hasActiveSubscriber(tags)) {
         queuePending(tags);
     } else {
         store.dispatch(api.util.invalidateTags(tags));

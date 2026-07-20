@@ -13,6 +13,8 @@ import { getRequestSchema } from "@/schemas";
 import DiscordService from "@/discord";
 import { getContext } from "@/middleware/context";
 import { hasPermission } from "common/utils";
+import { logActivity, roleSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -83,6 +85,14 @@ router.put("/:discordId",
         role.discordId = discordId;
 
         const result = await dataService.roles.update(role);
+
+        await logActivity(
+            LogCategory.ROLE,
+            "role.updated",
+            "<principal> updated permissions for role <role>",
+            { context: { role: roleSnapshot(result) }, details: { updated: result } }
+        );
+
         res.status(StatusCodes.OK).json(result);
     })
 );

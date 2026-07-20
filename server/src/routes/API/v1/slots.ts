@@ -14,6 +14,8 @@ import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
+import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router({ mergeParams: true });
 
@@ -99,6 +101,13 @@ router.post("/",
 
         await syncProjectCardCount(project.number);
 
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.created",
+            `<principal> created a ${faction} slot in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
         res.status(StatusCodes.OK).json(slot);
     })
 );
@@ -136,6 +145,13 @@ router.delete("/:slot",
 
         await syncProjectCardCount(project.number);
 
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.deleted",
+            `<principal> deleted slot ${slotNumber} from <project>`,
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -164,6 +180,13 @@ router.patch("/:slot",
             ...(notes !== undefined && { notes }),
             ...(statuses && { statuses: { ...slot.statuses, ...statuses } })
         });
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.updated",
+            `<principal> updated slot ${slotNumber} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
 
         res.status(StatusCodes.OK).json(updated);
     })
@@ -195,6 +218,7 @@ router.patch("/:slot/release",
         }
 
         const updates: ISlot[] = [];
+        let occupant: ISlot | undefined;
 
         if (code === null) {
             if (project.type === "expansion") {
@@ -220,7 +244,7 @@ router.patch("/:slot/release",
             // If another slot already occupies this position, either swap it into the dragged slot's
             // previous release position (if it had one), or evict it back to the development pool
             const occupyingSlots = await dataService.slots.read({ project: project.number, release: { code } });
-            const occupant = occupyingSlots.find((s) => s.release?.position === position && s.number !== slotNumber);
+            occupant = occupyingSlots.find((s) => s.release?.position === position && s.number !== slotNumber);
             if (occupant) {
                 if (slot.release) {
                     updates.push({ ...occupant, release: slot.release });
@@ -235,6 +259,56 @@ router.patch("/:slot/release",
         const updated = await dataService.slots.update(updates);
         const primary = updated.find((s) => s.number === slotNumber);
         const evicted = updated.find((s) => s.number !== slotNumber);
+
+        const [primaryCard] = await dataService.cards.read({ project: project.number, number: slotNumber, latest: true });
+        const primarySnapshot = cardSnapshot(`${project.number}|${slotNumber}|latest`, primaryCard);
+
+        if (code === null) {
+            if (slot.release) {
+                await logActivity(
+                    LogCategory.SLOT,
+                    "slot.release_cleared",
+                    `<principal> returned <card> to development from slot ${slot.release.position} of ${slot.release.code}`,
+                    { context: { card: primarySnapshot } }
+                );
+            }
+        } else if (slot.release) {
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.release_moved",
+                `<principal> moved <card> from slot ${slot.release.position} of ${slot.release.code} to slot ${position} of ${code}`,
+                { context: { card: primarySnapshot } }
+            );
+        } else {
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.release_assigned",
+                `<principal> placed <card> into slot ${position} of ${code}`,
+                { context: { card: primarySnapshot } }
+            );
+        }
+
+        if (occupant) {
+            const [occupantCard] = await dataService.cards.read({ project: project.number, number: occupant.number, latest: true });
+            const occupantSnapshot = cardSnapshot(`${project.number}|${occupant.number}|latest`, occupantCard);
+
+            if (slot.release) {
+                await logActivity(
+                    LogCategory.SLOT,
+                    "slot.release_displaced",
+                    `<principal>'s placement moved <card> from slot ${position} of ${code} to slot ${slot.release.position} of ${slot.release.code}`,
+                    { context: { card: occupantSnapshot }, severity: "warn" }
+                );
+            } else {
+                await logActivity(
+                    LogCategory.SLOT,
+                    "slot.release_evicted",
+                    `<principal>'s placement evicted <card> from slot ${position} of ${code}`,
+                    { context: { card: occupantSnapshot }, severity: "warn" }
+                );
+            }
+        }
+
         res.status(StatusCodes.OK).json({ slot: primary, evictedSlot: evicted });
     })
 );

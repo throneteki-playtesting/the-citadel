@@ -13,6 +13,9 @@ import { generateGetResponse, applyToFilter } from "@/utils";
 import { ApiErrorResponse } from "@/errors";
 import { getRequestSchema } from "@/schemas";
 import { syncReviewForum } from "@/discord/forums/playtestingReviews";
+import { cardSnapshot, logActivity, userSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
+import { getContext } from "@/middleware/context";
 
 const router = express.Router();
 
@@ -75,6 +78,16 @@ router.post("/",
     asyncHandler<unknown, unknown, IPlaytestReview, unknown>(async (req, res) => {
         let review = req.body;
         review = await dataService.reviews.create(review);
+
+        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+
+        await logActivity(
+            LogCategory.REVIEW,
+            "review.created",
+            "<principal> submitted a review for <card>",
+            { context: { card: cardSnapshot(`${review.project}|${review.number}|${review.version}`, card) } }
+        );
+
         res.status(StatusCodes.OK).json(review);
     })
 );
@@ -111,6 +124,20 @@ router.put("/:project/:number/:version/:reviewer",
         review.reviewer = reviewer;
 
         review = await dataService.reviews.update(review);
+
+        const [card] = await dataService.cards.read({ project, number, version });
+
+        const { principal } = getContext();
+        const isOwnReview = "discordId" in principal && principal.discordId === reviewer;
+        const [reviewerUser] = isOwnReview ? [] : await dataService.users.read({ discordId: reviewer });
+
+        await logActivity(
+            LogCategory.REVIEW,
+            "review.updated",
+            reviewerUser ? "<principal> updated <targetUser>'s review for <card>" : "<principal> updated their review for <card>",
+            { context: { card: cardSnapshot(`${project}|${number}|${version}`, card), ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) }) } }
+        );
+
         res.status(StatusCodes.OK).json(review);
     })
 );
@@ -139,6 +166,20 @@ router.delete("/:project/:number/:version/:reviewer",
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         const [deleted] = await dataService.reviews.destroy({ project, number, version, reviewer });
+
+        const [card] = await dataService.cards.read({ project, number, version });
+
+        const { principal } = getContext();
+        const isOwnReview = "discordId" in principal && principal.discordId === reviewer;
+        const [reviewerUser] = isOwnReview ? [] : await dataService.users.read({ discordId: reviewer });
+
+        await logActivity(
+            LogCategory.REVIEW,
+            "review.deleted",
+            reviewerUser ? "<principal> deleted <targetUser>'s review for <card>" : "<principal> deleted their review for <card>",
+            { context: { card: cardSnapshot(`${project}|${number}|${version}`, card), ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) }) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -171,6 +212,17 @@ router.post("/:project/:number/:version/:reviewer/sync/:type",
                 [review] = await syncReviewForum([review], forced);
                 break;
             }
+        }
+
+        if (forced) {
+            const [card] = await dataService.cards.read({ project, number, version });
+
+            await logActivity(
+                LogCategory.REVIEW,
+                "review.synced",
+                `<principal> forced a ${type} sync for the review on <card>`,
+                { context: { card: cardSnapshot(`${project}|${number}|${version}`, card) } }
+            );
         }
 
         res.status(StatusCodes.OK).json(review);

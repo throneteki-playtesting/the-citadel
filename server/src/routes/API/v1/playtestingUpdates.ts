@@ -15,6 +15,8 @@ import { getRequestSchema } from "@/schemas";
 import { asPDF } from "@/rendering";
 import { hasPermission, renderPlaytestingCard } from "common/utils";
 import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
+import { logActivity, projectSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -120,6 +122,13 @@ router.post("/:project",
 
         project.version = playtestingUpdate.version;
         project = await dataService.projects.update(project);
+
+        await logActivity(
+            LogCategory.PLAYTESTING_UPDATE,
+            "playtestingUpdate.created",
+            `<principal> created playtesting update v${playtestingUpdate.version} for <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
 
         res.status(StatusCodes.OK).json({ playtestingUpdate, project, cards: newCards });
     })
@@ -245,6 +254,7 @@ router.post("/:project/:version/sync/github/:type",
     asyncHandler<{ project: number, version: number, type: "code" | "data" }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
         const { type } = req.params;
         const { forced } = req.query;
+        const project = res.locals.project as IProject;
         let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
 
         switch (type) {
@@ -258,6 +268,15 @@ router.post("/:project/:version/sync/github/:type",
                 playtestingUpdate = updates.find((pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version) ?? playtestingUpdate;
                 break;
             }
+        }
+
+        if (forced) {
+            await logActivity(
+                LogCategory.PLAYTESTING_UPDATE,
+                "playtestingUpdate.synced",
+                `<principal> forced a ${type} sync for playtesting update v${playtestingUpdate.version} of <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
         }
 
         res.status(StatusCodes.OK).json(playtestingUpdate);

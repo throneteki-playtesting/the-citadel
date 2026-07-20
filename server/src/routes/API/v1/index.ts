@@ -11,9 +11,12 @@ import reviews from "./reviews";
 import render from "./render";
 import suggestions from "./suggestions";
 import broadcast from "./broadcast";
+import logs from "./logs";
 import { parseAPIRequest } from "@/middleware/filters";
 import { dataService } from "@/services";
 import { getContext } from "@/middleware/context";
+import { logActivity } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 router.use("/users", parseAPIRequest, users);
@@ -27,6 +30,7 @@ router.use("/reviews", parseAPIRequest, reviews);
 router.use("/render", parseAPIRequest, render);
 router.use("/suggestions", parseAPIRequest, suggestions);
 router.use("/broadcast", parseAPIRequest, broadcast);
+router.use("/logs", parseAPIRequest, logs);
 
 router.post("/login", (req, res) => {
     res.redirect("/auth/discord");
@@ -44,6 +48,7 @@ router.post("/logout", asyncHandler(async (req, res) => {
 
     if (sessionId && context.source === "client") {
         await dataService.auth.deleteSession(context.principal.discordId, sessionId);
+        await logActivity(LogCategory.AUTH, "auth.logout", "<principal> logged out");
     }
 
     res.clearCookie("accessToken", cookieOptions);

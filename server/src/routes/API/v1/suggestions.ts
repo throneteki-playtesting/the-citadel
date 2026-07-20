@@ -12,6 +12,8 @@ import { StatusCodes } from "http-status-codes";
 import { generateGetResponse, applyToFilter } from "@/utils";
 import { ApiErrorResponse } from "@/errors";
 import { getRequestSchema } from "@/schemas";
+import { cardSnapshot, logActivity } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -78,6 +80,14 @@ router.post("/",
         const created = new Date();
         let suggestion = { ...body, created, updated: created } as ICardSuggestion;
         suggestion = await dataService.suggestions.create(suggestion);
+
+        await logActivity(
+            LogCategory.SUGGESTION,
+            "suggestion.created",
+            "<principal> created suggestion <suggestion>",
+            { context: { suggestion: cardSnapshot(suggestion.id, suggestion.card) } }
+        );
+
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
@@ -109,6 +119,14 @@ router.put("/:id",
         let suggestion = req.body;
         suggestion.id = id;
         suggestion = await dataService.suggestions.update(suggestion);
+
+        await logActivity(
+            LogCategory.SUGGESTION,
+            "suggestion.updated",
+            "<principal> updated suggestion <suggestion>",
+            { context: { suggestion: cardSnapshot(id, suggestion.card) } }
+        );
+
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
@@ -137,6 +155,14 @@ router.delete("/:id",
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
         const [deleted] = await dataService.suggestions.destroy({ id });
+
+        await logActivity(
+            LogCategory.SUGGESTION,
+            "suggestion.deleted",
+            "<principal> deleted suggestion <suggestion>",
+            { context: { suggestion: cardSnapshot(id, deleted.card) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(deleted);
     })
 );

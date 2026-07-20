@@ -18,6 +18,8 @@ import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
 import slots from "./slots";
 import releases from "./releases";
+import { logActivity, projectSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
@@ -107,6 +109,14 @@ router.post("/",
         body.cardCount = factions.reduce((acc, faction) => ({ ...acc, [faction]: 0 }), {} as FactionCardCount);
         body.releases = [];
         const project = await dataService.projects.create(body);
+
+        await logActivity(
+            LogCategory.PROJECT,
+            "project.created",
+            "<principal> created project <project>",
+            { context: { project: projectSnapshot(project) } }
+        );
+
         res.status(StatusCodes.OK).json(project);
     })
 );
@@ -174,6 +184,13 @@ router.post("/:number/initialise",
             await dataService.suggestions.update(suggestions);
         }
 
+        await logActivity(
+            LogCategory.PROJECT,
+            "project.initialised",
+            "<principal> initialised project <project>",
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json({ project, cards: newCards });
     })
 );
@@ -209,6 +226,13 @@ router.put("/:number",
             project = await dataService.projects.update(project);
         }
 
+        await logActivity(
+            LogCategory.PROJECT,
+            "project.updated",
+            "<principal> updated project <project>",
+            { context: { project: projectSnapshot(project) } }
+        );
+
         res.status(StatusCodes.OK).json(project);
     })
 );
@@ -233,6 +257,14 @@ router.delete("/:number",
         }
         await dataService.cards.destroy({ project: number });
         await dataService.slots.destroy({ project: number });
+
+        await logActivity(
+            LogCategory.PROJECT,
+            "project.deleted",
+            "<principal> deleted project <project>",
+            { context: { project: projectSnapshot(deleted) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(deleted);
     })
 );
@@ -258,6 +290,13 @@ router.post("/:number/archive",
 
         project = await dataService.projects.update(project);
 
+        await logActivity(
+            LogCategory.PROJECT,
+            "project.archived",
+            "<principal> archived project <project>",
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(project);
     })
 );
@@ -281,6 +320,15 @@ router.post("/:number/sync/image",
         let cards = await dataService.cards.read({ project: project.number, number, version, latest });
 
         cards = await syncImage(cards, forced);
+
+        if (forced) {
+            await logActivity(
+                LogCategory.PROJECT,
+                "project.images_synced",
+                "<principal> forced an image sync for <project>",
+                { context: { project: projectSnapshot(project) } }
+            );
+        }
 
         res.status(StatusCodes.OK).json(cards);
     })

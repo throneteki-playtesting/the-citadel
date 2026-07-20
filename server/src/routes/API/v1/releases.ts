@@ -15,6 +15,8 @@ import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, clearRelease } from "@/utils";
 import { ISlot } from "common/models/slots";
 import { getContext } from "@/middleware/context";
+import { logActivity, projectSnapshot } from "@/services/activityLogService";
+import { LogCategory } from "common/models/logs";
 
 const router = express.Router({ mergeParams: true });
 
@@ -76,6 +78,13 @@ router.post("/",
         project.releases.push(release);
         const updated = await dataService.projects.update(project);
 
+        await logActivity(
+            LogCategory.RELEASE,
+            "release.created",
+            `<principal> created release "${code}" in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
         res.status(StatusCodes.OK).json(updated);
     })
 );
@@ -111,6 +120,13 @@ router.patch("/reorder",
             ? { ...r, number: renumbered.get(r.code)!, updated: now, updatedBy: principal.id }
             : r);
         const updated = await dataService.projects.update(project);
+
+        await logActivity(
+            LogCategory.RELEASE,
+            "release.reordered",
+            "<principal> reordered releases in <project>",
+            { context: { project: projectSnapshot(project) } }
+        );
 
         res.status(StatusCodes.OK).json(updated);
     })
@@ -216,6 +232,13 @@ router.put("/:code",
         project.releases = project.releases.map((r) => r.code === code ? updatedRelease : r);
         const updated = await dataService.projects.update(project);
 
+        await logActivity(
+            LogCategory.RELEASE,
+            "release.updated",
+            `<principal> updated release "${updatedRelease.code}" in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
         res.status(StatusCodes.OK).json({ project: updated, evictedSlots });
     })
 );
@@ -273,6 +296,13 @@ router.post("/:code/publish",
             await dataService.cards.update(updatedCards);
         }
 
+        await logActivity(
+            LogCategory.RELEASE,
+            "release.published",
+            `<principal> published release "${code}" in <project>`,
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
         res.status(StatusCodes.OK).json(updated);
     })
 );
@@ -302,6 +332,13 @@ router.delete("/:code",
 
         project.releases = project.releases.filter((r) => r.code !== code);
         const updated = await dataService.projects.update(project);
+
+        await logActivity(
+            LogCategory.RELEASE,
+            "release.deleted",
+            `<principal> deleted release "${code}" from <project>`,
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
 
         res.status(StatusCodes.OK).json({ project: updated, evictedSlots });
     })

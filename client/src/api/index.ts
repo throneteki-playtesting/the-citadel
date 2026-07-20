@@ -9,6 +9,7 @@ import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/mod
 import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
 import { Role, SafeIntegration, User } from "common/models/auth";
+import { ILogEntry } from "common/models/logs";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
@@ -621,6 +622,14 @@ const api = createApi({
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => generateFor(result, "review")
+        }),
+        // Logs API
+        getLogs: builder.query<IGetResponse<ILogEntry>, IGetRequest<ILogEntry>>({
+            query: (options) => {
+                const url = buildUrl("logs", options);
+                return { url, method: "GET" };
+            },
+            providesTags: (results) => generateFor(results?.items, "log")
         })
     })
 });
@@ -705,7 +714,9 @@ export const {
     useGetReviewsQuery,
     useCreateReviewMutation,
     useUpdateReviewMutation,
-    useDeleteReviewMutation
+    useDeleteReviewMutation,
+
+    useGetLogsQuery
 } = api;
 
 export default api;
