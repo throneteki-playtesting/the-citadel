@@ -6,6 +6,7 @@ import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore,
 import { Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
+import { isEnvironment } from "@/env";
 
 class DiscordService {
     private client: Client;
@@ -29,7 +30,7 @@ class DiscordService {
             // Syncs necessary data once on startup, then once a day
             logger.info("[Discord] Running daily sync...");
             this.syncAll();
-            if (process.env.NODE_ENV === "production") {
+            if (isEnvironment("staging", "production")) {
                 cron.schedule("0 0 * * *", () => this.syncAll());
                 logger.info("[Discord] Daily sync scheduled");
             }

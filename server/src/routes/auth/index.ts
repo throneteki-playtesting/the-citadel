@@ -13,6 +13,7 @@ import { AccessTokenPayload, AuthStatus, RefreshAuthResponse } from "@/types";
 import DiscordService from "@/discord";
 import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { isEnvironment } from "@/env";
 
 const router = express.Router();
 
@@ -167,17 +168,17 @@ async function applyTokensToResponse(res: Response, discordId: string, sessionId
 
     res.cookie("sessionId", sessionId, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isEnvironment("staging", "production"),
         sameSite: "lax"
     });
     res.cookie("accessToken", accessToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isEnvironment("staging", "production"),
         sameSite: "lax"
     });
     res.cookie("refreshToken", refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        secure: isEnvironment("staging", "production"),
         sameSite: "lax"
     });
 }

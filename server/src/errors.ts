@@ -3,6 +3,7 @@ import { StatusCodes } from "http-status-codes";
 import { logger } from "./services";
 import { NextFunction, Request, Response } from "express";
 import { ApiError, ApiFieldError, isApiError } from "./types";
+import { isEnvironment } from "./env";
 
 export class ApiErrorResponse extends Error implements ApiError {
     constructor(public code: StatusCodes, public error: string, public message: string, public cause?: unknown) {
@@ -51,7 +52,7 @@ export const errorHandler = (
     // Unhandled error
     logger.error(err);
 
-    if (process.env.NODE_ENV !== "production") {
+    if (isEnvironment("development")) {
         const apiError: ApiError = {
             code: StatusCodes.INTERNAL_SERVER_ERROR,
             error: "Internal Server Error",
@@ -60,7 +61,7 @@ export const errorHandler = (
         return res.status(apiError.code).json(apiError);
     }
 
-    // Unhandled error (for production) — same shape as above, without leaking internals
+    // Unhandled error (for staging/production) — same shape as above, without leaking internals
     const apiError: ApiError = {
         code: StatusCodes.INTERNAL_SERVER_ERROR,
         error: "Internal Server Error",

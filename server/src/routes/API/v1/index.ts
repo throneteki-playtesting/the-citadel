@@ -17,6 +17,7 @@ import { dataService } from "@/services";
 import { getContext } from "@/middleware/context";
 import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { isEnvironment } from "@/env";
 
 const router = express.Router();
 router.use("/users", parseAPIRequest, users);
@@ -38,7 +39,7 @@ router.post("/login", (req, res) => {
 
 const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: isEnvironment("staging", "production"),
     sameSite: "lax" as const
 };
 
