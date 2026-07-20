@@ -48,7 +48,7 @@ const EditSuggestionModal = ({ isOpen, suggestion: initial, onClose: onModalClos
                             <CardPreview card={renderCardSuggestion(suggestion)} className="self-center md:self-start shrink-0 max-w-64"/>
                             <WizardPages>
                                 <WizardPage controlledData={{ card: suggestion.card }}>
-                                    <CardEditor className="w-full" card={suggestion.card} onUpdate={(card) => setSuggestion((prev) => ({ ...prev, card }))} inputOptions={{ designer: "hidden" }}/>
+                                    <CardEditor className="w-full" card={suggestion.card} onUpdate={(card) => setSuggestion((prev) => ({ ...prev, card }))} inputOptions={{ designer: "hidden" }} for="card"/>
                                 </WizardPage>
                                 <WizardPage controlledData={{ tags: suggestion.tags }}>
                                     <ComboBox label="Tags" values={suggestion.tags ?? []} onChange={(tags) => setSuggestion((prev) => ({ ...prev, tags }))} chip={{ color: "primary", size: "sm" }}/>

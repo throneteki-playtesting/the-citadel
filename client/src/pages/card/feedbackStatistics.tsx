@@ -15,6 +15,7 @@ import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { useNavigate } from "react-router-dom";
 import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery, useGetUserQuery } from "../../api";
+import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
@@ -195,14 +196,17 @@ type ReviewGraphProps = Omit<BaseElementProps, "children"> & {
 function ReviewSummaries({ className, style, project, number, dataSet }: ReviewSummariesProps) {
     const [isOutdatedModalOpen, setIsOutdatedModalOpen] = useState(false);
     const navigate = useNavigate();
+    const { user } = useAuth();
 
-    const onEdit = useCallback((isLatest: boolean) => {
+    const onEdit = useCallback((review: IPlaytestReview, isLatest: boolean) => {
         if (isLatest) {
-            navigate(`/review/submit?project=${project}&number=${number}`);
+            navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}`);
+        } else if (hasPermission(user, Permission.EDIT_REVIEWS)) {
+            navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}&version=${review.version}`);
         } else {
             setIsOutdatedModalOpen(true);
         }
-    }, [navigate, number, project]);
+    }, [navigate, number, project, user]);
 
     return (
         <>
@@ -328,7 +332,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                             }>
                                 <Button
                                     isIconOnly
-                                    onPress={() => onEdit(card.latest)}
+                                    onPress={() => onEdit(review, card.latest)}
                                     color="primary"
                                 >
                                     <FontAwesomeIcon icon={faPencil}/>
@@ -410,7 +414,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
 
 type ReviewSummaryProps = Omit<BaseElementProps, "children"> & {
     review: IPlaytestReview;
-    onEdit: (isLatest: boolean) => void;
+    onEdit: (review: IPlaytestReview, isLatest: boolean) => void;
 }
 
 function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {

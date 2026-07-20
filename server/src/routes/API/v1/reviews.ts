@@ -75,6 +75,18 @@ router.get("/:project/:number/:version/:reviewer",
 router.post("/",
     validateRequest(Permission.MAKE_REVIEWS),
     celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
+    // Reviewers may only submit their own review for the card's current latest version, unless they hold EDIT_REVIEWS
+    validateRequest(async (principal, req) => {
+        const review = req.body;
+        if (hasPermission(principal, Permission.EDIT_REVIEWS)) {
+            return true;
+        }
+        if (!("discordId" in principal) || principal.discordId !== review.reviewer) {
+            return false;
+        }
+        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+        return !!card?.latest;
+    }),
     asyncHandler<unknown, unknown, IPlaytestReview, unknown>(async (req, res) => {
         let review = req.body;
         review = await dataService.reviews.create(review);
@@ -108,10 +120,19 @@ router.put("/:project/:number/:version/:reviewer",
         next();
     }),
     // Further permission check, now with context of the review
-    validateRequest((principal, req, res) => {
+    validateRequest(async (principal, _req, res) => {
         const review = res.locals.review as IPlaytestReview;
-        return hasPermission(principal, Permission.EDIT_REVIEWS) ||
-            validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
+        if (hasPermission(principal, Permission.EDIT_REVIEWS)) {
+            return true;
+        }
+
+        if (!validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer)) {
+            return false;
+        }
+
+        // Without EDIT_REVIEWS, reviewers may only amend their review for the card's current latest version
+        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+        return !!card?.latest;
     }),
     celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
     asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>(async (req, res) => {

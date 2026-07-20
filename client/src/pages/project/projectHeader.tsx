@@ -9,6 +9,7 @@ import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import { useMemo, ReactNode } from "react";
 import { TouchTooltip } from "../../components/touchTooltip";
+import ProjectImageStatus from "../../components/status/projectImageStatus";
 
 const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
     const headerComponents = useMemo(() => {
@@ -46,6 +47,9 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                     <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
                 </div>
                 <div className="self-end sm:self-start flex gap-1">
+                    <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
+                        <ProjectImageStatus project={project.number} />
+                    </PermissionGate>
                     {(project.draft || project.active) &&
                     <PermissionGate requires={Permission.EDIT_PROJECTS}>
                         <TouchTooltip content="Edit Project">

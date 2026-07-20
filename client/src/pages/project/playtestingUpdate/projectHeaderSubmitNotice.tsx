@@ -14,7 +14,7 @@ const ProjectHeaderPlaytestingUpdateNotice = ({ className, style, project }: Pro
     return (
         <>
             {!isDraftsLoading && draftCards.length > 0 && (
-                <Alert color="primary" title={<span className="font-bold text-sm md:text-md lg:text-lg">Playtesting Updates Available</span>} className={className} style={style}>
+                <Alert color="primary" title="Playtesting Updates Available" classNames={{ title: "font-bold text-sm md:text-md lg:text-lg" }} className={className} style={style}>
                     <div className="text-xs md:text-sm lg:text-md italic">
                         {draftCards.length} draft card changes found. To push these changes to playtesters, a Playtesting Update must be created & submitted.
                     </div>

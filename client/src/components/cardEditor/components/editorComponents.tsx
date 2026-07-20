@@ -7,12 +7,14 @@ import classNames from "classnames";
 import { BaseElementProps } from "../../../types";
 import ComboBox from "../../combobox";
 import { DeepPartial } from "common/types";
+import { useFieldName } from "../fieldPrefixContext";
 
 type CustomSetterProps<T> = Omit<BaseElementProps, "children"> & { value?: T, setValue: Dispatch<SetStateAction<T | undefined>>, isDisabled?: boolean };
 
 export const FactionSelect = ({ className, style, value: faction, setValue: setFaction, isDisabled }: CustomSetterProps<FactionType>) => {
+    const name = useFieldName("faction");
     return (
-        <Select name="faction" className={className} style={style} label="Faction" startContent={faction && <ThronesIcon name={faction}/>} selectedKeys={faction ? [faction] : []} onChange={(e) => setFaction(e.target.value as FactionType)} isDisabled={isDisabled}>
+        <Select name={name} className={className} style={style} label="Faction" startContent={faction && <ThronesIcon name={faction}/>} selectedKeys={faction ? [faction] : []} onChange={(e) => setFaction(e.target.value as FactionType)} isDisabled={isDisabled}>
             {factions.map((faction) =>
                 <SelectItem key={faction} startContent={<ThronesIcon name={faction}/>}>
                     {factionNames[faction]}
@@ -22,8 +24,9 @@ export const FactionSelect = ({ className, style, value: faction, setValue: setF
 };
 
 export const TypeSelect = ({ className, style, value: type, setValue: setType, isDisabled }: CustomSetterProps<TypeType>) => {
+    const name = useFieldName("type");
     return (
-        <Select name="type" className={className} style={style} label="Type" startContent={type && <ThronesIcon name={type}/>} selectedKeys = {type ? [type] : []} onChange={(e) => setType(e.target.value as TypeType)} isDisabled={isDisabled}>
+        <Select name={name} className={className} style={style} label="Type" startContent={type && <ThronesIcon name={type}/>} selectedKeys = {type ? [type] : []} onChange={(e) => setType(e.target.value as TypeType)} isDisabled={isDisabled}>
             {types.map((type) =>
                 <SelectItem key={type} startContent={<ThronesIcon name={type}/>}>
                     {typeNames[type]}
@@ -50,6 +53,7 @@ export const LoyalButton = ({ className, style, value: loyal, setValue: setLoyal
 };
 
 export const CostInput = ({ className, style, value: cost, setValue, isDisabled }: CustomSetterProps<CostType>) => {
+    const name = useFieldName("cost");
     const setCost = (value: string) => {
         let cost: CostType | undefined = undefined;
         if (value?.toUpperCase().startsWith("X")) {
@@ -65,7 +69,7 @@ export const CostInput = ({ className, style, value: cost, setValue, isDisabled 
         setValue(cost);
     };
     return (
-        <Input name="cost" className={className} style={style} label="Cost" value={cost?.toString() ?? ""} onValueChange={setCost} isDisabled={isDisabled}>
+        <Input name={name} className={className} style={style} label="Cost" value={cost?.toString() ?? ""} onValueChange={setCost} isDisabled={isDisabled}>
             {cost?.toString()}
         </Input>
     );
@@ -93,6 +97,7 @@ export const ChallengeIconButtons = ({ className, style, value: challengeIcons =
 };
 
 export const StrengthInput = ({ className, style, value: strength, setValue, isDisabled }: CustomSetterProps<StrengthType>) => {
+    const name = useFieldName("strength");
     const setStrength = (value: string) => {
         let strength: StrengthType | undefined = undefined;
         if (value?.toUpperCase().startsWith("X")) {
@@ -107,32 +112,38 @@ export const StrengthInput = ({ className, style, value: strength, setValue, isD
     };
 
     return (
-        <Input name="strength" className={className} style={style} label="Strength" value={strength?.toString() ?? ""} onValueChange={setStrength} isDisabled={isDisabled}>
+        <Input name={name} className={className} style={style} label="Strength" value={strength?.toString() ?? ""} onValueChange={setStrength} isDisabled={isDisabled}>
             {strength?.toString()}
         </Input>
     );
 };
 
 export const TraitsInput = ({ className, style, value: traits, setValue: setTraits, isDisabled }: CustomSetterProps<string[]>) => {
+    const name = useFieldName("traits");
     const setValue = (items: string[]) => {
         // Removes any trailing dots
         const cleanedItems = items.map((item) => item.replace(/\.+$/, ""));
         setTraits(cleanedItems);
     };
     return (
-        <ComboBox name="traits" className={className} style={style} label="Traits" values={traits} placeholder="Type and press enter" onChange={setValue} isDisabled={isDisabled} chip={{ color: "default", variant: "flat", className: "rounded-sm p-0 pr-0.5" }} addKeys={["Enter", "."]}/>
+        <ComboBox name={name} className={className} style={style} label="Traits" values={traits} placeholder="Type and press enter" onChange={setValue} isDisabled={isDisabled} chip={{ color: "default", variant: "flat", className: "rounded-sm p-0 pr-0.5" }} addKeys={["Enter", "."]}/>
     );
 };
 
 export const FlavorInput = ({ className, style, value: flavor, setValue: setFlavor, isDisabled }: CustomSetterProps<string>) => {
+    const name = useFieldName("flavor");
     return (
-        <Input name="flavor" className={className} style={style} label="Flavor" value={flavor ?? ""} onValueChange={setFlavor} isDisabled={isDisabled}>
+        <Input name={name} className={className} style={style} label="Flavor" value={flavor ?? ""} onValueChange={setFlavor} isDisabled={isDisabled}>
             {flavor}
         </Input>
     );
 };
 
 export const PlotStatInputs = ({ className, style, value: plotStats, setValue: setPlotStats, isDisabled }: Omit<CustomSetterProps<DeepPartial<PlotStatsType>>, "errorMessage"> & { errorMessages?: { [K in keyof PlotStatsType]?: string } }) => {
+    const incomeName = useFieldName("plotStats.income");
+    const initiativeName = useFieldName("plotStats.initiative");
+    const claimName = useFieldName("plotStats.claim");
+    const reserveName = useFieldName("plotStats.reserve");
     const setValue = (type: keyof PlotStatsType, value: string) => {
         let statValue: PlotValueType | undefined = undefined;
         if (value?.toUpperCase().startsWith("X")) {
@@ -147,16 +158,16 @@ export const PlotStatInputs = ({ className, style, value: plotStats, setValue: s
     };
     return (
         <div className={classNames("grid grid-cols-2 gap-2", className)} style={style}>
-            <Input name="plotStats.income" className={className} style={style} label="Income" value={plotStats?.income?.toString() ?? ""} onValueChange={(value) => setValue("income", value)} isDisabled={isDisabled}>
+            <Input name={incomeName} className={className} style={style} label="Income" value={plotStats?.income?.toString() ?? ""} onValueChange={(value) => setValue("income", value)} isDisabled={isDisabled}>
                 {plotStats?.income}
             </Input>
-            <Input name="plotStats.initiative" className={className} style={style} label="Initiative" value={plotStats?.initiative?.toString() ?? ""} onValueChange={(value) => setValue("initiative", value)} isDisabled={isDisabled}>
+            <Input name={initiativeName} className={className} style={style} label="Initiative" value={plotStats?.initiative?.toString() ?? ""} onValueChange={(value) => setValue("initiative", value)} isDisabled={isDisabled}>
                 {plotStats?.initiative}
             </Input>
-            <Input name="plotStats.claim" className={className} style={style} label="Claim" value={plotStats?.claim?.toString() ?? ""} onValueChange={(value) => setValue("claim", value)} isDisabled={isDisabled}>
+            <Input name={claimName} className={className} style={style} label="Claim" value={plotStats?.claim?.toString() ?? ""} onValueChange={(value) => setValue("claim", value)} isDisabled={isDisabled}>
                 {plotStats?.claim}
             </Input>
-            <Input name="plotStats.reserve" className={className} style={style} label="Reserve" value={plotStats?.reserve?.toString() ?? ""} onValueChange={(value) => setValue("reserve", value)} isDisabled={isDisabled}>
+            <Input name={reserveName} className={className} style={style} label="Reserve" value={plotStats?.reserve?.toString() ?? ""} onValueChange={(value) => setValue("reserve", value)} isDisabled={isDisabled}>
                 {plotStats?.reserve}
             </Input>
         </div>

@@ -28,7 +28,7 @@ function buildTracePath(w: number, h: number, sw: number, br: number): string {
     ].join(" ");
 }
 
-export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, className, style, traceClassName }: BaseStatusProps) {
+export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, keepTooltipOpen = false, className, style, traceClassName }: BaseStatusProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const lpRef = useRef({ triggered: false, timer: null as ReturnType<typeof setTimeout> | null });
 
@@ -197,7 +197,7 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
         );
 
         const withTooltip = (
-            <TouchTooltip content={tooltipContent}>
+            <TouchTooltip content={tooltipContent} keepOpen={keepTooltipOpen}>
                 {button}
             </TouchTooltip>
         );
@@ -282,12 +282,13 @@ type BaseStatusProps = Omit<BaseElementProps, "children"> & {
     isIconOnly?: boolean;
     longPressDelay?: number;
     traceClassName?: string;
+    keepTooltipOpen?: boolean;
 };
 
 export type StatusData = {
     icon?: ReactNode;
-    title?: string;
-    description?: string;
+    title?: ReactNode;
+    description?: ReactNode;
     color: UIColor;
     onPress?: () => void;
     href?: string;

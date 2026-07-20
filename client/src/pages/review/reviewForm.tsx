@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { IPlaytestCard } from "common/models/cards";
 import { CardPreview } from "@agot/card-preview";
 import { renderPlaytestingCard } from "common/utils";
-import { addToast, Button, NumberInput, Textarea } from "@heroui/react";
+import { addToast, Alert, Button, NumberInput, Textarea } from "@heroui/react";
 import { IPlaytestReview } from "common/models/reviews";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeepPartial } from "common/types";
@@ -15,9 +15,11 @@ import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleArrowLeft, faExternalLink } from "@fortawesome/free-solid-svg-icons";
+import { faCircleArrowLeft, faExternalLink, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { merge } from "lodash-es";
 import CardSelection from "./cardSelection";
+import classNames from "classnames";
+import { UserChip } from "../admin/logs/chips";
 
 const defaultData = {
     decks: [],
@@ -29,18 +31,21 @@ const defaultData = {
         releasable: undefined
     }
 };
-export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
+export default function ReviewForm({ card: initialCard, reviewer: targetReviewer }: ReviewFormProps) {
     const navigate = useNavigate();
     const [readReview] = useLazyGetReviewQuery();
     const [createReview, { isLoading: isCreating }] = useCreateReviewMutation();
     const [updateReview, { isLoading: isUpdating }] = useUpdateReviewMutation();
 
     const { user } = useAuth();
-    const reviewer = user?.discordId;
+    const reviewer = targetReviewer ?? user?.discordId;
+    const isOwnReview = !targetReviewer || targetReviewer === user?.discordId;
 
     const [review, setReview] = useState<DeepPartial<IPlaytestReview>>(defaultData);
     const [isNew, setIsNew] = useState(true);
     const [card, setCard] = useState<IPlaytestCard>();
+    // Changing the card would break the reviewer/version binding when editing someone else's or an outdated review
+    const canChangeCard = isOwnReview && (!card || card.latest);
 
     useEffect(() => {
         setReview((prev) => ({ ...prev, reviewer }));
@@ -55,7 +60,7 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
             if (card && reviewer) {
                 try {
                     const filter = { project: card.project, number: card.number, version: card.version, reviewer };
-                    const existingReview = await readReview(filter).unwrap();
+                    const existingReview = await readReview(filter, true).unwrap();
                     // If review already exists, save it. Otherwise, set to default values + card values
                     if (existingReview) {
                         setReview(existingReview);
@@ -95,15 +100,32 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
                     </WizardPage>
                     <WizardPage controlledData={review}>
                         <div className="font-cinzel text-3xl">
-                            {isNew ? "Render your Verdict" : "Your verdict has already been rendered"}
+                            {isNew
+                                ? "Render your Verdict"
+                                : `${isOwnReview ? "Your" : "This reviewer's"} verdict has already been rendered`
+                            }
                         </div>
-                        <div className="font-crimson text-lg">
-                            {isNew ? "Each verdict submitted to the Citadel provides the team with the tracked insights needed to refine a card's design — speak plainly and honestly of your findings." : "You have already submitted a review for this version — you may amend your scroll at any time."}
+                        <div className="text-lg">
+                            {isNew
+                                ? "Each verdict submitted to the Citadel provides the team with the tracked insights needed to refine a card's design — speak plainly and honestly of your findings."
+                                : isOwnReview
+                                    ? "You have already submitted a review for this version — you may amend your scroll at any time."
+                                    : <span className="inline-flex items-center gap-1 flex-wrap">You are amending <UserChip value={reviewer!} />&apos;s review for this version on their behalf.</span>
+                            }
                         </div>
-                        <div className="flex gap-2 items-center justify-between w-full">
-                            <WizardBack onCancel={() => true} startContent={<FontAwesomeIcon icon={faCircleArrowLeft}/>}>
-                                Change Card
-                            </WizardBack>
+                        {card && !card.latest && (
+                            <Alert color="warning" icon={<FontAwesomeIcon icon={faScroll} />} title="Amending an aged scroll" classNames={{ title: "font-bold text-sm md:text-md lg:text-lg" }}>
+                                <div className="text-xs md:text-sm lg:text-md italic">
+                                    You are editing a review for version {card.version} of this card, which is no longer the current version.
+                                </div>
+                            </Alert>
+                        )}
+                        <div className={classNames("flex gap-2 items-center w-full", canChangeCard ? "justify-between" : "justify-end")}>
+                            {canChangeCard && (
+                                <WizardBack onCancel={() => true} startContent={<FontAwesomeIcon icon={faCircleArrowLeft}/>}>
+                                    Change Card
+                                </WizardBack>
+                            )}
                             <Button as="a" color="secondary" isDisabled={!card} endContent={<FontAwesomeIcon icon={faExternalLink}/>} href={card ? `/project/${card.project}/${card.number}` : undefined} target="_blank" rel="noopener noreferrer">
                                 View Card Page
                             </Button>
@@ -180,4 +202,5 @@ export default function ReviewForm({ card: initialCard }: ReviewFormProps) {
 type ReviewFormProps = {
     review?: DeepPartial<IPlaytestReview>;
     card?: IPlaytestCard;
+    reviewer?: string;
 }
