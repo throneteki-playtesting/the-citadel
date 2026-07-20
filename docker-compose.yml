@@ -10,7 +10,7 @@ services:
         - VITE_BUG_REPORT_URL=${BUG_REPORT_URL}
         - VITE_SENTRY_DSN=${SENTRY_CLIENT_DSN}
     restart: always
-    container_name: citadel_client
+    container_name: citadel_client_${NODE_ENV}
     ports:
       - ${CLIENT_PORT}:${CLIENT_PORT}
     environment:
@@ -21,7 +21,7 @@ services:
       dockerfile: server/Dockerfile
       context: ./
     restart: always
-    container_name: citadel_server
+    container_name: citadel_server_${NODE_ENV}
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
     environment:
@@ -74,8 +74,10 @@ services:
       - S3_REGION=${S3_REGION}
       - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
       - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
-  redis:
-    image: redis
-    restart: always
-    container_name: redis
-    
+    networks:
+      - default
+      - shared_net
+networks:
+  shared_net:
+    external: true
+    name: shared_net
