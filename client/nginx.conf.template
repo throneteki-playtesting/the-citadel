@@ -12,7 +12,7 @@ server {
 
     location /api/ {
         set $server_upstream ${SERVER_INTERNAL_HOST};
-        proxy_pass $server_upstream/api/;
+        proxy_pass $server_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -21,7 +21,7 @@ server {
 
     location /auth/ {
         set $server_upstream ${SERVER_INTERNAL_HOST};
-        proxy_pass $server_upstream/auth/;
+        proxy_pass $server_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -30,7 +30,7 @@ server {
 
     location /thronesdb/ {
         set $server_upstream ${SERVER_INTERNAL_HOST};
-        proxy_pass $server_upstream/thronesdb/;
+        proxy_pass $server_upstream;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
