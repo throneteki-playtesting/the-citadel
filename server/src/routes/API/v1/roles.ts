@@ -23,17 +23,19 @@ async function getRoles(
     orderBy: IGetRequest<Role>["orderBy"],
     page: IGetRequest<Role>["page"],
     perPage: IGetRequest<Role>["perPage"]
-): Promise<IGetResponse<Role>> {
+): Promise<IGetResponse<Role & { userCount: number }>> {
     const [result, count] = await Promise.all([
         dataService.roles.read(filter, orderBy, page, perPage),
         dataService.roles.count(filter)
     ]);
-    return generateGetResponse(result, count);
+    const userCounts = await dataService.users.countByRole(result.map((role) => role.discordId));
+    const withUserCounts = result.map((role) => ({ ...role, userCount: userCounts.get(role.discordId) ?? 0 }));
+    return generateGetResponse(withUserCounts, count);
 }
 
 const getQuerySchema = getRequestSchema(
     Schemas.Role.Full,
-    { name: "desc" }
+    { position: "asc" }
 );
 
 const validateGetRoles = [

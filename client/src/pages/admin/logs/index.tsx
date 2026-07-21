@@ -16,7 +16,7 @@ const PER_PAGE = 20;
 const SKELETON_ROW_COUNT = 16;
 
 // Shared grid track sizing so the summary row's columns line up consistently top to bottom.
-const ROW_GRID_COLS = "grid grid-cols-[10rem_6rem_1fr_1rem]";
+const ROW_GRID_COLS = "flex flex-col gap-1 sm:grid sm:grid-cols-[10rem_6rem_1fr_1rem] sm:gap-3";
 
 function mergeItems(a: ILogEntry[], b: ILogEntry[]): ILogEntry[] {
     const byId = new Map<string, ILogEntry>();
@@ -232,7 +232,7 @@ export default function Logs() {
                 <div className="font-cinzel text-2xl">Activity Logs</div>
                 <div className="text-sm md:text-base">A live feed of important actions taken across the site, along with the user or integration responsible.</div>
             </div>
-            <Card className="border-1 border-content3 p-4 gap-3">
+            <Card className="border-1 border-content3 p-2 sm:p-4 gap-3">
                 <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
                     <DatePicker
                         label="From"
@@ -380,16 +380,18 @@ function LogRow({ entry, timezone, isExpanded, hasOpened, isFlashing, onToggle }
                 onClick={onToggle}
                 className={classNames(
                     ROW_GRID_COLS,
-                    "w-full items-center gap-3 px-4 py-3 text-left cursor-pointer transition-all duration-700 ring-2 ring-inset",
+                    "w-full sm:items-center px-2 sm:px-4 py-3 text-left cursor-pointer transition-all duration-700 ring-2 ring-inset",
                     isFlashing ? "ring-primary bg-primary/10" : "ring-transparent"
                 )}
             >
-                <span className="font-mono text-xs text-foreground/50">{formatLogTimestamp(new Date(entry.created), timezone)}</span>
-                <Chip size="sm" variant="flat" color={severityColors[entry.severity]} className="capitalize justify-center">
-                    {entry.severity}
-                </Chip>
-                <div className="min-w-0 text-sm"><LogMessage entry={entry} /></div>
-                <FontAwesomeIcon icon={faChevronLeft} className={classNames("text-foreground/50 transition-transform duration-200", { "-rotate-90": isExpanded })} />
+                <div className="flex items-center justify-between gap-3 sm:contents">
+                    <span className="font-mono text-xs text-foreground/50 sm:order-1">{formatLogTimestamp(new Date(entry.created), timezone)}</span>
+                    <Chip size="sm" variant="flat" color={severityColors[entry.severity]} className="capitalize justify-center sm:order-2">
+                        {entry.severity}
+                    </Chip>
+                    <FontAwesomeIcon icon={faChevronLeft} className={classNames("text-foreground/50 transition-transform duration-200 sm:order-4", { "-rotate-90": isExpanded })} />
+                </div>
+                <div className="min-w-0 text-sm sm:order-3"><LogMessage entry={entry} /></div>
             </button>
             <div className={classNames("grid transition-[grid-template-rows] duration-200 ease-out", isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
                 <div className="overflow-hidden">
@@ -413,10 +415,12 @@ function LogRow({ entry, timezone, isExpanded, hasOpened, isFlashing, onToggle }
 
 function SkeletonRow() {
     return (
-        <div className={classNames(ROW_GRID_COLS, "items-center gap-3 px-4 py-3 border-b border-content3")}>
-            <Skeleton className="w-40 h-4 rounded-sm" />
-            <Skeleton className="w-16 h-6 rounded-full" />
-            <Skeleton className="h-4 rounded-sm" />
+        <div className={classNames(ROW_GRID_COLS, "sm:items-center px-2 sm:px-4 py-3 border-b border-content3")}>
+            <div className="flex items-center gap-3 sm:contents">
+                <Skeleton className="w-40 h-4 rounded-sm sm:order-1" />
+                <Skeleton className="w-16 h-6 rounded-full sm:order-2" />
+            </div>
+            <Skeleton className="h-4 rounded-sm sm:order-3" />
         </div>
     );
 }
@@ -426,7 +430,7 @@ function LogsSkeleton() {
         <div className="space-y-2">
             <Skeleton className="w-56 h-8 rounded-sm" />
             <Skeleton className="w-full max-w-xl h-5 rounded-sm" />
-            <Card className="border-1 border-content3 p-4 gap-3">
+            <Card className="border-1 border-content3 p-2 sm:p-4 gap-3">
                 <div className="flex flex-wrap gap-2">
                     <Skeleton className="w-64 h-14 rounded-md" />
                     <Skeleton className="w-64 h-14 rounded-md" />

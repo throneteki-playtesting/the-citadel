@@ -13,15 +13,19 @@ import usePageTitle from "../../../hooks/usePageTitle";
 import { usePermission } from "../../../hooks/usePermission";
 import useTimezone from "../../../hooks/useTimezone";
 import { Filter } from "common/types";
+import SortableColumnHeader, { ColumnSort } from "../../../components/data/sortableColumnHeader";
+import classNames from "classnames";
 
 export default function Integrations() {
     usePageTitle("Integrations");
 
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState<ColumnSort>();
     const perPage = 10;
+    const orderBy = useMemo(() => sort ? { [sort.key]: sort.dir } : undefined, [sort]);
     const filter = useMemo<Filter<SafeIntegration>>(() => ({ name: { $regex: `(?i)${search}` } }), [search]);
-    const { data: integrationsData, isLoading, isFetching } = useGetIntegrationsQuery({ filter, page, perPage });
+    const { data: integrationsData, isLoading, isFetching } = useGetIntegrationsQuery({ filter, orderBy, page, perPage });
 
     // Reset to page 1 when search changes
     const handleSearch = (value: string) => {
@@ -53,12 +57,12 @@ export default function Integrations() {
     }, [deleteIntegration, deletingIntegration]);
 
     const columns = [
-        { key: "name", label: "Name" },
-        { key: "status", label: "Status" },
-        { key: "owners", label: "Owners", className: "max-sm:hidden" },
-        { key: "lastUsedAt", label: "Last Used", className: "max-sm:hidden" },
+        { key: "name", label: "Name", sortKey: "name" },
+        { key: "status", label: "Status", sortKey: "enabled" },
+        { key: "owners", label: "Owners" },
+        { key: "lastUsedAt", label: "Last Used", sortKey: "lastUsedAt" },
         { key: "actions", label: "" }
-    ] as { key: string; label: string; className?: string }[];
+    ] as { key: string; label: string; sortKey?: string; className?: string }[];
 
     const renderCell = useCallback((integration: SafeIntegration, columnKey: Key) => {
         switch (columnKey) {
@@ -108,8 +112,10 @@ export default function Integrations() {
                 <div className="text-sm md:text-base">Tokens are only shown once upon creation or refresh; refreshing a token immediately invalidates the previous one.</div>
             </div>
             <Table
+                topContentPlacement="outside"
+                bottomContentPlacement="outside"
                 topContent={
-                    <div className="flex gap-3 items-center justify-between">
+                    <div className="flex gap-3 items-center justify-between px-4">
                         <Input
                             placeholder="Search..."
                             value={search}
@@ -134,13 +140,17 @@ export default function Integrations() {
                     </div>
                 }
                 bottomContent={
-                    <Pagination page={page} onChange={setPage} total={Math.ceil((integrationsData?.total ?? 0) / perPage)} />
+                    <div className="px-4">
+                        <Pagination page={page} onChange={setPage} total={Math.max(1, Math.ceil((integrationsData?.total ?? 0) / perPage))} />
+                    </div>
                 }
             >
                 <TableHeader columns={columns}>
                     {(column) => (
                         <TableColumn key={column.key} className={column.className}>
-                            {column.label}
+                            {column.sortKey ? (
+                                <SortableColumnHeader label={column.label} sortKey={column.sortKey} sort={sort} onChange={setSort} />
+                            ) : column.label}
                         </TableColumn>
                     )}
                 </TableHeader>
@@ -149,7 +159,7 @@ export default function Integrations() {
                         <TableRow key={item.id}>
                             {(columnKey) => {
                                 const column = columns.find((c) => c.key === columnKey);
-                                return <TableCell className={column?.className}>{renderCell(item, columnKey)}</TableCell>;
+                                return <TableCell className={classNames("text-tiny sm:text-small", column?.className)}>{renderCell(item, columnKey)}</TableCell>;
                             }}
                         </TableRow>
                     )}

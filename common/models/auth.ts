@@ -33,6 +33,7 @@ export interface Role {
     unicodeEmoji: string | null;
     permissions: Permission[];
 }
+export type RoleWithUserCount = Role & { userCount: number };
 export interface User extends IPrincipal {
     username: string,
     displayname: string,

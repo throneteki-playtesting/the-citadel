@@ -42,6 +42,21 @@ export default class UsersRepository extends BasicRepository<"user"> {
         this.cachedGuestProfile = undefined;
     }
 
+    async countByRole(discordIds: string[]): Promise<Map<string, number>> {
+        if (discordIds.length === 0) {
+            return new Map();
+        }
+
+        const results = await this.database.collection.aggregate<{ _id: string, count: number }>([
+            { $match: { "roles.discordId": { $in: discordIds } } },
+            { $unwind: "$roles" },
+            { $match: { "roles.discordId": { $in: discordIds } } },
+            { $group: { _id: "$roles.discordId", count: { $sum: 1 } } }
+        ]).toArray();
+
+        return new Map(results.map((result) => [result._id, result.count]));
+    }
+
     async syncEmbeddedRole(roles: SingleOrArray<Role>) {
         const roleArray = asArray(roles);
         await this.database.collection.bulkWrite(

@@ -12,13 +12,16 @@ import { usePermission } from "../../../hooks/usePermission";
 import useTimezone from "../../../hooks/useTimezone";
 import { Filter } from "common/types";
 import classNames from "classnames";
+import SortableColumnHeader, { ColumnSort } from "../../../components/data/sortableColumnHeader";
 
 export default function Users() {
     usePageTitle("Users");
 
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState<ColumnSort>();
     const perPage = 10;
+    const orderBy = useMemo(() => sort ? { [sort.key]: sort.dir } : undefined, [sort]);
     const filter = useMemo<Filter<User>[]>(() => {
         const searchRegex = `(?i)${search}`;
 
@@ -27,7 +30,7 @@ export default function Users() {
             { username: { $regex: searchRegex }, discordId: { $ne: "anonymous" } }
         ];
     }, [search]);
-    const { data: usersData, isLoading, isFetching } = useGetUsersQuery({ filter, page, perPage });
+    const { data: usersData, isLoading, isFetching } = useGetUsersQuery({ filter, orderBy, page, perPage });
     const { data: guestUser } = useGetUserQuery({ discordId: "anonymous" });
 
     // Reset to page 1 when search changes
@@ -42,18 +45,18 @@ export default function Users() {
     const { format } = useTimezone();
 
     const columns = [
-        { key: "username", label: "Name" },
+        { key: "username", label: "Name", sortKey: "username" },
         { key: "roles", label: "Roles" },
-        { key: "lastLogin", label: "Last Login", className: "max-sm:hidden" },
+        { key: "lastLogin", label: "Last Login", sortKey: "lastLogin" },
         { key: "actions", label: "" }
-    ] as { key: string; label: string; className?: string }[];
+    ] as { key: string; label: string; sortKey?: string; className?: string }[];
 
     const renderCell = useCallback((user: User, columnKey: Key) => {
         switch (columnKey) {
             case "username":
                 return (
                     <DisplayUser
-                        avatarProps={{ radius: "lg", src: user.avatarUrl }}
+                        avatarProps={{ radius: "lg", src: user.avatarUrl, className: "shrink-0" }}
                         description={user.username}
                         name={user.displayname}
                     >
@@ -114,32 +117,40 @@ export default function Users() {
                 </div>
             )}
             <Table
+                topContentPlacement="outside"
+                bottomContentPlacement="outside"
                 topContent={
-                    <Input
-                        placeholder="Search..."
-                        value={search}
-                        onValueChange={handleSearch}
-                        startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
-                        endContent={
-                            isFetching ? (
-                                <Spinner size="sm" aria-label="Loading" />
-                            ) : search ? (
-                                <button onClick={() => handleSearch("")}>
-                                    <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
-                                </button>
-                            ) : null
-                        }
-                        className="max-w-98"
-                    />
+                    <div className="px-4">
+                        <Input
+                            placeholder="Search..."
+                            value={search}
+                            onValueChange={handleSearch}
+                            startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
+                            endContent={
+                                isFetching ? (
+                                    <Spinner size="sm" aria-label="Loading" />
+                                ) : search ? (
+                                    <button onClick={() => handleSearch("")}>
+                                        <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                                    </button>
+                                ) : null
+                            }
+                            className="max-w-98"
+                        />
+                    </div>
                 }
                 bottomContent={
-                    <Pagination page={page} onChange={setPage} total={Math.ceil((usersData?.total ?? 0) / perPage)} />
+                    <div className="px-4">
+                        <Pagination page={page} onChange={setPage} total={Math.max(1, Math.ceil((usersData?.total ?? 0) / perPage))} />
+                    </div>
                 }
             >
                 <TableHeader columns={columns}>
                     {(column) => (
                         <TableColumn key={column.key} className={column.className}>
-                            {column.label}
+                            {column.sortKey ? (
+                                <SortableColumnHeader label={column.label} sortKey={column.sortKey} sort={sort} onChange={setSort} />
+                            ) : column.label}
                         </TableColumn>
                     )}
                 </TableHeader>
@@ -148,7 +159,7 @@ export default function Users() {
                         <TableRow key={item.username}>
                             {(columnKey) => {
                                 const column = columns.find((c) => c.key === columnKey);
-                                return <TableCell className={column?.className}>{renderCell(item, columnKey)}</TableCell>;
+                                return <TableCell className={classNames("text-tiny sm:text-small", column?.className)}>{renderCell(item, columnKey)}</TableCell>;
                             }}
                         </TableRow>
                     )}

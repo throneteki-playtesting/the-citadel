@@ -5,17 +5,20 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import EditRoleModal from "./editRoleModal";
 import Loading from "../../../components/loading";
-import { Role } from "common/models/auth";
+import { Role, RoleWithUserCount } from "common/models/auth";
 import usePageTitle from "../../../hooks/usePageTitle";
 import { Filter } from "common/types";
 import classNames from "classnames";
+import SortableColumnHeader, { ColumnSort } from "../../../components/data/sortableColumnHeader";
 
 export default function Roles() {
     usePageTitle("Roles");
 
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
+    const [sort, setSort] = useState<ColumnSort | undefined>({ key: "position", dir: "asc" });
     const perPage = 10;
+    const orderBy = useMemo(() => sort ? { [sort.key]: sort.dir } : undefined, [sort]);
     const filter = useMemo<Filter<Role>[]>(() => {
         const searchRegex = `(?i)${search}`;
 
@@ -23,7 +26,7 @@ export default function Roles() {
             { name: { $regex: searchRegex } }
         ];
     }, [search]);
-    const { data: rolesData, isLoading, isFetching } = useGetRolesQuery({ filter, page, perPage });
+    const { data: rolesData, isLoading, isFetching } = useGetRolesQuery({ filter, orderBy, page, perPage });
 
     // Reset to page 1 when search changes
     const handleSearch = (value: string) => {
@@ -34,11 +37,12 @@ export default function Roles() {
     const [editingRole, setEditingRole] = useState<Role>();
 
     const columns = [
-        { key: "name", label: "Name" },
+        { key: "name", label: "Name", sortKey: "name" },
+        { key: "userCount", label: "Users" },
         { key: "actions", label: "" }
-    ] as { key: string; label: string; className?: string }[];
+    ] as { key: string; label: string; sortKey?: string; className?: string }[];
 
-    const renderCell = useCallback((role: Role, columnKey: Key) => {
+    const renderCell = useCallback((role: RoleWithUserCount, columnKey: Key) => {
         switch (columnKey) {
             case "name":
                 const hex = role.color ? `#${role.color.toString(16).padStart(6, "0")}` : undefined;
@@ -51,6 +55,8 @@ export default function Roles() {
                         {role.name}
                     </div>
                 );
+            case "userCount":
+                return <span>{role.userCount}</span>;
             case "actions":
                 return (
                     <Button isIconOnly size="sm" variant="light" isDisabled={!!editingRole} onPress={() => setEditingRole(role)}>
@@ -67,32 +73,40 @@ export default function Roles() {
                 <div className="text-sm md:text-base">Roles are managed within Discord, but can have citadel permissions tied to them.</div>
             </div>
             <Table
+                topContentPlacement="outside"
+                bottomContentPlacement="outside"
                 topContent={
-                    <Input
-                        placeholder="Search..."
-                        value={search}
-                        onValueChange={handleSearch}
-                        startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
-                        endContent={
-                            isFetching ? (
-                                <Spinner size="sm" aria-label="Loading" />
-                            ) : search ? (
-                                <button onClick={() => handleSearch("")}>
-                                    <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
-                                </button>
-                            ) : null
-                        }
-                        className="max-w-98"
-                    />
+                    <div className="px-4">
+                        <Input
+                            placeholder="Search..."
+                            value={search}
+                            onValueChange={handleSearch}
+                            startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
+                            endContent={
+                                isFetching ? (
+                                    <Spinner size="sm" aria-label="Loading" />
+                                ) : search ? (
+                                    <button onClick={() => handleSearch("")}>
+                                        <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                                    </button>
+                                ) : null
+                            }
+                            className="max-w-98"
+                        />
+                    </div>
                 }
                 bottomContent={
-                    <Pagination page={page} onChange={setPage} total={Math.ceil((rolesData?.total ?? 0) / perPage)} />
+                    <div className="px-4">
+                        <Pagination page={page} onChange={setPage} total={Math.max(1, Math.ceil((rolesData?.total ?? 0) / perPage))} />
+                    </div>
                 }
             >
                 <TableHeader columns={columns}>
                     {(column) => (
                         <TableColumn key={column.key} className={column.className}>
-                            {column.label}
+                            {column.sortKey ? (
+                                <SortableColumnHeader label={column.label} sortKey={column.sortKey} sort={sort} onChange={setSort} />
+                            ) : column.label}
                         </TableColumn>
                     )}
                 </TableHeader>
@@ -101,7 +115,7 @@ export default function Roles() {
                         <TableRow key={item.discordId}>
                             {(columnKey) => {
                                 const column = columns.find((c) => c.key === columnKey);
-                                return <TableCell className={column?.className}>{renderCell(item, columnKey)}</TableCell>;
+                                return <TableCell className={classNames("text-tiny sm:text-small", column?.className)}>{renderCell(item, columnKey)}</TableCell>;
                             }}
                         </TableRow>
                     )}

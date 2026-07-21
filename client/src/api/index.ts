@@ -8,7 +8,7 @@ import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, Si
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
-import { Role, SafeIntegration, User } from "common/models/auth";
+import { Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
 import { ILogEntry } from "common/models/logs";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
@@ -135,7 +135,7 @@ const api = createApi({
             ]
         }),
         // Roles API
-        getRoles: builder.query<IGetResponse<Role>, IGetRequest<Role> | void>({
+        getRoles: builder.query<IGetResponse<RoleWithUserCount>, IGetRequest<Role> | void>({
             query: (options) => {
                 const url = buildUrl("roles", options);
                 return { url, method: "GET" };
