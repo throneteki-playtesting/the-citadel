@@ -3,9 +3,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button, HeroUIProvider, Spinner, ToastProvider } from "@heroui/react";
 import { Navigate, useHref, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import usePageTitle from "../hooks/usePageTitle";
 
 export default function LoginPage() {
     const navigate = useNavigate();
+    usePageTitle("Login");
     const { isAuthenticated, isLoading, isProcessing, login } = useAuth();
 
     if (isLoading) {
