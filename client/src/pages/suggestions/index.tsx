@@ -4,6 +4,7 @@ import { useDeleteSuggestionMutation, useRenderImageMutation } from "../../api";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
 import { addToast, Button, Dropdown, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger, Spinner } from "@heroui/react";
+import HeaderActions from "../../components/actions/headerActions";
 import { DeepPartial } from "common/types";
 import { hasPermission, renderCardSuggestion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -16,7 +17,6 @@ import { downloadBlob } from "../../utils";
 import usePageTitle from "../../hooks/usePageTitle";
 import { groupBy } from "lodash-es";
 import { usePermission } from "../../hooks/usePermission";
-import PermissionGate from "../../components/permissionGate";
 import { showApiErrorToast } from "../../api/errors";
 
 type DropdownItemDef = {
@@ -31,6 +31,9 @@ type DropdownItemDef = {
 
 export default function Suggestions() {
     usePageTitle("Suggestions");
+    const canImport = usePermission(Permission.IMPORT_SUGGESTIONS);
+    const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
+    const canExport = usePermission(Permission.EXPORT_SUGGESTIONS);
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
     const [deleteSuggestion, { isLoading: isDeleting, originalArgs: deleting }] = useDeleteSuggestionMutation();
     const [renderImage, { isLoading: isRenderingImage, originalArgs: renderingImage }] = useRenderImageMutation();
@@ -67,22 +70,26 @@ export default function Suggestions() {
     return (
         <div className="flex flex-col gap-2 lg:flex-row">
             <div className='flex flex-col gap-2 flex-grow'>
-                <div className="px-4 md:px-0 flex gap-1">
-                    <PermissionGate requires={Permission.IMPORT_SUGGESTIONS}>
-                        <Button size="sm" isIconOnly={true}>
-                            <FontAwesomeIcon icon={faFileImport} />
-                        </Button>
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.MAKE_SUGGESTIONS}>
+                <div className="px-4 md:px-0 flex gap-1 items-center">
+                    <HeaderActions
+                        items={[
+                            canImport && {
+                                key: "import",
+                                title: "Import Suggestions",
+                                icon: <FontAwesomeIcon icon={faFileImport} />
+                            },
+                            canExport && {
+                                key: "export",
+                                title: "Export Suggestions",
+                                icon: <FontAwesomeIcon icon={faFileExport} />
+                            }
+                        ]}
+                    />
+                    {canCreate && (
                         <Button className="grow" size="sm" onPress={() => setEditing({})}>
-                        Create Suggestion
+                            Create Suggestion
                         </Button>
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.EXPORT_SUGGESTIONS}>
-                        <Button size="sm" isIconOnly={true}>
-                            <FontAwesomeIcon icon={faFileExport} />
-                        </Button>
-                    </PermissionGate>
+                    )}
                 </div>
                 <SuggestionsGrid>
                     {(suggestion) => (

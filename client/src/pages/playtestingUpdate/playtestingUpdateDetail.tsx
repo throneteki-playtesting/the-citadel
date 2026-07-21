@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateImplementedQuery, useGetPlaytestingUpdateQuery, useGetPreviousCardQuery, useGetProjectQuery, usePlaytestingUpdatePrintSheetMutation } from "../../api";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { Alert, Button, Card, Chip, Input, Link, Skeleton } from "@heroui/react";
+import { Alert, Button, Card, Chip, Input, Skeleton } from "@heroui/react";
 import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
@@ -12,8 +12,9 @@ import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { faAngleLeft, faBug, faCheck, faChevronLeft, faChevronRight, faInfoCircle, faMagnifyingGlass, faPrint, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
-import CodeUpdateStatus from "../../components/status/codeUpdateStatus";
-import DataUpdateStatus from "../../components/status/dataUpdateStatus";
+import { useCodeUpdateStatus } from "../../components/status/useCodeUpdateStatus";
+import { useDataUpdateStatus } from "../../components/status/useDataUpdateStatus";
+import HeaderActions from "../../components/actions/headerActions";
 import { TouchTooltip } from "../../components/touchTooltip";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
@@ -112,6 +113,8 @@ const BUG_REPORT_URL = import.meta.env.VITE_BUG_REPORT_URL;
 function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpdateHeaderProps) {
     const [renderPrintSheet, { isLoading: isRenderingPrintSheet }] = usePlaytestingUpdatePrintSheetMutation();
     const { format } = useTimezone();
+    const { data: codeStatus, isLoading: isCodeStatusLoading } = useCodeUpdateStatus(playtestingUpdate.project, playtestingUpdate.version);
+    const { data: dataStatus, isLoading: isDataStatusLoading } = useDataUpdateStatus(playtestingUpdate.project, playtestingUpdate.version);
 
     const onExportPNG = async () => {
         try {
@@ -123,35 +126,57 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
     };
     return (
         <div className="relative space-y-1">
-            <div className="px-4 md:px-0 flex flex-col sm:flex-row">
-                <div className="flex-1 flex items-center">
+            <div className="px-4 md:px-0 flex flex-col gap-2">
+                <div className="flex flex-row items-start justify-between gap-2">
                     <div className="flex flex-col">
                         <PermissionedLink to={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
                             <FontAwesomeIcon icon={faAngleLeft}/> {project.name}
                         </PermissionedLink>
-                        <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
-                                Playesting Update #{playtestingUpdate.version}
-                        </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                        <HeaderActions
+                            items={[
+                                codeStatus && {
+                                    key: "code-status",
+                                    title: codeStatus.title,
+                                    description: codeStatus.description,
+                                    icon: codeStatus.icon ?? null,
+                                    color: codeStatus.color,
+                                    href: codeStatus.href,
+                                    onPress: codeStatus.onPress,
+                                    isLoading: isCodeStatusLoading
+                                },
+                                dataStatus && {
+                                    key: "data-status",
+                                    title: dataStatus.title,
+                                    description: dataStatus.description,
+                                    icon: dataStatus.icon ?? null,
+                                    color: dataStatus.color,
+                                    href: dataStatus.href,
+                                    onPress: dataStatus.onPress,
+                                    isLoading: isDataStatusLoading
+                                },
+                                {
+                                    key: "print",
+                                    title: "Download Print PDF Sheet",
+                                    icon: <FontAwesomeIcon icon={faPrint} />,
+                                    onPress: onExportPNG,
+                                    isLoading: isRenderingPrintSheet
+                                },
+                                !!BUG_REPORT_URL && {
+                                    key: "report-bug",
+                                    title: "Report a bug",
+                                    icon: <FontAwesomeIcon icon={faBug} />,
+                                    color: "secondary",
+                                    href: BUG_REPORT_URL
+                                }
+                            ]}
+                        />
+                        <div className="w-fit text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
                     </div>
                 </div>
-                <div className="self-end sm:self-start">
-                    <div className="flex gap-1">
-                        <CodeUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
-                        <DataUpdateStatus project={playtestingUpdate.project} version={playtestingUpdate.version} isIconOnly/>
-                        <TouchTooltip content="Download Print PDF Sheet" placement="top">
-                            <Button isIconOnly color="default" onPress={onExportPNG} isLoading={isRenderingPrintSheet}>
-                                <FontAwesomeIcon icon={faPrint} />
-                            </Button>
-                        </TouchTooltip>
-                        {BUG_REPORT_URL &&
-                            <TouchTooltip content="Report a bug">
-                                <Button isIconOnly color="secondary" as={Link} href={BUG_REPORT_URL} target="_blank">
-                                    <FontAwesomeIcon icon={faBug} />
-                                </Button>
-                            </TouchTooltip>
-                        }
-                    </div>
-                    <div className="ml-auto w-fit py-1 flex-1 mt-auto text-xxs sm:text-sm tracking-wider text-foreground font-sans">{format(new Date(playtestingUpdate.created))}</div>
+                <div className="text-3xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary w-full">
+                    Playesting Update #{playtestingUpdate.version}
                 </div>
             </div>
             {playtestingUpdate.description && (

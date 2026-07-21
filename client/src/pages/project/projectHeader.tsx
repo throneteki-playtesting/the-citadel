@@ -1,17 +1,24 @@
 import { BaseElementProps } from "../../types";
-import { Button, Link } from "@heroui/react";
+import { Link } from "@heroui/react";
 import { IProject } from "common/models/projects";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowUpRightFromSquare, faBoxArchive, faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
-import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
+import { usePermission } from "../../hooks/usePermission";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import { useMemo, ReactNode } from "react";
-import { TouchTooltip } from "../../components/touchTooltip";
-import ProjectImageStatus from "../../components/status/projectImageStatus";
+import HeaderActions from "../../components/actions/headerActions";
+import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 
 const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
+    const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES);
+    const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
+    const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
+    const canArchive = usePermission(Permission.ARCHIVE_PROJECTS) && !project.draft && project.active;
+
+    const { data: imageStatus, isLoading: isImageStatusLoading } = useProjectImageStatus(project.number);
+
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
             <span key="number">#{project.number}</span>,
@@ -38,46 +45,48 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
     }, [project.draft, project.mandateUrl, project.number, project.type, project.version]);
 
     return (
-        <div className={classNames("space-y-2 md:space-y-4", className)} style={style}>
-            <div className="flex flex-col sm:flex-row">
-                <div className="flex flex-1 flex-col gap-2">
+        <div className={classNames("px-4 md:px-0 space-y-2 md:space-y-4", className)} style={style}>
+            <div className="flex flex-col gap-2">
+                <div className="flex flex-row items-start justify-between gap-2">
                     <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
                         {headerComponents}
                     </div>
-                    <div className="font-semibold font-cinzel tracking-widest text-2xl lg:text-3xl">{project.name}</div>
+                    <HeaderActions
+                        items={[
+                            canSyncImages && imageStatus && {
+                                key: "sync-images",
+                                title: imageStatus.title,
+                                description: imageStatus.description,
+                                icon: imageStatus.icon,
+                                color: imageStatus.color,
+                                onPress: imageStatus.onPress,
+                                isLoading: isImageStatusLoading,
+                                keepOpen: true
+                            },
+                            canEdit && {
+                                key: "edit",
+                                title: "Edit Project",
+                                icon: <FontAwesomeIcon icon={faPencil}/>,
+                                onPress: onEdit
+                            },
+                            canDelete && {
+                                key: "delete",
+                                title: "Delete Project",
+                                icon: <FontAwesomeIcon icon={faTrash}/>,
+                                color: "danger",
+                                onPress: onDelete
+                            },
+                            canArchive && {
+                                key: "archive",
+                                title: "Archive Project",
+                                icon: <FontAwesomeIcon icon={faBoxArchive}/>,
+                                color: "danger",
+                                onPress: onDelete
+                            }
+                        ]}
+                    />
                 </div>
-                <div className="self-end sm:self-start flex gap-1">
-                    <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
-                        <ProjectImageStatus project={project.number} />
-                    </PermissionGate>
-                    {(project.draft || project.active) &&
-                    <PermissionGate requires={Permission.EDIT_PROJECTS}>
-                        <TouchTooltip content="Edit Project">
-                            <Button isIconOnly onPress={onEdit}>
-                                <FontAwesomeIcon icon={faPencil}/>
-                            </Button>
-                        </TouchTooltip>
-                    </PermissionGate>
-                    }
-                    {project.draft && !project.active &&
-                    <PermissionGate requires={Permission.DELETE_PROJECTS}>
-                        <TouchTooltip content="Delete Project">
-                            <Button isIconOnly color="danger" onPress={onDelete}>
-                                <FontAwesomeIcon icon={faTrash}/>
-                            </Button>
-                        </TouchTooltip>
-                    </PermissionGate>
-                    }
-                    {!project.draft && project.active &&
-                    <PermissionGate requires={Permission.ARCHIVE_PROJECTS}>
-                        <TouchTooltip content="Archive Project">
-                            <Button isIconOnly color="danger" onPress={onDelete}>
-                                <FontAwesomeIcon icon={faBoxArchive}/>
-                            </Button>
-                        </TouchTooltip>
-                    </PermissionGate>
-                    }
-                </div>
+                <div className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl w-full">{project.name}</div>
             </div>
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}

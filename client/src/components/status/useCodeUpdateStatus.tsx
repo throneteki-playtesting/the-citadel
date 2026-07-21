@@ -2,16 +2,15 @@ import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
-import { BaseElementProps } from "../../types";
 import ThronesIcon from "../thronesIcon";
 import { faCode, faRotate } from "@fortawesome/free-solid-svg-icons";
 import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncPlaytestingUpdateGithubMutation } from "../../api";
 import Permission from "common/models/permissions";
-import { BaseStatus, StatusData } from "./baseStatus";
+import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 
-export default function CodeUpdateStatus({ className, style, project, version, isIconOnly }: CodeUpdateStatusProps) {
+export function useCodeUpdateStatus(project: number, version: number) {
     const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({ project, version });
     const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
 
@@ -39,9 +38,7 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             };
         }
 
-        const syncFn = () => syncPlaytestingUpdateGithub({ project, version, type: "code" });
-        const onPress = hasSyncPermission ? syncFn : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+        const onPress = hasSyncPermission ? () => syncPlaytestingUpdateGithub({ project, version, type: "code" }) : undefined;
 
         if (status === "error") {
             return {
@@ -78,7 +75,6 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon: <ThronesIcon name="power"/>,
-                    longPressOptions,
                     description: "Partially Implemented",
                     color: "success",
                     href: "https://playtesting.theironthrone.net"
@@ -87,7 +83,6 @@ export default function CodeUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <ThronesIcon name="power"/>,
-                longPressOptions,
                 description: "Implemented",
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
@@ -100,7 +95,6 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
-                    longPressOptions,
                     description: "Github PR Open",
                     color: "warning",
                     href
@@ -110,7 +104,6 @@ export default function CodeUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
-                    longPressOptions,
                     description: "Github PR Closed",
                     color: "success",
                     href
@@ -120,11 +113,5 @@ export default function CodeUpdateStatus({ className, style, project, version, i
         return null;
     }, [cards, error, hasSyncPermission, isSyncing, playtestingUpdate, project, status, step, syncPlaytestingUpdateGithub, version]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-}
-
-type CodeUpdateStatusProps = Omit<BaseElementProps, "children"> & {
-    project: number;
-    version: number;
-    isIconOnly?: boolean;
+    return { data, isLoading };
 }

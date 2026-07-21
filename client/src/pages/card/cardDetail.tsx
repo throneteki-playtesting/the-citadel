@@ -1,4 +1,4 @@
-import { addToast, Button, Link, Skeleton, Tab, Tabs } from "@heroui/react";
+import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery } from "../../api";
@@ -17,6 +17,7 @@ import LoadingCard from "../../components/loadingCard";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
+import { usePermission } from "../../hooks/usePermission";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
@@ -25,7 +26,7 @@ import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
 import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
 import { changeTypeClasses } from "../../constants";
-import { TouchTooltip } from "../../components/touchTooltip";
+import HeaderActions from "../../components/actions/headerActions";
 import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
 import usePageTitle from "../../hooks/usePageTitle";
@@ -265,6 +266,12 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const [deleting, setDeleting] = useState<IPlaytestCard>();
     const navigate = useNavigate();
 
+    const canViewDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);
+    const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
+    const canCreateDraft = usePermission(Permission.CREATE_CARDS);
+    const canEditDraft = usePermission(Permission.EDIT_CARDS);
+    const canDeleteDraft = usePermission(Permission.DELETE_CARDS);
+
     const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
         delete draft.note;
@@ -293,60 +300,49 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
         return null;
     }
 
+    const isReleased = !!(latest && latest.released);
+
     return (
-        <div className={classNames("flex gap-1", className)} style={style}>
-            <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
-                {latest?._metadata?.discord?.messageUrl &&
-                    <TouchTooltip content="Join Discussion">
-                        <Button
-                            isIconOnly
-                            as={Link}
-                            href={latest._metadata.discord.messageUrl.replace("https://", "discord://")}
-                            target="_blank"
-                        >
-                            <FontAwesomeIcon icon={faDiscord} />
-                        </Button>
-                    </TouchTooltip>
-                }
-            </PermissionGate>
-            {!(latest && latest.released) && (
-                <>
-                    <PermissionGate requires={Permission.MAKE_REVIEWS}>
-                        <TouchTooltip content="Submit Review">
-                            <Button isIconOnly color="primary" onPress={() => navigate(`/review/submit?project=${projectNumber}&number=${number}`)} className="text-lg">
-                                <FontAwesomeIcon icon={faScroll} />
-                            </Button>
-                        </TouchTooltip>
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.CREATE_CARDS}>
-                        {!draft && latest && (
-                            <TouchTooltip content="New Draft">
-                                <Button isIconOnly color="primary" onPress={() => onNewDraft(latest)} className="text-lg">
-                                    <FontAwesomeIcon icon={faFeather} />
-                                </Button>
-                            </TouchTooltip>
-                        )}
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.EDIT_CARDS}>
-                        {draft && (
-                            <TouchTooltip content="Edit Draft">
-                                <Button isIconOnly color="secondary" onPress={() => setEditing(draft)} className="text-lg">
-                                    <FontAwesomeIcon icon={faPencil} />
-                                </Button>
-                            </TouchTooltip>
-                        )}
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.DELETE_CARDS}>
-                        {draft && (
-                            <TouchTooltip content="Delete Draft">
-                                <Button isIconOnly color="danger" onPress={() => setDeleting(draft)} className="text-lg">
-                                    <FontAwesomeIcon icon={faTrash} />
-                                </Button>
-                            </TouchTooltip>
-                        )}
-                    </PermissionGate>
-                </>
-            )}
+        <div className={classNames(className)} style={style}>
+            <HeaderActions
+                items={[
+                    canViewDiscord && !!latest?._metadata?.discord?.messageUrl && {
+                        key: "discord",
+                        title: "Join Discussion",
+                        icon: <FontAwesomeIcon icon={faDiscord} />,
+                        href: latest._metadata.discord.messageUrl.replace("https://", "discord://"),
+                        openInNewTab: false
+                    },
+                    !isReleased && canSubmitReview && {
+                        key: "submit-review",
+                        title: "Submit Review",
+                        icon: <FontAwesomeIcon icon={faScroll} />,
+                        color: "primary",
+                        onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
+                    },
+                    !isReleased && canCreateDraft && !draft && latest && {
+                        key: "new-draft",
+                        title: "New Draft",
+                        icon: <FontAwesomeIcon icon={faFeather} />,
+                        color: "primary",
+                        onPress: () => onNewDraft(latest)
+                    },
+                    !isReleased && canEditDraft && draft && {
+                        key: "edit-draft",
+                        title: "Edit Draft",
+                        icon: <FontAwesomeIcon icon={faPencil} />,
+                        color: "secondary",
+                        onPress: () => setEditing(draft)
+                    },
+                    !isReleased && canDeleteDraft && draft && {
+                        key: "delete-draft",
+                        title: "Delete Draft",
+                        icon: <FontAwesomeIcon icon={faTrash} />,
+                        color: "danger",
+                        onPress: () => setDeleting(draft)
+                    }
+                ]}
+            />
             <EditCardModal isOpen={!!editing} card={editing} onClose={() => setEditing(undefined)} onSave={(card) => addToast({ title: "Successfully saved", color: "success", description: `'${card.name}' ver. ${card.version} has been ${draft ? "edited" : "created"}` })}/>
             <DeleteCardModal isOpen={!!deleting} card={deleting} onClose={() => setDeleting(undefined)} onDelete={(card) => addToast({ title: "Successfully deleted", color: "success", description: `'${card.name}' ver. ${card.version} has been deleted` })}/>
         </div>

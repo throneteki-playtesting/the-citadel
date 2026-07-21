@@ -1,8 +1,9 @@
 import { Alert, Button, Listbox, ListboxItem, Spinner } from "@heroui/react";
 import classNames from "classnames";
 import { ReactNode, useRef, useState } from "react";
-import { BaseElementProps, UIColor } from "../../types";
+import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
+import { ActionItem } from "../actions/types";
 
 const TRACE_STROKE = 2;
 
@@ -28,7 +29,7 @@ function buildTracePath(w: number, h: number, sw: number, br: number): string {
     ].join(" ");
 }
 
-export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, keepTooltipOpen = false, className, style, traceClassName }: BaseStatusProps) {
+export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, keepTooltipOpen = false, size, className, style, traceClassName }: BaseStatusProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const lpRef = useRef({ triggered: false, timer: null as ReturnType<typeof setTimeout> | null });
 
@@ -180,6 +181,7 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
             <Button
                 isLoading={isLoading}
                 isIconOnly
+                size={size}
                 color={data.color}
                 style={style}
                 onPressStart={hasLongPress ? startTimer : undefined}
@@ -283,14 +285,12 @@ type BaseStatusProps = Omit<BaseElementProps, "children"> & {
     longPressDelay?: number;
     traceClassName?: string;
     keepTooltipOpen?: boolean;
+    size?: "sm" | "md" | "lg";
 };
 
-export type StatusData = {
+export type StatusData = Omit<ActionItem, "key" | "icon" | "title" | "color"> & {
     icon?: ReactNode;
     title?: ReactNode;
-    description?: ReactNode;
-    color: UIColor;
-    onPress?: () => void;
-    href?: string;
+    color: NonNullable<ActionItem["color"]>;
     longPressOptions?: LongPressOption[];
 };

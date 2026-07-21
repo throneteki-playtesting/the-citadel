@@ -3,12 +3,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import { useGetCardsQuery, useSyncProjectImagesMutation } from "../../api";
-import { BaseStatus, StatusData } from "./baseStatus";
-import { BaseElementProps } from "../../types";
+import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 
-export default function ProjectImageStatus({ className, style, project }: ProjectImageStatusProps) {
+export function useProjectImageStatus(project: number) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, latest: true } });
     const cards = useMemo(() => cardsData?.items ?? [], [cardsData?.items]);
     const total = cards.length;
@@ -32,14 +31,14 @@ export default function ProjectImageStatus({ className, style, project }: Projec
                 title,
                 icon: <Spinner size="sm" />,
                 color: "secondary",
-                description: <div className="flex justify-center gap-2"><Spinner size="sm"/> {synced}/{total} synced</div>
+                description: `Syncing ${synced}/${total}...`
             };
         }
 
         if (isError) {
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
+                icon: <FontAwesomeIcon icon={faRotate} size="lg" />,
                 onPress,
                 color: "danger",
                 description: `Failed to Sync (${synced}/${total} synced)`
@@ -49,7 +48,7 @@ export default function ProjectImageStatus({ className, style, project }: Projec
         if (allSynced) {
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faCheck} size="xl" />,
+                icon: <FontAwesomeIcon icon={faCheck} size="lg" />,
                 onPress,
                 color: "success",
                 description: "All card images are synced"
@@ -65,9 +64,5 @@ export default function ProjectImageStatus({ className, style, project }: Projec
         };
     }, [hasSyncPermission, isError, isSyncing, percent, project, synced, syncProjectImages, total]);
 
-    return <BaseStatus className={className} style={style} isIconOnly data={data} isLoading={isLoading} keepTooltipOpen={isSyncing} />;
-};
-
-type ProjectImageStatusProps = Omit<BaseElementProps, "children"> & {
-    project: number;
+    return { data, isLoading, isSyncing };
 }

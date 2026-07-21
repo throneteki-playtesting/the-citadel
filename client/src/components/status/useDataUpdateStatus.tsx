@@ -2,15 +2,14 @@ import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
-import { BaseElementProps } from "../../types";
 import { faDatabase, faRotate } from "@fortawesome/free-solid-svg-icons";
 import { useGetPlaytestingUpdateQuery, useSyncPlaytestingUpdateGithubMutation } from "../../api";
 import Permission from "common/models/permissions";
-import { BaseStatus, StatusData } from "./baseStatus";
+import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 
-export default function DataUpdateStatus({ className, style, project, version, isIconOnly }: DataUpdateStatusProps) {
+export function useDataUpdateStatus(project: number, version: number) {
     const { data: playtestingUpdate, isLoading } = useGetPlaytestingUpdateQuery({ project, version });
 
     const [syncPlaytestingUpdateGithub, { isLoading: isSyncing }] = useSyncPlaytestingUpdateGithubMutation();
@@ -30,9 +29,7 @@ export default function DataUpdateStatus({ className, style, project, version, i
             };
         }
 
-        const syncFn = () => syncPlaytestingUpdateGithub({ project, version, type: "data" });
-        const onPress = hasSyncPermission ? syncFn : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+        const onPress = hasSyncPermission ? () => syncPlaytestingUpdateGithub({ project, version, type: "data" }) : undefined;
 
         if (status === "error") {
             return {
@@ -68,7 +65,6 @@ export default function DataUpdateStatus({ className, style, project, version, i
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faDatabase} size="xl" />,
-                longPressOptions,
                 description: "Synced",
                 color: "success",
                 href: dataMeta.pullRequestUrl
@@ -81,7 +77,6 @@ export default function DataUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
-                    longPressOptions,
                     description: "Github PR Open",
                     color: "warning",
                     href
@@ -91,7 +86,6 @@ export default function DataUpdateStatus({ className, style, project, version, i
                 return {
                     title,
                     icon,
-                    longPressOptions,
                     description: "Github PR Closed",
                     color: "success",
                     href
@@ -101,11 +95,5 @@ export default function DataUpdateStatus({ className, style, project, version, i
         return null;
     }, [playtestingUpdate, status, isSyncing, hasSyncPermission, step, syncPlaytestingUpdateGithub, project, version, error]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading}/>;
-}
-
-type DataUpdateStatusProps = Omit<BaseElementProps, "children"> & {
-    project: number;
-    version: number;
-    isIconOnly?: boolean;
+    return { data, isLoading };
 }

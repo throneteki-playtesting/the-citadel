@@ -119,10 +119,9 @@ export default function DeckSummaries({ className, style, project, number }: Dec
             </div>
         );
     }, [deckGroups, isLoading, loading.length]);
-    const hasEnoughForMinHeight = (deckGroups?.size ?? 0) >= 3;
 
     return (
-        <div className={classNames("flex flex-col flex-1", { "min-h-86 sm:min-h-64 md:min-h-52": hasEnoughForMinHeight }, className)} style={style}>
+        <div className={classNames("flex flex-col flex-1 min-h-86 sm:min-h-64 md:min-h-52", className)} style={style}>
             <SectionTitle>
                 Decks for this card
             </SectionTitle>
