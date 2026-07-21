@@ -30,8 +30,9 @@ declare namespace NodeJS {
         GITHUB_PRIVATE_KEY: string;
         GITHUB_WEBHOOK_SECRET: string;
 
-        DATABASE_NAME: string;
+        SOURCE_DATABASE_NAME: string;
         SOURCE_DATABASE_URL: string;
+        DEST_DATABASE_NAME: string;
         DEST_DATABASE_URL: string;
 
         JWT_SECRET: string;

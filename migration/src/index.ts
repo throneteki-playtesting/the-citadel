@@ -29,10 +29,11 @@ const resolveUsersOnly = args.includes("--resolve-users");
 async function main() {
     const sourceUrl = process.env.SOURCE_DATABASE_URL as string;
     const destUrl = process.env.DEST_DATABASE_URL as string;
-    const dbName = process.env.DATABASE_NAME as string;
+    const sourceDbName = process.env.SOURCE_DATABASE_NAME as string;
+    const destDbName = process.env.DEST_DATABASE_NAME as string;
 
-    if (!sourceUrl || !destUrl || !dbName) {
-        log.error("SOURCE_DATABASE_URL, DEST_DATABASE_URL and DATABASE_NAME must be set in your .env");
+    if (!sourceUrl || !destUrl || !sourceDbName || !destDbName) {
+        log.error("SOURCE_DATABASE_NAME, SOURCE_DATABASE_URL, DEST_DATABASE_NAME and DEST_DATABASE_URL must be set in your .env");
         process.exit(1);
     }
 
@@ -47,11 +48,11 @@ async function main() {
         await sourceClient.connect();
         await destClient.connect();
 
-        const sourceDb = sourceClient.db(dbName);
-        const destDb = destClient.db(dbName);
+        const sourceDb = sourceClient.db(sourceDbName);
+        const destDb = destClient.db(destDbName);
 
-        log.success(`Source: ${sourceUrl} / ${dbName}`);
-        log.success(`Dest:   ${destUrl} / ${dbName}`);
+        log.success(`Source: ${sourceUrl} / ${sourceDbName}`);
+        log.success(`Dest:   ${destUrl} / ${destDbName}`);
 
         // Migration registry lives on the destination
         const applied = await getAppliedMigrations(destDb);
