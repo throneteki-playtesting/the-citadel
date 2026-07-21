@@ -76,7 +76,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         return counts;
     }, [slots]);
 
-    // Collapse complete/released zones by default, once (further toggles are left to the user)
+    // Collapse released zones by default, once (further toggles are left to the user)
     useEffect(() => {
         if (hasInitializedCollapse.current || isLoadingSlots || isLoadingCards) {
             return;
@@ -84,13 +84,12 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         hasInitializedCollapse.current = true;
         const defaults = new Set<string>();
         for (const release of releases) {
-            const filled = filledCounts.get(release.code) ?? 0;
-            if (release.releasedDate || filled >= release.capacity) {
+            if (release.releasedDate) {
                 defaults.add(release.code);
             }
         }
         setCollapsedReleases(defaults);
-    }, [isLoadingSlots, isLoadingCards, releases, filledCounts]);
+    }, [isLoadingSlots, isLoadingCards, releases]);
 
     const baseContainers = useMemo(() => buildContainers(pool, releases, slots), [pool, releases, slots]);
     const containers = useMemo(
