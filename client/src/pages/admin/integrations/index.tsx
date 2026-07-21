@@ -102,9 +102,11 @@ export default function Integrations() {
 
     return (
         <div className="space-y-2">
-            <div className="font-cinzel text-2xl">Integrations</div>
-            <div className="text-sm md:text-base">Integrations grant external tools & services access to the API via a bearer token, limited to the permissions assigned here.</div>
-            <div className="text-sm md:text-base">Tokens are only shown once upon creation or refresh; refreshing a token immediately invalidates the previous one.</div>
+            <div className="px-4 md:px-0 space-y-2">
+                <div className="font-cinzel text-2xl">Integrations</div>
+                <div className="text-sm md:text-base">Integrations grant external tools & services access to the API via a bearer token, limited to the permissions assigned here.</div>
+                <div className="text-sm md:text-base">Tokens are only shown once upon creation or refresh; refreshing a token immediately invalidates the previous one.</div>
+            </div>
             <Table
                 topContent={
                     <div className="flex gap-3 items-center justify-between">

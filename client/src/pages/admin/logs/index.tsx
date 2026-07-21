@@ -228,8 +228,10 @@ export default function Logs() {
 
     return (
         <div className="space-y-2">
-            <div className="font-cinzel text-2xl">Activity Logs</div>
-            <div className="text-sm md:text-base">A live feed of important actions taken across the site, along with the user or integration responsible.</div>
+            <div className="px-4 md:px-0 space-y-2">
+                <div className="font-cinzel text-2xl">Activity Logs</div>
+                <div className="text-sm md:text-base">A live feed of important actions taken across the site, along with the user or integration responsible.</div>
+            </div>
             <Card className="border-1 border-content3 p-4 gap-3">
                 <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
                     <DatePicker

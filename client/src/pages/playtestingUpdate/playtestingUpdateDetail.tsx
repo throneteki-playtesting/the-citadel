@@ -123,7 +123,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
     };
     return (
         <div className="relative space-y-1">
-            <div className="flex flex-col sm:flex-row">
+            <div className="px-4 md:px-0 flex flex-col sm:flex-row">
                 <div className="flex-1 flex items-center">
                     <div className="flex flex-col">
                         <PermissionedLink to={`/project/${project.number}`} className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150" requires={Permission.READ_PROJECTS}>
@@ -155,7 +155,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                 </div>
             </div>
             {playtestingUpdate.description && (
-                <div className="text-md sm:text-lg font-sans leading-tight">
+                <div className="px-4 md:px-0 text-md sm:text-lg font-sans leading-tight">
                     {playtestingUpdate.description}
                 </div>
             )}
@@ -192,10 +192,10 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
 
     return (
         <div className="space-y-2">
-            <SectionTitle size="xl" indent="md">
+            <SectionTitle size="xl" indent="md" className="px-4 md:px-0">
                 Card Changes
             </SectionTitle>
-            <div className="flex flex-col gap-2 md:flex-row md:justify-between">
+            <div className="px-4 md:px-0 flex flex-col gap-2 md:flex-row md:justify-between">
                 <div className="text-base text-foreground space-y-1">
                     <p>Cards have changes to review, and will be applied together in this update.</p>
                     <p className="text-sm"><FontAwesomeIcon icon={faInfoCircle}/> Click card to toggle between previous & new version.</p>

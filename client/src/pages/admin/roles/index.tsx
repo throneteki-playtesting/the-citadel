@@ -62,8 +62,10 @@ export default function Roles() {
 
     return (
         <div className="space-y-2">
-            <div className="font-cinzel text-2xl">Citadel Roles</div>
-            <div className="text-sm md:text-base">Roles are managed within Discord, but can have citadel permissions tied to them.</div>
+            <div className="px-4 md:px-0 space-y-2">
+                <div className="font-cinzel text-2xl">Citadel Roles</div>
+                <div className="text-sm md:text-base">Roles are managed within Discord, but can have citadel permissions tied to them.</div>
+            </div>
             <Table
                 topContent={
                     <Input

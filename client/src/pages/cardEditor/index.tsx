@@ -36,7 +36,7 @@ export default function CardEditorPage() {
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="space-y-2">
+            <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Card Editor</div>
                 <div className="text-sm md:text-base">
                     Use this page to sketch out a card idea and see how it looks as a finished card. Fill in the details below and the preview will
@@ -44,7 +44,7 @@ export default function CardEditorPage() {
                 </div>
                 <div className="text-sm md:text-base">Happy with it? Use Export PNG to download the card image and share your idea.</div>
             </div>
-            <div className="flex justify-between items-center">
+            <div className="px-4 md:px-0 flex justify-between items-center">
                 <Button
                     size="sm"
                     onPress={onExportPNG}

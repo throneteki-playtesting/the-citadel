@@ -90,9 +90,11 @@ export default function Users() {
 
     return (
         <div className="space-y-2">
-            <div className="font-cinzel text-2xl">Citadel Users</div>
-            <div className="text-sm md:text-base">User data is synced with Discord, prioritising the linked discord server information.</div>
-            <div className="text-sm md:text-base">You may edit user permissions at a granular level here, or at a broader level via the Roles page.</div>
+            <div className="px-4 md:px-0 space-y-2">
+                <div className="font-cinzel text-2xl">Citadel Users</div>
+                <div className="text-sm md:text-base">User data is synced with Discord, prioritising the linked discord server information.</div>
+                <div className="text-sm md:text-base">You may edit user permissions at a granular level here, or at a broader level via the Roles page.</div>
+            </div>
             {canEdit && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border border-content2 rounded-lg p-4">
                     <div className="space-y-1">

@@ -67,7 +67,7 @@ export default function Suggestions() {
     return (
         <div className="flex flex-col gap-2 lg:flex-row">
             <div className='flex flex-col gap-2 flex-grow'>
-                <div className="flex gap-1">
+                <div className="px-4 md:px-0 flex gap-1">
                     <PermissionGate requires={Permission.IMPORT_SUGGESTIONS}>
                         <Button size="sm" isIconOnly={true}>
                             <FontAwesomeIcon icon={faFileImport} />
