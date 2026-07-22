@@ -1,5 +1,5 @@
 import puppeteer, { Page, Viewport } from "puppeteer";
-import { dataService, logger } from "@/services";
+import { dataService } from "@/services";
 import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { randomUUID, UUID } from "crypto";
@@ -92,8 +92,13 @@ async function checkRenderError(page: Page): Promise<void> {
     const errorEl = await page.$("#render-error");
     if (errorEl) {
         const errorJson = await errorEl.evaluate((el) => el.textContent);
-        logger.error("[Render] Page error:", errorJson);
-        throw new Error("Render page returned an error");
+        let cause: unknown = errorJson;
+        try {
+            cause = JSON.parse(errorJson);
+        } catch {
+            // Not JSON — fall back to the raw text as the cause
+        }
+        throw new Error("Render page returned an error", { cause });
     }
 }
 

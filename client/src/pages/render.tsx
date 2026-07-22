@@ -5,6 +5,7 @@ import { CardPreview } from "@agot/card-preview";
 import { IRenderCard } from "common/models/cards";
 import { JSX } from "react";
 import type { BatchRenderJob, SingleRenderJob } from "server/types";
+import { toNormalizedError } from "../api/errors";
 
 const Render = () => {
     const [searchParams] = useSearchParams();
@@ -13,7 +14,7 @@ const Render = () => {
     const { data: job, isLoading, isError, error } = useGetRenderJobQuery({ id });
 
     if (isError) {
-        return <div id="render-error">{JSON.stringify(error)}</div>;
+        return <div id="render-error">{JSON.stringify(toNormalizedError(error))}</div>;
     }
     if (isLoading || job?.data.length === 0) {
         return <div/>;

@@ -65,8 +65,8 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
         }
     }
 
-    if (result.error && typeof result.error.status === "number") {
-        result = { ...result, error: { ...result.error, data: toNormalizedError(result.error) } };
+    if (result.error) {
+        result = { ...result, error: { ...result.error, data: toNormalizedError(result.error) } as FetchBaseQueryError };
     }
 
     return result;
