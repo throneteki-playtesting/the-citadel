@@ -36,6 +36,10 @@ export const Regex = {
     }
 };
 
+export function escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function titleCase(value: string) {
     return value.split(" ")
         .map(w => w[0].toUpperCase() + w.substring(1).toLowerCase())

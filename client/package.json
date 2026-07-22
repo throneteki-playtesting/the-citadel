@@ -11,7 +11,7 @@
     "start": "serve -s dist -l 5173"
   },
   "dependencies": {
-    "@agot/card-preview": "^1.0.3",
+    "@agot/card-preview": "^1.0.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
@@ -22,6 +22,7 @@
     "@fortawesome/free-solid-svg-icons": "^7.0.0",
     "@fortawesome/react-fontawesome": "^0.2.3",
     "@heroui/react": "^2.8.2",
+    "@heroui/use-infinite-scroll": "^2.2.12",
     "@internationalized/date": "^3.8.2",
     "@reduxjs/toolkit": "^2.8.2",
     "@sentry/react": "^10.63.0",
