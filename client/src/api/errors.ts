@@ -50,7 +50,13 @@ export function toNormalizedError(error: unknown): NormalizedError {
         return { kind: kindForStatus(status), status, error: "Unknown Error", message: "An unknown error has occurred" };
     }
 
-    // FETCH_ERROR / PARSING_ERROR / TIMEOUT_ERROR / CUSTOM_ERROR, or a non-RTK-Query error
+    // FETCH_ERROR / PARSING_ERROR / TIMEOUT_ERROR / CUSTOM_ERROR — carry the underlying detail
+    if (fetchError && typeof fetchError.status === "string") {
+        const detail = "error" in fetchError && typeof fetchError.error === "string" ? fetchError.error : undefined;
+        return { kind: "unknown", status: 0, error: fetchError.status, message: detail ?? "An unknown error has occurred" };
+    }
+
+    // Non-RTK-Query error
     return { kind: "unknown", status: 0, error: "Unknown Error", message: "An unknown error has occurred" };
 }
 
