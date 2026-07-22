@@ -5,6 +5,7 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
     const contentRef = useRef<HTMLDivElement>(null);
     const elements = useRef(new Map<HTMLElement, number>());
     const lastFit = useRef<{ text: string, width: number, height: number } | null>(null);
+    const fontsWaited = useRef(false);
 
     useLayoutEffect(() => {
         const content = contentRef.current;
@@ -74,7 +75,23 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
             }
         });
         observer.observe(content);
-        return () => observer.disconnect();
+
+        // Re-fit once webfonts finish loading, in case the fit above ran against fallback-font metrics
+        let cancelled = false;
+        if (!fontsWaited.current && typeof document !== "undefined" && document.fonts) {
+            fontsWaited.current = true;
+            document.fonts.ready.then(() => {
+                if (!cancelled && contentRef.current === content) {
+                    lastFit.current = null;
+                    fit();
+                }
+            });
+        }
+
+        return () => {
+            cancelled = true;
+            observer.disconnect();
+        };
     });
 
     return (
