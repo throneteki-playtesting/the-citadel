@@ -117,22 +117,36 @@ export default function Users() {
                 <div className="text-sm md:text-base">User data is synced with Discord, prioritising the linked discord server information.</div>
                 <div className="text-sm md:text-base">You may edit user permissions at a granular level here, or at a broader level via the Roles page.</div>
             </div>
-            {canEdit && (
+            {(canEdit || canImpersonate) && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border border-content2 rounded-lg p-4">
                     <div className="space-y-1">
                         <div className="font-semibold text-sm">Guest Profile</div>
                         <div className="text-xs text-default-500">Defines the default permissions granted to all authenticated users, on top of their individual and role-based permissions.</div>
                     </div>
-                    <Button
-                        size="sm"
-                        variant="flat"
-                        className="shrink-0"
-                        startContent={<FontAwesomeIcon icon={faPencil} />}
-                        isDisabled={!guestUser || !!editingUser}
-                        onPress={() => setEditingUser(guestUser)}
-                    >
-                        Edit Guest Profile
-                    </Button>
+                    <div className="flex gap-2 shrink-0">
+                        {canImpersonate && !isImpersonating && (
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                startContent={<FontAwesomeIcon icon={faEye} />}
+                                isDisabled={!guestUser || isImpersonationActionPending}
+                                onPress={() => guestUser && impersonateUser(guestUser.discordId)}
+                            >
+                                View as Guest
+                            </Button>
+                        )}
+                        {canEdit && (
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                startContent={<FontAwesomeIcon icon={faPencil} />}
+                                isDisabled={!guestUser || !!editingUser}
+                                onPress={() => setEditingUser(guestUser)}
+                            >
+                                Edit Guest Profile
+                            </Button>
+                        )}
+                    </div>
                 </div>
             )}
             <Table
