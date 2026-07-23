@@ -8,6 +8,51 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { createContext, requestContext } from "./context";
 import DiscordService from "@/discord";
 import { APIGuildMember, GuildMember } from "discord.js";
+import { User } from "common/models/auth";
+import Permission from "common/models/permissions";
+import { hasPermission } from "common/utils";
+import { verifyImpersonationToken } from "./impersonation";
+import { ACCESS_TOKEN_COOKIE, IMPERSONATION_COOKIE } from "./cookies";
+
+// Resolves the effective principal for a request: the real user, unless a valid impersonation cookie is
+// present and the real user still holds the relevant IMPERSONATE_* permission — in which case the effective
+// principal becomes the target role (permissions/roles only) or target user (their full principal).
+async function resolveImpersonatedPrincipal(realUser: User, impersonationCookie?: string): Promise<{ principal: User; impersonating?: "role" | "user" }> {
+    if (!impersonationCookie) {
+        return { principal: realUser };
+    }
+
+    const payload = verifyImpersonationToken(impersonationCookie);
+    if (!payload || payload.realDiscordId !== realUser.discordId) {
+        return { principal: realUser };
+    }
+
+    if (payload.type === "role") {
+        if (!hasPermission(realUser, Permission.IMPERSONATE_ROLE)) {
+            return { principal: realUser };
+        }
+        const [role] = await dataService.roles.read({ discordId: payload.targetId });
+        if (!role) {
+            return { principal: realUser };
+        }
+        return {
+            principal: { ...realUser, permissions: [], roles: [role] },
+            impersonating: "role"
+        };
+    }
+
+    if (!hasPermission(realUser, Permission.IMPERSONATE_USER)) {
+        return { principal: realUser };
+    }
+    const [targetUser] = await dataService.users.read({ discordId: payload.targetId });
+    if (!targetUser) {
+        return { principal: realUser };
+    }
+    return {
+        principal: { ...targetUser, defaultPermissions: realUser.defaultPermissions },
+        impersonating: "user"
+    };
+}
 
 export const authMiddleware = asyncHandler(
     async (req, res, next) => {
@@ -22,7 +67,7 @@ export const authMiddleware = asyncHandler(
             const context = createContext("api", integration);
             requestContext.run(context, next);
         } else {
-            const { accessToken } = req.cookies;
+            const accessToken = req.cookies[ACCESS_TOKEN_COOKIE];
 
             if (!accessToken) {
                 throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "No session");
@@ -40,7 +85,10 @@ export const authMiddleware = asyncHandler(
                     ])]
                     : [];
 
-                const context = createContext("client", { ...user, defaultPermissions }, req.header("X-Client-Id"));
+                const realUser: User = { ...user, defaultPermissions };
+                const { principal, impersonating } = await resolveImpersonatedPrincipal(realUser, req.cookies[IMPERSONATION_COOKIE]);
+
+                const context = createContext("client", principal, realUser, impersonating, req.header("X-Client-Id"));
                 requestContext.run(context, next);
             } catch (err) {
                 if ("name" in err && err.name === "TokenExpiredError") {

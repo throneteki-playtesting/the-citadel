@@ -3,9 +3,10 @@ import { BaseElementProps } from "../../../types";
 import Permission, { permissionMeta } from "common/models/permissions";
 import { useGetUsersQuery, useUpdateRoleMutation } from "../../../api";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { cloneDeep } from "lodash-es";
+import { cloneDeep, omit } from "lodash-es";
 import { Role } from "common/models/auth";
 import PermissionCheckboxes from "../../../components/permissionCheckboxes";
+import { isImpersonationReadOnlyError } from "../../../api/errors";
 
 const permissionFullLabel = new Map<string, string>(
     Object.entries(permissionMeta).map(([value, { label, group }]) => [value, `${group} > ${label}`])
@@ -55,14 +56,16 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
 
     const onSave = useCallback(async () => {
         if (role) {
-            const model = cloneDeep(role);
+            const model = omit(cloneDeep(role) as Role & { userCount?: number }, "userCount");
             const validPermissions = new Set<string>(Object.values(Permission));
             model.permissions = [...permissions].filter((p) => validPermissions.has(p)).map((p) => p as Permission);
 
-            // TODO: Consider (somehow) updating the users who have this role on open sessions?
             const response = await updateRole(model);
             if (response.error) {
-                addToast({ title: "Error", color: "danger", description: "Failed to save role" });
+                // The global error toast middleware already surfaces a clearer message for this case
+                if (!isImpersonationReadOnlyError(response.error)) {
+                    addToast({ title: "Error", color: "danger", description: "Failed to save role" });
+                }
             } else {
                 addToast({ title: "Role saved", color: "success", description: `${model.name} was updated successfully.` });
                 if (onRoleSave) {

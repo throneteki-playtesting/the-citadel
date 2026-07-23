@@ -52,3 +52,26 @@ export interface Integration extends IAuditable, IPrincipal {
 }
 
 export type SafeIntegration = Omit<Integration, "tokenHash">;
+
+// Server-side `error` string used to distinguish a mutation blocked by read-only impersonation from a normal 403
+export const IMPERSONATION_READ_ONLY_ERROR = "Impersonation Read-Only";
+
+export type ImpersonationType = "role" | "user";
+
+export interface ImpersonationTarget {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    color?: number;
+}
+
+export interface ImpersonationInfo {
+    type: ImpersonationType;
+    target: ImpersonationTarget;
+    realUser: ImpersonationTarget;
+}
+
+// Response shape for GET /users/me — a User, plus impersonation details when the session is viewing-as a role/user
+export interface MeResponse extends User {
+    impersonation?: ImpersonationInfo;
+}

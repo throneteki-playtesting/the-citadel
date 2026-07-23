@@ -1,7 +1,9 @@
 import { configureStore, isRejectedWithValue, Middleware } from "@reduxjs/toolkit";
+import { addToast } from "@heroui/react";
 import api from ".";
 import auth from "./authSlice";
 import thronesdbApi from "./thronesdb";
+import { isImpersonationReadOnlyError } from "./errors";
 
 // Temporary solution to at least see errors coming in.
 // This should be replaced with a more clear-intended method of:
@@ -10,6 +12,16 @@ import thronesdbApi from "./thronesdb";
 const errorLoggerMiddleware: Middleware = () => (next) => (action) => {
     if (isRejectedWithValue(action)) {
         console.error("API Error (Rejected Value):", action.payload);
+
+        // Surface this everywhere, regardless of whether the call site handles/toasts its own errors,
+        // since it can otherwise look like a silent failure while impersonating.
+        if (isImpersonationReadOnlyError(action.payload)) {
+            addToast({
+                title: "Read-Only (Impersonating)",
+                color: "warning",
+                description: "You're viewing as another role or user — exit impersonation to make changes"
+            });
+        }
     }
 
     if (typeof action === "object" && action !== null && "type" in action) {

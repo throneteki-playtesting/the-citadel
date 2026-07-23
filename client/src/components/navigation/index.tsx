@@ -1,9 +1,9 @@
-import { Accordion, AccordionItem, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Navbar, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/react";
+import { Accordion, AccordionItem, Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Navbar, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProfileSection from "./profileSection";
 import { isMenuItem, isPageItem, isVisibleFor, MenuItem as MenuItemType, NavItem, navItems, PageItem as PageItemType, profileItems } from "../../pages";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChevronUp, faFeather } from "@fortawesome/free-solid-svg-icons";
+import { faChevronUp, faEye, faFeather } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { useGetProjectsQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
@@ -12,7 +12,7 @@ import { hasPermission } from "common/utils";
 import { useLocation } from "react-router-dom";
 
 const NavigationBar = () => {
-    const { user } = useAuth();
+    const { user, impersonation, isImpersonating, stopImpersonating, isImpersonationActionPending } = useAuth();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(false);
@@ -113,33 +113,45 @@ const NavigationBar = () => {
     }, [items]);
 
     return (
-        <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen}>
-            {collapsed &&
+        <>
+            {isImpersonating && impersonation && (
+                <div className="flex items-center justify-center gap-2 bg-warning-100 text-warning-800 text-sm py-1 px-4">
+                    <FontAwesomeIcon icon={faEye} />
+                    <span>Viewing as {impersonation.type} <strong>{impersonation.target.name}</strong></span>
+                    <Button size="sm" variant="light" color="warning" isDisabled={isImpersonationActionPending} onPress={stopImpersonating}>
+                        Exit
+                    </Button>
+                </div>
+            )}
+            <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen}>
+                {collapsed &&
             <NavbarContent justify="center" className="flex-none basis-auto">
                 <NavbarMenuToggle
                     aria-label={isMenuOpen ? "Close menu" : "Open menu"}
                 />
             </NavbarContent>}
-            <NavbarContent className="flex-1 min-w-0" justify="start">
-                <div ref={itemsRowRef} className="relative flex w-full min-w-0 overflow-hidden">
-                    {!collapsed && (
-                        <div className="flex gap-4 font-cinzel">
-                            {items.map((navItem, index) => <NavbarItem key={index}>{navItem}</NavbarItem>)}
+                <NavbarContent className="flex-1 min-w-0" justify="start">
+                    <div ref={itemsRowRef} className="relative flex w-full min-w-0 overflow-hidden">
+                        {!collapsed && (
+                            <div className="flex gap-4 font-cinzel">
+                                {items.map((navItem, index) => <NavbarItem key={index}>{navItem}</NavbarItem>)}
+                            </div>
+                        )}
+                        <div ref={measureRef} className="invisible absolute left-0 top-0 flex gap-4 whitespace-nowrap font-cinzel" aria-hidden="true">
+                            {items.map((navItem, index) => <span key={index}>{navItem}</span>)}
                         </div>
-                    )}
-                    <div ref={measureRef} className="invisible absolute left-0 top-0 flex gap-4 whitespace-nowrap font-cinzel" aria-hidden="true">
-                        {items.map((navItem, index) => <span key={index}>{navItem}</span>)}
                     </div>
-                </div>
-            </NavbarContent>
-            <Link href="/" className="font-cinzel text-primary font-semibold text-2xl hover:text-primary-3 00">The Citadel</Link>
-            <ProfileSection>
-                {profileItems}
-            </ProfileSection>
-            <NavbarMenu className="font-cinzel" >
-                {visibleItems.map((navItem, index) => <NavbarMenuItem key={index}><SubMenuItem item={navItem}/></NavbarMenuItem>)}
-            </NavbarMenu>
-        </Navbar>);
+                </NavbarContent>
+                <Link href="/" className="font-cinzel text-primary font-semibold text-2xl hover:text-primary-3 00">The Citadel</Link>
+                <ProfileSection>
+                    {profileItems}
+                </ProfileSection>
+                <NavbarMenu className="font-cinzel" >
+                    {visibleItems.map((navItem, index) => <NavbarMenuItem key={index}><SubMenuItem item={navItem}/></NavbarMenuItem>)}
+                </NavbarMenu>
+            </Navbar>
+        </>
+    );
 };
 
 const isNavItemActive = (navItem: NavItem, pathname: string): boolean => {

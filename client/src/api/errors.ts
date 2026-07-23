@@ -2,8 +2,9 @@ import { FetchBaseQueryError } from "@reduxjs/toolkit/query/react";
 import { addToast } from "@heroui/react";
 import { StatusCodes } from "http-status-codes";
 import type { ApiError, ApiFieldError } from "server/types";
+import { IMPERSONATION_READ_ONLY_ERROR } from "common/models/auth";
 
-export type ErrorKind = "validation" | "unauthorized" | "permission" | "notFound" | "businessRule" | "conflict" | "unknown";
+export type ErrorKind = "validation" | "unauthorized" | "permission" | "impersonationReadOnly" | "notFound" | "businessRule" | "conflict" | "unknown";
 
 export type NormalizedError = {
     kind: ErrorKind;
@@ -13,7 +14,9 @@ export type NormalizedError = {
     fields?: ApiFieldError[];
 };
 
-function kindForStatus(status: number): ErrorKind {
+function getErrorKind(status: number, error?: string): ErrorKind {
+    if (error === IMPERSONATION_READ_ONLY_ERROR) return "impersonationReadOnly";
+
     switch (status) {
         case StatusCodes.BAD_REQUEST: return "validation";
         case StatusCodes.UNAUTHORIZED: return "unauthorized";
@@ -45,9 +48,10 @@ export function toNormalizedError(error: unknown): NormalizedError {
         }
 
         if (isApiErrorBody(fetchError.data)) {
-            return { kind: kindForStatus(status), status, error: fetchError.data.error, message: fetchError.data.message, fields: fetchError.data.fields };
+            const kind = getErrorKind(status, fetchError.data.error);
+            return { kind, status, error: fetchError.data.error, message: fetchError.data.message, fields: fetchError.data.fields };
         }
-        return { kind: kindForStatus(status), status, error: "Unknown Error", message: "An unknown error has occurred" };
+        return { kind: getErrorKind(status), status, error: "Unknown Error", message: "An unknown error has occurred" };
     }
 
     // FETCH_ERROR / PARSING_ERROR / TIMEOUT_ERROR / CUSTOM_ERROR — carry the underlying detail
@@ -68,11 +72,16 @@ const ToastErrorMapping: Record<ErrorKind, (normalized: NormalizedError) => { ti
     validation: (normalized) => ({ title: "Invalid Data", description: normalized.message }),
     unauthorized: () => ({ title: "Not Signed In", description: "You must be signed in to perform this action" }),
     permission: () => ({ title: "Access Denied", description: "You do not have permission to perform this action" }),
+    impersonationReadOnly: () => ({ title: "Read-Only (Impersonating)", description: "You're viewing as another role or user — exit impersonation to make changes" }),
     notFound: (normalized) => ({ title: "Not Found", description: normalized.message }),
     businessRule: (normalized) => ({ title: "Action Not Allowed", description: normalized.message }),
     conflict: (normalized) => ({ title: "Already Exists", description: normalized.message }),
     unknown: () => ({ title: "Failed to Save", description: "An unknown error has occurred" })
 };
+
+export function isImpersonationReadOnlyError(error: unknown): boolean {
+    return toNormalizedError(error).kind === "impersonationReadOnly";
+}
 
 export function showApiErrorToast(error: unknown, overrides?: Partial<Parameters<typeof addToast>[0]>) {
     const normalized = toNormalizedError(error);

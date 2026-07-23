@@ -38,6 +38,7 @@ declare namespace NodeJS {
         JWT_SECRET: string;
         ACCESS_TOKEN_TTL: string;
         REFRESH_TOKEN_TTL: string;
+        IMPERSONATION_TOKEN_TTL: string;
 
         S3_BASE_URL: string;
         S3_BUCKET: string;

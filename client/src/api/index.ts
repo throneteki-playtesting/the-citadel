@@ -8,7 +8,7 @@ import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, Si
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
-import { Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
+import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
 import { ILogEntry } from "common/models/logs";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
@@ -94,7 +94,7 @@ const api = createApi({
             invalidatesTags: [{ type: "me" }]
         }),
         // Users API
-        getMe: builder.query<User | undefined, void>({
+        getMe: builder.query<MeResponse | undefined, void>({
             query: () => {
                 const url = buildUrl("users/me");
                 return {
@@ -103,11 +103,32 @@ const api = createApi({
                     // 401 (eg. no authentication provided) is treated as an undefined user rather than an error
                     validateStatus: (response) => [StatusCodes.OK, StatusCodes.UNAUTHORIZED].includes(response.status) };
             },
-            transformResponse: (response: User, meta: FetchBaseQueryMeta) => (meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response),
+            transformResponse: (response: MeResponse, meta: FetchBaseQueryMeta) => (meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response),
             providesTags: (result) => [
                 ...generateFor(result, "me", { includeList: false }),
                 ...generateFor(result?.roles, "role", { includeList: false })
             ]
+        }),
+        impersonateRole: builder.mutation<MeResponse, { roleId: string }>({
+            query: ({ roleId }) => {
+                const url = buildUrl(`impersonation/role/${roleId}`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: [{ type: "me" }]
+        }),
+        impersonateUser: builder.mutation<MeResponse, { discordId: string }>({
+            query: ({ discordId }) => {
+                const url = buildUrl(`impersonation/user/${discordId}`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: [{ type: "me" }]
+        }),
+        stopImpersonating: builder.mutation<MeResponse, void>({
+            query: () => {
+                const url = buildUrl("impersonation/stop");
+                return { url, method: "POST" };
+            },
+            invalidatesTags: [{ type: "me" }]
         }),
         getUsers: builder.query<IGetResponse<User>, IGetRequest<User> | void>({
             query: (options) => {
@@ -641,6 +662,9 @@ export const {
     useGetUsersQuery,
     useGetUserQuery,
     useUpdateUserMutation,
+    useImpersonateRoleMutation,
+    useImpersonateUserMutation,
+    useStopImpersonatingMutation,
 
     useGetRolesQuery,
     useUpdateRoleMutation,

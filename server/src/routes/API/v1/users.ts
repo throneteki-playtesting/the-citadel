@@ -9,7 +9,7 @@ import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
 import { StatusCodes } from "http-status-codes";
 import { getContext } from "@/middleware/context";
-import { User } from "common/models/auth";
+import { MeResponse, User } from "common/models/auth";
 import { getRequestSchema } from "@/schemas";
 import DiscordService from "@/discord";
 import { hasPermission } from "common/utils";
@@ -39,9 +39,26 @@ const getQuerySchema = getRequestSchema(
 // Fetch current user (for client)
 router.get("/me",
     (_req, res) => {
-        const { source, principal } = getContext();
-        const user: User = source === "client" ? principal : null;
-        res.status(StatusCodes.OK).json(user);
+        const context = getContext();
+        if (context.source !== "client") {
+            res.status(StatusCodes.OK).json(null);
+            return;
+        }
+
+        const { principal, realPrincipal, impersonating } = context;
+        const response: MeResponse = { ...principal };
+        if (impersonating) {
+            const target = impersonating === "role"
+                ? { id: principal.roles[0].discordId, name: principal.roles[0].name, color: principal.roles[0].color }
+                : { id: principal.discordId, name: principal.displayname, avatarUrl: principal.avatarUrl };
+            response.impersonation = {
+                type: impersonating,
+                target,
+                realUser: { id: realPrincipal.discordId, name: realPrincipal.displayname, avatarUrl: realPrincipal.avatarUrl }
+            };
+        }
+
+        res.status(StatusCodes.OK).json(response);
     }
 );
 

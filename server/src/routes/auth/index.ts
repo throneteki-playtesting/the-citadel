@@ -14,6 +14,7 @@ import DiscordService from "@/discord";
 import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { isEnvironment } from "@/env";
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, SESSION_ID_COOKIE } from "@/middleware/cookies";
 
 const router = express.Router();
 
@@ -64,7 +65,7 @@ router.get("/discord/callback",
             const user = await DiscordService.syncUser(discordDetails, true);
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
-            const sessionId = req.cookies.sessionId ?? randomUUID();
+            const sessionId = req.cookies[SESSION_ID_COOKIE] ?? randomUUID();
             await applyTokensToResponse(res, user.discordId, sessionId);
 
             await logActivity(LogCategory.AUTH, "auth.login", "<principal> logged in", {
@@ -81,7 +82,8 @@ router.get("/discord/callback",
 
 router.get("/refresh",
     asyncHandler<unknown, unknown, unknown, unknown>(async (req, res) => {
-        const { refreshToken, sessionId } = req.cookies;
+        const refreshToken = req.cookies[REFRESH_TOKEN_COOKIE];
+        const sessionId = req.cookies[SESSION_ID_COOKIE];
         if (!refreshToken) {
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Refresh Token", "No refresh token provided");
         }
@@ -166,17 +168,17 @@ async function applyTokensToResponse(res: Response, discordId: string, sessionId
     const { token: accessToken } = createAccessToken(discordId);
     const { token: refreshToken } = await createRefreshToken(discordId, sessionId);
 
-    res.cookie("sessionId", sessionId, {
+    res.cookie(SESSION_ID_COOKIE, sessionId, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
         sameSite: "lax"
     });
-    res.cookie("accessToken", accessToken, {
+    res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
         sameSite: "lax"
     });
-    res.cookie("refreshToken", refreshToken, {
+    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
         sameSite: "lax"

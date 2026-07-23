@@ -2,7 +2,7 @@ import { Key, useCallback, useMemo, useState } from "react";
 import { useGetRolesQuery } from "../../../api";
 import { Button, Input, Pagination, Spinner, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import EditRoleModal from "./editRoleModal";
 import Loading from "../../../components/loading";
 import { Role, RoleWithUserCount } from "common/models/auth";
@@ -10,6 +10,9 @@ import usePageTitle from "../../../hooks/usePageTitle";
 import { Filter } from "common/types";
 import classNames from "classnames";
 import SortableColumnHeader, { ColumnSort } from "../../../components/data/sortableColumnHeader";
+import Permission from "common/models/permissions";
+import { usePermission } from "../../../hooks/usePermission";
+import { useAuth } from "../../../hooks/useAuth";
 
 export default function Roles() {
     usePageTitle("Roles");
@@ -36,6 +39,9 @@ export default function Roles() {
 
     const [editingRole, setEditingRole] = useState<Role>();
 
+    const canImpersonate = usePermission(Permission.IMPERSONATE_ROLE);
+    const { impersonateRole, isImpersonating, isImpersonationActionPending } = useAuth();
+
     const columns = [
         { key: "name", label: "Name", sortKey: "name" },
         { key: "userCount", label: "Users" },
@@ -59,12 +65,26 @@ export default function Roles() {
                 return <span>{role.userCount}</span>;
             case "actions":
                 return (
-                    <Button isIconOnly size="sm" variant="light" isDisabled={!!editingRole} onPress={() => setEditingRole(role)}>
-                        <FontAwesomeIcon icon={faPencil} />
-                    </Button>
+                    <div className="flex gap-1">
+                        {canImpersonate && !isImpersonating && (
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="light"
+                                isDisabled={isImpersonationActionPending}
+                                onPress={() => impersonateRole(role.discordId)}
+                                title={`View as ${role.name}`}
+                            >
+                                <FontAwesomeIcon icon={faEye} />
+                            </Button>
+                        )}
+                        <Button isIconOnly size="sm" variant="light" isDisabled={!!editingRole} onPress={() => setEditingRole(role)}>
+                            <FontAwesomeIcon icon={faPencil} />
+                        </Button>
+                    </div>
                 );
         }
-    }, [editingRole]);
+    }, [canImpersonate, editingRole, impersonateRole, isImpersonating, isImpersonationActionPending]);
 
     return (
         <div className="space-y-2">

@@ -3,12 +3,13 @@ import { useGetUsersQuery, useGetUserQuery } from "../../../api";
 import { Key, useCallback, useMemo, useState } from "react";
 import Permission from "common/models/permissions";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import EditUserModal from "./editUserModal";
 import Loading from "../../../components/loading";
 import { User } from "common/models/auth";
 import usePageTitle from "../../../hooks/usePageTitle";
 import { usePermission } from "../../../hooks/usePermission";
+import { useAuth } from "../../../hooks/useAuth";
 import useTimezone from "../../../hooks/useTimezone";
 import { Filter } from "common/types";
 import classNames from "classnames";
@@ -42,6 +43,8 @@ export default function Users() {
     const [editingUser, setEditingUser] = useState<User>();
 
     const canEdit = usePermission(Permission.EDIT_USERS);
+    const canImpersonate = usePermission(Permission.IMPERSONATE_USER);
+    const { user: currentUser, impersonateUser, isImpersonating, isImpersonationActionPending } = useAuth();
     const { format } = useTimezone();
 
     const columns = [
@@ -83,13 +86,29 @@ export default function Users() {
             case "lastLogin":
                 return <span>{user.lastLogin ? format(user.lastLogin) : "Never"}</span>;
             case "actions":
-                return canEdit ? (
-                    <Button isIconOnly size="sm" variant="light" isDisabled={!!editingUser} onPress={() => setEditingUser(user)}>
-                        <FontAwesomeIcon icon={faPencil} />
-                    </Button>
-                ) : null;
+                return (
+                    <div className="flex gap-1">
+                        {canImpersonate && !isImpersonating && user.discordId !== "anonymous" && user.discordId !== currentUser?.discordId && (
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="light"
+                                isDisabled={isImpersonationActionPending}
+                                onPress={() => impersonateUser(user.discordId)}
+                                title={`View as ${user.displayname}`}
+                            >
+                                <FontAwesomeIcon icon={faEye} />
+                            </Button>
+                        )}
+                        {canEdit && (
+                            <Button isIconOnly size="sm" variant="light" isDisabled={!!editingUser} onPress={() => setEditingUser(user)}>
+                                <FontAwesomeIcon icon={faPencil} />
+                            </Button>
+                        )}
+                    </div>
+                );
         }
-    }, [canEdit, editingUser, format]);
+    }, [canEdit, canImpersonate, currentUser?.discordId, editingUser, format, impersonateUser, isImpersonating, isImpersonationActionPending]);
 
     return (
         <div className="space-y-2">

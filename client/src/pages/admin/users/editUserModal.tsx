@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { User } from "common/models/auth";
 import { cloneDeep } from "lodash-es";
 import PermissionCheckboxes from "../../../components/permissionCheckboxes";
+import { isImpersonationReadOnlyError } from "../../../api/errors";
 
 export default function EditUserModal({ user, guestUser, onOpenChange, onSave: onUserSave }: EditUserModalProps) {
     const [updateUser, { isLoading }] = useUpdateUserMutation();
@@ -17,10 +18,12 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
             const validPermissions = new Set<string>(Object.values(Permission));
             model.permissions = [...permissions].filter((p) => validPermissions.has(p)).map((p) => p as Permission);
 
-            // TODO: Consider (somehow) updating edited user who have sessions open?
             const response = await updateUser(model);
             if (response.error) {
-                addToast({ title: "Error", color: "danger", description: "Failed to save user" });
+                // The global error toast middleware already surfaces a clearer message for this case
+                if (!isImpersonationReadOnlyError(response.error)) {
+                    addToast({ title: "Error", color: "danger", description: "Failed to save user" });
+                }
             } else {
                 addToast({ title: "User saved", color: "success", description: `${model.displayname} was updated successfully.` });
                 if (onUserSave) {

@@ -79,6 +79,10 @@ enum Permission {
     REFRESH_INTEGRATION_TOKENS = "REFRESH_INTEGRATION_TOKENS",
     /** Can edit all roles */
     EDIT_ROLES = "EDIT_ROLES",
+    /** Can view the site as if only holding a specific role's permissions */
+    IMPERSONATE_ROLE = "IMPERSONATE_ROLE",
+    /** Can view the site as a specific user, using their role and personal permissions */
+    IMPERSONATE_USER = "IMPERSONATE_USER",
     /** Can assign the Playtesting Team Discord role to yourself */
     ASSIGN_OWN_PLAYTESTING_ROLE = "ASSIGN_OWN_PLAYTESTING_ROLE",
     /** Can render cards to another format (eg. PDF, PNG)*/
@@ -165,6 +169,8 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.DELETE_INTEGRATIONS]: { label: "Delete", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
     [Permission.REFRESH_INTEGRATION_TOKENS]: { label: "Refresh Tokens", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
     [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles", dependencies: Permission.READ_ROLES },
+    [Permission.IMPERSONATE_ROLE]: { label: "Impersonate", group: "Roles", dependencies: Permission.READ_ROLES },
+    [Permission.IMPERSONATE_USER]: { label: "Impersonate", group: "Users", dependencies: Permission.READ_USERS },
     [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
     [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },
     [Permission.READ_DISCORD_REVIEW_FORUM]: { label: "View Review Forum", group: "Discord" },
