@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { addToast, Button, Skeleton } from "@heroui/react";
 import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, MeasuringStrategy, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -19,6 +20,7 @@ import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
 import { getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
+import { highlightTarget } from "../../../constants";
 
 export default function CycleReleases({ project }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
@@ -40,6 +42,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const lastHoverContainerRef = useRef<string>(undefined);
     const captureFlip = useCapsuleFlip();
+    const { state: locationState } = useLocation();
 
     // TouchSensor (unlike PointerSensor) can preventDefault on touchmove during an active drag,
     // which lets capsules use touch-manipulation so swipes on them still scroll the page
@@ -82,14 +85,16 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             return;
         }
         hasInitializedCollapse.current = true;
+        // A release deep-linked via ?tab=releases + highlight state should start expanded, even if released
+        const highlightedCode = releases.find((release) => locationState?.highlight === highlightTarget.release(project.number, release.code))?.code;
         const defaults = new Set<string>();
         for (const release of releases) {
-            if (release.releasedDate) {
+            if (release.releasedDate && release.code !== highlightedCode) {
                 defaults.add(release.code);
             }
         }
         setCollapsedReleases(defaults);
-    }, [isLoadingSlots, isLoadingCards, releases]);
+    }, [isLoadingSlots, isLoadingCards, releases, locationState, project.number]);
 
     const baseContainers = useMemo(() => buildContainers(pool, releases, slots), [pool, releases, slots]);
     const containers = useMemo(

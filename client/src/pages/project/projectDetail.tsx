@@ -3,7 +3,7 @@ import { BaseElementProps } from "../../types";
 import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import EditProjectModal from "./editProjectModal";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
@@ -22,9 +22,10 @@ export default function ProjectDetail({ className, style, project: number }: Pro
     usePageTitle(project ? project.code : undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [tab, setTab] = useState<"development" | "releases">("development");
+    const [searchParams, setSearchParams] = useSearchParams();
+    const tab = searchParams.get("tab") === "releases" ? "releases" : "development";
     const navigate = useNavigate();
-    const canViewReleases = usePermission(Permission.READ_SLOTS);
+    const canViewReleases = usePermission(Permission.READ_RELEASES);
 
     if (isLoading) {
         return (
@@ -51,10 +52,19 @@ export default function ProjectDetail({ className, style, project: number }: Pro
             ) : canViewReleases ? (
                 <Tabs
                     selectedKey={tab}
-                    onSelectionChange={(key) => setTab(key as "development" | "releases")}
+                    onSelectionChange={(key) => setSearchParams((prev) => {
+                        const next = new URLSearchParams(prev);
+                        if (key === "releases") {
+                            next.set("tab", "releases");
+                        } else {
+                            next.delete("tab");
+                        }
+                        return next;
+                    }, { replace: true })}
                     aria-label="Project Sections"
                     variant="underlined"
                     color="primary"
+                    size="lg"
                     destroyInactiveTabPanel={false}
                 >
                     <Tab key="development" title="Development">

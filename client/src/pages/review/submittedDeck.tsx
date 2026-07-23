@@ -1,6 +1,6 @@
-import { faExternalLink, faPlus, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faClock, faExternalLink, faLayerGroup, faPlus, faX, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Textarea, Button, Accordion, AccordionItem, Skeleton, Link } from "@heroui/react";
+import { Textarea, Button, Accordion, AccordionItem, Chip, Skeleton, Link } from "@heroui/react";
 import { DeckLink, DecklistLink, isThronesDbLink } from "common/types";
 import { extractDeckIdentifier, isPlaytestingCode } from "common/utils";
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -11,6 +11,10 @@ import { sortBy } from "lodash-es";
 import CardImage from "../../components/cardImage";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
+import Timestamp from "../../components/timestamp";
+import { TouchTooltip } from "../../components/touchTooltip";
+
+const chipClassNames = { base: "whitespace-normal max-w-full h-auto py-0.5" };
 
 type DeckEntry = { url: DeckLink | DecklistLink; broken: boolean };
 
@@ -172,39 +176,82 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
 
     const cardSummary = useMemo(() => {
         if (!playtestedCards) {
-            return <Skeleton className="rounded-md h-full"/>;
+            return <Skeleton className="w-36 h-6 rounded-full"/>;
         }
+
+        const otherCards = playtestedCards.filter((pCard) => (typeof pCard === "string" ? pCard : pCard.code) !== card.code);
+        const otherChip = otherCards.length > 0 && (
+            <TouchTooltip
+                key="other"
+                content={
+                    <div className="text-sm font-sans max-w-56 whitespace-normal">
+                        Also contains: {otherCards.map((pCard) => typeof pCard === "string" ? pCard : pCard.label).join(", ")}
+                    </div>
+                }
+                size="sm"
+                delay={0}
+                closeDelay={0}
+            >
+                <Chip radius="sm" variant="flat" color="default" classNames={chipClassNames} startContent={<FontAwesomeIcon icon={faLayerGroup} className="ml-1"/>}>
+                    +{otherCards.length} other card{otherCards.length > 1 ? "s" : ""}
+                </Chip>
+            </TouchTooltip>
+        );
+
+        const updatedChip = deck && (
+            <Chip key="updated" radius="sm" variant="flat" color="default" classNames={chipClassNames} startContent={<FontAwesomeIcon icon={faClock} className="ml-1"/>}>
+                Updated <Timestamp date={deck.updated} className="inline"/>
+            </Chip>
+        );
+
         if (playtestedCards.length === 0) {
             return (
-                <div className="h-full border border-warning/30 bg-warning/10 rounded-lg p-3 animate-pulse">
-                    <div className="font-cinzel text-sm md:text-base text-warning">No playtesting found!</div>
-                    <div className="font-crimson italic text-xs md:text-sm text-warning/80">This deck contains no playtesting cards. Please remove this deck & provide another.</div>
-                </div>
+                <>
+                    <TouchTooltip content={<div className="text-sm font-sans max-w-56 whitespace-normal">This deck contains no playtesting cards. Please remove this deck & provide another.</div>} size="sm" delay={0} closeDelay={0}>
+                        <Chip radius="sm" variant="flat" color="warning" classNames={chipClassNames} startContent={<FontAwesomeIcon icon={faTriangleExclamation} className="ml-1"/>}>
+                            No playtesting found
+                        </Chip>
+                    </TouchTooltip>
+                    {updatedChip}
+                </>
             );
         }
         if (!playtestedCards.some((pCard) => typeof pCard === "string" ? pCard === card.code : pCard.code === card.code)) {
             return (
-                <div className="h-full border border-warning/30 bg-warning/10 rounded-lg p-3 animate-pulse">
-                    <div className="font-cinzel text-sm md:text-base text-warning">Card not found!</div>
-                    <div className="font-crimson italic text-xs md:text-sm text-warning/80">This deck contains no versions of the reviewed card. Are you sure it is the right deck?</div>
-                </div>
+                <>
+                    <TouchTooltip content={<div className="text-sm font-sans max-w-56 whitespace-normal">This deck contains no versions of the reviewed card. Are you sure it is the right deck?</div>} size="sm" delay={0} closeDelay={0}>
+                        <Chip radius="sm" variant="flat" color="warning" classNames={chipClassNames} startContent={<FontAwesomeIcon icon={faTriangleExclamation} className="ml-1"/>}>
+                            Not Included
+                        </Chip>
+                    </TouchTooltip>
+                    {otherChip}
+                    {updatedChip}
+                </>
             );
         }
+
+        const copies = card.code ? deck?.slots[card.code] : undefined;
+
         return (
-            <div className="h-full border border-success/30 bg-success/10 rounded-lg p-3">
-                <div className="font-cinzel text-sm md:text-base text-success">Playtesting has been noted.</div>
-                <div className="font-crimson italic text-xs md:text-sm text-success/80">This deck contains the reviewed card.</div>
-            </div>
+            <>
+                <TouchTooltip content={<div className="text-sm font-sans max-w-56 whitespace-normal">This deck runs {copies} cop{copies && copies > 1 ? "ies" : "y"} of the reviewed card.</div>} size="sm" delay={0} closeDelay={0}>
+                    <Chip radius="sm" variant="flat" color="success" classNames={chipClassNames} startContent={<FontAwesomeIcon icon={faCheck} className="ml-1"/>}>
+                        {copies ? `×${copies} ` : ""}Included
+                    </Chip>
+                </TouchTooltip>
+                {otherChip}
+                {updatedChip}
+            </>
         );
-    }, [card.code, playtestedCards]);
+    }, [card.code, playtestedCards, deck]);
 
     if (isLoading) {
         return (
             <div className="flex gap-1 p-1">
-                <CardStack cards={[undefined, undefined]} tilt={{ amount: -0.2, depth: 14 }} className="w-24 md:w-32" shadow={false}>
+                <CardStack cards={[undefined, undefined]} tilt={{ amount: -0.2, depth: 14 }} className="w-24 md:w-32 lg:w-24 xl:w-32" shadow={false}>
                     {() => <LoadingCard className="rounded-lg"/>}
                 </CardStack>
-                <div className="ml-16 grow">
+                <div className="ml-14 md:ml-16 lg:ml-14 xl:ml-16 grow">
                     <Skeleton className="size-full rounded-md"/>
                 </div>
             </div>
@@ -218,7 +265,7 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
                 <Link className="font-crimson text-sm md:text-base italic text-danger/60" href={src} target="_blank">View broken link</Link>
                 {onDelete && (
                     <Button className="absolute top-0 right-0 m-2" isIconOnly onPress={() => onDelete(src)} size="sm" radius="full" variant="flat" color="danger">
-                        <FontAwesomeIcon icon={faTrash}/>
+                        <FontAwesomeIcon icon={faX}/>
                     </Button>
                 )}
             </div>
@@ -232,7 +279,7 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
                 </div>
                 {onDelete && (
                     <Button isIconOnly className="ml-auto" onPress={() => onDelete(src)} size="sm" radius="full" color="danger">
-                        <FontAwesomeIcon icon={faTrash}/>
+                        <FontAwesomeIcon icon={faX}/>
                     </Button>
                 )}
             </div>
@@ -242,7 +289,7 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
                         {(card, index) => <CardImage key={index} card={card} className="rounded-lg"/>}
                     </CardStack>
                 </div>
-                <div className="ml-16 grow">
+                <div className="ml-14 md:ml-16 lg:ml-14 xl:ml-16 grow min-w-0 flex flex-wrap items-start content-start gap-1">
                     {cardSummary}
                 </div>
             </div>

@@ -97,7 +97,8 @@ export const emojis = {
 
 export const highlightTarget = {
     review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
-    factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`
+    factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
+    release: (project: number, code: string) => `release-${project}|${code}`
 } as const;
 
 export const statementOptions: { value: StatementAnswer; color: "danger" | "warning" | "default" | "secondary" | "success" }[] = [

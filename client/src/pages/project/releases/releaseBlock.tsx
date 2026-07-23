@@ -14,8 +14,9 @@ import { useDeleteReleaseMutation } from "../../../api";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
-import { factionBorderClasses, releaseStatusColors } from "../../../constants";
+import { factionBorderClasses, highlightTarget, releaseStatusColors } from "../../../constants";
 import { noReorderPreview, reorderItemId, slotNumberFromItemId } from "./releaseDnd";
+import { HighlightTarget } from "../../../components/highlightTarget";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
 export function SortableReleaseBlock(props: ReleaseBlockProps) {
@@ -214,67 +215,69 @@ export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEdit
     };
 
     return (
-        <div ref={setNodeRef} className="border border-content3 bg-content1">
-            <ReleaseBlockHeader
-                release={release}
-                filledCount={filledCount}
-                isCollapsed={isCollapsed}
-                isReorderDragging={isReorderDragging}
-                canEditReleases={canEditReleases}
-                canDeleteReleases={canDeleteReleases}
-                publishTooltip={publishTooltip}
-                isPublishDisabled={!isComplete || !!publishBlockedBy}
-                onToggleCollapse={onToggleCollapse}
-                onEdit={onEdit}
-                onPublish={() => setIsPublishModalOpen(true)}
-                onDelete={() => setIsConfirmingDelete(true)}
-                showDragHandle={!!dragHandleListeners}
-                dragHandleListeners={dragHandleListeners}
-                dragHandleAttributes={dragHandleAttributes}
-            />
-            <AnimatePresence initial={false}>
-                {!isCollapsed && (
-                    <motion.div
-                        key="content"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        // Forces DnD kit to remeasure containers once block expands/collapses
-                        onAnimationComplete={() => measureDroppableContainers(droppableContainers.getEnabled().map((container) => container.id))}
-                    >
-                        <SortableContext items={itemIds} strategy={noReorderPreview}>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 p-3">
-                                {itemIds.map((id, index) => {
-                                    const slotNumber = slotNumberFromItemId(id);
-                                    const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
-                                    return (
-                                        <ReleasePositionSlot key={id} id={id} position={index + 1} faction={getPositionFaction(release.slots, index + 1)} card={card} disabled={disabled}/>
-                                    );
-                                })}
-                            </div>
-                        </SortableContext>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-            <ConfirmModal
-                isOpen={isConfirmingDelete}
-                isLoading={isDeleting}
-                title={`Delete release '${release.code}'?`}
-                content="Any cards assigned to this release will be returned to the development pool."
-                confirmContent="Delete"
-                onConfirm={onDelete}
-                onClose={() => setIsConfirmingDelete(false)}
-            />
-            <PublishReleaseModal
-                isOpen={isPublishModalOpen}
-                project={project}
-                release={release}
-                assignedCards={assignedCards}
-                onClose={() => setIsPublishModalOpen(false)}
-                onSave={() => addToast({ title: "Successfully published", color: "success", description: `Release '${release.code}' has been published` })}
-            />
-        </div>
+        <HighlightTarget targetId={highlightTarget.release(project.number, release.code)}>
+            <div ref={setNodeRef} className="border border-content3 bg-content1">
+                <ReleaseBlockHeader
+                    release={release}
+                    filledCount={filledCount}
+                    isCollapsed={isCollapsed}
+                    isReorderDragging={isReorderDragging}
+                    canEditReleases={canEditReleases}
+                    canDeleteReleases={canDeleteReleases}
+                    publishTooltip={publishTooltip}
+                    isPublishDisabled={!isComplete || !!publishBlockedBy}
+                    onToggleCollapse={onToggleCollapse}
+                    onEdit={onEdit}
+                    onPublish={() => setIsPublishModalOpen(true)}
+                    onDelete={() => setIsConfirmingDelete(true)}
+                    showDragHandle={!!dragHandleListeners}
+                    dragHandleListeners={dragHandleListeners}
+                    dragHandleAttributes={dragHandleAttributes}
+                />
+                <AnimatePresence initial={false}>
+                    {!isCollapsed && (
+                        <motion.div
+                            key="content"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            // Forces DnD kit to remeasure containers once block expands/collapses
+                            onAnimationComplete={() => measureDroppableContainers(droppableContainers.getEnabled().map((container) => container.id))}
+                        >
+                            <SortableContext items={itemIds} strategy={noReorderPreview}>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 p-3">
+                                    {itemIds.map((id, index) => {
+                                        const slotNumber = slotNumberFromItemId(id);
+                                        const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
+                                        return (
+                                            <ReleasePositionSlot key={id} id={id} position={index + 1} faction={getPositionFaction(release.slots, index + 1)} card={card} disabled={disabled}/>
+                                        );
+                                    })}
+                                </div>
+                            </SortableContext>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+                <ConfirmModal
+                    isOpen={isConfirmingDelete}
+                    isLoading={isDeleting}
+                    title={`Delete release '${release.code}'?`}
+                    content="Any cards assigned to this release will be returned to the development pool."
+                    confirmContent="Delete"
+                    onConfirm={onDelete}
+                    onClose={() => setIsConfirmingDelete(false)}
+                />
+                <PublishReleaseModal
+                    isOpen={isPublishModalOpen}
+                    project={project}
+                    release={release}
+                    assignedCards={assignedCards}
+                    onClose={() => setIsPublishModalOpen(false)}
+                    onSave={() => addToast({ title: "Successfully published", color: "success", description: `Release '${release.code}' has been published` })}
+                />
+            </div>
+        </HighlightTarget>
     );
 }
 export type ReleaseBlockProps = {

@@ -21,7 +21,8 @@ import CardSelection from "./cardSelection";
 import classNames from "classnames";
 import { UserChip } from "../admin/logs/chips";
 
-const defaultData = {
+const defaultData: DeepPartial<IPlaytestReview> = {
+    played: 0,
     decks: [],
     statements: {
         boring: undefined,

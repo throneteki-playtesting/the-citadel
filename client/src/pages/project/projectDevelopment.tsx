@@ -3,12 +3,16 @@ import { IProject } from "common/models/projects";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { ReactNode, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
 import StatsGrid from "../../components/statsGrid";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
 import ProjectPlaytestingFocus from "./projectPlaytestingFocus";
 import ProjectContent from "./projectContent";
 import { BaseElementProps } from "../../types";
+import { highlightTarget, releaseStatusColors } from "../../constants";
+import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
+import classNames from "classnames";
 
 export default function ProjectDevelopment({ className, style, project }: ProjectDevelopmentProps) {
     return (
@@ -66,19 +70,40 @@ function ActiveDecksStat({ project }: ProjectStatProps) {
 }
 
 function PacksStat({ project }: ProjectStatProps) {
-    const releasedPacks = useMemo(() => project.releases.filter((release) => release.releasedDate), [project.releases]);
-    const packChips = releasedPacks.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
-            {releasedPacks.map((release) => <Chip key={release.code} size="sm" variant="bordered">{release.code}</Chip>)}
-        </div>) : <span className="text-2xl font-crimson tracking-wider">None</span>;
+    const navigate = useNavigate();
+    const { release, filled, isLoading } = useNextReleaseStatus(project);
 
-    return <StatCard label="Released Packs" value={packChips} />;
+    if (isLoading) {
+        return <StatCard label="Next Release" isLoading />;
+    }
+
+    if (!release) {
+        return <StatCard label="Next Release" value="None" />;
+    }
+
+    const displayStatus = release.releasedDate ? "released" : release.status;
+    const label = release.releasedDate ? "Latest Release" : "Next Release";
+    const footer = (
+        <span className="flex items-center gap-1.5">
+            <Chip size="sm" variant="flat" className="capitalize" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
+            <span className="truncate">{release.name}</span>
+        </span>
+    );
+
+    return (
+        <StatCard
+            label={label}
+            value={`${filled}/${release.capacity}`}
+            footer={footer}
+            onClick={() => navigate(`/project/${project.number}?tab=releases`, { state: { highlight: highlightTarget.release(project.number, release.code) } })}
+        />
+    );
 }
 type ProjectStatProps = {
     project: IProject;
 }
 
-function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
+function StatCard({ label, value, footer, isLoading = false, onClick }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="bg-content2/50 px-5 py-5 border-b-2 space-y-2">
@@ -89,7 +114,10 @@ function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
         );
     }
     return (
-        <div className="bg-content2/50 px-5 py-5">
+        <div
+            className={classNames("bg-content2/50 px-5 py-5", { "cursor-pointer hover:bg-content2 transition-colors": !!onClick })}
+            onClick={onClick}
+        >
             <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">
                 {label}
             </div>
@@ -103,4 +131,5 @@ type StatCardProps = {
   value?: ReactNode;
   footer?: ReactNode;
   isLoading?: boolean;
+  onClick?: () => void;
 };

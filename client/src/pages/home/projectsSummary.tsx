@@ -2,11 +2,12 @@ import { IProject } from "common/models/projects";
 import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Chip, Progress, Skeleton } from "@heroui/react";
+import classNames from "classnames";
 import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
-import { dismoji } from "../../constants";
+import { dismoji, highlightTarget, releaseStatusColors } from "../../constants";
 import Watermark from "../../components/watermark";
 
 export const ProjectsSummary = () => {
@@ -109,7 +110,7 @@ function ProjectCard({ project }: ProjectCardProps) {
                 <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
-                <ReleasesStat project={project} />
+                <PermissionGate requires={Permission.READ_RELEASES}><ReleasesStat project={project} /></PermissionGate>
             </StatsGrid>
         </div>
     );
@@ -141,23 +142,43 @@ function ActiveDecksStat({ project }: ProjectStatProps) {
 }
 
 function ReleasesStat({ project }: ProjectStatProps) {
+    const navigate = useNavigate();
+    const goToReleases = () => navigate(`/project/${project.number}?tab=releases`);
+
     if (project.type === "expansion") {
         const isReleased = project.releases[0]?.status === "released";
-        return <StatCard label="Released" value={isReleased ? "Yes" : "No"} />;
+        return <StatCard label="Released" value={isReleased ? "Yes" : "No"} onClick={project.releases.length > 0 ? goToReleases : undefined} />;
     }
 
     const packChips = project.releases.length > 0 ? (
         <div className="flex flex-wrap gap-1">
-            {project.releases.map((release) => <Chip key={release.code} size="sm" variant="bordered" className="">{release.code}</Chip>)}
+            {project.releases.map((release) => {
+                const displayStatus = release.releasedDate ? "released" : release.status;
+                return (
+                    <Chip
+                        key={release.code}
+                        size="sm"
+                        variant="flat"
+                        color={releaseStatusColors[displayStatus]}
+                        className="cursor-pointer"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/project/${project.number}?tab=releases`, { state: { highlight: highlightTarget.release(project.number, release.code) } });
+                        }}
+                    >
+                        {release.code}
+                    </Chip>
+                );
+            })}
         </div>) : <span className="text-lg font-crimson tracking-wider">None</span>;
 
-    return <StatCard label="Releases" value={packChips} />;
+    return <StatCard label="Releases" value={packChips} onClick={project.releases.length > 0 ? goToReleases : undefined} />;
 }
 type ProjectStatProps = {
     project: IProject;
 }
 
-function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
+function StatCard({ label, value, footer, isLoading = false, onClick }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="px-6 py-4 space-y-1">
@@ -168,7 +189,10 @@ function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
         );
     }
     return (
-        <div className="px-6 py-4">
+        <div
+            className={classNames("px-6 py-4", { "cursor-pointer hover:bg-content2 transition-colors": !!onClick })}
+            onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+        >
             <div className="text-xxs font-cinzel tracking-wide uppercase text-foreground/40">
                 {label}
             </div>
@@ -182,4 +206,5 @@ type StatCardProps = {
     value?: ReactNode;
     footer?: ReactNode;
     isLoading?: boolean;
+    onClick?: () => void;
 }
