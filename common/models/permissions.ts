@@ -131,7 +131,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
-    [Permission.READ_RELEASES]: { label: "Read Releases", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_RELEASES]: { label: "Read Releases", group: "Projects", dependencies: [Permission.READ_PROJECTS, Permission.READ_SLOTS] },
     [Permission.CREATE_RELEASES]: { label: "Create Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
     [Permission.EDIT_RELEASES]: { label: "Edit Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
     [Permission.DELETE_RELEASES]: { label: "Delete Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
