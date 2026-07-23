@@ -140,6 +140,7 @@ export default function EditReleaseModal({ isOpen, project, release: initial, on
                                     <DatePicker
                                         name="plannedDate"
                                         label="Planned Release Date"
+                                        description="Only visible to users with edit release permissions, not to those who can only view releases"
                                         value={release.plannedDate ? parseDate(release.plannedDate) : null}
                                         onChange={(date) => setRelease((prev) => ({ ...prev, plannedDate: date ? date.toString() as ReleaseDate : undefined }))}
                                         endContent={release.plannedDate && (
