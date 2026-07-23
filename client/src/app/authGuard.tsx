@@ -1,10 +1,9 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import api from "../api";
+import { useAuth } from "../hooks/useAuth";
 
 export default function AuthGuard() {
-    const { data: user, isLoading } = api.useGetMeQuery();
+    const { isAuthenticated, isLoading } = useAuth();
     const { pathname } = useLocation();
-    const isAuthenticated = !!user && user.id !== "anonymous";
 
     if (isLoading) {
         return (

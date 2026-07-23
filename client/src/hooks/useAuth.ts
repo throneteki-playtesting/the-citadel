@@ -16,8 +16,8 @@ export function useAuth() {
     const [stopImpersonatingMutation, { isLoading: isStoppingImpersonation }] = useStopImpersonatingMutation();
     const navigate = useNavigate();
 
-    const isAuthenticated = !!user && user.id !== "anonymous";
     const impersonation = user?.impersonation;
+    const isAuthenticated = !!user && (!!impersonation || user.id !== "anonymous");
 
     const login = () => {
         dispatch(setIsProcessing(true));

@@ -1,5 +1,5 @@
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
-import { faEye } from "@fortawesome/free-solid-svg-icons";
+import { faEye, faQuestion } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Avatar, Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Skeleton, Spinner } from "@heroui/react";
 import { useState } from "react";
@@ -10,6 +10,8 @@ import { useAuth } from "../../hooks/useAuth";
 const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     const { user, isAuthenticated, isLoading, isProcessing, login, logout, impersonation, isImpersonating, stopImpersonating, isImpersonationActionPending } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    // The guest profile has no real avatar (its avatarUrl is a placeholder), so show a generic icon instead
+    const isImpersonatingGuest = impersonation?.type === "user" && impersonation.target.id === "anonymous";
 
     if (!isAuthenticated && !isLoading) {
         const startContent = isProcessing ? <Spinner size="sm" /> : <FontAwesomeIcon icon={faDiscord} />;
@@ -28,7 +30,8 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
                     <div className="relative">
                         <Avatar
                             isDisabled={isLoading}
-                            src={user?.avatarUrl}
+                            src={isImpersonatingGuest ? undefined : user?.avatarUrl}
+                            icon={isImpersonatingGuest ? <FontAwesomeIcon icon={faQuestion} /> : undefined}
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
                             className={classNames("cursor-pointer", { "ring-2 ring-warning ring-offset-2 ring-offset-background": isImpersonating })}
                         />
