@@ -39,12 +39,14 @@ export default function ProjectDetail({ className, style, project: number }: Pro
         return <Error label="No such project exists in the Citadel's archives..." content="This project could not be found. It may have been removed, or you may have followed an incorrect link." />;
     }
 
-    return <div className={classNames("relative overflow-hidden", className)} style={style}>
-        <Watermark
-            position="top-right"
-            className={classNames("transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}
-            icon={project && <span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
-        />
+    return <div className={classNames("relative", className)} style={style}>
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <Watermark
+                position="top-right"
+                className={classNames("transition-opacity duration-500 ease-in", project ? "opacity-100" : "opacity-0")}
+                icon={project && <span className="-mt-12 mr-10 text-[10rem] md:-mt-24 md:mr-24 md:text-[16rem] opacity-20">{project.emoji && dismoji[project.emoji]}</span>}
+            />
+        </div>
         <div className="relative space-y-2">
             <ProjectHeader project={project} onEdit={() => setIsEditing(true)} onDelete={() => setIsDeleting(true)}/>
             {project.draft ? (

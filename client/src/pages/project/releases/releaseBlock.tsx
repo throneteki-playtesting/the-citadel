@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { addToast, Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
+import { useNavigate } from "react-router-dom";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -15,7 +16,7 @@ import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
 import { factionBorderClasses, highlightTarget, releaseStatusColors } from "../../../constants";
-import { noReorderPreview, reorderItemId, slotNumberFromItemId } from "./releaseDnd";
+import { findNextAvailableIndex, isFactionCompatible, noReorderPreview, normalizeDroppableId, reorderItemId, slotNumberFromItemId } from "./releaseDnd";
 import { HighlightTarget } from "../../../components/highlightTarget";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
@@ -38,8 +39,7 @@ export function SortableReleaseBlock(props: ReleaseBlockProps) {
     );
 }
 
-// Cursor-riding copy of the block header during a reorder drag (see DragOverlay).
-// Dragging visuals mount in their opposite state and flip via effect so they animate rather than snap
+// Cursor-riding copy of the block header during a reorder drag - mounts in its opposite state and flips via effect so it animates rather than snaps
 export function ReleaseBlockOverlay({ release, filledCount, canEditReleases, canDeleteReleases }: ReleaseBlockOverlayProps) {
     const { active } = useDndContext();
     const isDragging = active !== null;
@@ -180,7 +180,7 @@ type ReleaseBlockHeaderProps = {
 
 export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEditReleases, canDeleteReleases, canMoveCapsules, isCollapsed, onToggleCollapse, onEdit, publishBlockedBy, isReorderDragging, dragHandleListeners, dragHandleAttributes }: ReleaseBlockProps) {
     const { setNodeRef } = useDroppable({ id: release.code });
-    const { measureDroppableContainers, droppableContainers } = useDndContext();
+    const { measureDroppableContainers, droppableContainers, active, over } = useDndContext();
     const [deleteRelease, { isLoading: isDeleting }] = useDeleteReleaseMutation();
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -189,6 +189,17 @@ export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEdit
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
     const disabled = isLocked || !canMoveCapsules;
+
+    // Previews handleDragEnd's fallback (cycleReleases.tsx) - checks `over` directly since a specific slot always wins collision over this container
+    const activeIdStr = active ? String(active.id) : undefined;
+    const activeFaction = active?.data.current?.faction as Faction | undefined;
+    const isOwnRelease = !!activeIdStr && itemIds.includes(activeIdStr);
+    const overIdNormalized = over ? normalizeDroppableId(String(over.id)) : undefined;
+    const overIndexInRelease = overIdNormalized ? itemIds.indexOf(overIdNormalized) : -1;
+    const isHoveringRelease = !!overIdNormalized && (overIdNormalized === release.code || overIndexInRelease !== -1);
+    const isDirectValidTarget = overIndexInRelease !== -1 && isFactionCompatible(getPositionFaction(release.slots, overIndexInRelease + 1), activeFaction);
+    const nextAvailableIndex = findNextAvailableIndex(itemIds, release.slots, activeFaction);
+    const showNextSlotHighlight = isHoveringRelease && !isDirectValidTarget && !isOwnRelease && nextAvailableIndex !== -1;
 
     const publishTooltip = !isComplete
         ? "Every position must be filled before publishing"
@@ -215,8 +226,14 @@ export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEdit
     };
 
     return (
-        <HighlightTarget targetId={highlightTarget.release(project.number, release.code)}>
-            <div ref={setNodeRef} className="border border-content3 bg-content1">
+        <HighlightTarget className="overflow-visible" targetId={highlightTarget.release(project.number, release.code)}>
+            <div
+                ref={setNodeRef}
+                className={classNames(
+                    "border bg-content1 transition-[transform,colors] duration-150",
+                    showNextSlotHighlight ? "border-primary bg-primary/5 scale-[1.01]" : "border-content3"
+                )}
+            >
                 <ReleaseBlockHeader
                     release={release}
                     filledCount={filledCount}
@@ -251,7 +268,15 @@ export function ReleaseBlock({ project, release, itemIds, cardsByNumber, canEdit
                                         const slotNumber = slotNumberFromItemId(id);
                                         const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
                                         return (
-                                            <ReleasePositionSlot key={id} id={id} position={index + 1} faction={getPositionFaction(release.slots, index + 1)} card={card} disabled={disabled}/>
+                                            <ReleasePositionSlot
+                                                key={id}
+                                                id={id}
+                                                position={index + 1}
+                                                faction={getPositionFaction(release.slots, index + 1)}
+                                                card={card}
+                                                disabled={disabled}
+                                                isNextSlotTarget={showNextSlotHighlight && index === nextAvailableIndex}
+                                            />
                                         );
                                     })}
                                 </div>
@@ -297,22 +322,25 @@ export type ReleaseBlockProps = {
     dragHandleAttributes?: ReturnType<typeof useSortable>["attributes"];
 }
 
-export function ReleasePositionSlot({ id, position, faction, card, disabled }: ReleasePositionSlotProps) {
+export function ReleasePositionSlot({ id, position, faction, card, disabled, isNextSlotTarget }: ReleasePositionSlotProps) {
     const { attributes, listeners, setNodeRef, isDragging, isOver } = useSortable({ id, disabled: disabled || !card, data: { faction: card?.faction } });
     const { active } = useDndContext();
+    const navigate = useNavigate();
     const showBackground = !card || isDragging;
     // Slots are faction-locked; while a card is dragged, slots of other factions dim and never highlight
     const activeFaction = active?.data.current?.faction as Faction | undefined;
     const isFactionMismatch = !!faction && !!activeFaction && activeFaction !== faction;
     // Hovering an occupied slot only shrinks/darkens the occupant - the swap is confirmed on drop
     const isPendingReplacement = isOver && !isDragging && !!card && !isFactionMismatch;
+    // isNextSlotTarget previews where a generic release-area hover would actually land the card
+    const showHighlight = (isOver && !isFactionMismatch) || isNextSlotTarget;
 
     return (
-        <div ref={setNodeRef} className="relative h-8">
+        <div ref={setNodeRef} className="relative h-11">
             {showBackground && (
                 <div className={classNames(
-                    "absolute inset-1 flex items-center justify-center gap-1 font-cinzel text-sm rounded-md border-2 border-dashed transition-[colors,opacity] pointer-events-none text-foreground/25",
-                    isOver && !isFactionMismatch ? "border-primary" : faction ? factionBorderClasses[faction] : "border-content3",
+                    "absolute inset-1 flex items-center justify-center gap-1 font-cinzel text-sm rounded-md border-2 border-dashed transition-[colors,opacity,transform] pointer-events-none text-foreground/25",
+                    showHighlight ? "border-primary bg-primary/10 scale-105" : faction ? factionBorderClasses[faction] : "border-content3",
                     { "opacity-30": isFactionMismatch }
                 )}>
                     {position}
@@ -324,6 +352,7 @@ export function ReleasePositionSlot({ id, position, faction, card, disabled }: R
                     listeners={listeners}
                     attributes={attributes}
                     draggable={!disabled}
+                    onClick={disabled ? () => navigate(`/project/${card.project}/${card.number}`) : undefined}
                     flipSlot={card.number}
                     className={classNames("absolute inset-1 z-10 transition-[transform,filter] duration-150", { "scale-90 brightness-75": isPendingReplacement })}
                 />
@@ -337,4 +366,5 @@ type ReleasePositionSlotProps = {
     faction?: Faction;
     card?: IPlaytestCard;
     disabled: boolean;
+    isNextSlotTarget?: boolean;
 }

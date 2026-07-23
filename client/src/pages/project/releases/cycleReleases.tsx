@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
-import { addToast, Button, Skeleton } from "@heroui/react";
-import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, MeasuringStrategy, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
+import classNames from "classnames";
+import { addToast, Button, Skeleton, Tooltip } from "@heroui/react";
+import { DndContext, DragEndEvent, DragOverEvent, DragOverlay, DragStartEvent, DropAnimation, MeasuringStrategy, MouseSensor, TouchSensor, useDndContext, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import { IPlaytestCard } from "common/models/cards";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { useGetCardsQuery, useGetSlotsQuery, useReorderReleasesMutation } from "../../../api";
 import Permission from "common/models/permissions";
@@ -12,9 +14,9 @@ import { usePermission } from "../../../hooks/usePermission";
 import EditReleaseModal from "./editReleaseModal";
 import PermissionGate from "../../../components/permissionGate";
 import CapsuleVisual from "./capsuleVisual";
-import DevelopmentPool from "./developmentPool";
+import DevelopmentOverlay, { DevelopmentPoolButton } from "./developmentOverlay";
 import { ReleaseBlock, ReleaseBlockOverlay, ReleaseBlockProps, SortableReleaseBlock } from "./releaseBlock";
-import { buildContainers, codeFromReorderItemId, collisionDetection, dropAnimation, findContainer, HOVER_EXPAND_DELAY, POOL_ID, reorderItemId, slotNumberFromItemId, withHover } from "./releaseDnd";
+import { buildContainers, codeFromReorderItemId, createDropAnimation, createPoolAwareCollisionDetection, findContainer, findNextAvailableIndex, HOVER_EXPAND_DELAY, isFactionCompatible, normalizeDroppableId, POOL_ID, reorderItemId, slotNumberFromItemId, withHover } from "./releaseDnd";
 import { useCapsuleFlip } from "./releaseFlip";
 import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
@@ -36,16 +38,28 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     const [editing, setEditing] = useState<DeepPartial<IProjectRelease>>();
     const [activeId, setActiveId] = useState<string>();
     const [overId, setOverId] = useState<string>();
-    const [isPoolCollapsed, setIsPoolCollapsed] = useState(false);
+    // Starts collapsed to a bubble/button so the floating overlay doesn't cover content on load
+    const [isPoolCollapsed, setIsPoolCollapsed] = useState(true);
+    // Captured from the trigger's DOM rect on open, so the modal can morph in/out from wherever it was clicked
+    const [poolOriginRect, setPoolOriginRect] = useState<DOMRect>();
     const [collapsedReleases, setCollapsedReleases] = useState<Set<string>>(new Set());
     const hasInitializedCollapse = useRef(false);
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const lastHoverContainerRef = useRef<string>(undefined);
+    // Set synchronously in handleDragEnd, before dnd-kit reads it to pick the drop-flight animation
+    const isPoolDropRef = useRef(false);
+    const poolDropAnimation = useMemo(() => createDropAnimation(() => isPoolDropRef.current), []);
+    // Refreshed every render, not just at drag-end - collision detection needs this live, mid-drag
+    const poolStateRef = useRef<{ isOpen: boolean, poolItemIds: Set<string> }>({ isOpen: false, poolItemIds: new Set() });
+    const poolAwareCollisionDetection = useMemo(() => createPoolAwareCollisionDetection(() => poolStateRef.current), []);
     const captureFlip = useCapsuleFlip();
     const { state: locationState } = useLocation();
+    // Tabs don't unmount when inactive, but portalled content (the floating pool overlay) escapes
+    // the inactive panel's hidden styling - gate it explicitly so it doesn't float over Development
+    const [searchParams] = useSearchParams();
+    const isReleasesTabActive = searchParams.get("tab") === "releases";
 
-    // TouchSensor (unlike PointerSensor) can preventDefault on touchmove during an active drag,
-    // which lets capsules use touch-manipulation so swipes on them still scroll the page
+    // TouchSensor (unlike PointerSensor) preventDefaults touchmove during a drag, so chips can use touch-manipulation without blocking page scroll otherwise
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
@@ -79,6 +93,13 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         return counts;
     }, [slots]);
 
+    const poolCount = pool.length;
+    // Capacity is reserved the moment a release exists, whether or not it's filled yet
+    const isAtSlotCapacity = useMemo(
+        () => releases.reduce((sum, release) => sum + release.capacity, 0) >= slots.length,
+        [releases, slots]
+    );
+
     // Collapse released zones by default, once (further toggles are left to the user)
     useEffect(() => {
         if (hasInitializedCollapse.current || isLoadingSlots || isLoadingCards) {
@@ -101,16 +122,13 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         () => (activeId && overId ? withHover(baseContainers, activeId, overId) : baseContainers),
         [baseContainers, activeId, overId]
     );
+    poolStateRef.current = { isOpen: !isPoolCollapsed, poolItemIds: new Set(baseContainers[POOL_ID] ?? []) };
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;
     const activeCard = activeSlotNumber !== undefined ? cardsByNumber.get(activeSlotNumber) : undefined;
     const activeReorderCode = activeId ? codeFromReorderItemId(activeId) : undefined;
     const activeReorderRelease = activeReorderCode ? releases.find((release) => release.code === activeReorderCode) : undefined;
     const isReorderDragging = !!activeReorderCode;
-
-    // The pool's own droppable only fires isOver for its exact container id, but pool cards are
-    // individually droppable too - hovering any one of them should still highlight the whole zone
-    const hoveredContainer = overId ? findContainer(containers, overId) : undefined;
 
     const clearHoverTimer = () => {
         if (hoverTimerRef.current) {
@@ -125,6 +143,12 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         setActiveId(undefined);
         setOverId(undefined);
     };
+
+    const openPool = (rect: DOMRect) => {
+        setPoolOriginRect(rect);
+        setIsPoolCollapsed(false);
+    };
+    const closePool = () => setIsPoolCollapsed(true);
 
     const toggleReleaseCollapse = (code: string) => setCollapsedReleases((prev) => {
         const next = new Set(prev);
@@ -141,9 +165,11 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     const handleDragStart = (event: DragStartEvent) => {
         const id = String(event.active.id);
         setActiveId(id);
-        // Reordering collapses every release for the duration - and leaves them collapsed after
         if (codeFromReorderItemId(id) !== undefined) {
+            // Reordering collapses every release for the duration - and leaves them collapsed after
             setCollapsedReleases(new Set(releases.map((release) => release.code)));
+        } else {
+            closePool();
         }
     };
 
@@ -153,14 +179,14 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             return;
         }
 
-        // Once withHover moves the active card, the next measurement can report over === active
-        // without the pointer moving - reverting here would undo the preview and loop forever
+        // withHover can make over === active without the pointer moving - reverting would loop forever
         if (over && String(over.id) === String(active.id)) {
             return;
         }
 
-        const overContainer = over ? findContainer(containers, String(over.id)) : undefined;
-        setOverId(over ? String(over.id) : undefined);
+        const overIdStr = over ? normalizeDroppableId(String(over.id)) : undefined;
+        const overContainer = overIdStr ? findContainer(containers, overIdStr) : undefined;
+        setOverId(overIdStr);
 
         if (overContainer !== lastHoverContainerRef.current) {
             lastHoverContainerRef.current = overContainer;
@@ -180,6 +206,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     const handleDragEnd = async (event: DragEndEvent) => {
         const { active, over } = event;
         resetDragState();
+        isPoolDropRef.current = false;
 
         const activeIdStr = String(active.id);
 
@@ -217,8 +244,10 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         }
         const trueIndex = baseContainers[trueContainer].indexOf(activeIdStr);
 
-        // The withHover preview may already hold the final arrangement, and once it has moved the
-        // active card's DOM node, over.id can equal the active id - trust the live state over `over`
+        // Default: a cancelled/no-op return below leaves the card where it started - overridden once a real destination is resolved
+        isPoolDropRef.current = trueContainer === POOL_ID;
+
+        // withHover's preview may already be the final arrangement - trust live state over `over`
         const liveContainer = findContainer(containers, activeIdStr);
         const liveIndex = liveContainer ? containers[liveContainer].indexOf(activeIdStr) : -1;
         const hasLiveMove = !!liveContainer && (liveContainer !== trueContainer || liveIndex !== trueIndex);
@@ -232,7 +261,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             if (!over) {
                 return;
             }
-            const overIdStr = String(over.id);
+            const overIdStr = normalizeDroppableId(String(over.id));
             if (overIdStr === activeIdStr) {
                 return;
             }
@@ -248,14 +277,25 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                 position = undefined;
             } else {
                 code = overContainer;
-                let overIndex = baseContainers[overContainer].indexOf(overIdStr);
-                if (overIndex === -1) {
-                    overIndex = baseContainers[overContainer].findIndex((id) => slotNumberFromItemId(id) === undefined);
-                    if (overIndex === -1) {
+                const targetRelease = releases.find((release) => release.code === overContainer);
+                const overIndex = baseContainers[overContainer].indexOf(overIdStr);
+                // Faction-compatible (empty or occupied - occupied is a swap) is a direct target; else falls back below
+                const isDirectValidTarget = overIndex !== -1 && isFactionCompatible(getPositionFaction(targetRelease?.slots, overIndex + 1), activeCard?.faction);
+
+                let resolvedIndex: number;
+                if (isDirectValidTarget) {
+                    resolvedIndex = overIndex;
+                } else {
+                    // Landing on your OWN release this way is a no-op, not a bump to the next slot
+                    if (overContainer === trueContainer) {
+                        return;
+                    }
+                    resolvedIndex = findNextAvailableIndex(baseContainers[overContainer], targetRelease?.slots, activeCard?.faction);
+                    if (resolvedIndex === -1) {
                         return;
                     }
                 }
-                position = overIndex + 1;
+                position = resolvedIndex + 1;
             }
         }
 
@@ -273,6 +313,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         const unchanged = code === null
             ? !originalSlot?.release
             : originalSlot?.release?.code === code && originalSlot.release.position === position;
+        isPoolDropRef.current = code === null;
         if (unchanged) {
             return;
         }
@@ -305,56 +346,74 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     }
 
     return (
-        <DndContext sensors={sensors} collisionDetection={collisionDetection} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={resetDragState}>
+        <DndContext sensors={sensors} collisionDetection={poolAwareCollisionDetection} measuring={{ droppable: { strategy: MeasuringStrategy.Always } }} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={resetDragState}>
             <div className="flex flex-col gap-2">
                 <div className="text-sm text-foreground/50">
                     {canMoveCapsules
                         ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
                         : "Publishing a pack locks its contents permanently."}
                 </div>
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-                    {canMoveCapsules && (
-                        <div className="md:w-2/5 md:shrink-0">
-                            <DevelopmentPool
-                                itemIds={containers[POOL_ID] ?? []}
-                                cardsByNumber={cardsByNumber}
-                                isCollapsed={isPoolCollapsed}
-                                onToggle={() => setIsPoolCollapsed((prev) => !prev)}
-                                isHovered={hoveredContainer === POOL_ID}
-                            />
-                        </div>
-                    )}
-                    <div className="flex-1 min-w-0 flex flex-col gap-2 md:sticky md:top-20">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <SectionTitle size="lg" className="flex-1">Releases</SectionTitle>
-                            <PermissionGate requires={Permission.CREATE_RELEASES}>
-                                <Button size="sm" variant="flat" className="w-full sm:w-auto" startContent={<FontAwesomeIcon icon={faPlus}/>} onPress={() => setEditing({})}>
-                                    Add Release
-                                </Button>
-                            </PermissionGate>
-                        </div>
-                        {releases.length === 0 ? (
-                            <div className="border border-dashed border-content3 bg-content1/50 py-10 px-4 text-center">
-                                <div className="text-lg font-cinzel tracking-wide text-foreground/60">No packs have yet been chronicled for this project</div>
-                                <div className="text-sm text-foreground/40 mt-1">Add a release to begin assembling one from the development pool.</div>
-                            </div>
-                        ) : (
-                            <>
-                                {releases.filter((release) => release.releasedDate).map((release) => (
-                                    <ReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
-                                ))}
-                                <SortableContext items={orderedUnreleased.map((release) => reorderItemId(release.code))} strategy={verticalListSortingStrategy}>
-                                    {orderedUnreleased.map((release) => (
-                                        <SortableReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
-                                    ))}
-                                </SortableContext>
-                            </>
+                {canMoveCapsules && isReleasesTabActive && (
+                    <DevelopmentOverlay
+                        itemIds={containers[POOL_ID] ?? []}
+                        count={poolCount}
+                        cardsByNumber={cardsByNumber}
+                        isCollapsed={isPoolCollapsed}
+                        onOpen={openPool}
+                        onClose={closePool}
+                        originRect={poolOriginRect}
+                    />
+                )}
+                <div className="flex flex-col gap-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <SectionTitle size="lg" className="flex-1">Releases</SectionTitle>
+                        {canMoveCapsules && (
+                            <DevelopmentPoolButton count={poolCount} isCollapsed={isPoolCollapsed} onOpen={openPool}/>
                         )}
+                        <PermissionGate requires={Permission.CREATE_RELEASES}>
+                            <Tooltip content={isAtSlotCapacity ? "Every card slot in the project is already covered by a release" : undefined} isDisabled={!isAtSlotCapacity}>
+                                <span tabIndex={isAtSlotCapacity ? 0 : undefined} className="hidden sm:inline-block">
+                                    <Button size="sm" color="primary" isDisabled={isAtSlotCapacity} startContent={<FontAwesomeIcon icon={faPlus}/>} onPress={() => setEditing({})}>
+                                        Add Release
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                            {/* Floating add button for mobile only */}
+                            <Tooltip content={isAtSlotCapacity ? "Every card slot in the project is already covered by a release" : undefined} isDisabled={!isAtSlotCapacity}>
+                                <span tabIndex={isAtSlotCapacity ? 0 : undefined} className="sm:hidden fixed bottom-6 right-20 z-20">
+                                    <Button isIconOnly radius="full" size="lg" color="primary" className="shadow-lg" isDisabled={isAtSlotCapacity} onPress={() => setEditing({})}>
+                                        <FontAwesomeIcon icon={faPlus}/>
+                                    </Button>
+                                </span>
+                            </Tooltip>
+                        </PermissionGate>
                     </div>
+                    {releases.length === 0 ? (
+                        <div className="border border-dashed border-content3 bg-content1/50 py-10 px-4 text-center">
+                            <div className="text-lg font-cinzel tracking-wide text-foreground/60">No packs have yet been chronicled for this project</div>
+                            <div className="text-sm text-foreground/40 mt-1">Add a release to begin assembling one from the development pool.</div>
+                        </div>
+                    ) : (
+                        <>
+                            {releases.filter((release) => release.releasedDate).map((release) => (
+                                <ReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
+                            ))}
+                            <SortableContext items={orderedUnreleased.map((release) => reorderItemId(release.code))} strategy={verticalListSortingStrategy}>
+                                {orderedUnreleased.map((release) => (
+                                    <SortableReleaseBlock key={release.code} {...releaseBlockProps(release)}/>
+                                ))}
+                            </SortableContext>
+                        </>
+                    )}
                 </div>
             </div>
-            <DragOverlay dropAnimation={dropAnimation}>
-                {activeCard && <CapsuleVisual card={activeCard} className="h-full shadow-lg"/>}
+            <SizeMatchedDragOverlay
+                dropAnimation={poolDropAnimation}
+                activeCard={activeCard}
+                isPoolCollapsed={isPoolCollapsed}
+                poolChipId={containers[POOL_ID]?.[0]}
+                releaseSlotId={releases[0] ? containers[releases[0].code]?.[0] : undefined}
+            >
                 {activeReorderRelease && (
                     <ReleaseBlockOverlay
                         release={activeReorderRelease}
@@ -363,7 +422,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                         canDeleteReleases={canDeleteReleases}
                     />
                 )}
-            </DragOverlay>
+            </SizeMatchedDragOverlay>
             <EditReleaseModal
                 isOpen={!!editing}
                 project={project}
@@ -374,5 +433,38 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         </DndContext>
     );
 };
+
+// Sizes the dragged card to a pool chip (pool open) or a release slot (pool closed), never to whatever it's hovering (eg. a release header is much bigger)
+function SizeMatchedDragOverlay({ activeCard, isPoolCollapsed, poolChipId, releaseSlotId, dropAnimation, children }: SizeMatchedDragOverlayProps) {
+    const { droppableRects } = useDndContext();
+    const targetId = isPoolCollapsed ? releaseSlotId : poolChipId;
+    const rect = activeCard && targetId ? droppableRects.get(targetId) : undefined;
+
+    return (
+        <DragOverlay
+            dropAnimation={dropAnimation}
+            style={{
+                transition: "width 150ms ease, height 150ms ease",
+                ...(rect && { width: rect.width, height: rect.height })
+            }}
+        >
+            {activeCard && (
+                // Mirrors ReleasePositionSlot's own inset-1 capsule rather than shrinking this box directly, which would offset its center
+                <div className="relative h-full">
+                    <CapsuleVisual card={activeCard} className={classNames("shadow-lg", isPoolCollapsed ? "absolute inset-1" : "h-full")}/>
+                </div>
+            )}
+            {children}
+        </DragOverlay>
+    );
+}
+type SizeMatchedDragOverlayProps = {
+    activeCard?: IPlaytestCard;
+    isPoolCollapsed: boolean;
+    poolChipId?: string;
+    releaseSlotId?: string;
+    dropAnimation: DropAnimation;
+    children?: ReactNode;
+}
 
 type CycleReleasesProps = { project: IProject };

@@ -4,17 +4,20 @@ import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../../components/thronesIcon";
 import { factionBgClasses, factionBorderClasses } from "../../../constants";
 
-export default function CapsuleVisual({ card, className, style, forwardRef, listeners, attributes, draggable = true, flipSlot }: CapsuleVisualProps) {
+export default function CapsuleVisual({ card, className, style, forwardRef, listeners, attributes, draggable = true, onClick, flipSlot }: CapsuleVisualProps) {
+    const isClickable = !draggable && !!onClick;
+
     return (
         <div
             ref={forwardRef}
             style={style}
             data-flip-slot={flipSlot}
-            {...listeners}
-            {...attributes}
+            onClick={isClickable ? onClick : undefined}
+            {...(draggable ? listeners : undefined)}
+            {...(draggable ? attributes : undefined)}
             className={classNames(
-                "flex items-center gap-1 px-1.5 rounded-md border-2 select-none touch-manipulation z-20",
-                draggable ? "cursor-grab" : "cursor-default",
+                "flex items-center gap-1 px-1.5 rounded-md border-2 border-solid select-none touch-manipulation z-10 transition-[filter]",
+                draggable ? "cursor-grab" : isClickable ? "cursor-pointer hover:brightness-90" : "cursor-default",
                 factionBorderClasses[card.faction],
                 factionBgClasses[card.faction],
                 className
@@ -33,6 +36,7 @@ type CapsuleVisualProps = {
     listeners?: ReturnType<typeof useSortable>["listeners"];
     attributes?: ReturnType<typeof useSortable>["attributes"];
     draggable?: boolean;
+    onClick?: () => void;
     // Marks this capsule as a FLIP target (see useCapsuleFlip); omit on DragOverlay copies
     flipSlot?: number;
 }
