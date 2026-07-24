@@ -127,7 +127,7 @@ export default function PrivacyPolicy() {
         <div className="space-y-6">
             <div>
                 <div className="font-cinzel text-2xl">Privacy Policy</div>
-                <p className="text-small text-default-500">Last updated: June 2025</p>
+                <p className="text-small text-default-500">Last updated: July 2026</p>
             </div>
 
             {sections.map(({ icon, title, content }) => (
