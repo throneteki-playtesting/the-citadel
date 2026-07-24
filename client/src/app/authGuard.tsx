@@ -1,9 +1,10 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
 
 export default function AuthGuard() {
     const { isAuthenticated, isLoading } = useAuth();
-    const { pathname } = useLocation();
+    const { pathname, search } = useLocation();
 
     if (isLoading) {
         return (
@@ -15,7 +16,9 @@ export default function AuthGuard() {
 
     // Let /authRedirect through so it can display OAuth error toasts before redirecting
     if (!isAuthenticated && pathname !== "/authRedirect") {
-        return <Navigate to="/login" replace />;
+        const returnUrl = pathname + search;
+        const loginUrl = returnUrl !== "/" && isSafeRelativePath(returnUrl) ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : "/login";
+        return <Navigate to={loginUrl} replace />;
     }
 
     return <Outlet />;

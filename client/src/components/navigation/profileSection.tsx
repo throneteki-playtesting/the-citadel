@@ -16,7 +16,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
     if (!isAuthenticated && !isLoading) {
         const startContent = isProcessing ? <Spinner size="sm" /> : <FontAwesomeIcon icon={faDiscord} />;
         return (
-            <Button startContent={startContent} isDisabled={isProcessing} onPress={login} variant="flat" className="font-cinzel">
+            <Button startContent={startContent} isDisabled={isProcessing} onPress={() => login()} variant="flat" className="font-cinzel">
                 <span className="max-sm:hidden">Log in with Discord</span>
                 <span className="sm:hidden">Log in</span>
             </Button>

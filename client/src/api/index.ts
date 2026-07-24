@@ -1,7 +1,7 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
 import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
 import { ReleaseDate } from "common/models/shared";
-import { buildUrl, SemanticVersion } from "common/utils";
+import { buildUrl, isSafeRelativePath, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
@@ -54,7 +54,8 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
                 } else {
                     queryApi.dispatch(api.util.invalidateTags([{ type: "me" }]));
                     if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
-                        window.location.href = "/auth/discord";
+                        const returnUrl = window.location.pathname + window.location.search;
+                        window.location.href = returnUrl !== "/" && isSafeRelativePath(returnUrl) ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/discord";
                     }
                 }
             } finally {

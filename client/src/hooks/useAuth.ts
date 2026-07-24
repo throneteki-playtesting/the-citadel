@@ -19,9 +19,9 @@ export function useAuth() {
     const impersonation = user?.impersonation;
     const isAuthenticated = !!user && (!!impersonation || user.id !== "anonymous");
 
-    const login = () => {
+    const login = (returnUrl?: string) => {
         dispatch(setIsProcessing(true));
-        window.location.href = "/auth/discord";
+        window.location.href = returnUrl ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/discord";
     };
 
     const logout = async () => {

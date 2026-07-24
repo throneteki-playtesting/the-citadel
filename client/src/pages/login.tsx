@@ -1,7 +1,8 @@
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button, HeroUIProvider, Spinner, ToastProvider } from "@heroui/react";
-import { Navigate, useHref, useNavigate } from "react-router-dom";
+import { Navigate, useHref, useNavigate, useSearchParams } from "react-router-dom";
+import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
 import usePageTitle from "../hooks/usePageTitle";
 
@@ -9,6 +10,9 @@ export default function LoginPage() {
     const navigate = useNavigate();
     usePageTitle("Login");
     const { isAuthenticated, isLoading, isProcessing, login } = useAuth();
+    const [searchParams] = useSearchParams();
+    const returnUrlParam = searchParams.get("returnUrl");
+    const returnUrl = returnUrlParam && isSafeRelativePath(returnUrlParam) ? returnUrlParam : undefined;
 
     if (isLoading) {
         return (
@@ -19,7 +23,7 @@ export default function LoginPage() {
     }
 
     if (isAuthenticated) {
-        return <Navigate to="/" replace />;
+        return <Navigate to={returnUrl ?? "/"} replace />;
     }
 
     return (
@@ -60,7 +64,7 @@ export default function LoginPage() {
                                 : <FontAwesomeIcon icon={faDiscord} size="lg" />
                         }
                         isDisabled={isProcessing}
-                        onPress={login}
+                        onPress={() => login(returnUrl)}
                         className="font-cinzel tracking-widest uppercase px-10 border-primary/40 hover:border-primary whitespace-normal sm:whitespace-nowrap h-auto sm:h-12 py-4 sm:py-0 text-center"
                     >
                         Log in with Discord

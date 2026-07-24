@@ -218,6 +218,13 @@ export function buildUrl<T>(baseUrl: string, queryParameters?: T) {
     return url;
 }
 
+/**
+ * Guards against open redirects: only same-site relative paths are allowed, and not the auth pages themselves (to avoid redirect loops).
+ */
+export function isSafeRelativePath(path: string): boolean {
+    return /^\/(?!\/)/.test(path) && path !== "/login" && path !== "/authRedirect";
+}
+
 export type ValidationStep<T extends Principal> = Permission | ((principal: T) => boolean);
 export function validate<T extends Principal>(principal?: T, ...steps: ValidationStep<T>[]) {
     const { checks, permissions } = steps.reduce<{ checks: ((principal: T) => boolean)[], permissions: Permission[] }>(

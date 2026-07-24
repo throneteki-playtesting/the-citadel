@@ -43,7 +43,7 @@ export default function WelcomeBanner({ onBecamePlaytester }: WelcomeBannerProps
                         You are welcome to browse the public archives — active projects and their latest cards are open to all. Should you wish to delve deeper into the Citadel's records, please log in.
                     </div>
                 </div>
-                <Button startContent={isProcessing ? <Spinner color="secondary" size="sm"/> : <FontAwesomeIcon icon={faDiscord} />} isDisabled={isProcessing} color="primary" onPress={login} className="font-cinzel shrink-0 font-semibold">
+                <Button startContent={isProcessing ? <Spinner color="secondary" size="sm"/> : <FontAwesomeIcon icon={faDiscord} />} isDisabled={isProcessing} color="primary" onPress={() => login()} className="font-cinzel shrink-0 font-semibold">
                     Log in with Discord
                 </Button>
             </div>

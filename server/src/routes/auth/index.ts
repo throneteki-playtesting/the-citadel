@@ -14,8 +14,8 @@ import DiscordService from "@/discord";
 import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { isEnvironment } from "@/env";
-import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, SESSION_ID_COOKIE } from "@/middleware/cookies";
-import { determineOnboardingHint } from "common/utils";
+import { ACCESS_TOKEN_COOKIE, OAUTH_STATE_COOKIE, REFRESH_TOKEN_COOKIE, SESSION_ID_COOKIE } from "@/middleware/cookies";
+import { determineOnboardingHint, isSafeRelativePath } from "common/utils";
 import { OnboardingType } from "common/models/onboarding";
 
 const router = express.Router();
@@ -25,24 +25,71 @@ const SCOPES = [
     "guilds",
     "guilds.members.read"
 ];
-const DISCORD_AUTH_URL = `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${process.env.DISCORD_AUTH_REDIRECT}&scope=${SCOPES.join("+")}`;
 const REDIRECT_URL = `${process.env.CLIENT_HOST}/authRedirect`;
+const OAUTH_STATE_TTL_MS = 5 * 60 * 1000;
 
-router.get("/discord", (req, res) => {
-    res.redirect(encodeURI(DISCORD_AUTH_URL));
-});
+type DiscordAuthQuery = { returnUrl?: string };
 
-type DiscordCallbackQuery = { code?: string };
+router.get("/discord",
+    celebrate({
+        [Segments.QUERY]: {
+            returnUrl: Joi.string().optional()
+        }
+    }, { allowUnknown: true }),
+    asyncHandler<unknown, unknown, unknown, DiscordAuthQuery>(async (req, res) => {
+        const { returnUrl } = req.query;
+        const safeReturnUrl = returnUrl && isSafeRelativePath(returnUrl) ? returnUrl : undefined;
+
+        const csrf = randomUUID();
+        res.cookie(OAUTH_STATE_COOKIE, csrf, {
+            httpOnly: true,
+            secure: isEnvironment("staging", "production"),
+            sameSite: "lax",
+            maxAge: OAUTH_STATE_TTL_MS
+        });
+
+        const state = Buffer.from(JSON.stringify({ csrf, returnUrl: safeReturnUrl })).toString("base64url");
+        const discordAuthUrl = `https://discord.com/oauth2/authorize?client_id=${process.env.DISCORD_CLIENT_ID}&response_type=code&redirect_uri=${process.env.DISCORD_AUTH_REDIRECT}&scope=${SCOPES.join("+")}&state=${state}`;
+        res.redirect(encodeURI(discordAuthUrl));
+    })
+);
+
+type DiscordCallbackQuery = { code?: string, state?: string };
+
+function verifyOAuthState(state: string | undefined, storedCsrf: string | undefined): { valid: boolean, returnUrl?: string } {
+    if (!state || !storedCsrf) {
+        return { valid: false };
+    }
+    try {
+        const parsed = JSON.parse(Buffer.from(state, "base64url").toString("utf8")) as { csrf?: string, returnUrl?: string };
+        if (parsed.csrf !== storedCsrf) {
+            return { valid: false };
+        }
+        return { valid: true, returnUrl: parsed.returnUrl && isSafeRelativePath(parsed.returnUrl) ? parsed.returnUrl : undefined };
+    } catch {
+        return { valid: false };
+    }
+}
 
 router.get("/discord/callback",
     celebrate({
         [Segments.QUERY]: {
-            code: Joi.string()
+            code: Joi.string(),
+            state: Joi.string()
         }
     }, { allowUnknown: true }),
     asyncHandler<unknown, unknown, unknown, DiscordCallbackQuery>(async (req, res) => {
         try {
-            const { code } = req.query;
+            const { code, state } = req.query;
+
+            const storedCsrf = req.cookies[OAUTH_STATE_COOKIE];
+            res.clearCookie(OAUTH_STATE_COOKIE);
+            const { valid, returnUrl } = verifyOAuthState(state, storedCsrf);
+
+            if (!valid) {
+                res.redirect(buildUrl(REDIRECT_URL, { status: "error" } as { status: AuthStatus }));
+                return;
+            }
 
             if (!code) {
                 res.redirect(buildUrl(REDIRECT_URL, { status: "cancelled" } as { status: AuthStatus }));
@@ -84,8 +131,9 @@ router.get("/discord/callback",
 
             res.redirect(buildUrl(REDIRECT_URL, {
                 status: "success",
-                onboarding
-            } as { status: AuthStatus, onboarding?: OnboardingType }));
+                onboarding,
+                returnUrl
+            } as { status: AuthStatus, onboarding?: OnboardingType, returnUrl?: string }));
         } catch (err) {
             logger.error(err);
             res.redirect(buildUrl(REDIRECT_URL, { status: "error" } as { status: AuthStatus }));
