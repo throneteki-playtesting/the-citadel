@@ -136,7 +136,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                             </div>
                             <StatementBars statements={review.statements} />
                             <div className="text-xxs font-crimson italic truncate text-foreground/40">
-                                {review.played} {review.played !== 1 ? "games" : "game"} played
+                                {review.played === 0 ? "No games played" : `${review.played} ${review.played !== 1 ? "games" : "game"} played`}
                             </div>
                         </div>
                     </div>

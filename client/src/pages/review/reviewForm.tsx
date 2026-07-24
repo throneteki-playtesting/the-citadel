@@ -15,7 +15,7 @@ import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleArrowLeft, faExternalLink, faFeatherPointed, faScroll } from "@fortawesome/free-solid-svg-icons";
+import { faCircleArrowLeft, faExternalLink, faFlask, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { merge } from "lodash-es";
 import CardSelection from "./cardSelection";
 import classNames from "classnames";
@@ -169,7 +169,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                                             </Button>
                                         </ButtonGroup>
                                         {!hasPlaytested && (
-                                            <Alert color="secondary" icon={<FontAwesomeIcon icon={faFeatherPointed} className="text-2xl"/>} title="Important Notice" classNames={{ title: "font-cinzel font-semibold text-sm md:text-md lg:text-lg" }}>
+                                            <Alert color="warning" icon={<FontAwesomeIcon icon={faFlask} className="text-2xl"/>} title="Untested Review" classNames={{ title: "font-cinzel font-semibold text-sm md:text-md lg:text-lg" }}>
                                                 <div className="text-xs md:text-sm lg:text-md italic">
                                                     Thank you for sharing your thoughts — since this verdict isn't backed by actual playtesting, it may carry less weight than reviews from those who have put the card through its paces.
                                                 </div>

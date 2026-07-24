@@ -266,16 +266,24 @@ function createReviewEmbeds(review: IPlaytestReview, user: User) {
             iconURL: user.avatarUrl
         })
         .addFields(
-            {
-                name: "✦ Decks Submitted",
-                value: `${review.decks.length}`,
-                inline: true
-            },
-            {
-                name: "✦ Games Played",
-                value: `${review.played}`,
-                inline: true
-            },
+            ...(review.played === 0
+                ? [{
+                    name: "✦ Untested Review",
+                    value: "This reviewer has not yet played any games with this card, so treat their feedback as an early impression rather than a battle-tested verdict.",
+                    inline: false
+                }]
+                : [
+                    {
+                        name: "✦ Decks Submitted",
+                        value: `${review.decks.length}`,
+                        inline: true
+                    },
+                    {
+                        name: "✦ Games Played",
+                        value: `${review.played}`,
+                        inline: true
+                    }
+                ]),
             {
                 name: "✦ Statements (agree/disagree)",
                 value: Object.entries(review.statements).map(([statement, answer]) =>

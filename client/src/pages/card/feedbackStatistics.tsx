@@ -1,9 +1,9 @@
-import { Accordion, AccordionItem, Alert, Avatar, Button, Card, Link, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ScrollShadow, Select, SelectItem, SharedSelection, Skeleton } from "@heroui/react";
+import { Accordion, AccordionItem, Alert, Avatar, Button, Card, Chip, Link, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ScrollShadow, Select, SelectItem, SharedSelection, Skeleton } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
 import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faExternalLink, faLightbulb, faMeh, faPencil, faScaleBalanced, faScroll, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import { faCircleCheck, faExternalLink, faFlask, faLightbulb, faMeh, faPencil, faScaleBalanced, faScroll, faTrophy } from "@fortawesome/free-solid-svg-icons";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeckLink, DecklistLink } from "common/types";
 import { IPlaytestReview, statementAnswers, StatementQuestions, Statements } from "common/models/reviews";
@@ -363,11 +363,26 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                     <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} classNames={{ name: "text-2xl" }}className="shrink-0 size-12"/>
                     <div className="flex flex-col min-w-0">
                         <div className="text-lg font-crimson italic">
-                                Review by {user?.displayname ?? "Unknown Playtester"}
+                            Review by {user?.displayname ?? "Unknown Playtester"}
                         </div>
-                        <div className="text-base font-crimson italic truncate text-foreground/40">
-                            {review.played} {review.played !== 1 ? "games" : "game"} played
-                        </div>
+                        {review.played > 0
+                            ? (
+                                <div className="text-base font-crimson italic truncate text-foreground/40">
+                                    {review.played} {review.played !== 1 ? "games" : "game"} played
+                                </div>
+                            )
+                            : (
+                                <TouchTooltip content={
+                                    <div className="max-w-64 text-xs">
+                                        This feedback should be treated as an early impression rather than a battle-tested verdict.
+                                    </div>
+                                }>
+                                    <Chip size="sm" color="secondary" variant="flat" className="w-fit" startContent={<FontAwesomeIcon icon={faFlask} className="ml-1"/>}>
+                                        Untested Review
+                                    </Chip>
+                                </TouchTooltip>
+                            )
+                        }
                     </div>
                 </div>
             </div>
@@ -400,13 +415,15 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                     )}
                 </div>
             </div>
-            <Accordion>
-                <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
-                    <div className="overflow-hidden min-w-0">
-                        {review.decks.map((deck) => <ReviewSummaryDeck key={deck.link} url={deck.link} className="p-1" />)}
-                    </div>
-                </AccordionItem>
-            </Accordion>
+            {review.decks.length > 0 && (
+                <Accordion>
+                    <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
+                        <div className="overflow-hidden min-w-0">
+                            {review.decks.map((deck) => <ReviewSummaryDeck key={deck.link} url={deck.link} className="p-1" />)}
+                        </div>
+                    </AccordionItem>
+                </Accordion>
+            )}
         </HighlightTarget>
     );
 }
