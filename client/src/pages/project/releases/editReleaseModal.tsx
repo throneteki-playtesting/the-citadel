@@ -17,14 +17,12 @@ import { BaseElementProps } from "../../../types";
 import { useCreateReleaseMutation, useUpdateReleaseMutation } from "../../../api";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../../components/wizard";
 import ThronesIcon from "../../../components/thronesIcon";
-import { factionBgClasses, factionBorderClasses } from "../../../constants";
+import { factionBgClasses, factionBorderClasses, releaseStatusDescriptions } from "../../../constants";
 import { Release } from "common/models/schemas";
 
-const releaseStatuses: { status: IProjectRelease["status"], description: string }[] = [
-    { status: "planning", description: "Cards are still being chosen for this release" },
-    { status: "confirming", description: "Final card text & details are being polished" },
-    { status: "approved", description: "Contents are locked in and ready for release" }
-];
+// "released" is excluded - that status is only reached via publishing, never picked here
+const releaseStatuses: { status: IProjectRelease["status"], description: string }[] = (["planning", "confirming", "approved"] as const)
+    .map((status) => ({ status, description: releaseStatusDescriptions[status] }));
 
 // Every faction is always present in the editor (missing ones at 0), preserving any stored ordering
 function normalizeSlots(slots?: DeepPartial<ReleaseSlotAllocation[]>): ReleaseSlotAllocation[] {

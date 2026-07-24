@@ -351,7 +351,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                 <div className="text-sm text-foreground/50">
                     {canMoveCapsules
                         ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
-                        : "Publishing a pack locks its contents permanently."}
+                        : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
                 </div>
                 {canMoveCapsules && isReleasesTabActive && (
                     <DevelopmentOverlay

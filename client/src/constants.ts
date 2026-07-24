@@ -59,6 +59,13 @@ export const releaseStatusColors: Record<ReleaseStatus, "default" | "warning" | 
     released: "success"
 };
 
+export const releaseStatusDescriptions: Record<ReleaseStatus, string> = {
+    planning: "Cards are still being chosen for this release",
+    confirming: "Cards are unlikely to change, and their final details are being polished",
+    approved: "Contents & details are locked in and ready for release",
+    released: "Officially released to the public for physical & digital play"
+};
+
 export const changeTypeClasses: Record<ChangeType, string> = {
     new: "border-success-300 bg-success-100 text-success-700",
     draft: "border-secondary-300 bg-secondary-100 text-secondary-700",

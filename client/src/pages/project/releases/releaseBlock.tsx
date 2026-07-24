@@ -15,9 +15,10 @@ import { useDeleteReleaseMutation } from "../../../api";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
-import { factionBorderClasses, highlightTarget, releaseStatusColors } from "../../../constants";
+import { factionBorderClasses, highlightTarget, releaseStatusColors, releaseStatusDescriptions } from "../../../constants";
 import { findNextAvailableIndex, isFactionCompatible, noReorderPreview, normalizeDroppableId, reorderItemId, slotNumberFromItemId } from "./releaseDnd";
 import { HighlightTarget } from "../../../components/highlightTarget";
+import { TouchTooltip } from "../../../components/touchTooltip";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
 export function SortableReleaseBlock(props: ReleaseBlockProps) {
@@ -92,7 +93,11 @@ function ReleaseBlockHeader({ release, filledCount, isCollapsed, isReorderDraggi
                 <span className="min-w-0 max-w-full truncate text-lg font-cinzel tracking-wide">{release.name}</span>
                 <div className="flex items-center gap-2 flex-wrap">
                     <Chip size="sm" variant="bordered">{release.code}</Chip>
-                    <Chip size="sm" variant="flat" className="capitalize" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
+                    <TouchTooltip content={<span className="text-sm font-sans">{releaseStatusDescriptions[displayStatus]}</span>} size="sm" delay={0} closeDelay={0}>
+                        <span onClick={(e) => e.stopPropagation()}>
+                            <Chip size="sm" variant="flat" className="capitalize cursor-help" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
+                        </span>
+                    </TouchTooltip>
                     <span className="text-xs text-foreground/50">{filledCount}/{release.capacity}</span>
                     {canEditReleases && release.plannedDate && <span className="text-xs text-foreground/50">{release.plannedDate}</span>}
                     {release.article?.url && <a href={release.article.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-primary underline">Article</a>}

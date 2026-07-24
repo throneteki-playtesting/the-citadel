@@ -18,7 +18,8 @@ import { buildContainers, collisionDetection, dropAnimation, noReorderPreview, s
 import { useCapsuleFlip } from "./releaseFlip";
 import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
-import { releaseStatusColors } from "../../../constants";
+import { releaseStatusColors, releaseStatusDescriptions } from "../../../constants";
+import { TouchTooltip } from "../../../components/touchTooltip";
 
 // An expansion ships as one fixed release containing every card - no development pool, no
 // adding/deleting/reordering releases; only editing, rearranging within factions, and publishing
@@ -120,7 +121,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                 <div className="text-sm text-foreground/50">
                     {canMoveCapsules && !isLocked
                         ? "Rearrange cards within their faction's slots to plan the release. Publishing locks its contents permanently."
-                        : "Publishing a release locks its contents permanently."}
+                        : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
                 </div>
                 <div className="border border-content3 bg-content1">
                     <div className="flex items-center gap-2 px-4 py-3 bg-content2 border-b border-content3">
@@ -128,7 +129,9 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                             <span className="min-w-0 max-w-full truncate text-lg font-cinzel tracking-wide">{release.name}</span>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <Chip size="sm" variant="bordered">{release.code}</Chip>
-                                <Chip size="sm" variant="flat" className="capitalize" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
+                                <TouchTooltip content={<span className="text-sm font-sans">{releaseStatusDescriptions[displayStatus]}</span>} size="sm" delay={0} closeDelay={0}>
+                                    <Chip size="sm" variant="flat" className="capitalize cursor-help" color={releaseStatusColors[displayStatus]}>{displayStatus}</Chip>
+                                </TouchTooltip>
                                 <span className="text-xs text-foreground/50">{filledCount}/{release.capacity}</span>
                                 {canEditReleases && release.plannedDate && <span className="text-xs text-foreground/50">{release.plannedDate}</span>}
                                 {release.article?.url && <a href={release.article.url} target="_blank" rel="noreferrer" className="text-xs text-primary underline">Article</a>}
