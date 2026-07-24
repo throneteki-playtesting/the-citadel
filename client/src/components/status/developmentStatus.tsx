@@ -1,13 +1,26 @@
-import { faFeather } from "@fortawesome/free-solid-svg-icons";
+import { faCrosshairs, faFeather } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { isPreview, parseCardCode, SemanticVersion } from "common/utils";
 import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
-import { useGetCardsQuery } from "../../api";
+import { useGetCardsQuery, useGetProjectQuery, useGetSlotQuery } from "../../api";
+import { highlightTarget } from "../../constants";
 
 const DevelopmentStatus = ({ className, style, project, number, version, isIconOnly }: DevelopmentStatusProps) => {
+    const navigate = useNavigate();
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
+    const { data: projectData } = useGetProjectQuery({ number: project });
+    const { data: slotData } = useGetSlotQuery({ project, number });
+
+    const nextRelease = useMemo(() => {
+        const sorted = [...(projectData?.releases ?? [])].sort((a, b) => a.number - b.number);
+        return sorted.find((release) => !release.releasedDate);
+    }, [projectData?.releases]);
+
+    const isNextRelease = !!nextRelease && slotData?.release?.code === nextRelease.code;
+
     const data = useMemo<StatusData | null>(() => {
         const title = "Development";
         const draft = cardsData?.items.find((card) => card.draft);
@@ -30,6 +43,14 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
                     color: "success",
                     href
                 };
+            } else if (isNextRelease && nextRelease) {
+                return {
+                    title,
+                    icon: <FontAwesomeIcon icon={faCrosshairs} size="xl"/>,
+                    description: `Slotted for ${nextRelease.code}`,
+                    color: "success",
+                    onPress: () => navigate(`/project/${project}?tab=releases`, { state: { highlight: highlightTarget.release(project, nextRelease.code) } })
+                };
             } else {
                 return {
                     title,
@@ -43,7 +64,7 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
             description: "Unknown",
             color: "default"
         };
-    }, [cardsData?.items]);
+    }, [cardsData?.items, isNextRelease, nextRelease, navigate, project]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading}/>;
 };
