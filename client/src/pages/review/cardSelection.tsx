@@ -6,10 +6,19 @@ import { IPlaytestCard } from "common/models/cards";
 import { renderPlaytestingCard } from "common/utils";
 import { WizardNext } from "../../components/wizard";
 import PlaytestCardGrid from "./reviewingCardGrid";
+import { useGetProjectsQuery } from "../../api";
+import { useMemo } from "react";
 
 export default function CardSelection({ value: selected, onSelect, searchValue }: CardSelectionProps) {
+    const { data: projectsData, isLoading: isLoadingProjects } = useGetProjectsQuery({ filter: { active: true } });
+    const filter = useMemo(() => (isLoadingProjects ? undefined : { latest: true, project: { $in: projectsData?.items.map((project) => project.number) ?? [] } }), [isLoadingProjects, projectsData]);
+
+    if (isLoadingProjects) {
+        return null;
+    }
+
     return (
-        <PlaytestCardGrid filter={{ latest: true }} orderBy={{ project: "desc", number: "asc" }} search={searchValue} menuContent={<WizardNext color="primary" isDisabled={!selected} endContent={<FontAwesomeIcon icon={faCircleArrowRight}/>}>Continue</WizardNext>}>
+        <PlaytestCardGrid filter={filter} orderBy={{ project: "desc", number: "asc" }} search={searchValue} menuContent={<WizardNext color="primary" isDisabled={!selected} endContent={<FontAwesomeIcon icon={faCircleArrowRight}/>}>Continue</WizardNext>}>
             {(card) => {
                 const isSelected = selected && selected.project === card.project && selected.number === card.number && selected.version === card.version;
                 return (

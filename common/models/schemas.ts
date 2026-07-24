@@ -559,8 +559,8 @@ export const PlaytestingReview = {
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().required().items(ReviewDeckSchema).min(1),
         played: Joi.number().required(),
+        decks: Joi.array().items(ReviewDeckSchema).when("played", { is: Joi.number().greater(0), then: Joi.array().required().min(1), otherwise: Joi.array().optional() }),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
             competitive: Joi.string().required().valid(...statementAnswers),
@@ -605,8 +605,8 @@ export const PlaytestingReview = {
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().required().items(ReviewDeckSchema).min(1),
         played: Joi.number().required(),
+        decks: Joi.array().items(ReviewDeckSchema).when("played", { is: Joi.number().greater(0), then: Joi.array().required().min(1), otherwise: Joi.array().optional() }),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
             competitive: Joi.string().required().valid(...statementAnswers),

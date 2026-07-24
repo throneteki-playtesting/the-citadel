@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { IPlaytestCard } from "common/models/cards";
 import { CardPreview } from "@agot/card-preview";
 import { renderPlaytestingCard } from "common/utils";
-import { addToast, Alert, Button, NumberInput, Textarea } from "@heroui/react";
+import { addToast, Alert, Button, ButtonGroup, NumberInput, Textarea } from "@heroui/react";
 import { IPlaytestReview } from "common/models/reviews";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeepPartial } from "common/types";
@@ -15,14 +15,14 @@ import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleArrowLeft, faExternalLink, faScroll } from "@fortawesome/free-solid-svg-icons";
+import { faCircleArrowLeft, faExternalLink, faFeatherPointed, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { merge } from "lodash-es";
 import CardSelection from "./cardSelection";
 import classNames from "classnames";
 import { UserChip } from "../admin/logs/chips";
 
 const defaultData: DeepPartial<IPlaytestReview> = {
-    played: 0,
+    played: 1,
     decks: [],
     statements: {
         boring: undefined,
@@ -44,6 +44,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
 
     const [review, setReview] = useState<DeepPartial<IPlaytestReview>>(defaultData);
     const [isNew, setIsNew] = useState(true);
+    const [hasPlaytested, setHasPlaytested] = useState(true);
     const [card, setCard] = useState<IPlaytestCard>();
     // Changing the card would break the reviewer/version binding when editing someone else's or an outdated review
     const canChangeCard = isOwnReview && (!card || card.latest);
@@ -66,6 +67,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                     if (existingReview) {
                         setReview(existingReview);
                         setIsNew(false);
+                        setHasPlaytested((existingReview.played ?? 0) > 0);
                         return;
                     }
                 } catch {
@@ -74,16 +76,20 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
             }
             setReview(merge({}, defaultData, { reviewer, project: card?.project, number: card?.number, version: card?.version }));
             setIsNew(true);
+            setHasPlaytested(true);
         };
         checkCardUpdate();
     }, [card, readReview, reviewer]);
 
-    const onSubmit = useCallback(async (review: IPlaytestReview) => {
-        const newReview = isNew ? await createReview(review).unwrap() : await updateReview(review).unwrap();
+    const onSubmit = useCallback(async (validReview: IPlaytestReview) => {
+        if (!hasPlaytested) {
+            validReview = { ...validReview, played: 0, decks: [] };
+        }
+        const newReview = isNew ? await createReview(validReview).unwrap() : await updateReview(validReview).unwrap();
         setReview(newReview);
         navigate(`/project/${newReview.project}/${newReview.number}`);
         addToast({ title: "Successfully saved", color: "success", description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}` });
-    }, [card?.name, createReview, isNew, navigate, updateReview]);
+    }, [card?.name, createReview, hasPlaytested, isNew, navigate, updateReview]);
 
     return (
         <div className="space-y-2">
@@ -138,20 +144,54 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                                     <SectionTitle>
                                         Playtesting Information
                                     </SectionTitle>
-                                    <div className="flex flex-col w-full">
-                                        <div className="text-base md:text-lg font-cinzel">How many games have you played with this card?</div>
-                                        <NumberInput
-                                            name="played"
-                                            value={review.played ?? 0}
-                                            onValueChange={(played) => setReview((prev) => ({ ...prev, played }))}
-                                            minValue={0}
-                                            maxValue={999}
-                                            placeholder="Test"
-                                            size="lg"
-                                            classNames={{ mainWrapper: "max-w-24", inputWrapper: "h-10", input: "text-2xl" }}
-                                        />
+                                    <div className="flex flex-col w-full gap-1">
+                                        <div className="text-base md:text-lg font-cinzel">Have you playtested this card?</div>
+                                        <ButtonGroup size="lg" className="self-start">
+                                            <Button
+                                                color={hasPlaytested ? "primary" : "default"}
+                                                variant="bordered"
+                                                onPress={() => {
+                                                    setHasPlaytested(true);
+                                                    setReview((prev) => ({ ...prev, played: prev.played || 1 }));
+                                                }}
+                                            >
+                                                Yes
+                                            </Button>
+                                            <Button
+                                                color={!hasPlaytested ? "primary" : "default"}
+                                                variant="bordered"
+                                                onPress={() => {
+                                                    setHasPlaytested(false);
+                                                    setReview((prev) => ({ ...prev, played: 0, decks: [] }));
+                                                }}
+                                            >
+                                                No
+                                            </Button>
+                                        </ButtonGroup>
+                                        {!hasPlaytested && (
+                                            <Alert color="secondary" icon={<FontAwesomeIcon icon={faFeatherPointed} className="text-2xl"/>} title="Important Notice" classNames={{ title: "font-cinzel font-semibold text-sm md:text-md lg:text-lg" }}>
+                                                <div className="text-xs md:text-sm lg:text-md italic">
+                                                    Thank you for sharing your thoughts — since this verdict isn't backed by actual playtesting, it may carry less weight than reviews from those who have put the card through its paces.
+                                                </div>
+                                            </Alert>
+                                        )}
                                     </div>
-                                    <SubmitDecks decks={review?.decks} card={card} onValueChange={(decks) => setReview((prev) => ({ ...prev, decks }))}/>
+                                    {hasPlaytested && <>
+                                        <div className="flex flex-col w-full">
+                                            <div className="text-base md:text-lg font-cinzel">How many games have you played with this card?</div>
+                                            <NumberInput
+                                                name="played"
+                                                value={review.played ?? 0}
+                                                onValueChange={(played) => setReview((prev) => ({ ...prev, played }))}
+                                                minValue={1}
+                                                maxValue={999}
+                                                placeholder="Test"
+                                                size="lg"
+                                                classNames={{ mainWrapper: "max-w-24", inputWrapper: "h-10", input: "text-2xl" }}
+                                            />
+                                        </div>
+                                        <SubmitDecks decks={review?.decks} card={card} onValueChange={(decks) => setReview((prev) => ({ ...prev, decks }))}/>
+                                    </>}
                                 </div>
                             </div>
                             <div className="flex flex-col gap-1 p-2 w-full">
