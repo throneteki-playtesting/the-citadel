@@ -172,15 +172,14 @@ export function parsePlaytestCode(code: Cards.Code): { project: number, number: 
     const value = Math.abs(parseInt(code));
     return { project: Math.floor(value / 1000), number: (value % 1000) - 500 };
 }
-/**
- * For each card in a deck's slots, finds the latest non-draft version at or before the deck's update time, and adds it if not released
- */
+/** For each card in a deck's slots, finds the latest non-draft, non-released version at or before the deck's update time. */
 export function resolveDeckCardVersions(slots: Record<string, number>, deckUpdated: ISO8601String, cards: Cards.IPlaytestCard[]): Record<Cards.Code, SemanticVersion> {
     const deckUpdatedTime = new Date(deckUpdated).getTime();
     const result: Record<Cards.Code, SemanticVersion> = {};
 
     for (const code of Object.keys(slots)) {
-        const parsed = parsePlaytestCode(code as Cards.Code);
+        const parsed = parsePlaytestCode(code as Cards.Code)
+            ?? cards.find((card) => card.released && parseCardCode(true, card.project, card.released.number) === code);
         if (!parsed) {
             continue;
         }

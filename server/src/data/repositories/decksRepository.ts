@@ -26,10 +26,12 @@ export default class DecksRepository extends BasicAuditableRepository<"deck"> {
             return undefined;
         }
 
-        // Slots referencing a card by its real (post-release) ThronesDB code are ignored by
-        // resolveDeckCardVersions, so only playtesting-coded slots need their cards fetched.
+        // Released codes can't be reverse-mapped to a project/number, so pull in every released
+        // card instead and let resolveDeckCardVersions match them forward.
         const codes = Object.keys(decklist.slots) as Code[];
-        const cardFilters = codes.filter(isPlaytestingCode).map(parsePlaytestCode).filter((filter): filter is { project: number, number: number } => !!filter);
+        const playtestFilters = codes.filter(isPlaytestingCode).map(parsePlaytestCode).filter((filter): filter is { project: number, number: number } => !!filter);
+        const hasReleasedCodes = codes.some((code) => !isPlaytestingCode(code));
+        const cardFilters = [...playtestFilters, ...(hasReleasedCodes ? [{ released: { $exists: true } }] : [])];
         const cards = cardFilters.length > 0 ? await dataService.cards.read(cardFilters) : [];
 
         const deckData = {

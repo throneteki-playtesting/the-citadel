@@ -40,6 +40,12 @@ function playtestCode(project: number, number: number): string {
     return `${project}${number + 500}`;
 }
 
+// The real ThronesDB code for a released card - IPlaytestCard.released.code is the *pack's* short
+// code (eg. "TFE"), not a card code, so it must be derived from released.number instead.
+function releasedCardCode(project: number, releasedNumber: number): string {
+    return `${project}${releasedNumber.toString().padStart(3, "0")}`;
+}
+
 let cachedToken: string | undefined;
 async function getThronesDBToken(): Promise<string | undefined> {
     if (cachedToken) {
@@ -145,9 +151,9 @@ export const migration: Migration = {
             const deckUpdatedTime = new Date(decklist.date_update).getTime();
             const cardVersions: Record<string, string> = {};
             for (const code of Object.keys(decklist.slots ?? {})) {
-                // Slot codes referencing a card by its real (post-release) ThronesDB code are ignored,
-                // since a released card is no longer an active playtest subject.
-                const parsed = parsePlaytestCode(code);
+                // Real (post-release) codes are reverse-mapped via the matching card's `released` stamp.
+                const parsed = parsePlaytestCode(code)
+                    ?? cards.find((card: any) => card.released && releasedCardCode(card.project, card.released.number) === code);
                 if (!parsed) {
                     continue;
                 }
@@ -159,8 +165,6 @@ export const migration: Migration = {
                 );
                 const latest = candidates.reduce((best: any, card: any) =>
                     (!best || new Date(card.updated).getTime() > new Date(best.updated).getTime()) ? card : best, undefined);
-                // If the resolved version has itself since been released, exclude it rather than
-                // falling back to an earlier version - it's no longer being playtested.
                 if (latest && !latest.released) {
                     cardVersions[playtestCode(latest.project, latest.number)] = latest.version;
                 }
