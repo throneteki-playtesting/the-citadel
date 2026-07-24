@@ -38,8 +38,8 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     const [editing, setEditing] = useState<DeepPartial<IProjectRelease>>();
     const [activeId, setActiveId] = useState<string>();
     const [overId, setOverId] = useState<string>();
-    // Starts collapsed to a bubble/button so the floating overlay doesn't cover content on load
-    const [isPoolCollapsed, setIsPoolCollapsed] = useState(true);
+    // Starts closed to a bubble/button so the floating overlay doesn't cover content on load
+    const [isPoolOpen, setIsPoolOpen] = useState(false);
     // Captured from the trigger's DOM rect on open, so the modal can morph in/out from wherever it was clicked
     const [poolOriginRect, setPoolOriginRect] = useState<DOMRect>();
     const [collapsedReleases, setCollapsedReleases] = useState<Set<string>>(new Set());
@@ -122,7 +122,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         () => (activeId && overId ? withHover(baseContainers, activeId, overId) : baseContainers),
         [baseContainers, activeId, overId]
     );
-    poolStateRef.current = { isOpen: !isPoolCollapsed, poolItemIds: new Set(baseContainers[POOL_ID] ?? []) };
+    poolStateRef.current = { isOpen: isPoolOpen, poolItemIds: new Set(baseContainers[POOL_ID] ?? []) };
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;
     const activeCard = activeSlotNumber !== undefined ? cardsByNumber.get(activeSlotNumber) : undefined;
@@ -146,9 +146,9 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 
     const openPool = (rect: DOMRect) => {
         setPoolOriginRect(rect);
-        setIsPoolCollapsed(false);
+        setIsPoolOpen(true);
     };
-    const closePool = () => setIsPoolCollapsed(true);
+    const closePool = () => setIsPoolOpen(false);
 
     const toggleReleaseCollapse = (code: string) => setCollapsedReleases((prev) => {
         const next = new Set(prev);
@@ -358,7 +358,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                         itemIds={containers[POOL_ID] ?? []}
                         count={poolCount}
                         cardsByNumber={cardsByNumber}
-                        isCollapsed={isPoolCollapsed}
+                        isOpen={isPoolOpen}
                         onOpen={openPool}
                         onClose={closePool}
                         originRect={poolOriginRect}
@@ -368,7 +368,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <SectionTitle size="lg" className="flex-1">Releases</SectionTitle>
                         {canMoveCapsules && (
-                            <DevelopmentPoolButton count={poolCount} isCollapsed={isPoolCollapsed} onOpen={openPool}/>
+                            <DevelopmentPoolButton count={poolCount} isOpen={isPoolOpen} onOpen={openPool}/>
                         )}
                         <PermissionGate requires={Permission.CREATE_RELEASES}>
                             <Tooltip content={isAtSlotCapacity ? "Every card slot in the project is already covered by a release" : undefined} isDisabled={!isAtSlotCapacity}>
@@ -410,7 +410,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             <SizeMatchedDragOverlay
                 dropAnimation={poolDropAnimation}
                 activeCard={activeCard}
-                isPoolCollapsed={isPoolCollapsed}
+                isPoolOpen={isPoolOpen}
                 poolChipId={containers[POOL_ID]?.[0]}
                 releaseSlotId={releases[0] ? containers[releases[0].code]?.[0] : undefined}
             >
@@ -435,9 +435,9 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 };
 
 // Sizes the dragged card to a pool chip (pool open) or a release slot (pool closed), never to whatever it's hovering (eg. a release header is much bigger)
-function SizeMatchedDragOverlay({ activeCard, isPoolCollapsed, poolChipId, releaseSlotId, dropAnimation, children }: SizeMatchedDragOverlayProps) {
+function SizeMatchedDragOverlay({ activeCard, isPoolOpen, poolChipId, releaseSlotId, dropAnimation, children }: SizeMatchedDragOverlayProps) {
     const { droppableRects } = useDndContext();
-    const targetId = isPoolCollapsed ? releaseSlotId : poolChipId;
+    const targetId = isPoolOpen ? poolChipId : releaseSlotId;
     const rect = activeCard && targetId ? droppableRects.get(targetId) : undefined;
 
     return (
@@ -451,7 +451,7 @@ function SizeMatchedDragOverlay({ activeCard, isPoolCollapsed, poolChipId, relea
             {activeCard && (
                 // Mirrors ReleasePositionSlot's own inset-1 capsule rather than shrinking this box directly, which would offset its center
                 <div className="relative h-full">
-                    <CapsuleVisual card={activeCard} className={classNames("shadow-lg", isPoolCollapsed ? "absolute inset-1" : "h-full")}/>
+                    <CapsuleVisual card={activeCard} className={classNames("shadow-lg", isPoolOpen ? "h-full" : "absolute inset-1")}/>
                 </div>
             )}
             {children}
@@ -460,7 +460,7 @@ function SizeMatchedDragOverlay({ activeCard, isPoolCollapsed, poolChipId, relea
 }
 type SizeMatchedDragOverlayProps = {
     activeCard?: IPlaytestCard;
-    isPoolCollapsed: boolean;
+    isPoolOpen: boolean;
     poolChipId?: string;
     releaseSlotId?: string;
     dropAnimation: DropAnimation;

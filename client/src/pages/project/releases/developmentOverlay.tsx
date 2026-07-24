@@ -29,10 +29,10 @@ function useModalSize() {
 
 // The chip grid stays mounted (only transformed) so a drag never loses its source. The modal itself
 // isn't droppable - DevelopmentPoolButton (desktop) and the bubble below (mobile) are the only targets
-export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCollapsed, onOpen, onClose, originRect }: DevelopmentOverlayProps) {
+export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isOpen, onOpen, onClose, originRect }: DevelopmentOverlayProps) {
     const { measureDroppableContainers } = useDndContext();
     const bubbleRef = useRef<HTMLButtonElement>(null);
-    const { setNodeRef: setBubbleDropRef, isOver: isBubbleOver } = useDroppable({ id: POOL_MOBILE_TRIGGER_ID, disabled: !isCollapsed });
+    const { setNodeRef: setBubbleDropRef, isOver: isBubbleOver } = useDroppable({ id: POOL_MOBILE_TRIGGER_ID, disabled: isOpen });
     const combinedBubbleRef = (node: HTMLButtonElement | null) => {
         bubbleRef.current = node;
         setBubbleDropRef(node);
@@ -42,10 +42,10 @@ export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCo
     // Chips stay non-interactive until the open animation settles, or a mid-scale pickup sizes the drag overlay wrong
     const [isSettled, setIsSettled] = useState(false);
     useEffect(() => {
-        if (isCollapsed) {
+        if (!isOpen) {
             setIsSettled(false);
         }
-    }, [isCollapsed]);
+    }, [isOpen]);
 
     const target = { x: window.innerWidth / 2 - width / 2, y: window.innerHeight / 2 - height / 2, scale: 1, opacity: 1 };
     const origin = originRect
@@ -60,7 +60,7 @@ export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCo
     return createPortal(
         <>
             <AnimatePresence>
-                {isCollapsed && (
+                {!isOpen && (
                     <motion.button
                         ref={combinedBubbleRef}
                         key="mobile-bubble"
@@ -87,7 +87,7 @@ export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCo
             </AnimatePresence>
 
             <AnimatePresence>
-                {!isCollapsed && (
+                {isOpen && (
                     <motion.div
                         key="backdrop"
                         className="fixed inset-0 z-20 bg-black/60"
@@ -106,16 +106,17 @@ export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCo
                 dragMomentum={false}
                 dragElastic={0}
                 style={{ top: 0, left: 0, width, height }}
-                animate={isCollapsed ? origin : target}
+                initial={false}
+                animate={isOpen ? target : origin}
                 transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
                 onAnimationComplete={() => {
-                    if (!isCollapsed) {
+                    if (isOpen) {
                         setIsSettled(true);
                     }
                 }}
                 className={classNames(
                     "fixed z-30 border-2 border-content3 bg-content1 shadow-2xl flex flex-col",
-                    { "pointer-events-none": isCollapsed }
+                    { "pointer-events-none": !isOpen }
                 )}
             >
                 <div
@@ -132,7 +133,7 @@ export default function DevelopmentOverlay({ itemIds, count, cardsByNumber, isCo
                     </Button>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto p-3">
-                    <DevelopmentPanel itemIds={itemIds} cardsByNumber={cardsByNumber} isInteractive={!isCollapsed && isSettled}/>
+                    <DevelopmentPanel itemIds={itemIds} cardsByNumber={cardsByNumber} isInteractive={isOpen && isSettled}/>
                 </div>
             </motion.div>
         </>,
@@ -144,29 +145,29 @@ type DevelopmentOverlayProps = {
     // Distinct from itemIds.length, which includes a hover-preview arrival mid-drag (see withHover)
     count: number;
     cardsByNumber: Map<number, IPlaytestCard>;
-    isCollapsed: boolean;
+    isOpen: boolean;
     onOpen: (rect: DOMRect) => void;
     onClose: () => void;
     originRect?: DOMRect;
 }
 
-// Desktop trigger beside "Add Release" - always mounted, droppable/interactive only while collapsed
-export function DevelopmentPoolButton({ count, isCollapsed, onOpen }: DevelopmentPoolButtonProps) {
+// Desktop trigger beside "Add Release" - always mounted, droppable/interactive only while closed
+export function DevelopmentPoolButton({ count, isOpen, onOpen }: DevelopmentPoolButtonProps) {
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, disabled: !isCollapsed });
+    const { setNodeRef, isOver } = useDroppable({ id: POOL_ID, disabled: isOpen });
     const combinedRef = (node: HTMLDivElement | null) => {
         wrapperRef.current = node;
         setNodeRef(node);
     };
 
-    // isDisabled only blocks opening - the droppable registration above stays keyed on isCollapsed alone
+    // isDisabled only blocks opening - the droppable registration above stays keyed on isOpen alone
     return (
-        <div ref={combinedRef} className={classNames("hidden sm:block relative p-2 -m-2", { "pointer-events-none": !isCollapsed })}>
+        <div ref={combinedRef} className={classNames("hidden sm:block relative p-2 -m-2", { "pointer-events-none": isOpen })}>
             <Button
                 size="sm"
                 variant="flat"
-                isDisabled={!isCollapsed || count === 0}
-                className={classNames("transition-all", isOver ? "bg-primary/20 text-primary scale-110" : undefined, { "opacity-40": !isCollapsed })}
+                isDisabled={isOpen || count === 0}
+                className={classNames("transition-all", isOver ? "bg-primary/20 text-primary scale-110" : undefined, { "opacity-40": isOpen })}
                 startContent={<FontAwesomeIcon icon={faLayerGroup}/>}
                 onPress={() => wrapperRef.current && onOpen(wrapperRef.current.getBoundingClientRect())}
             >
@@ -177,6 +178,6 @@ export function DevelopmentPoolButton({ count, isCollapsed, onOpen }: Developmen
 }
 type DevelopmentPoolButtonProps = {
     count: number;
-    isCollapsed: boolean;
+    isOpen: boolean;
     onOpen: (rect: DOMRect) => void;
 }
