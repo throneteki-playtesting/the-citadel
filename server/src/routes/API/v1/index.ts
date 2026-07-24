@@ -8,6 +8,7 @@ import projects from "./projects";
 import playtestingUpdates from "./playtestingUpdates";
 import packs from "./packs";
 import reviews from "./reviews";
+import decks from "./decks";
 import render from "./render";
 import suggestions from "./suggestions";
 import broadcast from "./broadcast";
@@ -31,6 +32,7 @@ router.use("/projects", parseAPIRequest, blockMutationsWhileImpersonating, proje
 router.use("/playtesting-updates", parseAPIRequest, blockMutationsWhileImpersonating, playtestingUpdates);
 router.use("/packs", parseAPIRequest, blockMutationsWhileImpersonating, packs);
 router.use("/reviews", parseAPIRequest, blockMutationsWhileImpersonating, reviews);
+router.use("/decks", parseAPIRequest, blockMutationsWhileImpersonating, decks);
 router.use("/render", parseAPIRequest, blockMutationsWhileImpersonating, render);
 router.use("/suggestions", parseAPIRequest, blockMutationsWhileImpersonating, suggestions);
 router.use("/broadcast", parseAPIRequest, blockMutationsWhileImpersonating, broadcast);

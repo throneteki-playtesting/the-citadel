@@ -4,6 +4,7 @@ import { Migration } from "../lib/types";
 import { log } from "../lib/logger";
 import { resolveUsernameToId, fetchAllGuildMembers, fetchForumThreads, getDisplayNamesFor, ForumThread } from "../lib/discord";
 import { writeUnresolvedUsers, getResolvedMappings } from "../lib/userMappings";
+import { normalizeDeckLink } from "../lib/deckLinks";
 
 const BATCH_SIZE = 500;
 
@@ -113,12 +114,14 @@ export const migration: Migration = {
                     creative: (review.statements.creative as string).toLowerCase(),
                     balanced: (review.statements.balanced as string).toLowerCase(),
                     releasable: (review.statements.releasable as string).toLowerCase()
-                }
+                },
+                // Source decks are raw link strings - defaults to shared for all pre-existing links
+                decks: (review.decks as string[] ?? []).map((link) => ({ link: normalizeDeckLink(link), shared: true }))
             };
 
             // Carry through any other fields not explicitly remapped
             for (const [k, v] of Object.entries(review)) {
-                if (!["_id", "projectId", "epoch", "faction", "name", "reviewer", "statements"].includes(k)) {
+                if (!["_id", "projectId", "epoch", "faction", "name", "reviewer", "statements", "decks"].includes(k)) {
                     if (k === "discord") {
                         // Remap old root-level discord to _metadata
                         if (v) setDoc._metadata = { ...(setDoc._metadata ?? {}), discord: v };

@@ -20,7 +20,6 @@ import { TouchTooltip } from "../../components/touchTooltip";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
-import LoadingCard from "../../components/loadingCard";
 import { highlightTarget } from "../../constants";
 import { HighlightTarget } from "../../components/highlightTarget";
 import SectionTitle from "../../components/sectionTitle";
@@ -404,7 +403,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
             <Accordion>
                 <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
                     <div className="overflow-hidden min-w-0">
-                        {review.decks.map((deck) => <ReviewSummaryDeck key={deck} url={deck} className="p-1" />)}
+                        {review.decks.map((deck) => <ReviewSummaryDeck key={deck.link} url={deck.link} className="p-1" />)}
                     </div>
                 </AccordionItem>
             </Accordion>
@@ -452,14 +451,19 @@ function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {
 
     if (isLoading || isCardLoading) {
         return (
-            <div className={classNames("flex gap-1 h-52 w-full", className)} style={style}>
-                <LoadingCard />
-                <div className="flex flex-col flex-2 space-y-2 p-2">
-                    <Skeleton className="w-32 h-8 rounded-md"/>
-                    <Skeleton className="h-12 rounded-md"/>
-                    <Skeleton className="w-64 h-8 rounded-md"/>
-                    <Skeleton className="w-32 h-8 rounded-md"/>
-                </div>
+            <div className={classNames("w-full", className)} style={style}>
+                <Card className="p-2 w-full">
+                    <div className="flex flex-col flex-1 min-w-0">
+                        <div className="w-full flex items-center gap-2 min-w-0">
+                            <Skeleton className="h-6 w-40 rounded-md"/>
+                            <Skeleton className="size-4 rounded-full ml-auto shrink-0"/>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                            <Skeleton className="size-6 rounded-full shrink-0"/>
+                            <Skeleton className="h-5 w-48 rounded-md"/>
+                        </div>
+                    </div>
+                </Card>
             </div>
         );
     }

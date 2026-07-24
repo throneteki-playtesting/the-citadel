@@ -20,37 +20,16 @@ function missingDependencies(permissions: Permission[]): { permission: Permissio
     return missing;
 }
 
-function permissionSources(user: User, permission: Permission): string[] {
-    const sources: string[] = [];
-    if (user.permissions.includes(permission)) {
-        sources.push("direct grant");
-    }
-    if (user.defaultPermissions?.includes(permission)) {
-        sources.push("default permissions");
-    }
-    for (const role of user.roles) {
-        if (role.permissions.includes(permission)) {
-            sources.push(`role "${role.name}"`);
-        }
-    }
-    return sources;
-}
-
 function checkRole(role: Role) {
     for (const { permission, dependency } of missingDependencies(role.permissions)) {
         logger.warn(`Permission dependency check: role "${role.name}" (${role.discordId}) has ${permission} without required dependency ${dependency}`);
     }
 }
 
+// Only checks permissions granted directly to the user (not ones inherited from roles/defaults)
 function checkUser(user: User) {
-    const effectivePermissions = [
-        ...user.permissions,
-        ...(user.defaultPermissions ?? []),
-        ...user.roles.flatMap((role) => role.permissions)
-    ];
-    for (const { permission, dependency } of missingDependencies(effectivePermissions)) {
-        const sources = permissionSources(user, permission).join(", ");
-        logger.warn(`Permission dependency check: user "${user.displayname}" (${user.discordId}) effectively has ${permission} [${sources}] without required dependency ${dependency}`);
+    for (const { permission, dependency } of missingDependencies(user.permissions)) {
+        logger.warn(`Permission dependency check: user "${user.displayname}" (${user.discordId}) has ${permission} directly without required dependency ${dependency}`);
     }
 }
 

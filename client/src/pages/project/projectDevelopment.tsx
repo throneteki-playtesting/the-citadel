@@ -4,7 +4,7 @@ import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useGetCardsQuery, useGetReviewsQuery } from "../../api";
+import { useGetCardsQuery, useGetDecksQuery, useGetReviewsQuery } from "../../api";
 import StatsGrid from "../../components/statsGrid";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
 import ProjectPlaytestingFocus from "./projectPlaytestingFocus";
@@ -20,7 +20,7 @@ export default function ProjectDevelopment({ className, style, project }: Projec
             <StatsGrid>
                 <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_REVIEWS}><ActiveDecksStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_DECKS}><ActiveDecksStat project={project} /></PermissionGate>
                 <PacksStat project={project} />
             </StatsGrid>
             <div className="flex flex-col md:flex-row gap-2 md:gap-4 mt-2">
@@ -63,10 +63,9 @@ function ReviewsStat({ project }: ProjectStatProps) {
     );
 }
 function ActiveDecksStat({ project }: ProjectStatProps) {
-    const { data, isLoading } = useGetReviewsQuery({ filter: { project: project.number } });
-    const decks = useMemo(() => new Set(data?.items.reduce<string[]>((decks, review) => [...decks, ...review.decks], [])), [data?.items]);
+    const { data, isLoading } = useGetDecksQuery({ filter: { project: project.number } });
 
-    return <StatCard label="Submitted Decks" value={decks.size} footer="through reviews" isLoading={isLoading}/>;
+    return <StatCard label="Submitted Decks" value={data?.total} footer="for cards in this project" isLoading={isLoading}/>;
 }
 
 function PacksStat({ project }: ProjectStatProps) {

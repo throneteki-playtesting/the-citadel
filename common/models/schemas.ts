@@ -548,13 +548,18 @@ export const PlaytestingUpdate = {
     })
 };
 
+const ReviewDeckSchema = Joi.object({
+    link: Joi.string().required(),
+    shared: Joi.boolean().required()
+});
+
 export const PlaytestingReview = {
     Full: Joi.object({
         reviewer: Joi.string().required(),
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().required().items(Joi.string()).min(1),
+        decks: Joi.array().required().items(ReviewDeckSchema).min(1),
         played: Joi.number().required(),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
@@ -577,7 +582,7 @@ export const PlaytestingReview = {
         project: Joi.number(),
         number: Joi.number(),
         version: Joi.string().regex(Regex.SemanticVersion),
-        decks: Joi.array().items(Joi.string()).min(1),
+        decks: Joi.array().items(ReviewDeckSchema).min(1),
         played: Joi.number(),
         statements: Joi.object({
             boring: Joi.string().valid(...statementAnswers),
@@ -600,7 +605,7 @@ export const PlaytestingReview = {
         project: Joi.number().required(),
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
-        decks: Joi.array().required().items(Joi.string()).min(1),
+        decks: Joi.array().required().items(ReviewDeckSchema).min(1),
         played: Joi.number().required(),
         statements: Joi.object({
             boring: Joi.string().required().valid(...statementAnswers),
@@ -617,6 +622,12 @@ export const PlaytestingReview = {
         createdBy: Joi.string(),
         updated: Joi.date(),
         updatedBy: Joi.string()
+    })
+};
+
+export const Deck = {
+    Add: Joi.object({
+        link: Joi.string().required()
     })
 };
 

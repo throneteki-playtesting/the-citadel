@@ -1,7 +1,7 @@
 import { UUID } from "crypto";
 import * as Cards from "./models/cards";
 import Permission from "./models/permissions";
-import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "./types";
+import { DeckLink, DecklistLink, DeepPartial, ISO8601String, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
@@ -163,6 +163,43 @@ export function isPlaytestingCode(code: Cards.Code) {
     const number = parseInt(code);
     const remainder = Math.abs(number) % 1000;
     return remainder >= 500 && remainder <= 999;
+}
+/** Reverses parseCardCode(false, project, number) back to its project/number. */
+export function parsePlaytestCode(code: Cards.Code): { project: number, number: number } | undefined {
+    if (!isPlaytestingCode(code)) {
+        return undefined;
+    }
+    const value = Math.abs(parseInt(code));
+    return { project: Math.floor(value / 1000), number: (value % 1000) - 500 };
+}
+/**
+ * For each card in a deck's slots, finds the latest non-draft version at or before the deck's update
+ * time. Slot codes may be the temporary playtesting code or the real (post-release) ThronesDB code;
+ * either way the result is keyed by the canonical playtesting code.
+ */
+export function resolveDeckCardVersions(slots: Record<string, number>, deckUpdated: ISO8601String, cards: Cards.IPlaytestCard[]): Record<Cards.Code, SemanticVersion> {
+    const deckUpdatedTime = new Date(deckUpdated).getTime();
+    const result: Record<Cards.Code, SemanticVersion> = {};
+
+    for (const code of Object.keys(slots)) {
+        const parsed = parsePlaytestCode(code as Cards.Code);
+        const candidates = cards.filter((card) =>
+            !card.draft &&
+            card.updated.getTime() <= deckUpdatedTime &&
+            (parsed
+                ? (card.project === parsed.project && card.number === parsed.number)
+                : (card.released && parseCardCode(true, card.project, card.released.number) === code))
+        );
+        const latest = candidates.reduce<Cards.IPlaytestCard | undefined>(
+            (best, card) => (!best || card.updated.getTime() > best.updated.getTime()) ? card : best,
+            undefined
+        );
+        if (latest) {
+            result[parseCardCode(false, latest.project, latest.number)] = latest.version;
+        }
+    }
+
+    return result;
 }
 /**
  * Creates the full url for the specified request, converting query parameters into JSON

@@ -97,6 +97,12 @@ enum Permission {
     EDIT_REVIEWS = "EDIT_REVIEWS",
     /** Can delete other users card reviews */
     DELETE_REVIEWS = "DELETE_REVIEWS",
+    /** Can view decks in the shared decks pool */
+    READ_DECKS = "READ_DECKS",
+    /** Can add a deck directly to the shared decks pool, outside of the review process */
+    CREATE_DECKS = "CREATE_DECKS",
+    /** Can refresh a deck's data in the shared decks pool */
+    EDIT_DECKS = "EDIT_DECKS",
     /** Can access & read from the card forum on discord */
     READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM",
     /** Can access & read from the review forum on discord */
@@ -155,9 +161,12 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.IMPORT_SUGGESTIONS]: { label: "Import", group: "Suggestions" },
     [Permission.EXPORT_SUGGESTIONS]: { label: "Export", group: "Suggestions" },
     [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
-    [Permission.MAKE_REVIEWS]: { label: "Make Own", group: "Reviews", dependencies: Permission.READ_REVIEWS },
-    [Permission.EDIT_REVIEWS]: { label: "Edit Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
+    [Permission.MAKE_REVIEWS]: { label: "Make Own", group: "Reviews", dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS] },
+    [Permission.EDIT_REVIEWS]: { label: "Edit Others", group: "Reviews", dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS] },
     [Permission.DELETE_REVIEWS]: { label: "Delete Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
+    [Permission.READ_DECKS]: { label: "Read", group: "Decks" },
+    [Permission.CREATE_DECKS]: { label: "Create", group: "Decks", dependencies: Permission.READ_DECKS },
+    [Permission.EDIT_DECKS]: { label: "Edit", group: "Decks", dependencies: Permission.READ_DECKS },
     [Permission.READ_USER]: { label: "Read Single", group: "Users" },
     [Permission.READ_USERS]: { label: "Read All", group: "Users" },
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },

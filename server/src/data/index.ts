@@ -4,6 +4,7 @@ import { logger } from "@/services";
 import { createClient, RedisClientType } from "redis";
 import AuthRepository from "./repositories/authRepository";
 import CardsRepository from "./repositories/cardsRepository";
+import DecksRepository from "./repositories/decksRepository";
 import IntegrationRepository from "./repositories/integrationRepository";
 import LogsRepository from "./repositories/logsRepository";
 import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
@@ -28,6 +29,7 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "cards", ctor: CardsRepository },
     { key: "slots", ctor: SlotsRepository },
     { key: "reviews", ctor: ReviewsRepository },
+    { key: "decks", ctor: DecksRepository },
     { key: "users", ctor: UsersRepository },
     { key: "roles", ctor: RolesRepository },
     { key: "suggestions", ctor: SuggestionsRepository },
@@ -100,6 +102,7 @@ class DataService {
     get cards() { return this.getRepository<CardsRepository>("cards"); }
     get slots() { return this.getRepository<SlotsRepository>("slots"); }
     get reviews() { return this.getRepository<ReviewsRepository>("reviews"); }
+    get decks() { return this.getRepository<DecksRepository>("decks"); }
     get users() { return this.getRepository<UsersRepository>("users"); }
     get roles() { return this.getRepository<RolesRepository>("roles"); }
     get suggestions() { return this.getRepository<SuggestionsRepository>("suggestions"); }

@@ -12,12 +12,17 @@ export type Statements = {
     releasable: StatementAnswer
 };
 
+export interface ReviewDeck {
+    link: DeckLink | DecklistLink,
+    shared: boolean
+}
+
 export interface IPlaytestReview extends IAuditable {
     reviewer: string,
     project: number,
     number: number,
     version: SemanticVersion,
-    decks: (DeckLink | DecklistLink)[],
+    decks: ReviewDeck[],
     played: number,
     statements: Statements,
     _metadata?: {

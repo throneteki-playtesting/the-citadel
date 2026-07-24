@@ -13,9 +13,8 @@ export default function CardSelection({ value: selected, onSelect, searchValue }
             {(card) => {
                 const isSelected = selected && selected.project === card.project && selected.number === card.number && selected.version === card.version;
                 return (
-                    <div className="h-fit cursor-pointer select-none" onClick={() => onSelect(isSelected ? undefined : card)}>
+                    <div key={`${card.project}|${card.number}|${card.version}`} className="h-fit cursor-pointer select-none" onClick={() => onSelect(isSelected ? undefined : card)}>
                         <CardPreview
-                            key={`${card.project}|${card.number}|${card.version}`}
                             card={renderPlaytestingCard(card)}
                             className={classNames("h-fit transition-all duration-500 ease-in-out", { "ring-2 ring-primary": isSelected, "brightness-50": selected && !isSelected })}
                         />

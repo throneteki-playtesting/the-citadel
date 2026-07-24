@@ -8,6 +8,8 @@ import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, Si
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
+import { IDeck } from "common/models/decks";
+import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "common/types";
 import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
 import { ILogEntry } from "common/models/logs";
 import { Mutex } from "async-mutex";
@@ -644,6 +646,28 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "review")
         }),
+        // Decks API
+        getDecks: builder.query<IGetResponse<IDeck>, { filter?: SingleOrArray<DeepPartial<IPlaytestCard>> } | void>({
+            query: (options) => {
+                const url = buildUrl("decks", options ?? undefined);
+                return { url, method: "GET" };
+            },
+            providesTags: (result) => generateFor(result?.items, "deck")
+        }),
+        addDeck: builder.mutation<IDeck, { link: DeckLink | DecklistLink }>({
+            query: (body) => {
+                const url = buildUrl("decks");
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "deck")
+        }),
+        refreshDeck: builder.mutation<IDeck, { identifier: number | UUID }>({
+            query: ({ identifier }) => {
+                const url = buildUrl(`decks/${identifier}/refresh`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "deck")
+        }),
         // Logs API
         getLogs: builder.query<IGetResponse<ILogEntry>, IGetRequest<ILogEntry>>({
             query: (options) => {
@@ -739,6 +763,10 @@ export const {
     useCreateReviewMutation,
     useUpdateReviewMutation,
     useDeleteReviewMutation,
+
+    useGetDecksQuery,
+    useAddDeckMutation,
+    useRefreshDeckMutation,
 
     useGetLogsQuery
 } = api;

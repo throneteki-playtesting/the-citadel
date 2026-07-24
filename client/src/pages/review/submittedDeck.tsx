@@ -1,12 +1,14 @@
 import { faCheck, faClock, faExternalLink, faLayerGroup, faPlus, faX, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Textarea, Button, Accordion, AccordionItem, Chip, Skeleton, Link } from "@heroui/react";
+import { Textarea, Button, Accordion, AccordionItem, Chip, Skeleton, Link, Checkbox } from "@heroui/react";
 import { DeckLink, DecklistLink, isThronesDbLink } from "common/types";
 import { extractDeckIdentifier, isPlaytestingCode } from "common/utils";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useGetTDBDeckQuery, useLazyGetTDBCardQuery, useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import { useWizard } from "../../components/wizard/context";
 import { Code, ILabeledCard, IPlaytestCard } from "common/models/cards";
+import { ReviewDeck } from "common/models/reviews";
+import { DeepPartial } from "common/types";
 import { sortBy } from "lodash-es";
 import CardImage from "../../components/cardImage";
 import CardStack from "../../components/cardStack";
@@ -16,10 +18,12 @@ import { TouchTooltip } from "../../components/touchTooltip";
 
 const chipClassNames = { base: "whitespace-normal max-w-full h-auto py-0.5" };
 
-type DeckEntry = { url: DeckLink | DecklistLink; broken: boolean };
+type DeckEntry = { url: DeckLink | DecklistLink; broken: boolean; shared: boolean };
 
-const toEntries = (urls: (DeckLink | DecklistLink)[]): DeckEntry[] =>
-    urls.map((url) => ({ url, broken: false }));
+const toEntries = (decks: DeepPartial<ReviewDeck>[]): DeckEntry[] =>
+    decks
+        .filter((deck): deck is DeepPartial<ReviewDeck> & { link: DeckLink | DecklistLink } => !!deck.link)
+        .map(({ link, shared }) => ({ url: link, broken: false, shared: shared ?? true }));
 
 export default function SubmitDecks({ card, decks: initial = [], onValueChange: onDecksChange }: SubmitDecksProps) {
     const [entries, setEntries] = useState<DeckEntry[]>(toEntries(initial));
@@ -41,7 +45,7 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
     }, [validationErrors.decks]);
 
     const notifyChange = useCallback((updated: DeckEntry[]) => {
-        onDecksChange(updated.filter((e) => !e.broken).map((e) => e.url));
+        onDecksChange(updated.filter((e) => !e.broken).map((e) => ({ link: e.url, shared: e.shared })));
     }, [onDecksChange]);
 
     const onAddDeck = useCallback(async () => {
@@ -68,7 +72,7 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
 
             setDeckUrlInput("");
             setDeckUrlInputError(undefined);
-            const updated = [...entries, { url: deckUrlInput, broken: false }];
+            const updated = [...entries, { url: deckUrlInput, broken: false, shared: true }];
             setEntries(updated);
             notifyChange(updated);
         } finally {
@@ -85,6 +89,12 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
     const onDeckLinkBroken = useCallback((url: DeckLink | DecklistLink) => {
         setEntries((prev) => prev.map((e) => e.url === url ? { ...e, broken: true } : e));
     }, []);
+
+    const onDeckSharedChange = useCallback((url: DeckLink | DecklistLink, shared: boolean) => {
+        const updated = entries.map((e) => e.url === url ? { ...e, shared } : e);
+        setEntries(updated);
+        notifyChange(updated);
+    }, [entries, notifyChange]);
 
     return (
         <div className="space-y-2">
@@ -122,7 +132,7 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
                 <AccordionItem isDisabled={entries.length === 0} title={<span className="font-crimson italic text-lg">Submitted Decks {entries.length > 0 ? `(${entries.length})` : null}</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-1">
                         {entries.map((entry) => (
-                            <DeckSummary key={entry.url} card={card} src={entry.url} onDelete={onRemoveDeck} onBroken={onDeckLinkBroken} />
+                            <DeckSummary key={entry.url} card={card} src={entry.url} shared={entry.shared} onDelete={onRemoveDeck} onBroken={onDeckLinkBroken} onSharedChange={onDeckSharedChange} />
                         ))}
                     </div>
                 </AccordionItem>
@@ -133,11 +143,11 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
 
 type SubmitDecksProps = {
     card: IPlaytestCard;
-    decks?: (DeckLink | DecklistLink)[];
-    onValueChange: (value: (DeckLink | DecklistLink)[]) => void;
+    decks?: DeepPartial<ReviewDeck>[];
+    onValueChange: (value: ReviewDeck[]) => void;
 }
 
-function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummaryProps) {
+function DeckSummary({ card, src, shared, onDelete, onBroken = () => true, onSharedChange }: DeckSummaryProps) {
     const identifier = extractDeckIdentifier(src);
     const { data: deck, isLoading } = useGetTDBDeckQuery(identifier!, { skip: !identifier });
     const [fetchCard] = useLazyGetTDBCardQuery();
@@ -293,6 +303,11 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
                     {cardSummary}
                 </div>
             </div>
+            {onSharedChange && (
+                <Checkbox size="sm" isSelected={shared} onValueChange={(value) => onSharedChange(src, value)}>
+                    <span className="text-sm font-sans">Share this deck for others to use</span>
+                </Checkbox>
+            )}
         </div>
     );
 };
@@ -300,6 +315,8 @@ function DeckSummary({ card, src, onDelete, onBroken = () => true }: DeckSummary
 type DeckSummaryProps = {
     card: IPlaytestCard;
     src: DeckLink | DecklistLink;
+    shared: boolean;
     onDelete?: (src: DeckLink | DecklistLink) => void;
     onBroken?: (src: DeckLink | DecklistLink) => void;
+    onSharedChange?: (src: DeckLink | DecklistLink, shared: boolean) => void;
 }

@@ -4,8 +4,9 @@ import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
 import { ISlot } from "./models/slots";
 import { ILogEntry } from "./models/logs";
+import { IDeck } from "./models/decks";
 
-export type ResourceType = "user" | "role" | "integration" | "card" | "suggestion" | "project" | "playtestingUpdate" | "review" | "slot" | "log";
+export type ResourceType = "user" | "role" | "integration" | "card" | "suggestion" | "project" | "playtestingUpdate" | "review" | "slot" | "log" | "deck";
 
 export interface ResourceDataMap {
     user: User;
@@ -18,6 +19,7 @@ export interface ResourceDataMap {
     review: IPlaytestReview;
     slot: ISlot;
     log: ILogEntry;
+    deck: IDeck;
 }
 
 type ResourceIdKeys = {
@@ -31,6 +33,7 @@ type ResourceIdKeys = {
     review: "project" | "number" | "version" | "reviewer";
     slot: "project" | "number";
     log: "id";
+    deck: "identifier";
 };
 
 export const resourceIdFuncs: { [K in ResourceType]: (resource: Pick<ResourceDataMap[K], Extract<ResourceIdKeys[K], keyof ResourceDataMap[K]>>) => string } = {
@@ -43,5 +46,6 @@ export const resourceIdFuncs: { [K in ResourceType]: (resource: Pick<ResourceDat
     playtestingUpdate: (u) => `${u.project}|${u.version}`,
     review: (r) => `${r.project}|${r.number}|${r.version}|${r.reviewer}`,
     slot: (s) => `${s.project}|${s.number}`,
-    log: (l) => l.id
+    log: (l) => l.id,
+    deck: (d) => String(d.identifier)
 };

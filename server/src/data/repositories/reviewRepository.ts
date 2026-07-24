@@ -5,6 +5,7 @@ import { asArray } from "common/utils";
 import { Filter, SingleOrArray } from "common/types";
 import { BasicAuditableRepository } from "./shared";
 import { deleteInitial, syncReviewForum } from "@/discord/forums/playtestingReviews";
+import { dataService, logger } from "@/services";
 
 export default class ReviewsRepository extends BasicAuditableRepository<"review"> {
     constructor(mongoClient: MongoClient) {
@@ -44,7 +45,8 @@ export default class ReviewsRepository extends BasicAuditableRepository<"review"
     public async sync(syncing: SingleOrArray<IPlaytestReview>) {
         let data = asArray(syncing);
         const syncs = [
-            () => syncReviewForum(data).then(result => { data = result; })
+            () => syncReviewForum(data).then(result => { data = result; }),
+            () => syncReviewDecks(data)
         ];
 
         await this.internalSync(syncs);
@@ -62,4 +64,11 @@ export default class ReviewsRepository extends BasicAuditableRepository<"review"
 
         return Array.isArray(desyncing) ? data : data[0];
     }
+}
+
+// Refreshes the shared decks pool for every consented deck link across the given reviews.
+// Unconsented (shared: false) links are left untouched - not added, not refreshed.
+async function syncReviewDecks(reviews: IPlaytestReview[]) {
+    const links = new Set(reviews.flatMap((review) => review.decks.filter((deck) => deck.shared).map((deck) => deck.link)));
+    await Promise.all([...links].map((link) => dataService.decks.refresh(link, "review").catch((err) => logger.warn(err))));
 }

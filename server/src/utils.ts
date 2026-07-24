@@ -2,7 +2,7 @@ import { ILabeledCard, IPlaytestCard, NoteType, factions } from "common/models/c
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { getReleaseCapacity } from "common/utils";
-import { IGetResponse } from "./types";
+import { IGetResponse, OAuthTokenResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
 import { StatusCodes } from "http-status-codes";
@@ -10,6 +10,7 @@ import { ApiErrorResponse } from "./errors";
 import { dataService } from "./services";
 import asyncHandler from "express-async-handler";
 import { SingleOrArray } from "common/types";
+import { UUID } from "crypto";
 
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     "replaced": "major",
@@ -124,6 +125,65 @@ export function convertTDBCard(obj: any): ILabeledCard {
         workInProgress: obj.work_in_progress,
         label: obj.label
     };
+}
+
+const THRONESDB_TOKEN_REDIS_KEY = "thronesdb_access_token";
+
+async function getThronesDBToken() {
+    const token = await dataService.redis.get(THRONESDB_TOKEN_REDIS_KEY);
+    if (token && typeof token === "string") {
+        return token;
+    }
+
+    const response = await fetch("https://thronesdb.com/oauth/v2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_id: process.env.THRONESDB_CLIENT_ID,
+            client_secret: process.env.THRONESDB_CLIENT_SECRET,
+            grant_type: "client_credentials"
+        })
+    });
+    if (!response.ok) {
+        throw new Error(`Failed to fetch OAuth2 token from ThronesDB: ${response.statusText}`);
+    }
+
+    const accessTokenData = await response.json() as OAuthTokenResponse;
+    await dataService.redis.set(THRONESDB_TOKEN_REDIS_KEY, accessTokenData.access_token, {
+        expiration: {
+            type: "EX",
+            value: accessTokenData.expires_in - 60
+        }
+    });
+
+    return accessTokenData.access_token;
+}
+
+/**
+ * Fetches & converts a deck from ThronesDB, returning undefined if it cannot be found (eg. deleted or private).
+ */
+export async function fetchTDBDeck(identifier: number | UUID): Promise<IDecklist | undefined> {
+    let response: Response;
+    if (typeof identifier === "number") {
+        // Id decks are publicly available
+        response = await fetch(`https://thronesdb.com/api/public/decklist/${identifier}`);
+    } else {
+        // UUID decks require protected API (auth)
+        const authToken = await getThronesDBToken();
+        response = await fetch(
+            `https://thronesdb.com/api/oauth2/deck/load/${identifier}`,
+            { headers: { Authorization: `Bearer ${authToken}` } }
+        );
+    }
+    if (!response.ok) {
+        if (response.status === 404) {
+            return undefined;
+        }
+        throw new Error(`Failed to fetch deck with identifier "${identifier}": ${response.statusText}`);
+    }
+
+    const json = await response.json();
+    return convertTDBDeck(json);
 }
 
 /**

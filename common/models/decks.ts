@@ -1,6 +1,8 @@
 import { UUID } from "crypto";
 import { Code, Faction } from "./cards";
-import { ISO8601String } from "common/types";
+import { DeckLink, DecklistLink, ISO8601String } from "common/types";
+import { SemanticVersion } from "../utils";
+import { IAuditable } from "./shared";
 
 export interface IDecklist {
     id: number,
@@ -16,4 +18,19 @@ export interface IDecklist {
     version: `${number}.${number}`,
     tags?: string,
     url?: string
+}
+
+/** A deck persisted independently of any review; no regular card data stored */
+export interface IDeck extends IAuditable {
+    identifier: number | UUID,
+    link: DeckLink | DecklistLink,
+    name: string,
+    faction: Faction,
+    agendas: Code[],
+    tdbVersion: `${number}.${number}`,
+    tdbUpdated: ISO8601String,
+    /** Non-draft version of each playtesting card in this deck, based on updated dates of deck & cards */
+    cards: Record<Code, SemanticVersion>,
+    /** How this deck was most recently added/refreshed */
+    source: "manual" | "review"
 }
