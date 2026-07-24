@@ -7,17 +7,20 @@ import { useAuth } from "../../hooks/useAuth";
 import type { FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
+import { isPlaytester } from "common/utils";
+import { BaseElementProps } from "../../types";
 
 const DISCORD_SERVER_INVITE_URL = import.meta.env.VITE_DISCORD_SERVER_INVITE_URL;
 
-export default function WelcomeBanner() {
+export default function WelcomeBanner({ onBecamePlaytester }: WelcomeBannerProps = {}) {
     const { user, isAuthenticated, isProcessing, login } = useAuth();
     const [assignPlaytestingRole, { isLoading: isAssigning }] = useAssignPlaytestingRoleMutation();
 
-    const onBecomePlaytester = async () => {
+    const onBecomePlaytesterClick = async () => {
         try {
             await assignPlaytestingRole().unwrap();
             addToast({ title: "Welcome to the Playtesting Team!", color: "success" });
+            onBecamePlaytester?.();
         } catch (err) {
             const isMemberNotFound = (err as FetchBaseQueryError)?.status === 404;
             addToast({
@@ -30,6 +33,7 @@ export default function WelcomeBanner() {
         }
     };
 
+    // Should not be possible to reach this with login page, but worth being here as a safeguard (was an older feature)
     if (!isAuthenticated || !user) {
         return (
             <div className="border border-content3 bg-content1 p-4 flex flex-col md:flex-row md:items-center gap-3">
@@ -64,7 +68,7 @@ export default function WelcomeBanner() {
         );
     }
 
-    if (!user.roles.some((role) => role.name === "Playtesting Team")) {
+    if (!isPlaytester(user)) {
         return (
             <div className="border border-content3 bg-content1 p-4 flex flex-col md:flex-row md:items-center gap-3">
                 <div className="flex-1">
@@ -78,7 +82,7 @@ export default function WelcomeBanner() {
                         startContent={isAssigning ? <Spinner color="secondary" size="sm" /> : <FontAwesomeIcon icon={faDiscord} />}
                         isDisabled={isAssigning}
                         color="primary"
-                        onPress={onBecomePlaytester}
+                        onPress={onBecomePlaytesterClick}
                         className="font-cinzel shrink-0 font-semibold"
                     >
                     Become a Playtester
@@ -88,6 +92,9 @@ export default function WelcomeBanner() {
         );
     }
 
-    // TODO: Consider a dismissable welcome banner for newly signed in/added members
     return null;
 }
+
+type WelcomeBannerProps = Omit<BaseElementProps, "children"> & {
+    onBecamePlaytester?: () => void;
+};

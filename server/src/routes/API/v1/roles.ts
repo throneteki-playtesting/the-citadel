@@ -70,8 +70,8 @@ router.post("/me/playtesting-team",
             return;
         }
 
-        const user = await DiscordService.syncUser(member);
-        res.status(StatusCodes.OK).json(user);
+        const result = await DiscordService.syncUser(member);
+        res.status(StatusCodes.OK).json(result?.user);
     })
 );
 

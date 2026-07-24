@@ -34,6 +34,11 @@ export interface Role {
     permissions: Permission[];
 }
 export type RoleWithUserCount = Role & { userCount: number };
+
+/** Name of the Discord role that marks a user as a playtester; kept as a shared constant since it's checked in several places */
+/** TODO: Move this into a "settings" page on the frontend instead of a constant */
+export const PLAYTESTING_TEAM_ROLE_NAME = "Playtesting Team";
+
 export interface User extends IPrincipal {
     username: string,
     displayname: string,

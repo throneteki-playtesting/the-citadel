@@ -3,7 +3,7 @@ import { commands } from "./commands";
 import { registerEvents } from "./events";
 import { dataService, logger } from "@/services";
 import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role, Partials } from "discord.js";
-import { Role as AppRole } from "common/models/auth";
+import { PLAYTESTING_TEAM_ROLE_NAME, Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
 import { isEnvironment } from "@/env";
@@ -191,16 +191,21 @@ class DiscordService {
 
     public async getUserFromId(guild: Guild, discordId: string) {
         const member = await this.findMemberOrUserById(guild, discordId);
-        const user = await DiscordService.syncUser(member);
-        return user;
+        const result = await DiscordService.syncUser(member);
+        return result?.user;
     }
 
+    /**
+     * Syncs a discord member/user to our stored User record.
+     * Also reports transitions useful for onboarding purposes: whether this is the user's first ever
+     * login to the site, and which role names (if any) they gained since the last sync.
+     */
     static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
         const isUser = "username" in member && !("user" in member);
         const discordUser = isUser ? member as APIUser | User : (member as APIGuildMember | GuildMember).user;
 
         // Do not sync if user is missing or a bot
-        if (!discordUser || discordUser.bot) return;
+        if (!discordUser || discordUser.bot) return undefined;
 
         const nickname = !isUser
             ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
@@ -222,7 +227,10 @@ class DiscordService {
             roles = await dataService.roles.read([...roleIds.map((id) => ({ discordId: id })), { name: "@everyone" }]);
         }
 
-        return await dataService.users.update({
+        const previousRoleNames = new Set((existing?.roles ?? []).map((role) => role.name));
+        const rolesGained = roles.filter((role) => !previousRoleNames.has(role.name)).map((role) => role.name);
+
+        const user = await dataService.users.update({
             id: discordUser.id,
             discordId: discordUser.id,
             username: discordUser.username,
@@ -234,6 +242,12 @@ class DiscordService {
             roles,
             lastLogin: loggingIn ? new Date() : existing?.lastLogin
         });
+
+        return {
+            user,
+            isFirstLogin: loggingIn && !existing?.lastLogin,
+            rolesGained
+        };
     }
 
     static async syncRole(role: Role) {
@@ -258,7 +272,7 @@ class DiscordService {
             const guild = await this.getGuild();
             const roles = await guild.roles.fetch();
 
-            const requiredRoles = ["@everyone", "Playtesting Team"];
+            const requiredRoles = ["@everyone", PLAYTESTING_TEAM_ROLE_NAME];
             for (const name of requiredRoles) {
                 if (!roles.find((r) => r.name === name)) {
                     logger.warn(`[Discord] Required role "${name}" is missing from the guild`);
@@ -279,9 +293,9 @@ class DiscordService {
             return null;
         }
 
-        const role = await this.findRoleByName(guild, "Playtesting Team");
+        const role = await this.findRoleByName(guild, PLAYTESTING_TEAM_ROLE_NAME);
         if (!role) {
-            throw new Error("Playtesting Team role not found in guild");
+            throw new Error(`${PLAYTESTING_TEAM_ROLE_NAME} role not found in guild`);
         }
 
         await member.roles.add(role);

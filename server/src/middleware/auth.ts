@@ -127,8 +127,8 @@ export const githubWebhookMiddleware = asyncHandler(
 );
 
 export const discordCommandMiddleware = async (member: APIGuildMember | GuildMember, callback: () => void) => {
-    const user = await DiscordService.syncUser(member);
-    const context = createContext("api", user);
+    const result = await DiscordService.syncUser(member);
+    const context = createContext("api", result?.user);
     requestContext.run(context, callback);
 };
 

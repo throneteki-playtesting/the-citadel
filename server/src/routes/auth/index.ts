@@ -15,6 +15,8 @@ import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { isEnvironment } from "@/env";
 import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, SESSION_ID_COOKIE } from "@/middleware/cookies";
+import { determineOnboardingHint } from "common/utils";
+import { OnboardingType } from "common/models/onboarding";
 
 const router = express.Router();
 
@@ -62,7 +64,12 @@ router.get("/discord/callback",
             }
 
             // 3. Authenticate discord member/user to user
-            const user = await DiscordService.syncUser(discordDetails, true);
+            const result = await DiscordService.syncUser(discordDetails, true);
+            if (!result) {
+                res.redirect(buildUrl(REDIRECT_URL, { status: "error" } as { status: AuthStatus }));
+                return;
+            }
+            const { user, isFirstLogin, rolesGained } = result;
 
             // 4. Creates accessToken & refreshToken, and adds to response as HTTP only cookie
             const sessionId = req.cookies[SESSION_ID_COOKIE] ?? randomUUID();
@@ -72,7 +79,13 @@ router.get("/discord/callback",
                 principal: { type: "user", id: user.discordId, displayname: user.displayname, avatarUrl: user.avatarUrl }
             });
 
-            res.redirect(buildUrl(REDIRECT_URL, { status: "success" } as { status: AuthStatus }));
+            // Picks which onboarding flow (if any) to surface to the client, prioritised by common/models/onboarding
+            const onboarding = determineOnboardingHint({ user, isFirstLogin, rolesGained });
+
+            res.redirect(buildUrl(REDIRECT_URL, {
+                status: "success",
+                onboarding
+            } as { status: AuthStatus, onboarding?: OnboardingType }));
         } catch (err) {
             logger.error(err);
             res.redirect(buildUrl(REDIRECT_URL, { status: "error" } as { status: AuthStatus }));

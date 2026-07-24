@@ -7,6 +7,7 @@ import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IProject, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
+import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -221,6 +222,31 @@ export function hasPermission<T extends Principal>(principal?: T, ...permissions
     }
 
     return false;
+}
+
+export function hasRole<T extends Principal>(principal: T | undefined, roleName: string) {
+    return !!principal?.roles.some((role) => role.name === roleName);
+}
+
+export function isEligibleForOnboarding<T extends Principal>(principal: T | undefined, type: OnboardingType) {
+    return hasRole(principal, onboardingRoleConfig[type].roleName);
+}
+
+export function isPlaytester<T extends Principal>(principal?: T) {
+    return isEligibleForOnboarding(principal, "playtest");
+}
+
+/**
+ * Picks which onboarding flow (if any) to surface after a role/login sync: either the user just gained
+ * the flow's role this sync, or it's their first-ever login and they already hold it. When a user
+ * qualifies for more than one, `onboardingPriority` decides which wins.
+ */
+export function determineOnboardingHint<T extends Principal>(input: { user: T, isFirstLogin: boolean, rolesGained: string[] }): OnboardingType | undefined {
+    const { user, isFirstLogin, rolesGained } = input;
+    return onboardingPriority.find((type) => {
+        const { roleName } = onboardingRoleConfig[type];
+        return rolesGained.includes(roleName) || (isFirstLogin && hasRole(user, roleName));
+    });
 }
 
 export function getBaseCardValues<T extends Cards.ICard>(card: DeepPartial<T>) {
