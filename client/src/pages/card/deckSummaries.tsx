@@ -114,7 +114,7 @@ function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
 
     return (
         <Card className="p-0 w-full hover:ring-2 ring-content3 transition-shadow duration-200 relative">
-            <Link href={deck.link} target="_blank" className={classNames("transition-opacity duration-500", isLoading ? "opacity-0" : "opacity-100")}>
+            <Link href={deck.link} target="_blank" className={classNames("flex flex-col items-stretch transition-opacity duration-500", isLoading ? "opacity-0" : "opacity-100")}>
                 <div className="sm:hidden font-cinzel text-xl px-3 py-1 flex items-center min-w-0">
                     <span className='truncate'>{deck.name}</span>
                     <div className="ml-auto"><FontAwesomeIcon icon={faExternalLink}/></div>
