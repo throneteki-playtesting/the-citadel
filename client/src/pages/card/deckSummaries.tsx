@@ -1,8 +1,8 @@
-import { faExclamationCircle, faExternalLink, faScroll, faCheckCircle, faUserPen } from "@fortawesome/free-solid-svg-icons";
+import { faExclamationCircle, faExternalLink, faScroll, faCheckCircle, faUserPen, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { ScrollShadow, Card, Link, Avatar } from "@heroui/react";
 import { IDeck } from "common/models/decks";
-import { Code } from "common/models/cards";
+import { Code, IPlaytestCard } from "common/models/cards";
 import { sortBy } from "lodash-es";
 import { useMemo } from "react";
 import { useGetCardsQuery, useGetDecksQuery, useGetUserQuery } from "../../api";
@@ -15,14 +15,32 @@ import PermissionGate from "../../components/permissionGate";
 import Timestamp from "../../components/timestamp";
 import SectionTitle from "../../components/sectionTitle";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { parseCardCode } from "common/utils";
+import { parseCardCode, parsePlaytestCode } from "common/utils";
 
 export default function DeckSummaries({ className, style, project, number }: DeckSummariesProps) {
     const code = parseCardCode(false, project, number);
     const { data: decksData, isLoading: isLoadingDecks } = useGetDecksQuery({ filter: { project, number } });
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({ filter: { project, number } });
 
-    const isLoading = isLoadingDecks || isLoadingCards;
+    const otherCardFilters = useMemo(() => {
+        const pairs = new Map<string, { project: number, number: number }>();
+        for (const deck of decksData?.items ?? []) {
+            for (const otherCode of Object.keys(deck.cards) as Code[]) {
+                if (otherCode === code) {
+                    continue;
+                }
+                const parsed = parsePlaytestCode(otherCode);
+                if (parsed) {
+                    pairs.set(`${parsed.project}-${parsed.number}`, parsed);
+                }
+            }
+        }
+        return [...pairs.values()];
+    }, [code, decksData?.items]);
+
+    const { data: otherCardsData, isLoading: isLoadingOtherCards } = useGetCardsQuery({ filter: otherCardFilters }, { skip: otherCardFilters.length === 0 });
+
+    const isLoading = isLoadingDecks || isLoadingCards || (otherCardFilters.length > 0 && isLoadingOtherCards);
 
     const content = useMemo(() => {
         if (isLoading) {
@@ -41,18 +59,20 @@ export default function DeckSummaries({ className, style, project, number }: Dec
             );
         }
 
+        const otherCards = otherCardsData?.items ?? [];
+
         return (
             <div className="flex-1 relative">
                 <ScrollShadow className="absolute inset-0 overflow-y-auto p-2">
                     <div className="flex flex-col gap-2">
                         {sorted.map((deck) => (
-                            <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} />
+                            <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} otherCards={otherCards} />
                         ))}
                     </div>
                 </ScrollShadow>
             </div>
         );
-    }, [cardsData?.items, code, decksData?.items, isLoading]);
+    }, [cardsData?.items, code, decksData?.items, isLoading, otherCardsData?.items]);
 
     return (
         <div className={classNames("flex flex-col flex-1 min-h-86 sm:min-h-64 md:min-h-52", className)} style={style}>
@@ -71,11 +91,26 @@ type DeckSummariesProps = Omit<BaseElementProps, "children"> & {
     number: number;
 }
 
-function DeckSummary({ deck, code, card }: DeckSummaryProps) {
+function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
     const { data: user, isLoading } = useGetUserQuery({ discordId: deck.updatedBy });
 
     const faction = deck.faction;
     const agendas = [...deck.agendas].reverse();
+
+    const otherDeckCards = useMemo(() => {
+        const result: IPlaytestCard[] = [];
+        for (const otherCode of Object.keys(deck.cards) as Code[]) {
+            if (otherCode === code) {
+                continue;
+            }
+            const parsed = parsePlaytestCode(otherCode);
+            const match = parsed && otherCards.find((otherCard) => otherCard.project === parsed.project && otherCard.number === parsed.number && otherCard.version === deck.cards[otherCode]);
+            if (match) {
+                result.push(match);
+            }
+        }
+        return result;
+    }, [code, deck.cards, otherCards]);
 
     return (
         <Card className="p-0 w-full hover:ring-2 ring-content3 transition-shadow duration-200 relative">
@@ -112,11 +147,25 @@ function DeckSummary({ deck, code, card }: DeckSummaryProps) {
                     </div>
                 </div>
             </Link>
-            <TouchTooltip content={<div className="text-sm font-sans max-w-56 whitespace-normal">{deck.source === "review" ? "Submitted via a review" : "Submitted manually"}</div>} size="sm" delay={0} closeDelay={0}>
-                <div className="absolute bottom-2 right-2 text-foreground/40">
-                    <FontAwesomeIcon icon={deck.source === "review" ? faScroll : faUserPen}/>
-                </div>
-            </TouchTooltip>
+            <div className="absolute bottom-2 right-2 flex items-center gap-2 text-foreground/40">
+                {otherDeckCards.length > 0 && (
+                    <TouchTooltip
+                        content={
+                            <div className="text-sm font-sans max-w-56 whitespace-normal">
+                                Also tests: {otherDeckCards.map((otherCard) => otherCard.name).join(", ")}
+                            </div>
+                        }
+                        size="sm"
+                        delay={0}
+                        closeDelay={0}
+                    >
+                        <div><FontAwesomeIcon icon={faLayerGroup}/></div>
+                    </TouchTooltip>
+                )}
+                <TouchTooltip content={<div className="text-sm font-sans max-w-56 whitespace-normal">{deck.source === "review" ? "Submitted via a review" : "Submitted manually"}</div>} size="sm" delay={0} closeDelay={0}>
+                    <div><FontAwesomeIcon icon={deck.source === "review" ? faScroll : faUserPen}/></div>
+                </TouchTooltip>
+            </div>
         </Card>
     );
 }
@@ -125,4 +174,5 @@ type DeckSummaryProps = {
     deck: IDeck;
     code: Code;
     card?: { name: string, latest: boolean };
+    otherCards: IPlaytestCard[];
 }

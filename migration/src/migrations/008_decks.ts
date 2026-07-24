@@ -40,12 +40,6 @@ function playtestCode(project: number, number: number): string {
     return `${project}${number + 500}`;
 }
 
-// The real ThronesDB code for a released card - IPlaytestCard.released.code is the *pack's* short
-// code (eg. "TFE"), not a card code, so it must be derived from released.number instead.
-function releasedCardCode(project: number, releasedNumber: number): string {
-    return `${project}${releasedNumber.toString().padStart(3, "0")}`;
-}
-
 let cachedToken: string | undefined;
 async function getThronesDBToken(): Promise<string | undefined> {
     if (cachedToken) {
@@ -151,20 +145,23 @@ export const migration: Migration = {
             const deckUpdatedTime = new Date(decklist.date_update).getTime();
             const cardVersions: Record<string, string> = {};
             for (const code of Object.keys(decklist.slots ?? {})) {
-                // A slot code may reference a card by its temporary playtesting code, or - once
-                // released - by its real ThronesDB code (derived from released.number).
+                // Slot codes referencing a card by its real (post-release) ThronesDB code are ignored,
+                // since a released card is no longer an active playtest subject.
                 const parsed = parsePlaytestCode(code);
+                if (!parsed) {
+                    continue;
+                }
                 const candidates = cards.filter((card: any) =>
                     !card.draft &&
-                    new Date(card.updated).getTime() <= deckUpdatedTime &&
-                    (parsed
-                        ? (card.project === parsed.project && card.number === parsed.number)
-                        : (card.released && releasedCardCode(card.project, card.released.number) === code))
+                    card.project === parsed.project &&
+                    card.number === parsed.number &&
+                    new Date(card.updated).getTime() <= deckUpdatedTime
                 );
                 const latest = candidates.reduce((best: any, card: any) =>
                     (!best || new Date(card.updated).getTime() > new Date(best.updated).getTime()) ? card : best, undefined);
-                if (latest) {
-                    // Always key by the canonical playtesting code, regardless of which code the deck itself referenced
+                // If the resolved version has itself since been released, exclude it rather than
+                // falling back to an earlier version - it's no longer being playtested.
+                if (latest && !latest.released) {
                     cardVersions[playtestCode(latest.project, latest.number)] = latest.version;
                 }
             }

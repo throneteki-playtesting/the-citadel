@@ -173,9 +173,7 @@ export function parsePlaytestCode(code: Cards.Code): { project: number, number: 
     return { project: Math.floor(value / 1000), number: (value % 1000) - 500 };
 }
 /**
- * For each card in a deck's slots, finds the latest non-draft version at or before the deck's update
- * time. Slot codes may be the temporary playtesting code or the real (post-release) ThronesDB code;
- * either way the result is keyed by the canonical playtesting code.
+ * For each card in a deck's slots, finds the latest non-draft version at or before the deck's update time, and adds it if not released
  */
 export function resolveDeckCardVersions(slots: Record<string, number>, deckUpdated: ISO8601String, cards: Cards.IPlaytestCard[]): Record<Cards.Code, SemanticVersion> {
     const deckUpdatedTime = new Date(deckUpdated).getTime();
@@ -183,18 +181,20 @@ export function resolveDeckCardVersions(slots: Record<string, number>, deckUpdat
 
     for (const code of Object.keys(slots)) {
         const parsed = parsePlaytestCode(code as Cards.Code);
+        if (!parsed) {
+            continue;
+        }
         const candidates = cards.filter((card) =>
             !card.draft &&
-            card.updated.getTime() <= deckUpdatedTime &&
-            (parsed
-                ? (card.project === parsed.project && card.number === parsed.number)
-                : (card.released && parseCardCode(true, card.project, card.released.number) === code))
+            card.project === parsed.project &&
+            card.number === parsed.number &&
+            card.updated.getTime() <= deckUpdatedTime
         );
         const latest = candidates.reduce<Cards.IPlaytestCard | undefined>(
             (best, card) => (!best || card.updated.getTime() > best.updated.getTime()) ? card : best,
             undefined
         );
-        if (latest) {
+        if (latest && !latest.released) {
             result[parseCardCode(false, latest.project, latest.number)] = latest.version;
         }
     }
