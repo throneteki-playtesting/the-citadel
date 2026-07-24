@@ -1,10 +1,12 @@
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button, HeroUIProvider, Spinner, ToastProvider } from "@heroui/react";
+import { useState } from "react";
 import { Navigate, useHref, useNavigate, useSearchParams } from "react-router-dom";
 import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
 import usePageTitle from "../hooks/usePageTitle";
+import PrivacyPolicyModal from "../components/privacyPolicyModal";
 
 export default function LoginPage() {
     const navigate = useNavigate();
@@ -13,6 +15,7 @@ export default function LoginPage() {
     const [searchParams] = useSearchParams();
     const returnUrlParam = searchParams.get("returnUrl");
     const returnUrl = returnUrlParam && isSafeRelativePath(returnUrlParam) ? returnUrlParam : undefined;
+    const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
     if (isLoading) {
         return (
@@ -33,8 +36,8 @@ export default function LoginPage() {
                 className="min-h-screen flex flex-col items-center justify-center p-2"
                 style={{ background: "radial-gradient(ellipse at center, #1C1C24 0%, #0A0A0C 70%)" }}
             >
-                <div className="flex flex-col items-center border border-divider rounded-2xl bg-content1/30 px-10 py-12 sm:px-16 sm:py-14 w-full max-w-md">
-                    <div className="flex flex-col items-center text-center select-none mb-10">
+                <div className="flex flex-col items-center border border-divider rounded-2xl bg-content1/30 px-10 py-8 sm:px-16 sm:py-14 w-full max-w-md">
+                    <div className="flex flex-col items-center text-center select-none mb-6 sm:mb-10">
                         <h1 className="font-cinzel text-4xl sm:text-5xl font-semibold text-primary tracking-widest uppercase">
                             The Citadel
                         </h1>
@@ -69,8 +72,19 @@ export default function LoginPage() {
                     >
                         Log in with Discord
                     </Button>
+
+                    <Button
+                        variant="light"
+                        size="sm"
+                        onPress={() => setIsPrivacyOpen(true)}
+                        className="mt-6 text-foreground/40 text-tiny font-cinzel tracking-widest uppercase"
+                    >
+                        Privacy Policy
+                    </Button>
                 </div>
             </div>
+
+            <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
         </HeroUIProvider>
     );
 }
