@@ -57,7 +57,7 @@ export default function CardEditorPage() {
             </div>
             <div className="flex flex-col md:flex-row gap-2">
                 <CardPreview card={renderCard} className="self-center md:self-start shrink-0 max-w-86" />
-                <CardEditor onUpdate={setCard} />
+                <CardEditor onUpdate={setCard} inputOptions={{ flavor: "hidden", deckLimit: "hidden" }}/>
             </div>
         </div>
     );

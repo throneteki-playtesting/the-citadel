@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState, cloneElement, isValidElement, type ReactElement, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Tooltip, type TooltipProps } from "@heroui/react";
 
-export function TouchTooltip({ onOpenChange, children, ...props }: TooltipProps) {
+type TouchTooltipProps = TooltipProps & {
+    keepOpen?: boolean;
+};
+
+export function TouchTooltip({ onOpenChange, children, keepOpen = false, ...props }: TouchTooltipProps) {
     const [isOpen, setIsOpenState] = useState(false);
     const isOpenRef = useRef(false);
     const isTouchRef = useRef(false);
@@ -62,7 +66,7 @@ export function TouchTooltip({ onOpenChange, children, ...props }: TooltipProps)
         : children;
 
     return (
-        <Tooltip {...props} isOpen={isOpen} onOpenChange={handleTooltipOpenChange}>
+        <Tooltip {...props} isOpen={keepOpen || isOpen} onOpenChange={handleTooltipOpenChange}>
             {child}
         </Tooltip>
     );
