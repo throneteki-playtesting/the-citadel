@@ -1,54 +1,68 @@
-import { useState, useRef, useCallback, cloneElement, isValidElement, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, cloneElement, isValidElement, type ReactElement, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { Tooltip, type TooltipProps } from "@heroui/react";
 
-type TouchTooltipProps = Omit<TooltipProps, "isOpen" | "onOpenChange"> & {
-  holdDuration?: number;
-  keepOpen?: boolean;
-};
+export function TouchTooltip({ onOpenChange, children, ...props }: TooltipProps) {
+    const [isOpen, setIsOpenState] = useState(false);
+    const isOpenRef = useRef(false);
+    const isTouchRef = useRef(false);
+    const triggerRef = useRef<HTMLElement | null>(null);
 
-export function TouchTooltip({ holdDuration = 500, keepOpen = false, children, ...props }: TouchTooltipProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const setOpen = useCallback((open: boolean) => {
+        isOpenRef.current = open;
+        setIsOpenState(open);
+        onOpenChange?.(open);
+    }, [onOpenChange]);
 
-    const handleTouchStart = useCallback(() => {
-        timerRef.current = setTimeout(() => setIsOpen(true), holdDuration);
-    }, [holdDuration]);
-
-    const handleTouchEnd = useCallback(() => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
+    // react-aria's useTooltipTrigger force-closes on every pointerdown on the trigger (its
+    // onPressStart), ahead of the click event. On touch we drive open/close ourselves via
+    // handleClickCapture, so library-initiated changes are ignored to avoid the two fighting.
+    const handleTooltipOpenChange = useCallback((open: boolean) => {
+        if (isTouchRef.current) {
+            return;
         }
+        setOpen(open);
+    }, [setOpen]);
+
+    const handlePointerDownCapture = useCallback((event: ReactPointerEvent) => {
+        isTouchRef.current = event.pointerType === "touch";
     }, []);
 
-    const handleTouchMove = useCallback(() => {
-        if (timerRef.current) {
-            clearTimeout(timerRef.current);
-            timerRef.current = null;
+    const handleClickCapture = useCallback((event: ReactMouseEvent) => {
+        if (!isTouchRef.current) {
+            return;
         }
-        setIsOpen(false);
-    }, []);
+        if (isOpenRef.current) {
+            setOpen(false);
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(true);
+    }, [setOpen]);
 
-    const handlePointerEnter = useCallback(() => setIsOpen(true), []);
-    const handlePointerLeave = useCallback(() => setIsOpen(false), []);
-    const handleFocus = useCallback(() => setIsOpen(true), []);
-    const handleBlur = useCallback(() => setIsOpen(false), []);
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+        const handleOutsidePointerDown = (event: PointerEvent) => {
+            if (!triggerRef.current?.contains(event.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+        return () => document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
+    }, [isOpen, setOpen]);
 
     const child = isValidElement(children)
         ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-            onTouchStart: handleTouchStart,
-            onTouchEnd: handleTouchEnd,
-            onTouchCancel: handleTouchEnd,
-            onTouchMove: handleTouchMove,
-            onMouseEnter: handlePointerEnter,
-            onMouseLeave: handlePointerLeave,
-            onFocus: handleFocus,
-            onBlur: handleBlur
+            ref: triggerRef,
+            onPointerDownCapture: handlePointerDownCapture,
+            onClickCapture: handleClickCapture
         })
         : children;
 
     return (
-        <Tooltip {...props} isOpen={keepOpen || isOpen}>
+        <Tooltip {...props} isOpen={isOpen} onOpenChange={handleTooltipOpenChange}>
             {child}
         </Tooltip>
     );
