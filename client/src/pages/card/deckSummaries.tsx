@@ -62,13 +62,15 @@ export default function DeckSummaries({ className, style, project, number }: Dec
         const otherCards = otherCardsData?.items ?? [];
 
         return (
-            <ScrollShadow className="max-h-136 overflow-y-auto p-2 sm:max-h-none sm:flex-1 sm:min-h-0">
-                <div className="flex flex-col gap-2">
-                    {sorted.map((deck) => (
-                        <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} otherCards={otherCards} />
-                    ))}
-                </div>
-            </ScrollShadow>
+            <div className="relative sm:flex-1 sm:min-h-0">
+                <ScrollShadow className="max-h-136 overflow-y-auto p-2 sm:absolute sm:inset-0 sm:max-h-none">
+                    <div className="flex flex-col gap-2">
+                        {sorted.map((deck) => (
+                            <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} otherCards={otherCards} />
+                        ))}
+                    </div>
+                </ScrollShadow>
+            </div>
         );
     }, [cardsData?.items, code, decksData?.items, isLoading, otherCardsData?.items]);
 
