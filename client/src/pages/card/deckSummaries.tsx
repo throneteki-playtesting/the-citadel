@@ -62,24 +62,22 @@ export default function DeckSummaries({ className, style, project, number }: Dec
         const otherCards = otherCardsData?.items ?? [];
 
         return (
-            <div className="flex-1 relative">
-                <ScrollShadow className="absolute inset-0 overflow-y-auto p-2">
-                    <div className="flex flex-col gap-2">
-                        {sorted.map((deck) => (
-                            <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} otherCards={otherCards} />
-                        ))}
-                    </div>
-                </ScrollShadow>
-            </div>
+            <ScrollShadow className="max-h-136 overflow-y-auto p-2 sm:max-h-none sm:flex-1 sm:min-h-0">
+                <div className="flex flex-col gap-2">
+                    {sorted.map((deck) => (
+                        <DeckSummary key={deck.identifier} deck={deck} code={code} card={cardsData?.items.find((card) => card.version === deck.cards[code])} otherCards={otherCards} />
+                    ))}
+                </div>
+            </ScrollShadow>
         );
     }, [cardsData?.items, code, decksData?.items, isLoading, otherCardsData?.items]);
 
     return (
-        <div className={classNames("flex flex-col flex-1 min-h-86 sm:min-h-64 md:min-h-52", className)} style={style}>
+        <div className={classNames("flex flex-col sm:min-h-64 md:min-h-52", className)} style={style}>
             <SectionTitle>
                 Decks for this card
             </SectionTitle>
-            <div className="flex flex-col flex-1">
+            <div className="flex flex-col sm:flex-1 sm:min-h-0">
                 {content}
             </div>
         </div>
