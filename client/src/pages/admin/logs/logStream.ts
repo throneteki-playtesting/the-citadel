@@ -17,3 +17,15 @@ export function emitLogCreate(entry: ILogEntry): void {
 export function hasLogListeners(): boolean {
     return listeners.size > 0;
 }
+
+// Fired when the SSE provider resyncs after a reconnect, so a mounted Logs page can reset its pagination.
+const resyncListeners = new Set<() => void>();
+
+export function subscribeToResync(listener: () => void): () => void {
+    resyncListeners.add(listener);
+    return () => resyncListeners.delete(listener);
+}
+
+export function emitResync(): void {
+    resyncListeners.forEach((listener) => listener());
+}

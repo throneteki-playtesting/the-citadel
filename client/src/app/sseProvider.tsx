@@ -9,7 +9,7 @@ import { setConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
 import { mergeWith, isPlainObject } from "lodash-es";
-import { emitLogCreate, hasLogListeners } from "../pages/admin/logs/logStream";
+import { emitLogCreate, emitResync, hasLogListeners } from "../pages/admin/logs/logStream";
 import { ILogEntry } from "common/models/logs";
 
 function updateCachedEntity<T extends object>(
@@ -98,17 +98,19 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
     }, [pathname]);
 
     useEffect(() => {
-        const es = new EventSource("/api/v1/broadcast", { withCredentials: true });
-        esRef.current = es;
-
-        es.addEventListener("open", () => {
+        function handleOpen() {
             if (hasConnected.current) {
                 store.dispatch(api.util.invalidateTags(reconnectTags));
+                emitResync();
             }
             hasConnected.current = true;
-        });
+        }
 
-        es.addEventListener("message", (e) => {
+        function handleError() {
+            console.warn("SSE connection lost, awaiting reconnect");
+        }
+
+        function handleMessage(e: MessageEvent) {
             const event = JSON.parse(e.data) as SSEEvent;
 
             if (event.status === "connected") {
@@ -166,10 +168,47 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
 
                 event.items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[typeof type]));
             }
-        });
+        }
+
+        function connect() {
+            const es = new EventSource("/api/v1/broadcast", { withCredentials: true });
+            esRef.current = es;
+            es.addEventListener("open", handleOpen);
+            es.addEventListener("error", handleError);
+            es.addEventListener("message", handleMessage);
+        }
+
+        function reconnect() {
+            esRef.current?.close();
+            connect();
+        }
+
+        // Chromium-only (Page Lifecycle API); EventSource callbacks are suspended while frozen, so resume is the reliable signal.
+        function handleResume() {
+            reconnect();
+        }
+
+        // Firefox/Safari fallback: re-check readyState on visibility instead.
+        function handleVisibilityChange() {
+            if (document.visibilityState === "visible" && esRef.current?.readyState !== EventSource.OPEN) {
+                reconnect();
+            }
+        }
+
+        connect();
+
+        const supportsPageLifecycle = "onfreeze" in document;
+        if (supportsPageLifecycle) {
+            document.addEventListener("resume", handleResume);
+        }
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
-            es.close();
+            esRef.current?.close();
+            if (supportsPageLifecycle) {
+                document.removeEventListener("resume", handleResume);
+            }
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, []);
 

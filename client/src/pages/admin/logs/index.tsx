@@ -7,7 +7,7 @@ import usePageTitle from "../../../hooks/usePageTitle";
 import { useTagManagerOverrides } from "../../../hooks/useTagManagerOverrides";
 import useTimezone from "../../../hooks/useTimezone";
 import LogMessage from "./logMessage";
-import { subscribeToLogCreates } from "./logStream";
+import { subscribeToLogCreates, subscribeToResync } from "./logStream";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronLeft, faScroll, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
@@ -165,6 +165,14 @@ export default function Logs() {
             setPending((prev) => mergeItems([entry], prev));
         }
     }), [categories, severities, dateBounds, markFlashing]);
+
+    // On SSE resync, drop back to page 1 so the whole list is fetched fresh.
+    useEffect(() => subscribeToResync(() => {
+        setPage(1);
+        setItems([]);
+        setPending([]);
+        isAtTopRef.current = true;
+    }), []);
 
     const isFetchingRef = useRef(isFetching);
     isFetchingRef.current = isFetching;
