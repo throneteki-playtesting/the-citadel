@@ -21,7 +21,7 @@ export default function StatCards() {
                 <CardChangesStat />
             </PermissionGate>
             <PermissionGate requires={Permission.READ_USERS}>
-                <ActivePlaytestersStat />
+                <ActiveUsersStat />
             </PermissionGate>
             <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
                 <CardsInTestingStat />
@@ -65,14 +65,14 @@ function CardChangesStat() {
     );
 }
 
-function ActivePlaytestersStat() {
+function ActiveUsersStat() {
     const dayRange = 14;
     const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
     const { data, isLoading } = useGetUsersQuery({ filter: { lastLogin: { $gte: since } } });
 
     return (
         <StatCard
-            label="Active Playtesters"
+            label="Active Users"
             value={data?.total}
             footer={`in the last ${dayRange} days`}
             isLoading={isLoading}
