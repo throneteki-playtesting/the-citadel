@@ -12,9 +12,12 @@ import ProjectContent from "./projectContent";
 import { BaseElementProps } from "../../types";
 import { highlightTarget, releaseStatusColors } from "../../constants";
 import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
+import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 import classNames from "classnames";
 
 export default function ProjectDevelopment({ className, style, project }: ProjectDevelopmentProps) {
+    useTagManagerOverrides({ autoRefresh: true });
+
     return (
         <div className={className} style={style}>
             <StatsGrid>

@@ -9,12 +9,15 @@ import { ChangeType } from "common/types";
 import classNames from "classnames";
 import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
+import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 
 // TODO: Create a "statistics" endpoint in server, and call that rather than gathering data on front-end. For now, this is sufficient
 // Should also include new "statistics" related permissions, as a user could see total stats, but not the data creating those stats
 // Note: Also add scoped statistics, like project stats & card stats
 
 export default function StatCards() {
+    useTagManagerOverrides({ autoRefresh: true });
+
     return (
         <StatsGrid className="border border-content3 drop-shadow-lg">
             <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
