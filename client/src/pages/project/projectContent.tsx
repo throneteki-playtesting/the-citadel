@@ -291,7 +291,9 @@ const ProjectContentCard = memo(function ProjectContentCard({ card, stats, relea
                         <div className="text-xs">The maesters are penning a revised version of this card — it will not enter the field until published with the next Playtesting Update.</div>
                     </div>
                 }>
-                    <FontAwesomeIcon icon={faFeather} className="text-3xl text-foreground-500 opacity-90 animate-pulse"/>
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 animate-pulse">
+                        <FontAwesomeIcon icon={faFeather} className="text-lg text-primary"/>
+                    </div>
                 </TouchTooltip>
             )}
             {isNextRelease && (
