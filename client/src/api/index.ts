@@ -12,6 +12,7 @@ import { IDeck } from "common/models/decks";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "common/types";
 import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
 import { ILogEntry } from "common/models/logs";
+import { GlobalStats, ProjectStats } from "common/models/stats";
 import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
@@ -147,6 +148,30 @@ const api = createApi({
                 return { url, method: "GET" };
             },
             providesTags: (result, _error, args) => generateFor(result, "user", { includeList: false, args })
+        }),
+        // Stats API
+        getGlobalStats: builder.query<GlobalStats, void>({
+            query: () => {
+                const url = buildUrl("stats");
+                return { url, method: "GET" };
+            },
+            providesTags: () => [
+                { type: "card", id: "LIST" },
+                { type: "review", id: "LIST" },
+                { type: "user", id: "LIST" },
+                { type: "project", id: "LIST" }
+            ]
+        }),
+        getProjectStats: builder.query<ProjectStats, { project: number }>({
+            query: ({ project }) => {
+                const url = buildUrl(`projects/${project}/stats`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project }) => [
+                { type: "card", id: `LIST|${project}` },
+                { type: "review", id: "LIST" },
+                { type: "deck", id: "LIST" }
+            ]
         }),
         updateUser: builder.mutation<User, User>({
             query: (user) => {
@@ -683,6 +708,9 @@ const api = createApi({
 export const {
     useLoginMutation,
     useLogoutMutation,
+
+    useGetGlobalStatsQuery,
+    useGetProjectStatsQuery,
 
     useGetUsersQuery,
     useGetUserQuery,

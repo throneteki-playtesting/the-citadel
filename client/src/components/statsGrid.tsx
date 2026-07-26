@@ -26,7 +26,14 @@ export default function StatsGrid({ children, className }: StatsGridProps) {
     if (visibleCount === 0) return null;
 
     return (
-        <div className={classNames("grid max-sm:divide-y divide-x divide-content3", gridCols[visibleCount], className)}>
+        <div
+            className={classNames(
+                "grid max-sm:divide-y divide-x divide-content3",
+                "max-sm:[&>*:nth-child(even)]:border-e-0! max-sm:[&>*:nth-last-child(-n+2)]:border-b-0!",
+                gridCols[visibleCount],
+                className
+            )}
+        >
             {children}
         </div>
     );

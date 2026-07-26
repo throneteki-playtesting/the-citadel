@@ -61,6 +61,10 @@ enum Permission {
     READ_USER = "READ_USER",
     /** Can view all users */
     READ_USERS = "READ_USERS",
+    /** Can view sitewide aggregate statistics (eg. active user counts) */
+    READ_STATS_GLOBAL = "READ_STATS_GLOBAL",
+    /** Can view aggregate statistics for a project (eg. card changes, review counts) */
+    READ_STATS_PROJECT = "READ_STATS_PROJECT",
     /** Can edit all users */
     EDIT_USERS = "EDIT_USERS",
     /** Can view all roles */
@@ -170,6 +174,8 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.READ_USER]: { label: "Read Single", group: "Users" },
     [Permission.READ_USERS]: { label: "Read All", group: "Users" },
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
+    [Permission.READ_STATS_GLOBAL]: { label: "Global", group: "Statistics" },
+    [Permission.READ_STATS_PROJECT]: { label: "Project", group: "Statistics", dependencies: Permission.READ_PROJECTS },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.READ_INTEGRATIONS]: { label: "Read", group: "Integrations" },
     [Permission.READ_LOGS]: { label: "Read", group: "Logs" },

@@ -3,7 +3,7 @@ import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Chip, Progress, Skeleton } from "@heroui/react";
 import classNames from "classnames";
-import { useGetCardsQuery, useGetDecksQuery, useGetProjectsQuery, useGetReviewsQuery } from "../../api";
+import { useGetProjectsQuery, useGetProjectStatsQuery } from "../../api";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
@@ -107,9 +107,9 @@ function ProjectCard({ project }: ProjectCardProps) {
                 </div>
             </Watermark>
             <StatsGrid>
-                <PermissionGate requires={Permission.READ_CARDS}><CardChangesStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_REVIEWS}><ReviewsStat project={project} /></PermissionGate>
-                <PermissionGate requires={Permission.READ_DECKS}><ActiveDecksStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_STATS_PROJECT}><CardChangesStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_STATS_PROJECT}><ReviewsStat project={project} /></PermissionGate>
+                <PermissionGate requires={Permission.READ_STATS_PROJECT}><ActiveDecksStat project={project} /></PermissionGate>
                 <PermissionGate requires={Permission.READ_RELEASES}><ReleasesStat project={project} /></PermissionGate>
             </StatsGrid>
         </div>
@@ -120,24 +120,21 @@ type ProjectCardProps = {
 };
 
 function CardChangesStat({ project }: ProjectStatProps) {
-    const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, version: { $ne: "1.0.0" } } });
+    const { data, isLoading } = useGetProjectStatsQuery({ project: project.number });
 
-    const factions = useMemo(() => new Set(data?.items.map((card) => card.faction)), [data?.items]);
-
-    return <StatCard label={"Total Changes"} value={data?.total} footer={`across ${factions.size} faction${factions.size !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
+    return <StatCard label={"Total Changes"} value={data?.cardChanges.total} footer={data && `across ${data.cardChanges.factionCount} faction${data.cardChanges.factionCount !== 1 ? "s" : ""}`} isLoading={isLoading}/>;
 }
 
 function ReviewsStat({ project }: ProjectStatProps) {
-    const { data, isLoading } = useGetReviewsQuery({ filter: { project: project.number } });
-    const reviewers = useMemo(() => new Set(data?.items.map((review) => review.reviewer)), [data?.items]);
+    const { data, isLoading } = useGetProjectStatsQuery({ project: project.number });
 
-    return <StatCard label="Playtesting Reviews" value={data?.total} footer={`from ${reviewers.size} playtesters`} isLoading={isLoading} />;
+    return <StatCard label="Playtesting Reviews" value={data?.reviews.total} footer={data && `from ${data.reviews.reviewerCount} playtesters`} isLoading={isLoading} />;
 }
 
 function ActiveDecksStat({ project }: ProjectStatProps) {
-    const { data, isLoading } = useGetDecksQuery({ filter: { project: project.number } });
+    const { data, isLoading } = useGetProjectStatsQuery({ project: project.number });
 
-    return <StatCard label="Submitted Decks" value={data?.total} footer="for cards in this project" isLoading={isLoading}/>;
+    return <StatCard label="Submitted Decks" value={data?.activeDecks.total} footer="for cards in this project" isLoading={isLoading}/>;
 }
 
 function ReleasesStat({ project }: ProjectStatProps) {

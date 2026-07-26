@@ -14,6 +14,7 @@ import { cloneDeep } from "lodash-es";
 import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter, loadProjectByNumber, buildExpansionRelease } from "@/utils";
+import { ProjectStats } from "common/models/stats";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
 import slots from "./slots";
@@ -87,6 +88,34 @@ router.get("/:number",
     validateProjectAccess,
     asyncHandler(async (_req, res) => {
         res.status(StatusCodes.OK).json(res.locals.project);
+    })
+);
+
+// Read project stats
+router.get("/:number/stats",
+    validateRequest(Permission.READ_STATS_PROJECT),
+    celebrate({ [Segments.PARAMS]: numberParams }),
+    loadProjectByNumber,
+    validateProjectAccess,
+    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { number } = req.params;
+
+        const [changedCards, reviews, decks] = await Promise.all([
+            dataService.cards.read({ project: number, version: { $ne: "1.0.0" } }),
+            dataService.reviews.read({ project: number }),
+            dataService.decks.forCards({ project: number })
+        ]);
+
+        const factionCount = new Set(changedCards.map((card) => card.faction)).size;
+        const reviewerCount = new Set(reviews.map((review) => review.reviewer)).size;
+
+        const stats: ProjectStats = {
+            cardChanges: { total: changedCards.length, factionCount },
+            reviews: { total: reviews.length, reviewerCount },
+            activeDecks: { total: decks.length }
+        };
+
+        res.status(StatusCodes.OK).json(stats);
     })
 );
 

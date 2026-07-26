@@ -1,7 +1,5 @@
-import { useGetCardsQuery, useGetProjectsQuery, useGetReviewsQuery, useGetUsersQuery } from "../../api";
-import { ReactNode, useMemo } from "react";
-import { NoteType } from "common/models/cards";
-import { daysFromNow } from "../../utils";
+import { useGetGlobalStatsQuery } from "../../api";
+import { ReactNode } from "react";
 import { Skeleton } from "@heroui/react";
 import Permission from "common/models/permissions";
 import { changeTypeClasses } from "../../constants";
@@ -11,57 +9,39 @@ import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 
-// TODO: Create a "statistics" endpoint in server, and call that rather than gathering data on front-end. For now, this is sufficient
-// Should also include new "statistics" related permissions, as a user could see total stats, but not the data creating those stats
-// Note: Also add scoped statistics, like project stats & card stats
+const CARD_CHANGE_DAY_RANGE = 7;
+const ACTIVE_USER_DAY_RANGE = 14;
 
 export default function StatCards() {
     useTagManagerOverrides({ autoRefresh: true });
 
     return (
-        <StatsGrid className="border border-content3 drop-shadow-lg">
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
+        <PermissionGate requires={Permission.READ_STATS_GLOBAL}>
+            <StatsGrid className="border border-content3 drop-shadow-lg">
                 <CardChangesStat />
-            </PermissionGate>
-            <PermissionGate requires={Permission.READ_USERS}>
                 <ActiveUsersStat />
-            </PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_CARDS]}>
                 <CardsInTestingStat />
-            </PermissionGate>
-            <PermissionGate requires={[Permission.READ_PROJECTS, Permission.READ_REVIEWS]}>
                 <ReviewsStat />
-            </PermissionGate>
-        </StatsGrid>
+            </StatsGrid>
+        </PermissionGate>
     );
 }
 
 function CardChangesStat() {
-    const dayRange = 7;
-    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
+    const { data, isLoading } = useGetGlobalStatsQuery();
 
-    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, updated: { $gte: since }, note: { $exists: true } })) }, { skip: !projectsData });
-
-    const isLoading = isLoadingProjectsData || isLoadingCardsData;
-
-    const footer = useMemo(() => {
-        const noteMap = cardsData?.items.reduce<Record<NoteType, number>>((map, card) => {
-            if (card.note) map[card.note.type]++;
-            return map;
-        }, { updated: 0, reworked: 0, replaced: 0, wording: 0 }) ?? {};
-
-        return (
-            <div className="flex gap-0.5 flex-wrap">
-                {Object.entries(noteMap).filter(([, count]) => Number(count) > 0).map(([type, count]) => (<div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50 border-1", changeTypeClasses[type as ChangeType])}>{String(count)} {type}</div>))}
-            </div>
-        );
-    }, [cardsData?.items]);
+    const footer = (
+        <div className="flex gap-0.5 flex-wrap">
+            {data && Object.entries(data.cardChanges.byNoteType).filter(([, count]) => count > 0).map(([type, count]) => (
+                <div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50 border-1", changeTypeClasses[type as ChangeType])}>{count} {type}</div>
+            ))}
+        </div>
+    );
 
     return (
         <StatCard
-            label={`Card Changes · ${dayRange} days`}
-            value={cardsData?.total}
+            label={`Card Changes · ${CARD_CHANGE_DAY_RANGE} days`}
+            value={data?.cardChanges.total}
             footer={footer}
             isLoading={isLoading}
         />
@@ -69,33 +49,26 @@ function CardChangesStat() {
 }
 
 function ActiveUsersStat() {
-    const dayRange = 14;
-    const since = useMemo(() => daysFromNow(-dayRange).toISOString(), [dayRange]);
-    const { data, isLoading } = useGetUsersQuery({ filter: { lastLogin: { $gte: since } } });
+    const { data, isLoading } = useGetGlobalStatsQuery();
 
     return (
         <StatCard
             label="Active Users"
-            value={data?.total}
-            footer={`in the last ${dayRange} days`}
+            value={data?.activeUsers.total}
+            footer={`in the last ${ACTIVE_USER_DAY_RANGE} days`}
             isLoading={isLoading}
         />
     );
 }
 
 function CardsInTestingStat() {
-    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: cardsData, isLoading: isLoadingCardsData } = useGetCardsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number, latest: true, released: { $exists: false } })) }, { skip: !projectsData });
-
-    const isLoading = isLoadingProjectsData || isLoadingCardsData;
-
-    const acrossProjects = useMemo(() => new Set(cardsData?.items.map((card) => card.project)), [cardsData?.items]);
+    const { data, isLoading } = useGetGlobalStatsQuery();
 
     return (
         <StatCard
             label="Cards in testing"
-            value={cardsData?.total}
-            footer={`across ${acrossProjects.size} project${acrossProjects.size !== 1 ? "s" : ""}`}
+            value={data?.cardsInTesting.total}
+            footer={data && `across ${data.cardsInTesting.projectCount} project${data.cardsInTesting.projectCount !== 1 ? "s" : ""}`}
             isLoading={isLoading}
         />
     );
@@ -103,17 +76,13 @@ function CardsInTestingStat() {
 
 
 function ReviewsStat() {
-    const { data: projectsData, isLoading: isLoadingProjectsData } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: reviewsData, isLoading: isLoadingReviewsData } = useGetReviewsQuery({ filter: projectsData?.items.map((project) => ({ project: project.number })) });
+    const { data, isLoading } = useGetGlobalStatsQuery();
 
-    const isLoading = isLoadingProjectsData || isLoadingReviewsData;
-
-    const numPlaytesters = new Set(reviewsData?.items.map((review) => review.reviewer)).size;
     return (
         <StatCard
             label="Reviews"
-            value={reviewsData?.total}
-            footer={`across ${numPlaytesters} playtesters`}
+            value={data?.reviews.total}
+            footer={data && `across ${data.reviews.playtesterCount} playtesters`}
             isLoading={isLoading}
         />
     );
