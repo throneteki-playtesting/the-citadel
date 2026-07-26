@@ -5,14 +5,26 @@ export async function getMilestone(project: IProject) {
     if (project.milestone === undefined) {
         try {
             const { client, owner, repo } = githubService.getContext();
-            const { data } = await client.rest.issues.createMilestone({
+            const title = `${project.number} | ${project.code} Development`;
+            const existing = await client.paginate(client.rest.issues.listMilestones, {
                 owner,
                 repo,
-                title: `${project.number} | ${project.code} Development`,
-                description: `Development related to the "${project.name}" playtesting project`
+                state: "all"
             });
-            logger.info(`[Github] Created new milestone "${data.title}" (${data.number}) for project: ${data.html_url}`);
-            project.milestone = data.number;
+            let milestone = existing.find((m) => m.title === title);
+            if (milestone) {
+                logger.info(`[Github] Found existing milestone "${milestone.title}" (${milestone.number}) for project: ${milestone.html_url}`);
+            } else {
+                const { data } = await client.rest.issues.createMilestone({
+                    owner,
+                    repo,
+                    title,
+                    description: `Development related to the "${project.name}" playtesting project`
+                });
+                logger.info(`[Github] Created new milestone "${data.title}" (${data.number}) for project: ${data.html_url}`);
+                milestone = data;
+            }
+            project.milestone = milestone.number;
             // Update milestone back to database
             project = await dataService.projects.update(project, false);
         } catch (err) {
