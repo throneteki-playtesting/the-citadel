@@ -1,5 +1,5 @@
 import puppeteer, { Page, Viewport } from "puppeteer";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { randomUUID, UUID } from "crypto";
@@ -26,9 +26,11 @@ export async function asPNG(data: SingleOrArray<IRenderCard>, options?: SingleRe
     const page = (await browser.pages())[0] ?? await browser.newPage();
     const job = await createJob("single", cards, options);
     try {
+        attachDiagnostics(page, job.id);
         await applyInternalAuthHeaders(page);
         await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "networkidle0" });
         await page.evaluate(() => document.fonts.ready);
+        await logFontStatus(page, job.id);
         await checkRenderError(page);
 
         const responses: PNGResponse[] = [];
@@ -59,9 +61,11 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
     const page = (await browser.pages())[0] ?? await browser.newPage();
 
     try {
+        attachDiagnostics(page, job.id);
         await applyInternalAuthHeaders(page);
         await page.goto(`${process.env.CLIENT_HOST}/render?id=${job.id}`, { waitUntil: "networkidle0" });
         await page.evaluate(() => document.fonts.ready);
+        await logFontStatus(page, job.id);
         await checkRenderError(page);
 
         const buffer = await page.pdf({ printBackground: true, format: "A4" });
@@ -72,6 +76,40 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
         await browser.close();
     }
 }
+function attachDiagnostics(page: Page, jobId: UUID) {
+    page.on("console", (msg) => {
+        if (msg.type() === "error" || msg.type() === "warn") {
+            logger.warn(`[render ${jobId}] console.${msg.type()}: ${msg.text()}`);
+        }
+    });
+    page.on("pageerror", (err) => {
+        logger.error(new Error(`[render ${jobId}] page error`, { cause: err }));
+    });
+    page.on("requestfailed", (request) => {
+        logger.warn(`[render ${jobId}] request failed: ${request.url()} (${request.failure()?.errorText})`);
+    });
+    page.on("response", (response) => {
+        const url = response.url();
+        const isFont = url.includes("fonts.googleapis.com") || url.includes("fonts.gstatic.com") || url.includes(".ttf") || url.includes(".woff");
+        if (isFont && !response.ok()) {
+            logger.warn(`[render ${jobId}] font request returned ${response.status()}: ${url}`);
+        }
+    });
+}
+
+async function logFontStatus(page: Page, jobId: UUID) {
+    // "unloaded" just means unused so far (most of the declared @font-face weights never get
+    // triggered by a given card) - only "error" indicates an actual failed fetch/parse. Note this
+    // only catches failures where the @font-face rule itself registered (the stylesheet loaded) but
+    // the font file fetch then failed - if the stylesheet request itself fails, no FontFace is ever
+    // registered to report "error" on, so that case relies on the response/requestfailed listeners
+    // in attachDiagnostics instead.
+    const errored = await page.evaluate(() => [...new Set(Array.from(document.fonts).filter((f) => f.status === "error").map((f) => f.family))]);
+    if (errored.length > 0) {
+        logger.warn(`[render ${jobId}] fonts failed to load: ${errored.join(", ")}`);
+    }
+}
+
 async function applyInternalAuthHeaders(page: Page) {
     const token = await dataService.integrations.fetchInternalToken();
     await page.setRequestInterception(true);
