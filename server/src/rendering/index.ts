@@ -108,6 +108,34 @@ async function logFontStatus(page: Page, jobId: UUID) {
     if (errored.length > 0) {
         logger.warn(`[render ${jobId}] fonts failed to load: ${errored.join(", ")}`);
     }
+
+    // document.fonts.ready can resolve before a font that hasn't been "discovered" by layout yet
+    // is even requested. A family declares several weight/style variants and most render a card
+    // will never use, so "unloaded" on its own is normal noise - only flag a family with NO loaded
+    // variant at all, since one of its variants is always the one actually applied to visible text
+    const usedFamilies = await page.evaluate(() => {
+        const families = new Set<string>();
+        for (const cardEl of Array.from(document.querySelectorAll("[data-card-id]"))) {
+            for (const el of Array.from(cardEl.querySelectorAll("*"))) {
+                const family = (el as HTMLElement).style?.fontFamily;
+                if (family) {
+                    families.add(family.split(",")[0].replace(/['"]/g, "").trim());
+                }
+            }
+        }
+        return [...families];
+    });
+    const noneLoaded = (families: string[]) => families.filter((name) => {
+        const variants = Array.from(document.fonts).filter((f) => f.family === name);
+        return variants.length > 0 && !variants.some((f) => f.status === "loaded");
+    });
+    const notYetLoaded = await page.evaluate(noneLoaded, usedFamilies);
+    if (notYetLoaded.length > 0) {
+        logger.warn(`[render ${jobId}] card fonts with no loaded variant when document.fonts.ready resolved: ${notYetLoaded.join(", ")}`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        const stillNotLoaded = await page.evaluate(noneLoaded, usedFamilies);
+        logger.warn(`[render ${jobId}] same fonts 500ms later: ${stillNotLoaded.join(", ") || "(all loaded by then)"}`);
+    }
 }
 
 async function applyInternalAuthHeaders(page: Page) {
