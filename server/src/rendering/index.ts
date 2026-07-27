@@ -77,6 +77,14 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
     }
 }
 function attachDiagnostics(page: Page, jobId: UUID) {
+    logger.info(`[render ${jobId}] diagnostics attached`);
+    page.on("response", (response) => {
+        const url = response.url();
+        if (url.endsWith(".js") && url.includes("/assets/")) {
+            const headers = response.headers();
+            logger.info(`[render ${jobId}] loaded bundle: ${url} (cache-control: ${headers["cache-control"]}, age: ${headers.age}, last-modified: ${headers["last-modified"]}, etag: ${headers.etag})`);
+        }
+    });
     page.on("console", (msg) => {
         if (msg.type() === "error" || msg.type() === "warn") {
             logger.warn(`[render ${jobId}] console.${msg.type()}: ${msg.text()}`);
