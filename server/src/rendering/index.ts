@@ -77,14 +77,6 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
     }
 }
 function attachDiagnostics(page: Page, jobId: UUID) {
-    logger.info(`[render ${jobId}] diagnostics attached`);
-    page.on("response", (response) => {
-        const url = response.url();
-        if (url.endsWith(".js") && url.includes("/assets/")) {
-            const headers = response.headers();
-            logger.info(`[render ${jobId}] loaded bundle: ${url} (cache-control: ${headers["cache-control"]}, age: ${headers.age}, last-modified: ${headers["last-modified"]}, etag: ${headers.etag})`);
-        }
-    });
     page.on("console", (msg) => {
         if (msg.type() === "error" || msg.type() === "warn") {
             logger.warn(`[render ${jobId}] console.${msg.type()}: ${msg.text()}`);
@@ -106,43 +98,10 @@ function attachDiagnostics(page: Page, jobId: UUID) {
 }
 
 async function logFontStatus(page: Page, jobId: UUID) {
-    // "unloaded" just means unused so far (most of the declared @font-face weights never get
-    // triggered by a given card) - only "error" indicates an actual failed fetch/parse. Note this
-    // only catches failures where the @font-face rule itself registered (the stylesheet loaded) but
-    // the font file fetch then failed - if the stylesheet request itself fails, no FontFace is ever
-    // registered to report "error" on, so that case relies on the response/requestfailed listeners
-    // in attachDiagnostics instead.
+    // "unloaded" just means unused so far - only "error" indicates an actual failed fetch/parse
     const errored = await page.evaluate(() => [...new Set(Array.from(document.fonts).filter((f) => f.status === "error").map((f) => f.family))]);
     if (errored.length > 0) {
         logger.warn(`[render ${jobId}] fonts failed to load: ${errored.join(", ")}`);
-    }
-
-    // document.fonts.ready can resolve before a font that hasn't been "discovered" by layout yet
-    // is even requested. A family declares several weight/style variants and most render a card
-    // will never use, so "unloaded" on its own is normal noise - only flag a family with NO loaded
-    // variant at all, since one of its variants is always the one actually applied to visible text
-    const usedFamilies = await page.evaluate(() => {
-        const families = new Set<string>();
-        for (const cardEl of Array.from(document.querySelectorAll("[data-card-id]"))) {
-            for (const el of Array.from(cardEl.querySelectorAll("*"))) {
-                const family = (el as HTMLElement).style?.fontFamily;
-                if (family) {
-                    families.add(family.split(",")[0].replace(/['"]/g, "").trim());
-                }
-            }
-        }
-        return [...families];
-    });
-    const noneLoaded = (families: string[]) => families.filter((name) => {
-        const variants = Array.from(document.fonts).filter((f) => f.family === name);
-        return variants.length > 0 && !variants.some((f) => f.status === "loaded");
-    });
-    const notYetLoaded = await page.evaluate(noneLoaded, usedFamilies);
-    if (notYetLoaded.length > 0) {
-        logger.warn(`[render ${jobId}] card fonts with no loaded variant when document.fonts.ready resolved: ${notYetLoaded.join(", ")}`);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const stillNotLoaded = await page.evaluate(noneLoaded, usedFamilies);
-        logger.warn(`[render ${jobId}] same fonts 500ms later: ${stillNotLoaded.join(", ") || "(all loaded by then)"}`);
     }
 }
 

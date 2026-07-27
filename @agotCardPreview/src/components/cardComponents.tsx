@@ -413,7 +413,7 @@ export const PlotStat = memo(({ className, style, type, children: value }: PlotS
                 backgroundColor: thronesColors[type],
                 position: "relative",
                 textAlign: "center",
-                fontFamily: "Open sans, sans-serif",
+                fontFamily: "Open Sans, sans-serif",
                 width: px(30),
                 lineHeight: 1.35,
                 padding: em(0.15),
