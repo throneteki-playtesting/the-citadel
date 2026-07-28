@@ -229,20 +229,26 @@ async function applyTokensToResponse(res: Response, discordId: string, sessionId
     const { token: accessToken } = createAccessToken(discordId);
     const { token: refreshToken } = await createRefreshToken(discordId, sessionId);
 
+    const accessTokenAge = Number.parseInt(process.env.ACCESS_TOKEN_TTL) * 1000;
+    const refreshTokenAge = Number.parseInt(process.env.REFRESH_TOKEN_TTL) * 1000;
+
     res.cookie(SESSION_ID_COOKIE, sessionId, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
-        sameSite: "lax"
+        sameSite: "lax",
+        maxAge: refreshTokenAge
     });
     res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
-        sameSite: "lax"
+        sameSite: "lax",
+        maxAge: accessTokenAge
     });
     res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
         httpOnly: true,
         secure: isEnvironment("staging", "production"),
-        sameSite: "lax"
+        sameSite: "lax",
+        maxAge: refreshTokenAge
     });
 }
 

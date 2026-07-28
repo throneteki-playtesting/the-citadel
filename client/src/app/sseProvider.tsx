@@ -9,6 +9,7 @@ import { setConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
 import { mergeWith, isPlainObject } from "lodash-es";
+import { refreshSession } from "../api/refresh";
 import { emitLogCreate, emitResync, hasLogListeners } from "../pages/admin/logs/logStream";
 import { ILogEntry } from "common/models/logs";
 
@@ -98,7 +99,12 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
     }, [pathname]);
 
     useEffect(() => {
+        let retryTimer: ReturnType<typeof setTimeout> | undefined;
+        let retryAttempt = 0;
+        let cancelled = false;
+
         function handleOpen() {
+            retryAttempt = 0;
             if (hasConnected.current) {
                 store.dispatch(api.util.invalidateTags(reconnectTags));
                 emitResync();
@@ -106,8 +112,34 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             hasConnected.current = true;
         }
 
+        // Allows recovery when access token expires/closes
+        async function recover() {
+            const outcome = await refreshSession();
+            if (cancelled) {
+                return;
+            }
+
+            if (outcome === "expired") {
+                // Leave the redirect to the query layer so a background reconnect never navigates the user away.
+                store.dispatch(api.util.invalidateTags([{ type: "me" }]));
+                return;
+            }
+
+            const delay = Math.min(30000, 1000 * 2 ** retryAttempt);
+            retryAttempt++;
+            retryTimer = setTimeout(() => {
+                if (!cancelled) {
+                    reconnect();
+                }
+            }, delay);
+        }
+
         function handleError() {
-            console.warn("SSE connection lost, awaiting reconnect");
+            if (esRef.current?.readyState !== EventSource.CLOSED) {
+                console.warn("SSE connection lost, awaiting reconnect");
+                return;
+            }
+            void recover();
         }
 
         function handleMessage(e: MessageEvent) {
@@ -179,6 +211,7 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
         }
 
         function reconnect() {
+            clearTimeout(retryTimer);
             esRef.current?.close();
             connect();
         }
@@ -204,6 +237,8 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
+            cancelled = true;
+            clearTimeout(retryTimer);
             esRef.current?.close();
             if (supportsPageLifecycle) {
                 document.removeEventListener("resume", handleResume);

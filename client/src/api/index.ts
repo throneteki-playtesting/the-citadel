@@ -1,10 +1,10 @@
 import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
 import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
 import { ReleaseDate } from "common/models/shared";
-import { buildUrl, isSafeRelativePath, SemanticVersion } from "common/utils";
+import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "crypto";
-import type { BatchRenderJob, IGetRequest, IGetResponse, RefreshAuthResponse, SingleRenderJob } from "server/types";
+import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
@@ -13,10 +13,10 @@ import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "common/types
 import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "common/models/auth";
 import { ILogEntry } from "common/models/logs";
 import { GlobalStats, ProjectStats } from "common/models/stats";
-import { Mutex } from "async-mutex";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
+import { redirectToLogin, refreshSession } from "./refresh";
 
 const baseQuery = fetchBaseQuery({
     baseUrl: "/api/v1",
@@ -28,7 +28,6 @@ const baseQuery = fetchBaseQuery({
     }
 });
 
-const mutex = new Mutex();
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
     args,
     queryApi,
@@ -37,35 +36,15 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
     let result = await baseQuery(args, queryApi, extraOptions);
 
     if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
-        if (!mutex.isLocked()) {
-            // We're the first 401 — acquire the lock and do the refresh
-            const release = await mutex.acquire();
-            try {
-                const baseAuthQuery = fetchBaseQuery({ baseUrl: "/auth", credentials: "include" }) as BaseQueryFn<
-                    string | FetchArgs,
-                    RefreshAuthResponse,
-                    FetchBaseQueryError,
-                    unknown,
-                    FetchBaseQueryMeta
-                >;
-                const refreshResult = await baseAuthQuery("/refresh", queryApi, extraOptions);
+        const outcome = await refreshSession();
 
-                if (refreshResult.data?.status === "success") {
-                    result = await baseQuery(args, queryApi, extraOptions);
-                } else {
-                    queryApi.dispatch(api.util.invalidateTags([{ type: "me" }]));
-                    if (refreshResult.meta?.response?.status === StatusCodes.FORBIDDEN) {
-                        const returnUrl = window.location.pathname + window.location.search;
-                        window.location.href = returnUrl !== "/" && isSafeRelativePath(returnUrl) ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/discord";
-                    }
-                }
-            } finally {
-                release(); // Always release, even if refresh throws
-            }
-        } else {
-            // Another request is already refreshing — wait for it to finish, then retry
-            await mutex.waitForUnlock();
+        if (outcome === "refreshed" || outcome === "concurrent") {
             result = await baseQuery(args, queryApi, extraOptions);
+        } else {
+            queryApi.dispatch(api.util.invalidateTags([{ type: "me" }]));
+            if (outcome === "expired") {
+                redirectToLogin();
+            }
         }
     }
 
