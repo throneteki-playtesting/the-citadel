@@ -1,0 +1,20 @@
+# Normalise all text files to LF in the repository and in the working tree.
+# The repository is already LF-only; this makes that a property of the repo
+# rather than of each developer's core.autocrlf setting, and means Windows
+# checkouts match the Linux containers we deploy to.
+* text=auto eol=lf
+
+# Binary assets: never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Generated: collapse in diffs and hide from language stats.
+package-lock.json -diff linguist-generated
