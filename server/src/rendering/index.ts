@@ -2,7 +2,8 @@ import puppeteer, { Page, Viewport } from "puppeteer";
 import { dataService, logger } from "@/services";
 import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
-import { randomUUID, UUID } from "crypto";
+import { randomUUID } from "crypto";
+import { UUID } from "common/models/shared";
 import { BatchRenderJob, BatchRenderJobOptions, RenderType, SingleRenderJob, SingleRenderJobOptions } from "@/types";
 import { IRenderCard } from "common/models/cards";
 

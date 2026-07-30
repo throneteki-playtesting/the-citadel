@@ -1,7 +1,8 @@
-import { Button, ButtonGroup, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
+import { Button, ButtonGroup, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import { useMemo } from "react";
+import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 import { ActionItem } from "./types";
@@ -46,9 +47,17 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                             color={item.color}
                             isDisabled={item.isDisabled}
                             isLoading={item.isLoading}
+                            // The badge sits inside the button (ButtonGroup rounds its direct children),
+                            // and z-10 lifts it out of the base z-0 the next button would paint over
+                            className={classNames("overflow-visible", item.badge && "z-10")}
                             onPress={() => openItem(item)}
                         >
                             {item.icon}
+                            {!!item.badge && (
+                                <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-secondary text-secondary-foreground text-tiny font-medium flex items-center justify-center">
+                                    {item.badge}
+                                </span>
+                            )}
                         </Button>
                     </TouchTooltip>
                 ))}
@@ -76,6 +85,13 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                                 color={item.color}
                                 description={item.description}
                                 startContent={item.icon}
+                                endContent={
+                                    item.badge ? (
+                                        <Chip size="sm" variant="flat" color="secondary">
+                                            {item.badge}
+                                        </Chip>
+                                    ) : undefined
+                                }
                                 closeOnSelect={!item.keepOpen}
                             >
                                 {item.title}

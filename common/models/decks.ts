@@ -1,8 +1,7 @@
-import { UUID } from "crypto";
 import { Code, Faction } from "./cards";
 import { DeckLink, DecklistLink, ISO8601String } from "common/types";
 import { SemanticVersion } from "../utils";
-import { IAuditable } from "./shared";
+import { IAuditable, UUID } from "./shared";
 
 export interface IDecklist {
     id: number;

@@ -1,4 +1,4 @@
-import { UUID } from "crypto";
+import { UUID } from "./models/shared";
 import * as Cards from "./models/cards";
 import Permission from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, ISO8601String, SingleOrArray } from "./types";

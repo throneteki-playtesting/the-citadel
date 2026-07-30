@@ -4,7 +4,7 @@ import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
 export const githubStatuses = ["open", "closed"] as const;
-export const releaseStatuses = ["planning", "confirming", "approved", "released"] as const;
+export const releaseStatuses = ["planning", "confirming", "approved", "assembling", "proofing", "released"] as const;
 export const articleStatuses = ["pending", "drafted", "published"] as const;
 export type Type = (typeof types)[number];
 export type Code = `${number}`;
@@ -46,6 +46,24 @@ export interface IProjectRelease extends IAuditable {
         url?: string;
         status: (typeof articleStatuses)[number];
     };
+}
+
+/** Computed completeness for a whole project. Never stored */
+export interface IProjectProgress {
+    /** Mean overall% of every card in the project; absent when it has no cards to average */
+    overall?: number;
+    cardCount: number;
+}
+
+/** Computed completeness for one release. Never stored */
+export interface IReleaseProgress {
+    code: string;
+    /** Mean overall% of the cards assigned to this release */
+    cards: number;
+    /** How far the release's own status has progressed */
+    status: number;
+    overall: number;
+    cardCount: number;
 }
 
 export type ReleaseSlotAllocation = {

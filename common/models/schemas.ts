@@ -372,15 +372,35 @@ export const Slot = {
         type: Joi.string().valid(...Cards.types),
         notes: Joi.string().allow(""),
         statuses: Joi.object({
-            development: Joi.string()
-                .required()
-                .valid(...Slots.developmentStatuses),
-            wording: Joi.string()
-                .required()
-                .valid(...Slots.wordingStatuses),
-            artwork: Joi.string()
-                .required()
-                .valid(...Slots.artworkStatuses),
+            design: Joi.object({
+                status: Joi.string()
+                    .required()
+                    .valid(...Slots.designStatuses),
+                checks: Joi.array()
+                    .required()
+                    .items(
+                        Joi.object({
+                            ready: Joi.boolean().required(),
+                            categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
+                            note: Joi.string().max(140).allow(""),
+                            version: Joi.string().required().regex(Regex.SemanticVersion),
+                            created: Joi.date().required(),
+                            createdBy: Joi.string().required(),
+                            updated: Joi.date().required(),
+                            updatedBy: Joi.string().required()
+                        })
+                    ),
+                finalApproval: Joi.object({
+                    by: Joi.string().required(),
+                    at: Joi.date().required()
+                })
+            }).required(),
+            artwork: Joi.object({
+                status: Joi.string()
+                    .required()
+                    .valid(...Slots.artworkStatuses),
+                type: Joi.string().valid(...Slots.artworkTypes)
+            }).required(),
             production: Joi.string()
                 .required()
                 .valid(...Slots.productionStatuses)
@@ -402,9 +422,29 @@ export const Slot = {
         type: Joi.string().valid(...Cards.types),
         notes: Joi.string().allow(""),
         statuses: Joi.object({
-            development: Joi.string().valid(...Slots.developmentStatuses),
-            wording: Joi.string().valid(...Slots.wordingStatuses),
-            artwork: Joi.string().valid(...Slots.artworkStatuses),
+            design: Joi.object({
+                status: Joi.string().valid(...Slots.designStatuses),
+                checks: Joi.array().items(
+                    Joi.object({
+                        ready: Joi.boolean().required(),
+                        categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
+                        note: Joi.string().max(140).allow(""),
+                        version: Joi.string().regex(Regex.SemanticVersion),
+                        created: Joi.date(),
+                        createdBy: Joi.string(),
+                        updated: Joi.date(),
+                        updatedBy: Joi.string()
+                    })
+                ),
+                finalApproval: Joi.object({
+                    by: Joi.string().required(),
+                    at: Joi.date().required()
+                }).allow(null)
+            }),
+            artwork: Joi.object({
+                status: Joi.string().valid(...Slots.artworkStatuses),
+                type: Joi.string().valid(...Slots.artworkTypes)
+            }),
             production: Joi.string().valid(...Slots.productionStatuses)
         }),
         release: Joi.object({
@@ -416,6 +456,30 @@ export const Slot = {
         createdBy: Joi.string(),
         updated: Joi.date(),
         updatedBy: Joi.string()
+    }),
+    // Body for PATCH /:slot/design/checks - shared with the client's release-check form validation
+    ReleaseCheck: Joi.object({
+        ready: Joi.boolean().required(),
+        categories: Joi.when("ready", {
+            is: false,
+            then: Joi.array()
+                .required()
+                .min(1)
+                .items(Joi.string().valid(...Slots.releaseCheckCategories))
+                .messages({
+                    "any.required": "Select at least one category",
+                    "array.min": "Select at least one category"
+                }),
+            otherwise: Joi.forbidden()
+        }),
+        note: Joi.when("ready", {
+            is: false,
+            then: Joi.string().trim().max(140).required().messages({
+                "any.required": "Provide your reasoning",
+                "string.empty": "Provide your reasoning"
+            }),
+            otherwise: Joi.forbidden()
+        })
     })
 };
 

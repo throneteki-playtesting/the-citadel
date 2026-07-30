@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
 import { addToast, Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
@@ -38,6 +38,7 @@ import {
 } from "./releaseDnd";
 import { HighlightTarget } from "../../../components/highlightTarget";
 import { TouchTooltip } from "../../../components/touchTooltip";
+import ReleaseProgressMeter from "./releaseProgressMeter";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
 export function SortableReleaseBlock(props: ReleaseBlockProps) {
@@ -92,9 +93,11 @@ type ReleaseBlockOverlayProps = {
     canDeleteReleases: boolean;
 };
 
-function ReleaseBlockHeader({
+// Explicitly memoised to prevent re-renders for every dnd-kit context change
+const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     release,
     filledCount,
+    projectNumber,
     isCollapsed,
     isReorderDragging,
     canEditReleases,
@@ -182,6 +185,11 @@ function ReleaseBlockHeader({
                         >
                             Article
                         </a>
+                    )}
+                    {projectNumber !== undefined && (
+                        <span onClick={(e) => e.stopPropagation()}>
+                            <ReleaseProgressMeter project={projectNumber} code={release.code} status={displayStatus} />
+                        </span>
                     )}
                 </div>
             </div>
@@ -278,10 +286,11 @@ function ReleaseBlockHeader({
             )}
         </div>
     );
-}
+});
 type ReleaseBlockHeaderProps = {
     release: IProjectRelease;
     filledCount: number;
+    projectNumber?: number;
     isCollapsed: boolean;
     isReorderDragging: boolean;
     canEditReleases: boolean;
@@ -323,6 +332,12 @@ export function ReleaseBlock({
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
     const disabled = isLocked || !canMoveCapsules;
+
+    // Bound here rather than by the caller, so the memoised header keeps stable handlers
+    const toggleCollapse = useCallback(() => onToggleCollapse(release.code), [onToggleCollapse, release.code]);
+    const editRelease = useCallback(() => onEdit(release), [onEdit, release]);
+    const openPublishModal = useCallback(() => setIsPublishModalOpen(true), []);
+    const openDeleteConfirm = useCallback(() => setIsConfirmingDelete(true), []);
 
     // Previews handleDragEnd's fallback (cycleReleases.tsx) - checks `over` directly since a specific slot always wins collision over this container
     const activeIdStr = active ? String(active.id) : undefined;
@@ -378,16 +393,17 @@ export function ReleaseBlock({
                 <ReleaseBlockHeader
                     release={release}
                     filledCount={filledCount}
+                    projectNumber={project.number}
                     isCollapsed={isCollapsed}
                     isReorderDragging={isReorderDragging}
                     canEditReleases={canEditReleases}
                     canDeleteReleases={canDeleteReleases}
                     publishTooltip={publishTooltip}
                     isPublishDisabled={!isComplete || !!publishBlockedBy}
-                    onToggleCollapse={onToggleCollapse}
-                    onEdit={onEdit}
-                    onPublish={() => setIsPublishModalOpen(true)}
-                    onDelete={() => setIsConfirmingDelete(true)}
+                    onToggleCollapse={toggleCollapse}
+                    onEdit={editRelease}
+                    onPublish={openPublishModal}
+                    onDelete={openDeleteConfirm}
                     showDragHandle={!!dragHandleListeners}
                     dragHandleListeners={dragHandleListeners}
                     dragHandleAttributes={dragHandleAttributes}
@@ -466,8 +482,8 @@ export type ReleaseBlockProps = {
     canDeleteReleases: boolean;
     canMoveCapsules: boolean;
     isCollapsed: boolean;
-    onToggleCollapse: () => void;
-    onEdit: () => void;
+    onToggleCollapse: (code: string) => void;
+    onEdit: (release: IProjectRelease) => void;
     publishBlockedBy: string | undefined;
     isReorderDragging: boolean;
     dragHandleListeners?: ReturnType<typeof useSortable>["listeners"];
@@ -489,6 +505,12 @@ export function ReleasePositionSlot({
     });
     const { active } = useDndContext();
     const navigate = useNavigate();
+
+    const onCapsuleClick = useCallback(() => {
+        if (card) {
+            navigate(`/project/${card.project}/${card.number}`);
+        }
+    }, [navigate, card]);
     const showBackground = !card || isDragging;
     // Slots are faction-locked; while a card is dragged, slots of other factions dim and never highlight
     const activeFaction = active?.data.current?.faction as Faction | undefined;
@@ -521,8 +543,10 @@ export function ReleasePositionSlot({
                     listeners={listeners}
                     attributes={attributes}
                     draggable={!disabled}
-                    onClick={disabled ? () => navigate(`/project/${card.project}/${card.number}`) : undefined}
+                    onClick={onCapsuleClick}
                     flipSlot={card.number}
+                    showProgress
+                    showReleaseCheck
                     className={classNames("absolute inset-1 z-10 transition-[transform,filter] duration-150", {
                         "scale-90 brightness-75": isPendingReplacement
                     })}

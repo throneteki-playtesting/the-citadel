@@ -1,34 +1,44 @@
-import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
+import { addToast, Button, Chip, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery } from "../../api";
+import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery, useGetSlotQuery } from "../../api";
 import { IPlaytestCard } from "common/models/cards";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
-import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
+import { getFinalCardNumber, getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faAngleLeft, faFeather, faPencil, faScroll, faTrash } from "@fortawesome/free-solid-svg-icons";
+import {
+    faAngleLeft,
+    faFeather,
+    faLayerGroup,
+    faPencil,
+    faScroll,
+    faThumbsUp,
+    faTrash
+} from "@fortawesome/free-solid-svg-icons";
 import { rcompare } from "semver";
 import classNames from "classnames";
 import CardImage from "../../components/cardImage";
 import EditCardModal from "./editCardModal";
 import DeleteCardModal from "./deleteCardModal";
 import LoadingCard from "../../components/loadingCard";
-import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
 import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
+import { TouchTooltip } from "../../components/touchTooltip";
 import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
-import { changeTypeClasses } from "../../constants";
+import { changeTypeClasses, highlightTarget, releaseStatusColors } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
+import { ActionItem } from "../../components/actions/types";
 import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
+import CardProgress from "./cardProgress";
+import ReleaseChecksModal from "../../components/releaseChecksModal";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
 import PermissionedLink from "../../components/permissionedLink";
@@ -64,13 +74,16 @@ export default function CardDetail({ className, style, project: projectNumber, n
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
                 <div className="flex-1 flex flex-col">
-                    <PermissionedLink
-                        to={`/project/${projectNumber}`}
-                        className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
-                        requires={Permission.READ_PROJECTS}
-                    >
-                        <FontAwesomeIcon icon={faAngleLeft} /> {project?.name}
-                    </PermissionedLink>
+                    <div className="flex items-center gap-2">
+                        <PermissionedLink
+                            to={`/project/${projectNumber}`}
+                            className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
+                            requires={Permission.READ_PROJECTS}
+                        >
+                            <FontAwesomeIcon icon={faAngleLeft} /> {project?.name}
+                        </PermissionedLink>
+                        <ReleaseChip project={projectNumber} number={number} />
+                    </div>
                     <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
                         Playtesting Card #{parseCardCode(false, projectNumber, number)}
                     </div>
@@ -78,10 +91,12 @@ export default function CardDetail({ className, style, project: projectNumber, n
                 <ButtonSection project={projectNumber} number={number} className="self-end sm:self-start" />
             </div>
             <div className="space-y-4">
+                <PermissionGate requires={Permission.READ_STATS_SLOT}>
+                    <CardProgress project={projectNumber} number={number} />
+                </PermissionGate>
                 <div className="flex flex-col md:flex-row gap-2 w-full overflow-x-hidden">
                     <CardVersions project={projectNumber} number={number} className="z-10" />
                     <div className="flex flex-col gap-2 flex-1">
-                        <StatusBoard project={projectNumber} number={number} />
                         <PermissionGate requires={Permission.READ_DECKS}>
                             <DeckSummaries project={projectNumber} number={number} className="flex-1" />
                         </PermissionGate>
@@ -96,6 +111,65 @@ export default function CardDetail({ className, style, project: projectNumber, n
 }
 
 type CardDetailProps = Omit<BaseElementProps, "children"> & { project: number; number: number };
+
+// Continues the breadcrumb: which release this card sits in, coloured by how far that release has
+// got. Absent until the card is placed in one; the pack name & print number live in the tooltip.
+function ReleaseChip({ className, style, project: projectNumber, number }: ReleaseChipProps) {
+    const navigate = useNavigate();
+    const canReadReleases = usePermission(Permission.READ_RELEASES);
+    const { data: project } = useGetProjectQuery({ number: projectNumber }, { skip: !canReadReleases });
+    const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadReleases });
+
+    const release = useMemo(
+        () => slot?.release && project?.releases.find((entry) => entry.code === slot.release?.code),
+        [project?.releases, slot?.release]
+    );
+
+    if (!project || !slot?.release || !release) {
+        return null;
+    }
+
+    // Publishing sets releasedDate without necessarily moving status off its last working value
+    const displayStatus = release.releasedDate ? "released" : release.status;
+    const finalNumber = getFinalCardNumber(project, slot);
+
+    return (
+        <TouchTooltip
+            content={
+                <div className="max-w-60 px-1 py-1 space-y-1">
+                    <div className="font-cinzel uppercase tracking-wide text-xs">
+                        {release.name} {finalNumber !== undefined && `#${finalNumber}`}
+                    </div>
+                    <div className="font-sans normal-case text-xs text-foreground/70 leading-snug">
+                        {release.status === "released"
+                            ? "This card has been released"
+                            : "This card is scheduled for release"}
+                    </div>
+                </div>
+            }
+        >
+            <Chip
+                size="sm"
+                variant="flat"
+                color={releaseStatusColors[displayStatus]}
+                className={classNames("cursor-pointer", className)}
+                style={style}
+                startContent={<FontAwesomeIcon icon={faLayerGroup} className="ml-1" />}
+                onClick={() =>
+                    navigate(`/project/${projectNumber}?tab=releases`, {
+                        state: { highlight: highlightTarget.release(projectNumber, release.code) }
+                    })
+                }
+            >
+                {release.code}
+            </Chip>
+        </TouchTooltip>
+    );
+}
+type ReleaseChipProps = Omit<BaseElementProps, "children"> & {
+    project: number;
+    number: number;
+};
 
 function CardVersions({ className, style, project, number }: CardVersionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
@@ -254,22 +328,25 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
                             )
                     )}
                 </div>
-                <CardStack
-                    cards={sortedCards}
-                    selectedIndex={selectedIndex}
-                    tilt={-1}
-                    className={classNames(
-                        sortedCards.some((card) => card.type === "plot") ? "w-full" : "h-full",
-                        widthClass
-                    )}
-                >
-                    {(card) => {
-                        if (card.latest && card.released) {
-                            return <CardImage card={card} />;
-                        }
-                        return <CardPreview card={renderPlaytestingCard(card)} />;
-                    }}
-                </CardStack>
+                <div className="relative">
+                    <CardStack
+                        cards={sortedCards}
+                        selectedIndex={selectedIndex}
+                        tilt={-1}
+                        className={classNames(
+                            sortedCards.some((card) => card.type === "plot") ? "w-full" : "h-full",
+                            widthClass
+                        )}
+                    >
+                        {(card) => {
+                            if (card.latest && card.released) {
+                                return <CardImage card={card} />;
+                            }
+                            return <CardPreview card={renderPlaytestingCard(card)} />;
+                        }}
+                    </CardStack>
+                    <CardStackActions project={project} number={number} className="absolute top-2 right-2 z-20" />
+                </div>
             </div>
         </div>
     );
@@ -319,14 +396,92 @@ type CardVersionsProps = Omit<BaseElementProps, "children"> & {
     number: number;
 };
 
+// Header row: the card-state icons plus Release Checks and Submit Review, with the state icons
+// floating as bubbles on mobile. Draft actions live over the card stack instead.
 function ButtonSection({ className, style, project: projectNumber, number }: ButtonSectionProps) {
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
+    const navigate = useNavigate();
+    const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
+    const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
+    const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
+    const [searchParams, setSearchParams] = useSearchParams();
+    // Allows deep-linking straight into the modal (eg. the capsule buttons on the releases page)
+    const [feedbackOpen, setFeedbackOpen] = useState(searchParams.get("releaseCheck") === "1");
+
+    const closeFeedback = () => {
+        setFeedbackOpen(false);
+        if (searchParams.has("releaseCheck")) {
+            const remaining = new URLSearchParams(searchParams);
+            remaining.delete("releaseCheck");
+            // Replaced, so closing isn't a history entry the back button reopens
+            setSearchParams(remaining, { replace: true });
+        }
+    };
+
+    const latest = useMemo(
+        () => [...(cardsData?.items ?? [])].reverse().find((card) => card.latest),
+        [cardsData?.items]
+    );
+    const isReleased = !!(latest && latest.released);
+    const feedbackCount = slot?.statuses.design.checks.length ?? 0;
+
+    const statusButtons = (bubbleClass?: string, size?: "sm" | "md" | "lg") => (
+        <>
+            <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                <DiscordCardStatus
+                    project={projectNumber}
+                    number={number}
+                    isIconOnly
+                    className={bubbleClass}
+                    size={size}
+                />
+            </PermissionGate>
+            <GithubCardStatus project={projectNumber} number={number} isIconOnly className={bubbleClass} size={size} />
+            <ImageStatus project={projectNumber} number={number} isIconOnly className={bubbleClass} size={size} />
+        </>
+    );
+
+    return (
+        <div className={classNames("flex items-center gap-1.5", className)} style={style}>
+            <div className="hidden sm:flex items-center gap-1.5">{statusButtons()}</div>
+            <div className="sm:hidden fixed bottom-6 right-20 z-20 flex items-center gap-2">
+                {statusButtons("rounded-full shadow-lg", "lg")}
+            </div>
+            <HeaderActions
+                items={[
+                    canReadFeedback && {
+                        key: "release-checks",
+                        title: "Release Checks",
+                        icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
+                        badge: feedbackCount,
+                        onPress: () => setFeedbackOpen(true)
+                    },
+                    !isLoading &&
+                        !isReleased &&
+                        canSubmitReview && {
+                            key: "submit-review",
+                            title: "Submit Review",
+                            icon: <FontAwesomeIcon icon={faScroll} size="xl" />,
+                            color: "primary",
+                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
+                        }
+                ]}
+            />
+            <ReleaseChecksModal isOpen={feedbackOpen} onClose={closeFeedback} project={projectNumber} number={number} />
+        </div>
+    );
+}
+type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
+    project: number;
+    number: number;
+};
+
+// Overlays New/Edit/Delete Draft on the top-right corner of the card stack preview
+function CardStackActions({ className, style, project: projectNumber, number }: CardStackActionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const [editing, setEditing] = useState<IPlaytestCard>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
-    const navigate = useNavigate();
 
-    const canViewDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);
-    const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canCreateDraft = usePermission(Permission.CREATE_CARDS);
     const canEditDraft = usePermission(Permission.EDIT_CARDS);
     const canDeleteDraft = usePermission(Permission.DELETE_CARDS);
@@ -360,57 +515,47 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     }
 
     const isReleased = !!(latest && latest.released);
+    const items: (Pick<ActionItem, "key" | "title" | "icon" | "color"> & { onPress: () => void })[] = [];
+    if (!isReleased && canCreateDraft && !draft && latest) {
+        items.push({
+            key: "new-draft",
+            title: "New Draft",
+            icon: <FontAwesomeIcon icon={faFeather} size="lg" />,
+            color: "primary",
+            onPress: () => onNewDraft(latest)
+        });
+    }
+    if (!isReleased && canEditDraft && draft) {
+        items.push({
+            key: "edit-draft",
+            title: "Edit Draft",
+            icon: <FontAwesomeIcon icon={faPencil} size="lg" />,
+            onPress: () => setEditing(draft)
+        });
+    }
+    if (!isReleased && canDeleteDraft && draft) {
+        items.push({
+            key: "delete-draft",
+            title: "Delete Draft",
+            icon: <FontAwesomeIcon icon={faTrash} size="lg" />,
+            color: "danger",
+            onPress: () => setDeleting(draft)
+        });
+    }
+
+    if (items.length === 0) {
+        return null;
+    }
 
     return (
-        <div className={classNames(className)} style={style}>
-            <HeaderActions
-                items={[
-                    canViewDiscord &&
-                        !!latest?._metadata?.discord?.messageUrl && {
-                            key: "discord",
-                            title: "Join Discussion",
-                            icon: <FontAwesomeIcon icon={faDiscord} />,
-                            href: latest._metadata.discord.messageUrl.replace("https://", "discord://"),
-                            openInNewTab: false
-                        },
-                    !isReleased &&
-                        canSubmitReview && {
-                            key: "submit-review",
-                            title: "Submit Review",
-                            icon: <FontAwesomeIcon icon={faScroll} />,
-                            color: "primary",
-                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
-                        },
-                    !isReleased &&
-                        canCreateDraft &&
-                        !draft &&
-                        latest && {
-                            key: "new-draft",
-                            title: "New Draft",
-                            icon: <FontAwesomeIcon icon={faFeather} />,
-                            color: "primary",
-                            onPress: () => onNewDraft(latest)
-                        },
-                    !isReleased &&
-                        canEditDraft &&
-                        draft && {
-                            key: "edit-draft",
-                            title: "Edit Draft",
-                            icon: <FontAwesomeIcon icon={faPencil} />,
-                            color: "secondary",
-                            onPress: () => setEditing(draft)
-                        },
-                    !isReleased &&
-                        canDeleteDraft &&
-                        draft && {
-                            key: "delete-draft",
-                            title: "Delete Draft",
-                            icon: <FontAwesomeIcon icon={faTrash} />,
-                            color: "danger",
-                            onPress: () => setDeleting(draft)
-                        }
-                ]}
-            />
+        <div className={classNames("flex gap-1", className)} style={style}>
+            {items.map((item) => (
+                <TouchTooltip key={item.key} content={item.title}>
+                    <Button isIconOnly size="sm" className="opacity-75" color={item.color} onPress={item.onPress}>
+                        {item.icon}
+                    </Button>
+                </TouchTooltip>
+            ))}
             <EditCardModal
                 isOpen={!!editing}
                 card={editing}
@@ -438,30 +583,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
         </div>
     );
 }
-type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
-    project: number;
-    number: number;
-};
-
-function StatusBoard({ className, style, project, number }: StatusBoardProps) {
-    return (
-        <div
-            className={classNames("py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1", className)}
-            style={style}
-        >
-            <DevelopmentStatus project={project} number={number} />
-            <GithubCardStatus project={project} number={number} />
-            <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
-                <ImageStatus project={project} number={number} />
-            </PermissionGate>
-            <PermissionGate requires={Permission.SYNC_CARD_DISCORD}>
-                <DiscordCardStatus project={project} number={number} />
-            </PermissionGate>
-        </div>
-    );
-}
-
-type StatusBoardProps = Omit<BaseElementProps, "children"> & {
+type CardStackActionsProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
 };

@@ -1,6 +1,6 @@
 import { IProject } from "common/models/projects";
 import { useGetCardsQuery, useGetPlaytestingUpdatesQuery } from "../../../api";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { addToast, Button, Skeleton } from "@heroui/react";
 import CreatePlaytestingUpdateModal from "./createPlaytestingUpdateModal";
 import PermissionGate from "../../../components/permissionGate";
@@ -37,6 +37,31 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
         { skip: project.draft }
     );
     const containerRef = useRef<HTMLDivElement>(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(false);
+
+    // The container is flex-row-reverse so it loads scrolled to the newest, which means scrollLeft
+    // runs from 0 at the right edge down to -(scrollWidth - clientWidth) at the left
+    const updateScrollState = useCallback(() => {
+        const el = containerRef.current;
+        if (!el) {
+            return;
+        }
+        setCanScrollLeft(el.scrollLeft > -(el.scrollWidth - el.clientWidth) + 1);
+        setCanScrollRight(el.scrollLeft < -1);
+    }, []);
+
+    const updateCount = playtestingData?.items.length ?? 0;
+    const draftCount = cardsData?.items.length ?? 0;
+
+    useEffect(() => {
+        updateScrollState();
+    }, [updateCount, draftCount, updateScrollState]);
+
+    useEffect(() => {
+        window.addEventListener("resize", updateScrollState);
+        return () => window.removeEventListener("resize", updateScrollState);
+    }, [updateScrollState]);
 
     const scrollByPage = (direction: -1 | 1) => {
         const el = containerRef.current;
@@ -72,12 +97,11 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
         );
     }
 
-    const showArrows = playtestingData.total + (cardsData?.total ? 1 : 0) > 1;
-
     return (
         <div className="relative">
             <div
                 ref={containerRef}
+                onScroll={updateScrollState}
                 className="flex flex-row-reverse overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden divide-x divide-content2"
             >
                 <CreateCard project={project} draftCards={cardsData?.items} />
@@ -92,30 +116,30 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
                     </div>
                 ))}
             </div>
-            {showArrows && (
-                <>
-                    <Button
-                        isIconOnly
-                        size="sm"
-                        radius="full"
-                        variant="light"
-                        className="absolute left-1 top-1/2 -translate-y-1/2 z-10"
-                        onPress={() => scrollByPage(-1)}
-                    >
-                        <FontAwesomeIcon icon={faChevronLeft} />
-                    </Button>
-                    <Button
-                        isIconOnly
-                        size="sm"
-                        radius="full"
-                        variant="light"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 z-10"
-                        onPress={() => scrollByPage(1)}
-                    >
-                        <FontAwesomeIcon icon={faChevronRight} />
-                    </Button>
-                </>
-            )}
+            <Button
+                isIconOnly
+                size="sm"
+                radius="full"
+                variant="light"
+                className={classNames("absolute left-1 top-1/2 -translate-y-1/2 z-10 transition-opacity", {
+                    "opacity-0 pointer-events-none": !canScrollLeft
+                })}
+                onPress={() => scrollByPage(-1)}
+            >
+                <FontAwesomeIcon icon={faChevronLeft} />
+            </Button>
+            <Button
+                isIconOnly
+                size="sm"
+                radius="full"
+                variant="light"
+                className={classNames("absolute right-1 top-1/2 -translate-y-1/2 z-10", {
+                    "opacity-0 pointer-events-none": !canScrollRight
+                })}
+                onPress={() => scrollByPage(1)}
+            >
+                <FontAwesomeIcon icon={faChevronRight} />
+            </Button>
         </div>
     );
 }
@@ -131,26 +155,27 @@ function CreateCard({ project, draftCards = [] }: CreateCardProps) {
     return (
         <PermissionGate requires={Permission.CREATE_PLAYTESTING_UPDATES}>
             <div
-                className={classNames("min-w-full p-4 shrink-0 w-full snap-start space-y-1", {
+                className={classNames("min-w-full p-4 shrink-0 w-full snap-start space-y-1 flex flex-col", {
                     "animate-pulse": !isModalOpen
                 })}
             >
                 <div className="text-xl md:text-2xl font-cinzel">
                     <FontAwesomeIcon icon={faFeather} /> Pending from the Archives
                 </div>
-                <div className="px-5">
-                    <div className="text-xs md:text-sm font-sans">
-                        {draftCards.length} draft card(s) are ready for the field. Draft cards must be published to
-                        playtesting in bulk via a Playtesting Update — each update is tracked against a GitHub
-                        implementation milestone, ensuring online play stays in step with the physical card pool.
+                <div className="flex-1 px-5 flex flex-col justify-between">
+                    <div className="text-sm md:text-base font-sans">
+                        {draftCards.length} draft card{draftCards.length > 1 ? "s are" : " is"} ready for the field, and
+                        must be published via a Playtesting Update below.
                     </div>
-                    <Button
-                        className="font-sans text-sm md:text-base"
-                        color="primary"
-                        onPress={() => setIsModalOpen((prev) => !prev)}
-                    >
-                        Publish Updates <FontAwesomeIcon icon={faArrowRightFromBracket} />
-                    </Button>
+                    <div className="mx-auto">
+                        <Button
+                            className="font-sans text-sm md:text-base"
+                            color="primary"
+                            onPress={() => setIsModalOpen((prev) => !prev)}
+                        >
+                            Publish Update <FontAwesomeIcon icon={faArrowRightFromBracket} />
+                        </Button>
+                    </div>
                 </div>
             </div>
             <CreatePlaytestingUpdateModal

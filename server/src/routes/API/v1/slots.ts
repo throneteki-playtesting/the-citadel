@@ -3,7 +3,18 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { DefaultSlotStatuses, ISlot } from "common/models/slots";
+import {
+    DefaultSlotStatuses,
+    DesignStatus,
+    designPhase,
+    designStatuses,
+    IReleaseCheck,
+    IReleaseCheckSummary,
+    isCheckStale,
+    ISlot,
+    ReleaseCheckCategory,
+    SlotStatuses
+} from "common/models/slots";
 import { factions } from "common/models/cards";
 import { factionNames, getPositionFaction } from "common/utils";
 import { IProject } from "common/models/projects";
@@ -14,8 +25,11 @@ import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
+import { isEqual } from "lodash-es";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { getContext } from "@/middleware/context";
+import { computeCardProgress } from "@/services/progressService";
 
 const router = express.Router({ mergeParams: true });
 
@@ -203,11 +217,62 @@ router.patch(
             );
         }
 
+        // Preventing changes which require specific endpoints & conditions to handle them
+        if (statuses?.design?.checks !== undefined && !isEqual(statuses.design.checks, slot.statuses.design.checks)) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Release checks cannot be submitted this way"
+            );
+        }
+        if (
+            statuses?.design?.finalApproval !== undefined &&
+            !isEqual(statuses.design.finalApproval, slot.statuses.design.finalApproval)
+        ) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Final approval cannot be submitted this way"
+            );
+        }
+        if (
+            statuses?.design?.status &&
+            designPhase[statuses.design.status] !== designPhase[slot.statuses.design.status]
+        ) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "This sort of status change cannot be submitted this way"
+            );
+        }
+
+        const mergedStatuses: SlotStatuses | undefined = statuses && {
+            ...slot.statuses,
+            ...statuses,
+            ...(statuses.design && { design: { ...slot.statuses.design, ...statuses.design } }),
+            ...(statuses.artwork && { artwork: { ...slot.statuses.artwork, ...statuses.artwork } })
+        };
+
+        // Production is downstream of design & artwork, and the invariant breaks from both directions
+        if (
+            mergedStatuses &&
+            mergedStatuses.production !== "waiting" &&
+            !(mergedStatuses.design.status === "complete" && mergedStatuses.artwork.status === "complete")
+        ) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                mergedStatuses.production !== slot.statuses.production
+                    ? "Production can only begin once design and artwork are both complete"
+                    : "Design and artwork are locked while production is underway - revert production to Waiting before changing them"
+            );
+        }
+
         const updated = await dataService.slots.update({
             ...slot,
             ...(type !== undefined && { type }),
             ...(notes !== undefined && { notes }),
-            ...(statuses && { statuses: { ...slot.statuses, ...statuses } })
+            ...(mergedStatuses && { statuses: mergedStatuses })
         });
 
         await logActivity(LogCategory.SLOT, "slot.updated", `<principal> updated slot ${slotNumber} in <project>`, {
@@ -215,6 +280,224 @@ router.patch(
         });
 
         res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Move (or emergency-reverse) a card's design between the development & finalising phases - the only
+// path allowed to move design.status across phases, and the only path allowed to set/clear finalApproval
+router.patch(
+    "/:slot/design/status",
+    validateRequest(Permission.APPROVE_CARD_DESIGN),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: {
+            status: Joi.string()
+                .required()
+                .valid(...designStatuses)
+        }
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number; slot: number }, unknown, { status: DesignStatus }, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+        const { status } = req.body;
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Slot #${slotNumber} does not exist for project #${project.number}`
+            );
+        }
+
+        const currentPhase = designPhase[slot.statuses.design.status];
+        const targetPhase = designPhase[status];
+        if (currentPhase === targetPhase) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Design is already at this stage of approval - this sort of status change cannot be submitted this way"
+            );
+        }
+
+        const isFinalising = currentPhase === "development" && targetPhase === "finalising";
+
+        // Same invariant PATCH /:slot enforces - reopening design would strand an already-composited card file
+        if (!isFinalising && slot.statuses.production !== "waiting") {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Design cannot be reopened while production is underway - revert production to Waiting first"
+            );
+        }
+
+        const { principal } = getContext();
+        const updated = await dataService.slots.update({
+            ...slot,
+            statuses: {
+                ...slot.statuses,
+                design: {
+                    ...slot.statuses.design,
+                    status,
+                    finalApproval: isFinalising ? { by: principal.id, at: new Date() } : undefined
+                }
+            }
+        });
+
+        const [card] = await dataService.cards.read({ project: project.number, number: slotNumber, latest: true });
+        await logActivity(
+            LogCategory.SLOT,
+            isFinalising ? "slot.design_approved" : "slot.design_regressed",
+            isFinalising
+                ? "<principal> locked in <card>'s design, marking it for the refinement teams"
+                : `<principal> reopened design on <card>, regressing it from ${slot.statuses.design.status} back to ${status}`,
+            {
+                context: {
+                    project: projectSnapshot(project),
+                    card: cardSnapshot(`${project.number}|${slotNumber}|latest`, card)
+                },
+                severity: isFinalising ? undefined : "warn"
+            }
+        );
+
+        res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Submit (or update) the caller's own release check - upserted by submitter, one live entry per person
+router.patch(
+    "/:slot/design/checks",
+    validateRequest(Permission.SUBMIT_RELEASE_CHECK),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.ReleaseCheck
+    }),
+    loadProjectByNumber,
+    asyncHandler<
+        { number: number; slot: number },
+        unknown,
+        { ready: boolean; categories?: ReleaseCheckCategory[]; note?: string },
+        unknown
+    >(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+        const { ready, categories, note } = req.body;
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Slot #${slotNumber} does not exist for project #${project.number}`
+            );
+        }
+
+        const [latestCard] = await dataService.cards.read({
+            project: project.number,
+            number: slotNumber,
+            latest: true
+        });
+        if (!latestCard) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                `Slot #${slotNumber} does not have a card to check yet`
+            );
+        }
+
+        const { principal } = getContext();
+        const now = new Date();
+        const existingIndex = slot.statuses.design.checks.findIndex((entry) => entry.createdBy === principal.id);
+        const entry: IReleaseCheck =
+            existingIndex === -1
+                ? {
+                      ready,
+                      categories,
+                      note,
+                      version: latestCard.version,
+                      created: now,
+                      createdBy: principal.id,
+                      updated: now,
+                      updatedBy: principal.id
+                  }
+                : {
+                      ...slot.statuses.design.checks[existingIndex],
+                      ready,
+                      categories,
+                      note,
+                      version: latestCard.version,
+                      updated: now,
+                      updatedBy: principal.id
+                  };
+
+        const checks =
+            existingIndex === -1
+                ? [...slot.statuses.design.checks, entry]
+                : slot.statuses.design.checks.map((existing, index) => (index === existingIndex ? entry : existing));
+
+        const updated = await dataService.slots.update({
+            ...slot,
+            statuses: { ...slot.statuses, design: { ...slot.statuses.design, checks } }
+        });
+
+        res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Release-check tally for a slot, measured against everyone able to submit one
+router.get(
+    "/:slot/design/checks/summary",
+    validateRequest(Permission.READ_RELEASE_CHECKS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { number: project, slot: slotNumber } = req.params;
+
+        const [slot] = await dataService.slots.read({ project, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Slot #${slotNumber} does not exist for project #${project}`
+            );
+        }
+
+        const [total, [latestCard]] = await Promise.all([
+            dataService.users.countByPermission(Permission.SUBMIT_RELEASE_CHECK),
+            dataService.cards.read({ project, number: slotNumber, latest: true })
+        ]);
+
+        // Only verdicts against the latest version count; the rest are reported as a subset of pending
+        const { checks } = slot.statuses.design;
+        const current = checks.filter((entry) => !isCheckStale(entry, latestCard?.version));
+        const ready = current.filter((entry) => entry.ready).length;
+        const notReady = current.length - ready;
+
+        const summary: IReleaseCheckSummary = {
+            version: latestCard?.version,
+            ready,
+            notReady,
+            // Clamped, since a submitter can lose the permission after answering
+            pending: Math.max(0, total - current.length),
+            stale: checks.length - current.length,
+            total
+        };
+
+        res.status(StatusCodes.OK).json(summary);
+    })
+);
+
+// Computed card-completeness progress for a slot
+router.get(
+    "/:slot/progress",
+    validateRequest(Permission.READ_STATS_SLOT),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { number: project, slot: slotNumber } = req.params;
+        const progress = await computeCardProgress(project, slotNumber);
+        res.status(StatusCodes.OK).json(progress);
     })
 );
 

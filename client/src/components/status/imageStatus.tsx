@@ -1,4 +1,4 @@
-import { faRotate } from "@fortawesome/free-solid-svg-icons";
+import { faImage, faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
@@ -10,7 +10,7 @@ import { useCardSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 
-export default function ImageStatus({ className, style, project, number, isIconOnly }: ImageStatusProps) {
+export default function ImageStatus({ className, style, project, number, isIconOnly, size }: ImageStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
 
@@ -75,6 +75,7 @@ export default function ImageStatus({ className, style, project, number, isIconO
 
         return {
             title,
+            icon: <FontAwesomeIcon icon={faImage} size="xl" />,
             href: card._metadata.imageUrl,
             longPressOptions,
             color: "success",
@@ -82,7 +83,16 @@ export default function ImageStatus({ className, style, project, number, isIconO
         };
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardImage]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
+    return (
+        <BaseStatus
+            className={className}
+            style={style}
+            isIconOnly={isIconOnly}
+            size={size}
+            data={data}
+            isLoading={isLoading}
+        />
+    );
 }
 
 type ImageStatusProps = Omit<BaseElementProps, "children"> & {
@@ -90,4 +100,5 @@ type ImageStatusProps = Omit<BaseElementProps, "children"> & {
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
+    size?: "sm" | "md" | "lg";
 };

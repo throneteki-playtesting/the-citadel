@@ -15,6 +15,7 @@ import { factions, IPlaytestCard } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter, loadProjectByNumber, buildExpansionRelease } from "@/utils";
 import { ProjectStats } from "common/models/stats";
+import { computeProjectProgress } from "@/services/progressService";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
 import slots from "./slots";
@@ -118,6 +119,19 @@ router.get(
         };
 
         res.status(StatusCodes.OK).json(stats);
+    })
+);
+
+// Computed completeness progress for a project
+router.get(
+    "/:number/progress",
+    validateRequest(Permission.READ_STATS_PROJECT),
+    celebrate({ [Segments.PARAMS]: numberParams }),
+    loadProjectByNumber,
+    validateProjectAccess,
+    asyncHandler(async (_req, res) => {
+        const progress = await computeProjectProgress(res.locals.project as IProject);
+        res.status(StatusCodes.OK).json(progress);
     })
 );
 

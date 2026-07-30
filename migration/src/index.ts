@@ -14,6 +14,7 @@ import { migration as metadataMigration } from "./migrations/005_metadata";
 import { migration as expansionReleasesMigration } from "./migrations/006_expansionReleases";
 import { migration as reviewDeckShapeMigration } from "./migrations/007_reviewDeckShape";
 import { migration as decksMigration } from "./migrations/008_decks";
+import { migration as slotDesignLaneMigration } from "./migrations/009_slotDesignLane";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
@@ -23,7 +24,8 @@ const ALL_MIGRATIONS: Migration[] = [
     metadataMigration,
     expansionReleasesMigration,
     reviewDeckShapeMigration,
-    decksMigration
+    decksMigration,
+    slotDesignLaneMigration
 ];
 
 const args = process.argv.slice(2);

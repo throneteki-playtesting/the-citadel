@@ -41,7 +41,7 @@ import { Release } from "common/models/schemas";
 
 // "released" is excluded - that status is only reached via publishing, never picked here
 const releaseStatuses: { status: IProjectRelease["status"]; description: string }[] = (
-    ["planning", "confirming", "approved"] as const
+    ["planning", "confirming", "approved", "assembling", "proofing"] as const
 ).map((status) => ({ status, description: releaseStatusDescriptions[status] }));
 
 // Every faction is always present in the editor (missing ones at 0), preserving any stored ordering

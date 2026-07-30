@@ -1,5 +1,5 @@
 import { useSearchParams } from "react-router-dom";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 import { useGetRenderJobQuery } from "../api";
 import { CardPreview } from "@agot/card-preview";
 import { IRenderCard } from "common/models/cards";

@@ -1,4 +1,4 @@
-import { UUID } from "crypto";
+import { UUID } from "./models/shared";
 import { Regex } from "./utils";
 import { NoteType } from "./models/cards";
 

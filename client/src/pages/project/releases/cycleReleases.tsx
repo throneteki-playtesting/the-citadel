@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import classNames from "classnames";
 import { addToast, Button, Skeleton, Tooltip } from "@heroui/react";
@@ -194,16 +194,19 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     };
     const closePool = () => setIsPoolOpen(false);
 
-    const toggleReleaseCollapse = (code: string) =>
-        setCollapsedReleases((prev) => {
-            const next = new Set(prev);
-            if (next.has(code)) {
-                next.delete(code);
-            } else {
-                next.add(code);
-            }
-            return next;
-        });
+    const toggleReleaseCollapse = useCallback(
+        (code: string) =>
+            setCollapsedReleases((prev) => {
+                const next = new Set(prev);
+                if (next.has(code)) {
+                    next.delete(code);
+                } else {
+                    next.add(code);
+                }
+                return next;
+            }),
+        []
+    );
 
     const commitMove = useCommitMove(project.number, captureFlip);
 
@@ -231,7 +234,8 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 
         const overIdStr = over ? normalizeDroppableId(String(over.id)) : undefined;
         const overContainer = overIdStr ? findContainer(containers, overIdStr) : undefined;
-        setOverId(overIdStr);
+        // withHover only previews pool arrivals; tracking other hovers re-renders the page for an identical result
+        setOverId(overContainer === POOL_ID ? overIdStr : undefined);
 
         if (overContainer !== lastHoverContainerRef.current) {
             lastHoverContainerRef.current = overContainer;
@@ -386,8 +390,8 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         canDeleteReleases,
         canMoveCapsules,
         isCollapsed: collapsedReleases.has(release.code),
-        onToggleCollapse: () => toggleReleaseCollapse(release.code),
-        onEdit: () => setEditing(release),
+        onToggleCollapse: toggleReleaseCollapse,
+        onEdit: setEditing,
         publishBlockedBy:
             !release.releasedDate && release.code !== nextPublishableCode ? nextPublishableCode : undefined,
         isReorderDragging
@@ -571,6 +575,9 @@ function SizeMatchedDragOverlay({
                 <div className="relative h-full">
                     <CapsuleVisual
                         card={activeCard}
+                        showProgress
+                        showReleaseCheck
+                        hideExtras
                         className={classNames("shadow-lg", isPoolOpen ? "h-full" : "absolute inset-1")}
                     />
                 </div>

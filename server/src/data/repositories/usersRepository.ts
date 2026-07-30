@@ -1,6 +1,7 @@
 ﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { Document, MongoClient } from "mongodb";
 import { Role, User } from "common/models/auth";
+import Permission from "common/models/permissions";
 import { BasicRepository } from "./shared";
 import { SingleOrArray } from "common/types";
 import { logger } from "@/services";
@@ -60,6 +61,23 @@ export default class UsersRepository extends BasicRepository<"user"> {
             .toArray();
 
         return new Map(results.map((result) => [result._id, result.count]));
+    }
+
+    // Mirrors hasPermission's resolution: granted directly, via a role, or to everyone by the guest profile
+    async countByPermission(permission: Permission): Promise<number> {
+        const guestProfile = await this.getGuestProfile();
+        const isDefault =
+            !!guestProfile &&
+            (guestProfile.permissions.includes(permission) ||
+                guestProfile.roles.some((role) => role.permissions.includes(permission)));
+
+        // The guest profile stands in for unauthenticated access, never a person who could answer
+        const notGuest = { discordId: { $ne: "anonymous" } };
+        const filter = isDefault
+            ? notGuest
+            : { ...notGuest, $or: [{ permissions: permission }, { "roles.permissions": permission }] };
+
+        return this.database.collection.countDocuments(filter as Document);
     }
 
     async syncEmbeddedRole(roles: SingleOrArray<Role>) {

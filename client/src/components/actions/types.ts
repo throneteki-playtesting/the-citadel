@@ -14,4 +14,6 @@ export type ActionItem = {
     isDisabled?: boolean;
     isLoading?: boolean;
     keepOpen?: boolean;
+    /** Small numeric badge shown on the action's button; hidden when 0 or undefined. */
+    badge?: number;
 };

@@ -17,7 +17,8 @@ export default function DiscordCardStatus({
     project,
     number,
     version,
-    isIconOnly
+    isIconOnly,
+    size
 }: DiscordCardStatusProps) {
     const { data: card, isLoading } = useGetCardQuery({ project, number, version: version ?? "latest" });
 
@@ -92,7 +93,16 @@ export default function DiscordCardStatus({
         };
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardDiscord]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
+    return (
+        <BaseStatus
+            className={className}
+            style={style}
+            isIconOnly={isIconOnly}
+            size={size}
+            data={data}
+            isLoading={isLoading}
+        />
+    );
 }
 
 type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
@@ -100,4 +110,5 @@ type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
+    size?: "sm" | "md" | "lg";
 };

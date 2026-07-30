@@ -18,7 +18,8 @@ export default function GithubCardStatus({
     project,
     number,
     version,
-    isIconOnly
+    isIconOnly,
+    size
 }: GithubCardStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
@@ -126,7 +127,16 @@ export default function GithubCardStatus({
         return null;
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardGithub]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
+    return (
+        <BaseStatus
+            className={className}
+            style={style}
+            isIconOnly={isIconOnly}
+            size={size}
+            data={data}
+            isLoading={isLoading}
+        />
+    );
 }
 
 type GithubCardStatusProps = Omit<BaseElementProps, "children"> & {
@@ -134,4 +144,5 @@ type GithubCardStatusProps = Omit<BaseElementProps, "children"> & {
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
+    size?: "sm" | "md" | "lg";
 };
