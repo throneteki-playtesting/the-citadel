@@ -7,7 +7,6 @@ import swaggerUi from "swagger-ui-express";
 import j2s from "joi-to-swagger";
 import * as Schemas from "common/models/schemas";
 
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -15,9 +14,10 @@ const router = express.Router();
 
 // Read all API versions based on folder structure in routes/API
 const apiBasePath = path.join(__dirname, "routes", "API");
-const apiVersions = fs.readdirSync(apiBasePath, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => d.name);
+const apiVersions = fs
+    .readdirSync(apiBasePath, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
 
 // Set up spec for each API version
 apiVersions.forEach((apiVersion) => {
@@ -25,13 +25,13 @@ apiVersions.forEach((apiVersion) => {
         definition: {
             openapi: "3.0.3",
             info: {
-                title: "GOT Automation API",
-                description: "Automation for the Global Operations Team for the Game of Thrones Card Game LCG 2nd edition Community",
+                title: "The Citadel API",
+                description: "Playtesting management for the A Game of Thrones: The Card Game (2nd Edition) community",
                 version: apiVersion
             },
-            servers: [ { url: `${process.env.SERVER_HOST}/api/v1` }],
-            consumes: [ "application/json" ],
-            produces: [ "application/json" ],
+            servers: [{ url: `${process.env.SERVER_HOST}/api/v1` }],
+            consumes: ["application/json"],
+            produces: ["application/json"],
             components: {
                 schemas: {
                     card: {
@@ -65,11 +65,7 @@ apiVersions.forEach((apiVersion) => {
         apis: [path.join(apiBasePath, apiVersion, "**", "*.ts")]
     });
 
-    router.use(
-        `/api-docs/${apiVersion}`,
-        swaggerUi.serve,
-        swaggerUi.setup(spec)
-    );
+    router.use(`/api-docs/${apiVersion}`, swaggerUi.serve, swaggerUi.setup(spec));
 });
 
 export default router;

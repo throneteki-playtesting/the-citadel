@@ -1,0 +1,7 @@
+# Revisions to skip in `git blame`.
+# Enable locally with:
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub honours this file automatically.
+
+# Repo-wide Prettier reformat (no behavioural change).
+# Append the commit SHA below once the formatting commit is created.

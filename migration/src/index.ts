@@ -37,11 +37,13 @@ async function main() {
     const destDbName = process.env.DEST_DATABASE_NAME as string;
 
     if (!sourceUrl || !destUrl || !sourceDbName || !destDbName) {
-        log.error("SOURCE_DATABASE_NAME, SOURCE_DATABASE_URL, DEST_DATABASE_NAME and DEST_DATABASE_URL must be set in your .env");
+        log.error(
+            "SOURCE_DATABASE_NAME, SOURCE_DATABASE_URL, DEST_DATABASE_NAME and DEST_DATABASE_URL must be set in your .env"
+        );
         process.exit(1);
     }
 
-    log.section("GoT Automation — MongoDB Migration");
+    log.section("The Citadel — MongoDB Migration");
     if (dryRun) log.warn("--dry-run: no data will be written");
     if (resolveUsersOnly) log.info("--resolve-users: only reviews migration will run");
 
@@ -71,7 +73,9 @@ async function main() {
             if (alreadyApplied) {
                 // Re-running is safe: migrated documents are replaced in place (matched on natural
                 // keys) and dest-only documents are untouched — but we still skip by default.
-                log.info(`Skipping "${migration.name}" (already applied) — use --dry-run to preview or clear _migrations to re-run`);
+                log.info(
+                    `Skipping "${migration.name}" (already applied) — use --dry-run to preview or clear _migrations to re-run`
+                );
                 continue;
             }
 
@@ -96,7 +100,6 @@ async function main() {
 
         log.section("Done");
         log.success(dryRun ? "Dry run complete — no data was written" : "All pending migrations complete");
-
     } finally {
         await sourceClient.close();
         await destClient.close();
@@ -104,7 +107,7 @@ async function main() {
     }
 }
 
-main().catch(err => {
+main().catch((err) => {
     log.error("Unexpected error", err);
     process.exit(1);
 });

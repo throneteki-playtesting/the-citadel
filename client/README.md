@@ -1,69 +1,28 @@
-# React + TypeScript + Vite
+# client
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Citadel's frontend: a React 19 + Vite single-page app, styled with HeroUI and Tailwind 4, with Redux
+Toolkit Query for data fetching and React Router 7 for routing.
 
-Currently, two official plugins are available:
+See the [root README](../README.md) for setup, environment variables and how to run the full stack.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Scripts
 
-## Expanding the ESLint configuration
+| Script            | What it does                                                                     |
+| ----------------- | -------------------------------------------------------------------------------- |
+| `npm run dev`     | Vite dev server on `:5173`, proxying `/api`, `/auth` and `/thronesdb` to the API |
+| `npm run build`   | Type-checks (`tsc -b`) and builds to `dist/`                                     |
+| `npm run preview` | Serves the built output                                                          |
+| `npm run start`   | Serves `dist/` with `serve` (used by the Docker image)                           |
+| `npm run lint`    | ESLint                                                                           |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+`npm run build` fails unless `VITE_SENTRY_DSN` is set — see [`.env.example`](.env.example).
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Notes
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Shared models and helpers come from [`common/`](../common/) via the `common/*` TypeScript path alias, not
+  an npm dependency, so changes there apply without a rebuild.
+- Card rendering uses [`@agot/card-preview`](https://www.npmjs.com/package/@agot/card-preview), whose source
+  lives in [`@agotCardPreview/`](../@agotCardPreview/). It is excluded from Vite's dep optimisation and React
+  is deduped, so a `file:`-linked copy during library development doesn't end up with two React instances.
+- Routes are declared in [`src/pages/index.tsx`](src/pages/index.tsx) as `navItems`, which drives both the
+  router and the navigation menu. Each entry carries the permission required to see it.
