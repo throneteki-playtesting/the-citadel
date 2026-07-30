@@ -549,7 +549,7 @@ function ReadOnlyReleaseCheck({ entry, latestVersion }: { entry?: IReleaseCheck;
                     "flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium",
                     entry.ready
                         ? "border-success/40 bg-success/10 text-success"
-                        : "border-default-400/40 bg-default-100 text-foreground/70",
+                        : "border-warning/40 bg-warning/10 text-warning",
                     isStale && "opacity-50"
                 )}
             >

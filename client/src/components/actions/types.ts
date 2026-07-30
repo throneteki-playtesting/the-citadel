@@ -16,4 +16,8 @@ export type ActionItem = {
     keepOpen?: boolean;
     /** Small numeric badge shown on the action's button; hidden when 0 or undefined. */
     badge?: number;
+    /** Groups the item into the leading status section, divided from the actions beneath it. */
+    isStatus?: boolean;
+    /** Leaves the item out of the desktop button group - for statuses with their own desktop rendering. */
+    isDropdownOnly?: boolean;
 };

@@ -14,7 +14,7 @@ const artworkStatusMap: Record<string, string> = {
 
 // Old production vocabulary -> new; the old lane had no middle stage, so nothing lands on "compositing"
 const productionStatusMap: Record<string, string> = {
-    pending: "pending",
+    pending: "waiting",
     filed: "complete"
 };
 
@@ -70,7 +70,7 @@ export const migration: Migration = {
                                     })
                                 },
                                 artwork: { status: artworkStatusMap[artwork] ?? "pending" },
-                                production: productionStatusMap[production] ?? "pending"
+                                production: productionStatusMap[production] ?? "waiting"
                             }
                         }
                     }

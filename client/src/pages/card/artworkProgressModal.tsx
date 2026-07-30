@@ -80,7 +80,7 @@ export default function ArtworkProgressModal({ isOpen, onClose, project, number 
                             <StatusStepDetail steps={steps} selectedKey={status} />
                             <Select
                                 label="Type"
-                                isDisabled={!canEdit}
+                                isDisabled={!isPickable}
                                 selectedKeys={type ? [type] : []}
                                 onSelectionChange={(keys) => setType([...keys][0] as ArtworkType | undefined)}
                             >

@@ -20,15 +20,24 @@ import Error from "../../components/error";
 import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
 import Watermark from "../../components/watermark";
+import ProgressRing from "../../components/progressRing";
+import CardProgressBreakdown from "../../components/cardProgressBreakdown";
+import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
+import { usePermission } from "../../hooks/usePermission";
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
     name: "Card Name",
     reviews: "Fewest Reviews",
-    priority: "Testing Priority"
+    priority: "Testing Priority",
+    progress: "Progress"
 };
 
 const REORDER_TRANSITION = { duration: 0.4, ease: [0.65, 0, 0.35, 1] } as const;
+
+// Shared by the sort-specific badges pinned to a card's bottom-right corner
+const CORNER_BADGE_CLASS =
+    "absolute bottom-0 right-0 m-2 z-10 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100";
 
 function compareByReviews(cardStats: Map<number, CardStats>, a: IPlaytestCard, b: IPlaytestCard) {
     const statA = cardStats.get(a.number) ?? { latest: 0, total: 0 };
@@ -46,12 +55,20 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     const [isSorting, startSorting] = useTransition();
     const { state } = useLocation();
 
+    // Progress lives on the slots, so sorting by it is only offered to those able to read either
+    const canReadSlots = usePermission(Permission.READ_SLOTS);
+    const canReadProgress = usePermission(Permission.READ_STATS_SLOT) && canReadSlots;
+    const availableSortOptions = useMemo(
+        () => Object.entries(sortOptions).filter(([key]) => key !== "progress" || canReadProgress),
+        [canReadProgress]
+    );
+
     useEffect(() => {
         const sort = state?.sortBy as SortOption;
-        if (sort && sortOptions[sort]) {
+        if (sort && availableSortOptions.some(([key]) => key === sort)) {
             startSorting(() => setSortBy(sort));
         }
-    }, [state]);
+    }, [state, availableSortOptions]);
 
     const cardStats = useMemo(() => {
         const cardsByNumber = new Map(data?.items.map((card) => [card.number, card]) ?? []);
@@ -94,6 +111,17 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         return map;
     }, [slotsData?.items, releasesByCode]);
 
+    const cardProgress = useMemo(() => {
+        const map = new Map<number, CardLaneBreakdown>();
+        if (!canReadProgress) {
+            return map;
+        }
+        for (const slot of slotsData?.items ?? []) {
+            map.set(slot.number, cardLaneBreakdown(slot.statuses));
+        }
+        return map;
+    }, [slotsData?.items, canReadProgress]);
+
     const cardsByFaction = useMemo(() => {
         const map = new Map<Faction, IPlaytestCard[]>();
         for (const card of data?.items ?? []) {
@@ -116,13 +144,19 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                     return releaseA ? -1 : 1;
                 }
                 return compareByReviews(cardStats, a, b);
+            },
+            // Most complete first, so the cards closest to release lead the carousel
+            progress: (a, b) => {
+                const pctA = cardProgress.get(a.number)?.overall ?? 0;
+                const pctB = cardProgress.get(b.number)?.overall ?? 0;
+                return pctB - pctA || a.number - b.number;
             }
         };
         for (const cards of map.values()) {
             cards.sort(comparators[sortBy]);
         }
         return map;
-    }, [data?.items, cardStats, cardReleases, sortBy]);
+    }, [data?.items, cardStats, cardReleases, cardProgress, sortBy]);
 
     if (!isLoading && !data) {
         return (
@@ -147,7 +181,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                     disallowEmptySelection
                     isDisabled={isLoading}
                 >
-                    {Object.entries(sortOptions).map(([key, label]) => (
+                    {availableSortOptions.map(([key, label]) => (
                         <SelectItem key={key} className="font-cinzel">
                             {label}
                         </SelectItem>
@@ -175,9 +209,11 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             cards={cards}
                             cardStats={cardStats}
                             cardReleases={cardReleases}
+                            cardProgress={cardProgress}
                             nextReleaseCode={nextReleaseCode}
                             sortBy={sortBy}
                             showReviewBadge={sortBy === "reviews"}
+                            showProgressBadge={sortBy === "progress"}
                             isLoadingReviews={isLoadingReviews || !reviewsData}
                         />
                     ))}
@@ -188,7 +224,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 }
 
 type ProjectContentProps = { project: IProject };
-type SortOption = "number" | "name" | "reviews" | "priority";
+type SortOption = "number" | "name" | "reviews" | "priority" | "progress";
 type CardStats = { latest: number; total: number };
 
 function FactionCarousel({
@@ -196,9 +232,11 @@ function FactionCarousel({
     cards,
     cardStats,
     cardReleases,
+    cardProgress,
     nextReleaseCode,
     sortBy,
     showReviewBadge,
+    showProgressBadge,
     isLoadingReviews
 }: FactionCarouselProps) {
     const percent = useMemo(() => {
@@ -263,10 +301,12 @@ function FactionCarousel({
                                     card={card}
                                     stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
                                     release={cardReleases.get(card.number)}
+                                    progress={cardProgress.get(card.number)}
                                     isNextRelease={
                                         !!nextReleaseCode && cardReleases.get(card.number)?.code === nextReleaseCode
                                     }
                                     showReviewBadge={showReviewBadge}
+                                    showProgressBadge={showProgressBadge}
                                 />
                             </PermissionedLink>
                         </motion.div>
@@ -281,9 +321,11 @@ type FactionCarouselProps = {
     cards: IPlaytestCard[];
     cardStats: Map<number, CardStats>;
     cardReleases: Map<number, IProjectRelease>;
+    cardProgress: Map<number, CardLaneBreakdown>;
     nextReleaseCode?: string;
     sortBy: SortOption;
     showReviewBadge: boolean;
+    showProgressBadge: boolean;
     isLoadingReviews: boolean;
 };
 
@@ -316,8 +358,10 @@ const ProjectContentCard = memo(function ProjectContentCard({
     card,
     stats,
     release,
+    progress,
     isNextRelease,
-    showReviewBadge
+    showReviewBadge,
+    showProgressBadge
 }: ProjectContentCardProps) {
     const navigate = useNavigate();
     const { data: draftData } = useGetCardsQuery({
@@ -393,8 +437,19 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     </TouchTooltip>
                 )}
             </div>
+            {showProgressBadge && progress && (
+                <div className={CORNER_BADGE_CLASS}>
+                    <TouchTooltip content={<CardProgressBreakdown progress={progress} />}>
+                        <ProgressRing value={progress.overall} className="size-9">
+                            <div className="flex items-center justify-center size-7 rounded-full bg-black/60 text-[0.6rem] font-bold text-primary">
+                                {Math.round(progress.overall)}%
+                            </div>
+                        </ProgressRing>
+                    </TouchTooltip>
+                </div>
+            )}
             {showReviewBadge && stats && (
-                <div className="absolute bottom-0 right-0 m-2 z-10 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100">
+                <div className={CORNER_BADGE_CLASS}>
                     <TouchTooltip
                         content={
                             <div className="max-w-64 px-1 py-0.5">
@@ -433,6 +488,8 @@ type ProjectContentCardProps = {
     card: IPlaytestCard;
     stats?: CardStats;
     release?: IProjectRelease;
+    progress?: CardLaneBreakdown;
     isNextRelease?: boolean;
     showReviewBadge: boolean;
+    showProgressBadge: boolean;
 };

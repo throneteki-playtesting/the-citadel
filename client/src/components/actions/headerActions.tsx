@@ -1,4 +1,13 @@
-import { Button, ButtonGroup, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
+import {
+    Button,
+    ButtonGroup,
+    Chip,
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
+    DropdownSection,
+    DropdownTrigger
+} from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import { useMemo } from "react";
@@ -22,8 +31,34 @@ function openItem(item: ActionItem) {
     }
 }
 
+function renderDropdownItem(item: ActionItem) {
+    return (
+        <DropdownItem
+            key={item.key}
+            color={item.color}
+            description={item.description}
+            // Icons vary in width (brand glyphs, spinners, plain text), so they share a centred column
+            startContent={<span className="min-w-6 flex items-center justify-center">{item.icon}</span>}
+            endContent={
+                item.badge ? (
+                    <Chip size="sm" variant="flat" color="secondary">
+                        {item.badge}
+                    </Chip>
+                ) : undefined
+            }
+            closeOnSelect={!item.keepOpen}
+        >
+            {item.title}
+        </DropdownItem>
+    );
+}
+
 export default function HeaderActions({ items, className }: HeaderActionsProps) {
     const resolvedItems = useMemo(() => items.filter((item): item is ActionItem => !!item), [items]);
+    const buttonItems = useMemo(() => resolvedItems.filter((item) => !item.isDropdownOnly), [resolvedItems]);
+    // Statuses read as state rather than as things to do, so the dropdown keeps them in their own section
+    const statusItems = useMemo(() => resolvedItems.filter((item) => item.isStatus), [resolvedItems]);
+    const actionItems = useMemo(() => resolvedItems.filter((item) => !item.isStatus), [resolvedItems]);
 
     if (resolvedItems.length === 0) {
         return null;
@@ -31,8 +66,8 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
 
     return (
         <div className={className}>
-            <ButtonGroup className="hidden sm:flex">
-                {resolvedItems.map((item) => (
+            <ButtonGroup className={classNames("hidden", { "sm:flex": buttonItems.length > 0 })}>
+                {buttonItems.map((item) => (
                     <TouchTooltip
                         key={item.key}
                         content={
@@ -79,24 +114,22 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                             }
                         }}
                     >
-                        {resolvedItems.map((item) => (
-                            <DropdownItem
-                                key={item.key}
-                                color={item.color}
-                                description={item.description}
-                                startContent={item.icon}
-                                endContent={
-                                    item.badge ? (
-                                        <Chip size="sm" variant="flat" color="secondary">
-                                            {item.badge}
-                                        </Chip>
-                                    ) : undefined
-                                }
-                                closeOnSelect={!item.keepOpen}
-                            >
-                                {item.title}
-                            </DropdownItem>
-                        ))}
+                        {[
+                            ...(statusItems.length > 0
+                                ? [
+                                      <DropdownSection key="statuses" showDivider={actionItems.length > 0}>
+                                          {statusItems.map(renderDropdownItem)}
+                                      </DropdownSection>
+                                  ]
+                                : []),
+                            ...(actionItems.length > 0
+                                ? [
+                                      <DropdownSection key="actions">
+                                          {actionItems.map(renderDropdownItem)}
+                                      </DropdownSection>
+                                  ]
+                                : [])
+                        ]}
                     </DropdownMenu>
                 </Dropdown>
             </div>

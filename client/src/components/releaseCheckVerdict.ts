@@ -13,9 +13,9 @@ export const releaseCheckVerdicts = {
     },
     notReady: {
         icon: faX,
-        color: "default",
-        ring: "ring-default-400",
-        staleRing: "ring-default-400/30",
+        color: "warning",
+        ring: "ring-warning",
+        staleRing: "ring-warning/30",
         label: "Not ready to release"
     }
 } as const;

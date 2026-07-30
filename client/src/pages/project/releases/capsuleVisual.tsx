@@ -1,10 +1,9 @@
 import { memo, useRef, useState } from "react";
 import classNames from "classnames";
-import { Divider } from "@heroui/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
-import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
+import { cardLaneBreakdown } from "common/progress/calc";
 import ThronesIcon from "../../../components/thronesIcon";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import { usePermission } from "../../../hooks/usePermission";
@@ -12,7 +11,8 @@ import { useAuth } from "../../../hooks/useAuth";
 import { factionBgClasses, factionBorderClasses } from "../../../constants";
 import ReleaseChecksModal from "../../../components/releaseChecksModal";
 import ReleaseCheckButton from "./releaseCheckButton";
-import CapsuleProgressRing from "./capsuleProgressRing";
+import ProgressRing from "../../../components/progressRing";
+import CardProgressBreakdown from "../../../components/cardProgressBreakdown";
 import { useCapsuleSlot } from "./useCapsuleSlot";
 
 // How far a press may travel and still count as a tap rather than a drag
@@ -91,7 +91,7 @@ function CapsuleVisual({
             >
                 {progress ? (
                     <TouchTooltip
-                        content={<ProgressBreakdown progress={progress} />}
+                        content={<CardProgressBreakdown progress={progress} />}
                         size="sm"
                         delay={0}
                         closeDelay={0}
@@ -101,9 +101,9 @@ function CapsuleVisual({
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                         >
-                            <CapsuleProgressRing value={progress.overall} ringClassName={extrasClass}>
+                            <ProgressRing value={progress.overall} ringClassName={extrasClass}>
                                 {typeIcon}
-                            </CapsuleProgressRing>
+                            </ProgressRing>
                         </span>
                     </TouchTooltip>
                 ) : (
@@ -137,18 +137,6 @@ function CapsuleVisual({
         </>
     );
 }
-function ProgressBreakdown({ progress }: { progress: CardLaneBreakdown }) {
-    return (
-        <div className="flex flex-col gap-0.5 py-1 text-sm font-sans">
-            <div>Design: {Math.round(progress.design)}%</div>
-            <div>Artwork: {Math.round(progress.artwork)}%</div>
-            <div>Production: {Math.round(progress.production)}%</div>
-            <Divider className="my-1" />
-            <div className="font-semibold">Overall: {Math.round(progress.overall)}%</div>
-        </div>
-    );
-}
-
 // Every slot re-renders on each dnd-kit context change, but the capsule's
 // own props hold steady through a drag - so its tooltips and ring stay out of that path
 export default memo(CapsuleVisual);

@@ -1,15 +1,14 @@
 import { ReactNode } from "react";
 import classNames from "classnames";
 
-// Drawn on a 24-unit viewBox, so the ring's geometry is fixed regardless of the icon it surrounds
+// Drawn on a 24-unit viewBox, so the ring's geometry is fixed regardless of what it surrounds
 const RADIUS = 10;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-// Wraps the capsule's card-type icon in a completeness ring, centring the icon absolutely so that
-// surrounding it never changes its rendered size
-export default function CapsuleProgressRing({ value, ringClassName, children }: CapsuleProgressRingProps) {
+// Wraps content in a completeness ring, centring it absolutely so that surrounding it never changes its rendered size
+export default function ProgressRing({ value, className, ringClassName, children }: ProgressRingProps) {
     return (
-        <span className="relative shrink-0 size-6 flex items-center justify-center">
+        <span className={classNames("relative shrink-0 flex items-center justify-center", className ?? "size-6")}>
             <svg
                 viewBox="0 0 24 24"
                 className={classNames("absolute inset-0 size-full -rotate-90", ringClassName)}
@@ -33,9 +32,11 @@ export default function CapsuleProgressRing({ value, ringClassName, children }: 
     );
 }
 
-type CapsuleProgressRingProps = {
+type ProgressRingProps = {
     value: number;
-    /** Applied to the ring alone, so it can be styled without touching the icon it surrounds */
+    /** Sizes the ring and the box it centres its children in; defaults to size-6 */
+    className?: string;
+    /** Applied to the ring alone, so it can be styled without touching what it surrounds */
     ringClassName?: string;
     children: ReactNode;
 };

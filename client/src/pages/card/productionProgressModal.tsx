@@ -20,11 +20,11 @@ export default function ProductionProgressModal({ isOpen, onClose, project, numb
         }
     }, [slot]);
 
-    // Production is downstream - nothing past Pending is selectable without a locked design and finished artwork
+    // Production is downstream - nothing past Waiting is selectable without a locked design and finished artwork
     const prerequisitesMet =
         !!slot && slot.statuses.design.status === "complete" && slot.statuses.artwork.status === "complete";
     const steps = laneSteps(productionLane).map((step) => {
-        const isLocked = step.key !== "pending" && !prerequisitesMet;
+        const isLocked = step.key !== "waiting" && !prerequisitesMet;
         return {
             ...step,
             isDisabled: isLocked,

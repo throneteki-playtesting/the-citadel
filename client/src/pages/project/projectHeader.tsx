@@ -10,6 +10,7 @@ import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectProgressMeter from "./projectProgressMeter";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 
 const ProjectHeader = ({
@@ -74,16 +75,10 @@ const ProjectHeader = ({
                     <HeaderActions
                         items={[
                             canSyncImages &&
-                                imageStatus && {
-                                    key: "sync-images",
-                                    title: imageStatus.title,
-                                    description: imageStatus.description,
-                                    icon: imageStatus.icon,
-                                    color: imageStatus.color,
-                                    onPress: imageStatus.onPress,
+                                statusActionItem("sync-images", imageStatus, {
                                     isLoading: isImageStatusLoading,
                                     keepOpen: true
-                                },
+                                }),
                             canEdit && {
                                 key: "edit",
                                 title: "Edit Project",

@@ -9,7 +9,7 @@ export default function ProductionLockAlert({ lane }: ProductionLockAlertProps) 
             color="warning"
             variant="faded"
             title="Locked while production is underway"
-            description={`This card's file is already being assembled, so its ${cardLanes[lane].heading.toLowerCase()} can no longer be changed. Revert Production back to Pending if this needs another pass.`}
+            description={`This card's file is already being assembled, so its ${cardLanes[lane].heading.toLowerCase()} can no longer be changed. Revert Production back to Waiting if this needs another pass.`}
         />
     );
 }

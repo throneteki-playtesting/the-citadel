@@ -15,7 +15,7 @@ type TouchTooltipProps = TooltipProps & {
     keepOpen?: boolean;
 };
 
-export function TouchTooltip({ onOpenChange, children, keepOpen = false, ...props }: TouchTooltipProps) {
+export function TouchTooltip({ onOpenChange, children, content, keepOpen = false, ...props }: TouchTooltipProps) {
     const [isOpen, setIsOpenState] = useState(false);
     const isOpenRef = useRef(false);
     const isTouchRef = useRef(false);
@@ -85,8 +85,21 @@ export function TouchTooltip({ onOpenChange, children, keepOpen = false, ...prop
         : children;
 
     return (
-        <Tooltip {...props} isOpen={keepOpen || isOpen} onOpenChange={handleTooltipOpenChange}>
+        <Tooltip
+            {...props}
+            content={
+                <span className="contents" onPointerDown={stopBubbling} onClick={stopBubbling}>
+                    {content}
+                </span>
+            }
+            isOpen={keepOpen || isOpen}
+            onOpenChange={handleTooltipOpenChange}
+        >
             {child}
         </Tooltip>
     );
+}
+
+function stopBubbling(event: ReactPointerEvent | ReactMouseEvent) {
+    event.stopPropagation();
 }

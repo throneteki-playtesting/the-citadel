@@ -35,6 +35,10 @@ import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../ut
 import { changeTypeClasses, highlightTarget, releaseStatusColors } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
 import { ActionItem } from "../../components/actions/types";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import { useDiscordCardStatus } from "../../components/status/useDiscordCardStatus";
+import { useGithubCardStatus } from "../../components/status/useGithubCardStatus";
+import { useCardImageStatus } from "../../components/status/useCardImageStatus";
 import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
 import CardProgress from "./cardProgress";
@@ -396,8 +400,8 @@ type CardVersionsProps = Omit<BaseElementProps, "children"> & {
     number: number;
 };
 
-// Header row: the card-state icons plus Release Checks and Submit Review, with the state icons
-// floating as bubbles on mobile. Draft actions live over the card stack instead.
+// Header row: the card-state icons plus Release Checks and Submit Review. On mobile the state icons
+// fold into the actions dropdown, above its divider. Draft actions live over the card stack instead.
 function ButtonSection({ className, style, project: projectNumber, number }: ButtonSectionProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const navigate = useNavigate();
@@ -425,30 +429,29 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const isReleased = !!(latest && latest.released);
     const feedbackCount = slot?.statuses.design.checks.length ?? 0;
 
-    const statusButtons = (bubbleClass?: string, size?: "sm" | "md" | "lg") => (
-        <>
-            <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
-                <DiscordCardStatus
-                    project={projectNumber}
-                    number={number}
-                    isIconOnly
-                    className={bubbleClass}
-                    size={size}
-                />
-            </PermissionGate>
-            <GithubCardStatus project={projectNumber} number={number} isIconOnly className={bubbleClass} size={size} />
-            <ImageStatus project={projectNumber} number={number} isIconOnly className={bubbleClass} size={size} />
-        </>
-    );
+    // The same statuses the desktop icon row renders, as dropdown entries for mobile
+    const canReadDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);
+    const { data: discordStatus } = useDiscordCardStatus(projectNumber, number);
+    const { data: githubStatus } = useGithubCardStatus(projectNumber, number);
+    const { data: imageStatus } = useCardImageStatus(projectNumber, number);
+    const statusItems = [
+        canReadDiscord && statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
+        statusActionItem("github-status", githubStatus, { isDropdownOnly: true }),
+        statusActionItem("image-status", imageStatus, { isDropdownOnly: true })
+    ];
 
     return (
         <div className={classNames("flex items-center gap-1.5", className)} style={style}>
-            <div className="hidden sm:flex items-center gap-1.5">{statusButtons()}</div>
-            <div className="sm:hidden fixed bottom-6 right-20 z-20 flex items-center gap-2">
-                {statusButtons("rounded-full shadow-lg", "lg")}
+            <div className="hidden sm:flex items-center gap-1.5">
+                <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                    <DiscordCardStatus project={projectNumber} number={number} isIconOnly />
+                </PermissionGate>
+                <GithubCardStatus project={projectNumber} number={number} isIconOnly />
+                <ImageStatus project={projectNumber} number={number} isIconOnly />
             </div>
             <HeaderActions
                 items={[
+                    ...statusItems,
                     canReadFeedback && {
                         key: "release-checks",
                         title: "Release Checks",

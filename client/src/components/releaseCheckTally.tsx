@@ -51,7 +51,7 @@ export default function ReleaseCheckTally({
                 <span className="flex items-center gap-1 text-success">
                     <FontAwesomeIcon icon={faCheck} /> {data.ready} ready
                 </span>
-                <span className="flex items-center gap-1 text-foreground/70">
+                <span className="flex items-center gap-1 text-warning">
                     <FontAwesomeIcon icon={faXmark} /> {data.notReady} not ready
                 </span>
                 {data.total > 0 && (
