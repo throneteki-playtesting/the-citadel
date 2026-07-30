@@ -5,7 +5,17 @@ import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCirclePlus } from "@fortawesome/free-solid-svg-icons";
 
-const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientation = "horizontal", triggerContent, classNames: classGroups, styles: styleGroups }: RadialMenuProps) => {
+const RadialMenu = ({
+    className,
+    style,
+    children,
+    isOpen,
+    onOpenChange,
+    orientation = "horizontal",
+    triggerContent,
+    classNames: classGroups,
+    styles: styleGroups
+}: RadialMenuProps) => {
     const [isActive, setIsActive] = useState(isOpen ?? false);
 
     useEffect(() => {
@@ -27,7 +37,7 @@ const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientat
                     isActive ? "text-2xl md:text-3xl lg:text-4xl rotate-45" : "text-5xl md:text-6xl lg:text-7xl",
                     classGroups?.button
                 )}
-                onPress={() => onOpenChange ? onOpenChange(!isActive) : setIsActive(!isActive)}
+                onPress={() => (onOpenChange ? onOpenChange(!isActive) : setIsActive(!isActive))}
                 style={styleGroups?.button}
             >
                 <FontAwesomeIcon icon={faCirclePlus} />
@@ -35,12 +45,15 @@ const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientat
         );
     }, [classGroups?.button, isActive, onOpenChange, styleGroups?.button, triggerContent]);
 
-    const angleCalc = useCallback((index: number, total: number) => {
-        if (orientation === "horizontal") {
-            return (index * 2 * Math.PI) / total + Math.PI;
-        }
-        return (index * 2 * Math.PI) / total - Math.PI / 2;
-    }, [orientation]);
+    const angleCalc = useCallback(
+        (index: number, total: number) => {
+            if (orientation === "horizontal") {
+                return (index * 2 * Math.PI) / total + Math.PI;
+            }
+            return (index * 2 * Math.PI) / total - Math.PI / 2;
+        },
+        [orientation]
+    );
 
     const items = useMemo(() => {
         const activeItems: ReactNode[] = [];
@@ -64,9 +77,7 @@ const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientat
                         opacity: isActive ? 1 : 0
                     }}
                 >
-                    <div className={isActive ? "pointer-events-auto" : "pointer-events-none"}>
-                        {item}
-                    </div>
+                    <div className={isActive ? "pointer-events-auto" : "pointer-events-none"}>{item}</div>
                 </div>
             );
         });
@@ -77,7 +88,14 @@ const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientat
     }
 
     return (
-        <div className={classNames("relative flex items-center justify-center [container-type:size] w-16 h-16", className, classGroups?.wrapper)} style={{ ...style, ...styleGroups?.wrapper }}>
+        <div
+            className={classNames(
+                "relative flex items-center justify-center [container-type:size] w-16 h-16",
+                className,
+                classGroups?.wrapper
+            )}
+            style={{ ...style, ...styleGroups?.wrapper }}
+        >
             {trigger}
             {items}
         </div>
@@ -87,10 +105,10 @@ const RadialMenu = ({ className, style, children, isOpen, onOpenChange, orientat
 export default RadialMenu;
 
 type RadialMenuProps = BaseElementProps & {
-    isOpen?: boolean,
-    onOpenChange?: (isOpen: boolean) => void,
-    orientation?: "horizontal" | "vertical",
-    triggerContent?: ReactNode,
-    classNames?: { wrapper?: string, button?: string },
-    styles?: { wrapper?: CSSProperties, button?: CSSProperties }
-}
+    isOpen?: boolean;
+    onOpenChange?: (isOpen: boolean) => void;
+    orientation?: "horizontal" | "vertical";
+    triggerContent?: ReactNode;
+    classNames?: { wrapper?: string; button?: string };
+    styles?: { wrapper?: CSSProperties; button?: CSSProperties };
+};

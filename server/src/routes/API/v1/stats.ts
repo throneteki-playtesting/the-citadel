@@ -19,7 +19,8 @@ function daysAgo(days: number): Date {
 }
 
 // Read sitewide stats
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_STATS_GLOBAL),
     asyncHandler(async (_req, res) => {
         const activeProjects = await dataService.projects.read({ active: true });
@@ -27,14 +28,21 @@ router.get("/",
 
         const [changedCards, testingCards, reviews, activeUsersTotal] = await Promise.all([
             projectNumbers.length > 0
-                ? dataService.cards.read(projectNumbers.map((project) => ({ project, latest: true, updated: { $gte: daysAgo(CARD_CHANGE_DAY_RANGE) }, note: { $exists: true } })))
+                ? dataService.cards.read(
+                      projectNumbers.map((project) => ({
+                          project,
+                          latest: true,
+                          updated: { $gte: daysAgo(CARD_CHANGE_DAY_RANGE) },
+                          note: { $exists: true }
+                      }))
+                  )
                 : [],
             projectNumbers.length > 0
-                ? dataService.cards.read(projectNumbers.map((project) => ({ project, latest: true, released: { $exists: false } })))
+                ? dataService.cards.read(
+                      projectNumbers.map((project) => ({ project, latest: true, released: { $exists: false } }))
+                  )
                 : [],
-            projectNumbers.length > 0
-                ? dataService.reviews.read(projectNumbers.map((project) => ({ project })))
-                : [],
+            projectNumbers.length > 0 ? dataService.reviews.read(projectNumbers.map((project) => ({ project }))) : [],
             dataService.users.count({ lastLogin: { $gte: daysAgo(ACTIVE_USER_DAY_RANGE) } })
         ]);
 

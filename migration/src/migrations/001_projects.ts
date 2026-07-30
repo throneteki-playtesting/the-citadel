@@ -73,13 +73,16 @@ export const migration: Migration = {
             return;
         }
 
-        let upserted = 0, modified = 0;
+        let upserted = 0,
+            modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
             const batch = ops.slice(i, i + BATCH_SIZE);
             const result = await dest.bulkWrite(batch as any, { ordered: false });
             upserted += result.upsertedCount;
             modified += result.modifiedCount;
-            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
+            log.info(
+                `Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`
+            );
         }
 
         await dest.dropIndex("number_1").catch(() => undefined);

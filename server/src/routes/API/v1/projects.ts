@@ -31,21 +31,23 @@ const numberParams = {
     number: Joi.number().required()
 };
 
-const validateProjectQueryPermission = asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(async (req, _res, next) => {
-    const { principal } = getContext();
+const validateProjectQueryPermission = asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(
+    async (req, _res, next) => {
+        const { principal } = getContext();
 
-    if (hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)) {
-        return next();
+        if (hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)) {
+            return next();
+        }
+
+        const filters = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter];
+        if (filters.some((f) => f?.active === false)) {
+            throw new PermissionErrorResponse();
+        }
+
+        req.query.filter = applyToFilter(req.query.filter, { active: true });
+        next();
     }
-
-    const filters = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter];
-    if (filters.some(f => f?.active === false)) {
-        throw new PermissionErrorResponse();
-    }
-
-    req.query.filter = applyToFilter(req.query.filter, { active: true });
-    next();
-});
+);
 
 async function getProjects(
     filter: IGetRequest<IProject>["filter"],
@@ -60,13 +62,11 @@ async function getProjects(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.Project.Full,
-    { created: "desc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.Project.Full, { created: "desc" });
 
 // Read projects
-router.get("/",
+router.get(
+    "/",
     celebrate({
         [Segments.QUERY]: getQuerySchema
     }),
@@ -79,7 +79,8 @@ router.get("/",
 );
 
 // Read project by number
-router.get("/:number",
+router.get(
+    "/:number",
     celebrate({
         [Segments.PARAMS]: numberParams,
         [Segments.QUERY]: getQuerySchema
@@ -92,7 +93,8 @@ router.get("/:number",
 );
 
 // Read project stats
-router.get("/:number/stats",
+router.get(
+    "/:number/stats",
     validateRequest(Permission.READ_STATS_PROJECT),
     celebrate({ [Segments.PARAMS]: numberParams }),
     loadProjectByNumber,
@@ -120,7 +122,8 @@ router.get("/:number/stats",
 );
 
 // Create project
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.CREATE_PROJECTS),
     celebrate({
         [Segments.BODY]: Schemas.Project.Draft
@@ -129,7 +132,11 @@ router.post("/",
         const { number, name, code } = req.body;
         const [existing] = await dataService.projects.read([{ number }, { name }, { code }]);
         if (existing) {
-            throw new ApiErrorResponse(StatusCodes.CONFLICT, "Already Exists", "Project with that number, name or code already exists");
+            throw new ApiErrorResponse(
+                StatusCodes.CONFLICT,
+                "Already Exists",
+                "Project with that number, name or code already exists"
+            );
         }
         next();
     }),
@@ -139,31 +146,37 @@ router.post("/",
         body.releases = [];
         const project = await dataService.projects.create(body);
 
-        await logActivity(
-            LogCategory.PROJECT,
-            "project.created",
-            "<principal> created project <project>",
-            { context: { project: projectSnapshot(project) } }
-        );
+        await logActivity(LogCategory.PROJECT, "project.created", "<principal> created project <project>", {
+            context: { project: projectSnapshot(project) }
+        });
 
         res.status(StatusCodes.OK).json(project);
     })
 );
 
 // Initialise drafted project
-router.post("/:number/initialise",
+router.post(
+    "/:number/initialise",
     validateRequest(Permission.INITIALISE_PROJECTS),
     celebrate({ [Segments.PARAMS]: numberParams }),
     loadProjectByNumber,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (!project.draft) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Only draft projects can be initialised");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Only draft projects can be initialised"
+            );
         }
         const cards = await dataService.cards.read({ project: project.number });
         const totalSlots = await dataService.slots.count({ project: project.number });
         if (cards.length < totalSlots) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Card Slots", "Project is missing cards for allocated slots; either provide cards, or adjust card slots");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Card Slots",
+                "Project is missing cards for allocated slots; either provide cards, or adjust card slots"
+            );
         }
         res.locals.cards = cards;
         next();
@@ -213,19 +226,18 @@ router.post("/:number/initialise",
             await dataService.suggestions.update(suggestions);
         }
 
-        await logActivity(
-            LogCategory.PROJECT,
-            "project.initialised",
-            "<principal> initialised project <project>",
-            { context: { project: projectSnapshot(project) }, severity: "warn" }
-        );
+        await logActivity(LogCategory.PROJECT, "project.initialised", "<principal> initialised project <project>", {
+            context: { project: projectSnapshot(project) },
+            severity: "warn"
+        });
 
         res.status(StatusCodes.OK).json({ project, cards: newCards });
     })
 );
 
 // Update project
-router.put("/:number",
+router.put(
+    "/:number",
     validateRequest(Permission.EDIT_PROJECTS),
     celebrate({
         [Segments.PARAMS]: numberParams,
@@ -240,7 +252,11 @@ router.put("/:number",
 
         const [previous] = await dataService.projects.read({ number: project.number });
         if (!previous.draft && !previous.active) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Archived projects cannot be edited");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Archived projects cannot be edited"
+            );
         }
         // cardCount & releases are server-maintained caches (kept in sync via the slots/releases endpoints) -
         // never trust or overwrite them from a general project edit body
@@ -255,26 +271,28 @@ router.put("/:number",
             project = await dataService.projects.update(project);
         }
 
-        await logActivity(
-            LogCategory.PROJECT,
-            "project.updated",
-            "<principal> updated project <project>",
-            { context: { project: projectSnapshot(project) } }
-        );
+        await logActivity(LogCategory.PROJECT, "project.updated", "<principal> updated project <project>", {
+            context: { project: projectSnapshot(project) }
+        });
 
         res.status(StatusCodes.OK).json(project);
     })
 );
 
 // Delete draft project
-router.delete("/:number",
+router.delete(
+    "/:number",
     validateRequest(Permission.DELETE_PROJECTS),
     celebrate({ [Segments.PARAMS]: numberParams }),
     loadProjectByNumber,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (!project.draft) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Active projects cannot be deleted, only archived");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Active projects cannot be deleted, only archived"
+            );
         }
         next();
     }),
@@ -287,26 +305,29 @@ router.delete("/:number",
         await dataService.cards.destroy({ project: number });
         await dataService.slots.destroy({ project: number });
 
-        await logActivity(
-            LogCategory.PROJECT,
-            "project.deleted",
-            "<principal> deleted project <project>",
-            { context: { project: projectSnapshot(deleted) }, severity: "warn" }
-        );
+        await logActivity(LogCategory.PROJECT, "project.deleted", "<principal> deleted project <project>", {
+            context: { project: projectSnapshot(deleted) },
+            severity: "warn"
+        });
 
         res.status(StatusCodes.OK).json(deleted);
     })
 );
 
 // Archive active project
-router.post("/:number/archive",
+router.post(
+    "/:number/archive",
     validateRequest(Permission.ARCHIVE_PROJECTS),
     celebrate({ [Segments.PARAMS]: numberParams }),
     loadProjectByNumber,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (project.draft) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Draft projects cannot be archived, only deleted");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Draft projects cannot be archived, only deleted"
+            );
         }
         if (!project.active) {
             throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Project is already archived");
@@ -319,19 +340,18 @@ router.post("/:number/archive",
 
         project = await dataService.projects.update(project);
 
-        await logActivity(
-            LogCategory.PROJECT,
-            "project.archived",
-            "<principal> archived project <project>",
-            { context: { project: projectSnapshot(project) }, severity: "warn" }
-        );
+        await logActivity(LogCategory.PROJECT, "project.archived", "<principal> archived project <project>", {
+            context: { project: projectSnapshot(project) },
+            severity: "warn"
+        });
 
         res.status(StatusCodes.OK).json(project);
     })
 );
 
 // Sync project card images
-router.post("/:number/sync/image",
+router.post(
+    "/:number/sync/image",
     validateRequest(Permission.SYNC_CARD_IMAGES),
     celebrate({
         [Segments.PARAMS]: numberParams,
@@ -343,7 +363,12 @@ router.post("/:number/sync/image",
         }
     }),
     loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, { number?: number, version?: SemanticVersion, latest?: boolean, forced?: boolean }>(async (req, res) => {
+    asyncHandler<
+        { number: number },
+        unknown,
+        unknown,
+        { number?: number; version?: SemanticVersion; latest?: boolean; forced?: boolean }
+    >(async (req, res) => {
         const project = res.locals.project as IProject;
         const { number, version, latest, forced } = req.query;
         let cards = await dataService.cards.read({ project: project.number, number, version, latest });

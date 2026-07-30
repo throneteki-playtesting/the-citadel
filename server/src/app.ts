@@ -20,10 +20,12 @@ import { checkPermissionDependencies } from "./startup/checkPermissionDependenci
 const app = express();
 
 // Register global middleware
-app.use(cors({
-    origin: process.env.CLIENT_HOST,
-    credentials: true
-}));
+app.use(
+    cors({
+        origin: process.env.CLIENT_HOST,
+        credentials: true
+    })
+);
 app.use(partials());
 app.use(express.json());
 app.use(cookieParser());

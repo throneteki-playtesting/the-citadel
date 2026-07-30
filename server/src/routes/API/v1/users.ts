@@ -31,39 +31,40 @@ async function getUsers(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.User.Full,
-    { displayname: "asc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.User.Full, { displayname: "asc" });
 
 // Fetch current user (for client)
-router.get("/me",
-    (_req, res) => {
-        const context = getContext();
-        if (context.source !== "client") {
-            res.status(StatusCodes.OK).json(null);
-            return;
-        }
+router.get("/me", (_req, res) => {
+    const context = getContext();
+    if (context.source !== "client") {
+        res.status(StatusCodes.OK).json(null);
+        return;
+    }
 
-        const { principal, realPrincipal, impersonating } = context;
-        const response: MeResponse = { ...principal };
-        if (impersonating) {
-            const target = impersonating === "role"
+    const { principal, realPrincipal, impersonating } = context;
+    const response: MeResponse = { ...principal };
+    if (impersonating) {
+        const target =
+            impersonating === "role"
                 ? { id: principal.roles[0].discordId, name: principal.roles[0].name, color: principal.roles[0].color }
                 : { id: principal.discordId, name: principal.displayname, avatarUrl: principal.avatarUrl };
-            response.impersonation = {
-                type: impersonating,
-                target,
-                realUser: { id: realPrincipal.discordId, name: realPrincipal.displayname, avatarUrl: realPrincipal.avatarUrl }
-            };
-        }
-
-        res.status(StatusCodes.OK).json(response);
+        response.impersonation = {
+            type: impersonating,
+            target,
+            realUser: {
+                id: realPrincipal.discordId,
+                name: realPrincipal.displayname,
+                avatarUrl: realPrincipal.avatarUrl
+            }
+        };
     }
-);
+
+    res.status(StatusCodes.OK).json(response);
+});
 
 // Read users
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_USERS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<User>>(async (req, res) => {
@@ -74,8 +75,11 @@ router.get("/",
 );
 
 // Read user by discordId
-router.get("/:discordId",
-    validateRequest((principal) => hasPermission(principal, Permission.READ_USER) || hasPermission(principal, Permission.READ_USERS)),
+router.get(
+    "/:discordId",
+    validateRequest(
+        (principal) => hasPermission(principal, Permission.READ_USER) || hasPermission(principal, Permission.READ_USERS)
+    ),
     celebrate({ [Segments.PARAMS]: { discordId: Joi.string().required() } }),
     asyncHandler<{ discordId: string }, unknown, unknown, unknown>(async (req, res) => {
         const { discordId } = req.params;
@@ -95,7 +99,8 @@ router.get("/:discordId",
 );
 
 // Update user
-router.put("/:discordId",
+router.put(
+    "/:discordId",
     validateRequest(Permission.EDIT_USERS),
     validatePermissionDependencies(),
     celebrate({ [Segments.BODY]: Schemas.User.Full }),
@@ -110,12 +115,10 @@ router.put("/:discordId",
             dataService.users.invalidateGuestProfileCache();
         }
 
-        await logActivity(
-            LogCategory.USER,
-            "user.updated",
-            "<principal> updated permissions for <targetUser>",
-            { context: { targetUser: userSnapshot(result) }, details: { updated: result } }
-        );
+        await logActivity(LogCategory.USER, "user.updated", "<principal> updated permissions for <targetUser>", {
+            context: { targetUser: userSnapshot(result) },
+            details: { updated: result }
+        });
 
         res.status(StatusCodes.OK).json(result);
     })

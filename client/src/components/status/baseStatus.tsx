@@ -29,7 +29,17 @@ function buildTracePath(w: number, h: number, sw: number, br: number): string {
     ].join(" ");
 }
 
-export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isIconOnly = false, keepTooltipOpen = false, size, className, style, traceClassName }: BaseStatusProps) {
+export function BaseStatus({
+    isLoading = false,
+    data,
+    longPressDelay = 1000,
+    isIconOnly = false,
+    keepTooltipOpen = false,
+    size,
+    className,
+    style,
+    traceClassName
+}: BaseStatusProps) {
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const lpRef = useRef({ triggered: false, timer: null as ReturnType<typeof setTimeout> | null });
 
@@ -63,10 +73,11 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
         path.style.strokeDasharray = String(length);
         path.style.strokeDashoffset = String(length);
 
-        traceAnimRef.current = path.animate(
-            [{ strokeDashoffset: length }, { strokeDashoffset: 0 }],
-            { duration: longPressDelay, fill: "forwards", easing: "linear" }
-        );
+        traceAnimRef.current = path.animate([{ strokeDashoffset: length }, { strokeDashoffset: 0 }], {
+            duration: longPressDelay,
+            fill: "forwards",
+            easing: "linear"
+        });
     };
 
     const stopTracing = () => {
@@ -113,15 +124,23 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
         onTouchStart: startTimer,
         onTouchEnd: clearTimer,
         onTouchCancel: clearTimer,
-        onContextMenu: (e: React.MouseEvent) => { if (lpRef.current.triggered) e.preventDefault(); }
+        onContextMenu: (e: React.MouseEvent) => {
+            if (lpRef.current.triggered) e.preventDefault();
+        }
     };
 
     const overlayMenu = dropdownOpen ? (
         <>
             <div
                 className="fixed inset-0 z-40"
-                onMouseDown={(e) => { e.stopPropagation(); closeDropdown(); }}
-                onTouchStart={(e) => { e.preventDefault(); closeDropdown(); }}
+                onMouseDown={(e) => {
+                    e.stopPropagation();
+                    closeDropdown();
+                }}
+                onTouchStart={(e) => {
+                    e.preventDefault();
+                    closeDropdown();
+                }}
             />
             <div className="absolute z-50 top-full mt-1 left-0 min-w-max shadow-medium bg-content2 rounded-medium border border-divider overflow-hidden">
                 <Listbox
@@ -187,7 +206,7 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
                 onPressStart={hasLongPress ? startTimer : undefined}
                 onPressEnd={hasLongPress ? clearTimer : undefined}
                 onPress={hasLongPress ? handleButtonPress : data.onPress}
-                as={hasLongPress ? undefined : (data.href ? "a" : undefined)}
+                as={hasLongPress ? undefined : data.href ? "a" : undefined}
                 href={hasLongPress ? undefined : data.href}
                 target={!hasLongPress && data.href ? "_blank" : undefined}
                 rel={!hasLongPress && data.href ? "noreferrer" : undefined}
@@ -249,12 +268,16 @@ export function BaseStatus({ isLoading = false, data, longPressDelay = 1000, isI
                 href={data.href}
                 target="_blank"
                 rel="noreferrer"
-                onClick={hasLongPress ? (e) => {
-                    if (lpRef.current.triggered) {
-                        e.preventDefault();
-                        lpRef.current.triggered = false;
-                    }
-                } : undefined}
+                onClick={
+                    hasLongPress
+                        ? (e) => {
+                              if (lpRef.current.triggered) {
+                                  e.preventDefault();
+                                  lpRef.current.triggered = false;
+                              }
+                          }
+                        : undefined
+                }
                 {...(hasLongPress ? lpDomHandlers : {})}
             >
                 {alert}

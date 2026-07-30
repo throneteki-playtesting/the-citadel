@@ -11,7 +11,6 @@ export default class RolesRepository extends BasicRepository<"role"> {
         super(new MongoDataSource<Role>(mongoClient, "roles", { discordId: 1 }), "role");
     }
 
-
     public override async update(updating: Role, upsert?: boolean): Promise<Role>;
     public override async update(updating: Role[], upsert?: boolean): Promise<Role[]>;
     public override async update(updating: SingleOrArray<Role>, upsert?: boolean) {

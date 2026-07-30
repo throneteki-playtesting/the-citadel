@@ -52,10 +52,10 @@ export const sseService = {
 };
 
 export interface SyncEmitter<K extends SyncType> {
-    start: () => void,
-    progress: (step: string) => void,
-    complete: (data: SyncDataMap[K]) => void,
-    error: (error: string) => void
+    start: () => void;
+    progress: (step: string) => void;
+    complete: (data: SyncDataMap[K]) => void;
+    error: (error: string) => void;
 }
 
 const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = {
@@ -64,7 +64,11 @@ const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = 
     playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`
 };
 
-export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOperation<K>, resource: SyncDataMap[K]): SyncEmitter<K> {
+export function createSyncEmitter<K extends SyncType>(
+    type: K,
+    operation: SyncOperation<K>,
+    resource: SyncDataMap[K]
+): SyncEmitter<K> {
     const initialResource = cloneDeep(resource);
     const resourceId = resourceIdFunc[type](initialResource);
     const emit = (event: SyncEvent<K>) => {
@@ -75,14 +79,11 @@ export function createSyncEmitter<K extends SyncType>(type: K, operation: SyncOp
     };
 
     return {
-        start: () =>
-            emit({ type, id: resourceId, operation, status: "start" }),
-        progress: (step: string) =>
-            emit({ type, id: resourceId, operation, status: "progress", step }),
+        start: () => emit({ type, id: resourceId, operation, status: "start" }),
+        progress: (step: string) => emit({ type, id: resourceId, operation, status: "progress", step }),
         complete: (data: SyncDataMap[K]) =>
             emit({ type, id: resourceId, operation, status: "complete", data: getDiff(initialResource, data) }),
-        error: (error: string) =>
-            emit({ type, id: resourceId, operation, status: "error", error })
+        error: (error: string) => emit({ type, id: resourceId, operation, status: "error", error })
     };
 }
 
@@ -91,7 +92,7 @@ export function broadcastResourceChange<K extends ResourceType>(
     resources: SingleOrArray<ResourceDataMap[K]>,
     status: "create" | "update" | "delete" = "update"
 ): void {
-    const items = asArray(resources).map(resource => ({
+    const items = asArray(resources).map((resource) => ({
         id: resourceIdFuncs[type](resource),
         data: resource
     }));

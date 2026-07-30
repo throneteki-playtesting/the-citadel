@@ -2,7 +2,20 @@ import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { registerEvents } from "./events";
 import { dataService, logger } from "@/services";
-import { Client, ForumChannel, Guild, ThreadChannel, Events, FetchedThreadsMore, APIGuildMember, GuildMember, APIUser, User, Role, Partials } from "discord.js";
+import {
+    Client,
+    ForumChannel,
+    Guild,
+    ThreadChannel,
+    Events,
+    FetchedThreadsMore,
+    APIGuildMember,
+    GuildMember,
+    APIUser,
+    User,
+    Role,
+    Partials
+} from "discord.js";
 import { PLAYTESTING_TEAM_ROLE_NAME, Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
@@ -91,7 +104,10 @@ class DiscordService {
      * @param threadFunc Function to match thread on
      * @returns The found thread, or null if none can be found within the given Forum Channel
      */
-    public async findForumThread(forum: ForumChannel, threadFunc: (thread: ThreadChannel) => Promise<boolean> | boolean) {
+    public async findForumThread(
+        forum: ForumChannel,
+        threadFunc: (thread: ThreadChannel) => Promise<boolean> | boolean
+    ) {
         // First check unarchived threads
         const active = await forum.threads.fetchActive();
         for (const thread of active.threads.values()) {
@@ -149,7 +165,7 @@ class DiscordService {
         try {
             return await guild.members.fetch(id);
         } catch {
-        // Not in guild, fall back to global user lookup
+            // Not in guild, fall back to global user lookup
         }
 
         try {
@@ -202,27 +218,22 @@ class DiscordService {
      */
     static async syncUser(member: APIGuildMember | GuildMember | APIUser | User, loggingIn: boolean = false) {
         const isUser = "username" in member && !("user" in member);
-        const discordUser = isUser ? member as APIUser | User : (member as APIGuildMember | GuildMember).user;
+        const discordUser = isUser ? (member as APIUser | User) : (member as APIGuildMember | GuildMember).user;
 
         // Do not sync if user is missing or a bot
         if (!discordUser || discordUser.bot) return undefined;
 
-        const nickname = !isUser
-            ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null)
-            : null;
+        const nickname = !isUser ? ((member as APIGuildMember).nick ?? (member as GuildMember).nickname ?? null) : null;
 
-        const displayname = discordUser instanceof User
-            ? discordUser.globalName
-            : discordUser.global_name ?? null;
+        const displayname = discordUser instanceof User ? discordUser.globalName : (discordUser.global_name ?? null);
 
         const [existing] = await dataService.users.read({ discordId: discordUser.id });
 
         let roles: AppRole[] = existing?.roles ?? [];
         if (!isUser) {
             const guildMember = member as GuildMember | APIGuildMember;
-            const roleIds = guildMember instanceof GuildMember
-                ? [...guildMember.roles.cache.keys()]
-                : guildMember.roles;
+            const roleIds =
+                guildMember instanceof GuildMember ? [...guildMember.roles.cache.keys()] : guildMember.roles;
 
             roles = await dataService.roles.read([...roleIds.map((id) => ({ discordId: id })), { name: "@everyone" }]);
         }
@@ -306,10 +317,7 @@ class DiscordService {
         try {
             const guild = await this.getGuild();
 
-            const [members, roles] = await Promise.all([
-                guild.members.fetch(),
-                guild.roles.fetch()
-            ]);
+            const [members, roles] = await Promise.all([guild.members.fetch(), guild.roles.fetch()]);
             await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
             await Promise.all(members.map((m) => DiscordService.syncUser(m)));
 

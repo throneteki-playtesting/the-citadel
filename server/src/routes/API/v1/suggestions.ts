@@ -30,13 +30,11 @@ async function getSuggestions(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.CardSuggestion.Full,
-    { created: "desc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.CardSuggestion.Full, { created: "desc" });
 
 // Read tags
-router.get("/tags",
+router.get(
+    "/tags",
     asyncHandler<unknown, unknown, unknown, unknown>(async (req, res) => {
         const result = await dataService.suggestions.tags();
         res.json(result);
@@ -44,7 +42,8 @@ router.get("/tags",
 );
 
 // Read suggestions
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_SUGGESTIONS),
     celebrate({
         [Segments.QUERY]: getQuerySchema
@@ -56,7 +55,8 @@ router.get("/",
     })
 );
 
-router.get("/:id",
+router.get(
+    "/:id",
     validateRequest(Permission.READ_SUGGESTIONS),
     celebrate({
         [Segments.PARAMS]: { id: Joi.string().required() },
@@ -72,7 +72,8 @@ router.get("/:id",
 );
 
 // Create suggestion
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.MAKE_SUGGESTIONS),
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Draft }),
     asyncHandler<unknown, unknown, Omit<ICardSuggestion, "id" | "updated" | "created">, unknown>(async (req, res) => {
@@ -81,21 +82,23 @@ router.post("/",
         let suggestion = { ...body, created, updated: created } as ICardSuggestion;
         suggestion = await dataService.suggestions.create(suggestion);
 
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.created",
-            "<principal> created suggestion <suggestion>",
-            { context: { suggestion: cardSnapshot(suggestion.id, suggestion.card) } }
-        );
+        await logActivity(LogCategory.SUGGESTION, "suggestion.created", "<principal> created suggestion <suggestion>", {
+            context: { suggestion: cardSnapshot(suggestion.id, suggestion.card) }
+        });
 
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
 
 // Update suggestion
-router.put("/:id",
+router.put(
+    "/:id",
     // Initial check to see if they have one of the appropriate permissions
-    validateRequest((principal) => hasPermission(principal, Permission.EDIT_SUGGESTIONS) || hasPermission(principal, Permission.MAKE_SUGGESTIONS)),
+    validateRequest(
+        (principal) =>
+            hasPermission(principal, Permission.EDIT_SUGGESTIONS) ||
+            hasPermission(principal, Permission.MAKE_SUGGESTIONS)
+    ),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     // Load suggestion for ownership check
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res, next) => {
@@ -110,8 +113,14 @@ router.put("/:id",
     // Further permission check, now with context of the suggestion
     validateRequest((principal, req, res) => {
         const suggestion = res.locals.suggestion as ICardSuggestion;
-        return hasPermission(principal, Permission.EDIT_SUGGESTIONS) ||
-            validate(principal, Permission.MAKE_SUGGESTIONS, (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId);
+        return (
+            hasPermission(principal, Permission.EDIT_SUGGESTIONS) ||
+            validate(
+                principal,
+                Permission.MAKE_SUGGESTIONS,
+                (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId
+            )
+        );
     }),
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
     asyncHandler<{ id: string }, unknown, ICardSuggestion, unknown>(async (req, res) => {
@@ -120,21 +129,23 @@ router.put("/:id",
         suggestion.id = id;
         suggestion = await dataService.suggestions.update(suggestion);
 
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.updated",
-            "<principal> updated suggestion <suggestion>",
-            { context: { suggestion: cardSnapshot(id, suggestion.card) } }
-        );
+        await logActivity(LogCategory.SUGGESTION, "suggestion.updated", "<principal> updated suggestion <suggestion>", {
+            context: { suggestion: cardSnapshot(id, suggestion.card) }
+        });
 
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
 
 // Delete suggestion
-router.delete("/:id",
+router.delete(
+    "/:id",
     // Initial check to see if they have one of the appropriate permissions
-    validateRequest((principal) => hasPermission(principal, Permission.DELETE_SUGGESTIONS) || hasPermission(principal, Permission.MAKE_SUGGESTIONS)),
+    validateRequest(
+        (principal) =>
+            hasPermission(principal, Permission.DELETE_SUGGESTIONS) ||
+            hasPermission(principal, Permission.MAKE_SUGGESTIONS)
+    ),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     // Load suggestion for ownership check
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res, next) => {
@@ -149,19 +160,23 @@ router.delete("/:id",
     // Further permission check, now with context of the suggestion
     validateRequest((principal, req, res) => {
         const suggestion = res.locals.suggestion as ICardSuggestion;
-        return hasPermission(principal, Permission.DELETE_SUGGESTIONS) ||
-            validate(principal, Permission.MAKE_SUGGESTIONS, (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId);
+        return (
+            hasPermission(principal, Permission.DELETE_SUGGESTIONS) ||
+            validate(
+                principal,
+                Permission.MAKE_SUGGESTIONS,
+                (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId
+            )
+        );
     }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
         const [deleted] = await dataService.suggestions.destroy({ id });
 
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.deleted",
-            "<principal> deleted suggestion <suggestion>",
-            { context: { suggestion: cardSnapshot(id, deleted.card) }, severity: "warn" }
-        );
+        await logActivity(LogCategory.SUGGESTION, "suggestion.deleted", "<principal> deleted suggestion <suggestion>", {
+            context: { suggestion: cardSnapshot(id, deleted.card) },
+            severity: "warn"
+        });
 
         res.status(StatusCodes.OK).json(deleted);
     })

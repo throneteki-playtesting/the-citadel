@@ -7,7 +7,7 @@ export default class AuthRepository extends Database<RefreshToken> {
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<RefreshToken>(mongoClient, "refreshTokens", { discordId: 1, sessionId: 1 }));
         // Ensures that refresh tokens are automatically deleted once they expire
-        this.database.collection.createIndex({ "expiresAt": 1 }, { expireAfterSeconds: 0 });
+        this.database.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     }
 
     public async addRefreshToken(refreshToken: RefreshToken) {

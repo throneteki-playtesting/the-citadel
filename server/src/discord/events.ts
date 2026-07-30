@@ -1,4 +1,14 @@
-import { APIGuildMember, Client, ClientEvents, Events, ForumChannel, GuildMember, APIUser, User, Role } from "discord.js";
+import {
+    APIGuildMember,
+    Client,
+    ClientEvents,
+    Events,
+    ForumChannel,
+    GuildMember,
+    APIUser,
+    User,
+    Role
+} from "discord.js";
 import { dataService, logger } from "@/services";
 import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
@@ -20,7 +30,9 @@ export function registerEvents(client: Client, guildId: string, syncUser: SyncUs
 
         const nicknameChanged = oldMember.nickname !== newMember.nickname;
         const avatarChanged = oldMember.avatar !== newMember.avatar;
-        const rolesChanged = oldMember.roles.cache.size !== newMember.roles.cache.size || oldMember.roles.cache.some((r) => !newMember.roles.cache.has(r.id));
+        const rolesChanged =
+            oldMember.roles.cache.size !== newMember.roles.cache.size ||
+            oldMember.roles.cache.some((r) => !newMember.roles.cache.has(r.id));
 
         if (!nicknameChanged && !avatarChanged && !rolesChanged) return;
 

@@ -4,7 +4,12 @@ import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { useWizard } from "../../components/wizard/context";
 import { statementOptions } from "../../constants";
 
-export default function StatementQuestion({ name, statement, answer, onValueChange = () => true }: StatementQuestionProps) {
+export default function StatementQuestion({
+    name,
+    statement,
+    answer,
+    onValueChange = () => true
+}: StatementQuestionProps) {
     const { validationErrors } = useWizard();
 
     return (
@@ -20,7 +25,7 @@ export default function StatementQuestion({ name, statement, answer, onValueChan
                             aria-label={value}
                             onPress={() => onValueChange(answer === value ? undefined : value)}
                         >
-                            <StatementAnswerIcon answer={value} tooltip={false}/>
+                            <StatementAnswerIcon answer={value} tooltip={false} />
                         </Button>
                     ))}
                 </ButtonGroup>
@@ -28,11 +33,11 @@ export default function StatementQuestion({ name, statement, answer, onValueChan
             {name && validationErrors[name] && <div className="text-tiny text-danger">{validationErrors[name]}</div>}
         </div>
     );
-};
+}
 
 type StatementQuestionProps = {
-    name?:string;
+    name?: string;
     statement: string;
     answer?: StatementAnswer;
     onValueChange?: (value?: StatementAnswer) => void;
-}
+};

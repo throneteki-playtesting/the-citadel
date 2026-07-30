@@ -17,7 +17,10 @@ import { ACCESS_TOKEN_COOKIE, IMPERSONATION_COOKIE } from "./cookies";
 // Resolves the effective principal for a request: the real user, unless a valid impersonation cookie is
 // present and the real user still holds the relevant IMPERSONATE_* permission — in which case the effective
 // principal becomes the target role (permissions/roles only) or target user (their full principal).
-async function resolveImpersonatedPrincipal(realUser: User, impersonationCookie?: string): Promise<{ principal: User; impersonating?: "role" | "user" }> {
+async function resolveImpersonatedPrincipal(
+    realUser: User,
+    impersonationCookie?: string
+): Promise<{ principal: User; impersonating?: "role" | "user" }> {
     if (!impersonationCookie) {
         return { principal: realUser };
     }
@@ -54,77 +57,73 @@ async function resolveImpersonatedPrincipal(realUser: User, impersonationCookie?
     };
 }
 
-export const authMiddleware = asyncHandler(
-    async (req, res, next) => {
-        if (req.header("Authorization")?.startsWith("Bearer ")) {
-            const rawToken = req.header("Authorization").replace("Bearer ", "");
+export const authMiddleware = asyncHandler(async (req, res, next) => {
+    if (req.header("Authorization")?.startsWith("Bearer ")) {
+        const rawToken = req.header("Authorization").replace("Bearer ", "");
 
-            const integration = await dataService.integrations.findByToken(rawToken);
-            if (!integration) {
-                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Integration token invalid");
-            }
-
-            const context = createContext("api", integration);
-            requestContext.run(context, next);
-        } else {
-            const accessToken = req.cookies[ACCESS_TOKEN_COOKIE];
-
-            if (!accessToken) {
-                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "No session");
-            }
-            try {
-                const { discordId } = jwt.verify(accessToken, process.env.JWT_SECRET) as AccessTokenPayload;
-                const [[user], guestProfile] = await Promise.all([
-                    dataService.users.read({ discordId }),
-                    dataService.users.getGuestProfile()
-                ]);
-                const defaultPermissions = guestProfile
-                    ? [...new Set([
-                        ...guestProfile.permissions,
-                        ...guestProfile.roles.flatMap((r) => r.permissions)
-                    ])]
-                    : [];
-
-                const realUser: User = { ...user, defaultPermissions };
-                const { principal, impersonating } = await resolveImpersonatedPrincipal(realUser, req.cookies[IMPERSONATION_COOKIE]);
-
-                const context = createContext("client", principal, realUser, impersonating, req.header("X-Client-Id"));
-                requestContext.run(context, next);
-            } catch (err) {
-                if ("name" in err && err.name === "TokenExpiredError") {
-                    throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Token Expired");
-                }
-                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Token Invalid");
-            }
-        }
-    }
-);
-export const githubWebhookMiddleware = asyncHandler(
-    async (req, res, next) => {
-        const signature = req.headers["x-hub-signature-256"] as string;
-        if (!signature) {
-            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Missing signature");
-        }
-
-        const secret = process.env.GITHUB_WEBHOOK_SECRET;
-        const hmac = createHmac("sha256", secret);
-        const digest = `sha256=${hmac.update(JSON.stringify(req.body)).digest("hex")}`;
-
-        if (!timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
-            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
-        }
-
-        // TODO: Separate Github into its own integration, rather than using internal
-        const rawToken = await dataService.integrations.fetchInternalToken();
         const integration = await dataService.integrations.findByToken(rawToken);
         if (!integration) {
-            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
+            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Integration token invalid");
         }
 
-        const context = createContext("webhook", integration);
+        const context = createContext("api", integration);
         requestContext.run(context, next);
+    } else {
+        const accessToken = req.cookies[ACCESS_TOKEN_COOKIE];
+
+        if (!accessToken) {
+            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "No session");
+        }
+        try {
+            const { discordId } = jwt.verify(accessToken, process.env.JWT_SECRET) as AccessTokenPayload;
+            const [[user], guestProfile] = await Promise.all([
+                dataService.users.read({ discordId }),
+                dataService.users.getGuestProfile()
+            ]);
+            const defaultPermissions = guestProfile
+                ? [...new Set([...guestProfile.permissions, ...guestProfile.roles.flatMap((r) => r.permissions)])]
+                : [];
+
+            const realUser: User = { ...user, defaultPermissions };
+            const { principal, impersonating } = await resolveImpersonatedPrincipal(
+                realUser,
+                req.cookies[IMPERSONATION_COOKIE]
+            );
+
+            const context = createContext("client", principal, realUser, impersonating, req.header("X-Client-Id"));
+            requestContext.run(context, next);
+        } catch (err) {
+            if ("name" in err && err.name === "TokenExpiredError") {
+                throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Token Expired");
+            }
+            throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Token Invalid");
+        }
     }
-);
+});
+export const githubWebhookMiddleware = asyncHandler(async (req, res, next) => {
+    const signature = req.headers["x-hub-signature-256"] as string;
+    if (!signature) {
+        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Missing signature");
+    }
+
+    const secret = process.env.GITHUB_WEBHOOK_SECRET;
+    const hmac = createHmac("sha256", secret);
+    const digest = `sha256=${hmac.update(JSON.stringify(req.body)).digest("hex")}`;
+
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(digest))) {
+        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
+    }
+
+    // TODO: Separate Github into its own integration, rather than using internal
+    const rawToken = await dataService.integrations.fetchInternalToken();
+    const integration = await dataService.integrations.findByToken(rawToken);
+    if (!integration) {
+        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
+    }
+
+    const context = createContext("webhook", integration);
+    requestContext.run(context, next);
+});
 
 export const discordCommandMiddleware = async (member: APIGuildMember | GuildMember, callback: () => void) => {
     const result = await DiscordService.syncUser(member);
@@ -132,7 +131,10 @@ export const discordCommandMiddleware = async (member: APIGuildMember | GuildMem
     requestContext.run(context, callback);
 };
 
-export const discordEventMiddleware = async (member: APIGuildMember | GuildMember | undefined, callback: () => void) => {
+export const discordEventMiddleware = async (
+    member: APIGuildMember | GuildMember | undefined,
+    callback: () => void
+) => {
     // TODO: Separate Discord into its own integration, rather than using internal
     const rawToken = await dataService.integrations.fetchInternalToken();
     const integration = await dataService.integrations.findByToken(rawToken);

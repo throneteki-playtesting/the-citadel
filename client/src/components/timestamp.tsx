@@ -20,17 +20,14 @@ export default function Timestamp({ date, className, style }: TimestampProps) {
     const { format } = useTimezone();
     return (
         <TouchTooltip content={format(new Date(date))}>
-            <div
-                style={style}
-                className={classNames("space-x-0.5 font-sans", className)}
-            >
+            <div style={style} className={classNames("space-x-0.5 font-sans", className)}>
                 <TimeAgo date={date} formatter={shortFormatter} />
             </div>
         </TouchTooltip>
     );
 }
 type TimestampProps = {
-  date: Date | ISO8601String;
-  className?: string;
-  style?: CSSProperties;
+    date: Date | ISO8601String;
+    className?: string;
+    style?: CSSProperties;
 };

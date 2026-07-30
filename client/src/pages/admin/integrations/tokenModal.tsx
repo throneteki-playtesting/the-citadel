@@ -1,4 +1,14 @@
-import { addToast, Alert, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Snippet } from "@heroui/react";
+import {
+    addToast,
+    Alert,
+    Button,
+    Modal,
+    ModalBody,
+    ModalContent,
+    ModalFooter,
+    ModalHeader,
+    Snippet
+} from "@heroui/react";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
 import { useRecycleIntegrationTokenMutation } from "../../../api";
@@ -34,18 +44,32 @@ export default function TokenModal({ integration, initialToken, onClose }: Token
     };
 
     return (
-        <Modal isOpen={!!integration} size="xl" placement="top-center" isDismissable={!token} isKeyboardDismissDisabled={!!token} hideCloseButton={!!token} onOpenChange={(isOpen) => !isOpen && onClose()}>
+        <Modal
+            isOpen={!!integration}
+            size="xl"
+            placement="top-center"
+            isDismissable={!token}
+            isKeyboardDismissDisabled={!!token}
+            hideCloseButton={!!token}
+            onOpenChange={(isOpen) => !isOpen && onClose()}
+        >
             <ModalContent>
-                <ModalHeader>
-                    API token for {integration?.name}
-                </ModalHeader>
+                <ModalHeader>API token for {integration?.name}</ModalHeader>
                 <ModalBody>
                     {token ? (
-                        <Alert color="warning" title="Copy this token now" description="It will not be shown again."/>
+                        <Alert color="warning" title="Copy this token now" description="It will not be shown again." />
                     ) : (
-                        <Alert title="This token is hidden" description="Refresh it to get a new one; the current token will stop working immediately."/>
+                        <Alert
+                            title="This token is hidden"
+                            description="Refresh it to get a new one; the current token will stop working immediately."
+                        />
                     )}
-                    <Snippet symbol="" radius="sm" hideCopyButton={!token} classNames={{ base: "max-w-full", pre: "whitespace-pre-wrap break-all font-bold" }}>
+                    <Snippet
+                        symbol=""
+                        radius="sm"
+                        hideCopyButton={!token}
+                        classNames={{ base: "max-w-full", pre: "whitespace-pre-wrap break-all font-bold" }}
+                    >
                         {token ?? `${integration?.id}.${"•".repeat(32)}`}
                     </Snippet>
                     <div className="space-y-2 text-sm text-default-500">
@@ -54,30 +78,42 @@ export default function TokenModal({ integration, initialToken, onClose }: Token
                             <li>Store the token somewhere safe.</li>
                             <li>
                                 Add it to the <code>Authorization</code> header of every request:
-                                <Snippet size="sm" symbol="" radius="sm" hideCopyButton className="mt-1 w-full" classNames={{ pre: "whitespace-pre-wrap break-all" }}>
+                                <Snippet
+                                    size="sm"
+                                    symbol=""
+                                    radius="sm"
+                                    hideCopyButton
+                                    className="mt-1 w-full"
+                                    classNames={{ pre: "whitespace-pre-wrap break-all" }}
+                                >
                                     {"Authorization: Bearer <token>"}
                                 </Snippet>
                             </li>
                             <li>
-                                Send requests to <code>{`${SERVER_HOST}/api/v1/...`}</code> — access is limited to the permissions assigned to this integration.
+                                Send requests to <code>{`${SERVER_HOST}/api/v1/...`}</code> — access is limited to the
+                                permissions assigned to this integration.
                             </li>
                         </ol>
                     </div>
                 </ModalBody>
                 <ModalFooter>
                     {canRefresh && (
-                        <Button color="danger" variant="flat" isLoading={isLoading} startContent={!isLoading && <FontAwesomeIcon icon={faArrowsRotate}/>} onPress={onRefresh}>
+                        <Button
+                            color="danger"
+                            variant="flat"
+                            isLoading={isLoading}
+                            startContent={!isLoading && <FontAwesomeIcon icon={faArrowsRotate} />}
+                            onPress={onRefresh}
+                        >
                             Refresh Token
                         </Button>
                     )}
-                    <Button onPress={onClose}>
-                        Close
-                    </Button>
+                    <Button onPress={onClose}>Close</Button>
                 </ModalFooter>
             </ModalContent>
         </Modal>
     );
-};
+}
 
 type TokenModalProps = Omit<BaseElementProps, "children"> & {
     integration?: SafeIntegration;

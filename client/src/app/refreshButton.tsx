@@ -31,7 +31,7 @@ export function RefreshButton() {
             aria-label="Refresh"
             onPress={handlePress}
         >
-            <FontAwesomeIcon icon={faArrowsRotate}/>
+            <FontAwesomeIcon icon={faArrowsRotate} />
         </Button>
     );
 }

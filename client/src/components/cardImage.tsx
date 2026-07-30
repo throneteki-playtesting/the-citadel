@@ -15,10 +15,15 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
     const [fetchCard] = useLazyGetTDBCardQuery();
 
     const [imageUrl, setImageUrl] = useState<string>();
-    const [defaultOrientation, setDefaultOrientation] = useState<"vertical" | "horizontal" | undefined>(typeof identifier !== "string" ? (identifier.type === "plot" ? "horizontal" : "vertical") : undefined);
+    const [defaultOrientation, setDefaultOrientation] = useState<"vertical" | "horizontal" | undefined>(
+        typeof identifier !== "string" ? (identifier.type === "plot" ? "horizontal" : "vertical") : undefined
+    );
     const [alt, setAlt] = useState<string>();
 
-    const actualOrientation = useMemo(() => orientation ?? defaultOrientation ?? "vertical", [defaultOrientation, orientation]);
+    const actualOrientation = useMemo(
+        () => orientation ?? defaultOrientation ?? "vertical",
+        [defaultOrientation, orientation]
+    );
     const rotate = useMemo(() => actualOrientation !== defaultOrientation, [actualOrientation, defaultOrientation]);
 
     useEffect(() => {
@@ -57,15 +62,22 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
     const showImage = !isLoading && !isError;
 
     return (
-        <div className={classNames("relative w-full [container-type:size] flex items-center justify-center overflow-hidden", actualOrientation === "horizontal" ? "aspect-[333/240]" : "aspect-[240/333]", className)} style={style}>
-            {isLoading && (
-                <Skeleton className="absolute inset-0 z-10 block w-full h-full" />
+        <div
+            className={classNames(
+                "relative w-full [container-type:size] flex items-center justify-center overflow-hidden",
+                actualOrientation === "horizontal" ? "aspect-[333/240]" : "aspect-[240/333]",
+                className
             )}
+            style={style}
+        >
+            {isLoading && <Skeleton className="absolute inset-0 z-10 block w-full h-full" />}
             {isError && (
                 <Alert color="danger" hideIcon className="absolute inset-0 z-10 flex w-full h-full p-0">
                     <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center">
                         <FontAwesomeIcon icon={faCircleExclamation} className="text-3xl opacity-80" />
-                        <div className="text-sm font-semibold uppercase tracking-widest opacity-70">Failed to load image</div>
+                        <div className="text-sm font-semibold uppercase tracking-widest opacity-70">
+                            Failed to load image
+                        </div>
                         <div className="text-xl font-cinzel">{alt}</div>
                     </div>
                 </Alert>
@@ -77,13 +89,20 @@ const CardImage = ({ className, style, card: identifier, orientation }: CardImag
                     setIsLoading(false);
                     setIsError(true);
                 }}
-                className={classNames("object-contain transition-opacity duration-500", { "opacity-0": !showImage, "-rotate-90 w-[100cqh] h-[100cqw] min-w-[100cqh] min-h-[100cqw]": rotate, "w-full h-full": !rotate })}
+                className={classNames("object-contain transition-opacity duration-500", {
+                    "opacity-0": !showImage,
+                    "-rotate-90 w-[100cqh] h-[100cqw] min-w-[100cqh] min-h-[100cqw]": rotate,
+                    "w-full h-full": !rotate
+                })}
                 alt={alt}
             />
         </div>
     );
 };
 
-type CardImageProps = Omit<BaseElementProps, "children"> & { card: Code | Faction | IPlaytestCard, orientation?: "vertical" | "horizontal" }
+type CardImageProps = Omit<BaseElementProps, "children"> & {
+    card: Code | Faction | IPlaytestCard;
+    orientation?: "vertical" | "horizontal";
+};
 
 export default CardImage;

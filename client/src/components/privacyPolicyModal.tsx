@@ -18,7 +18,9 @@ export default function PrivacyPolicyModal({ isOpen, onClose: onModalClose = () 
                             <PrivacyPolicy />
                         </ModalBody>
                         <ModalFooter>
-                            <Button color="primary" onPress={onClose}>Close</Button>
+                            <Button color="primary" onPress={onClose}>
+                                Close
+                            </Button>
                         </ModalFooter>
                     </>
                 )}

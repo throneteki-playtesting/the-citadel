@@ -40,7 +40,7 @@ let progressES: EventSource | null = null;
 let progressRefCount = 0;
 
 function getAtPath(state: NestedState, [head, tail]: string[]): SyncState {
-    return (tail ? (state[head] as FlatState)?.[tail] : state[head] as SyncState) ?? {};
+    return (tail ? (state[head] as FlatState)?.[tail] : (state[head] as SyncState)) ?? {};
 }
 
 function setAtPath(state: NestedState, [head, tail]: string[], value: SyncState): NestedState {
@@ -62,15 +62,24 @@ function connectProgress() {
 
             let partial: Partial<SyncState>;
             switch (status as SyncStatus) {
-                case "start": partial = { status: "start" }; break;
-                case "progress": partial = { status: "progress", step: event.step }; break;
-                case "complete": partial = { status: "complete" }; break;
-                case "error": partial = { status: "error", error: event.error }; break;
-                default: return;
+                case "start":
+                    partial = { status: "start" };
+                    break;
+                case "progress":
+                    partial = { status: "progress", step: event.step };
+                    break;
+                case "complete":
+                    partial = { status: "complete" };
+                    break;
+                case "error":
+                    partial = { status: "error", error: event.error };
+                    break;
+                default:
+                    return;
             }
 
             entry.state = setAtPath(entry.state, path, { ...getAtPath(entry.state, path), ...partial });
-            entry.listeners.forEach(l => l());
+            entry.listeners.forEach((l) => l());
         });
     }
     progressRefCount++;
@@ -96,7 +105,7 @@ function useSyncListener<K extends SyncType>(type: K, id?: string) {
         const key = `${type}/${id}`;
 
         if (!registry.has(key)) {
-            registry.set(key, { state: { ...defaultStates[type] as NestedState }, listeners: new Set() });
+            registry.set(key, { state: { ...(defaultStates[type] as NestedState) }, listeners: new Set() });
         }
 
         const entry = registry.get(key)!;
@@ -119,15 +128,20 @@ function useSyncListener<K extends SyncType>(type: K, id?: string) {
     return syncStates;
 }
 
-export function useCardSync(card?: { project: number, number: number, version: SemanticVersion }) {
+export function useCardSync(card?: { project: number; number: number; version: SemanticVersion }) {
     const id = card ? `${card.project}|${card.number}|${card.version}` : undefined;
     return useSyncListener("card", id);
 }
-export function useReviewSync(review?: { project: number, number: number, version: SemanticVersion, reviewer: string }) {
+export function useReviewSync(review?: {
+    project: number;
+    number: number;
+    version: SemanticVersion;
+    reviewer: string;
+}) {
     const id = review ? `${review.project}|${review.number}|${review.version}|${review.reviewer}` : undefined;
     return useSyncListener("review", id);
 }
-export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number, version: number }) {
+export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number; version: number }) {
     const id = playtestingUpdate ? `${playtestingUpdate.project}|${playtestingUpdate?.version}` : undefined;
     return useSyncListener("playtestingUpdate", id);
 }

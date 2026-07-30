@@ -17,17 +17,21 @@ const Render = () => {
         return <div id="render-error">{JSON.stringify(toNormalizedError(error))}</div>;
     }
     if (isLoading || job?.data.length === 0) {
-        return <div/>;
+        return <div />;
     }
 
     const generateSingleSheet = (job: SingleRenderJob) => {
         const orientation = job.options?.orientation;
         const rounded = job.options?.rounded;
         return job.data.map(({ id, card }) => {
-            const wrapperOrientation = orientation ?? card.type === "plot" ? "horizontal" : "vertical";
+            const wrapperOrientation = (orientation ?? card.type === "plot") ? "horizontal" : "vertical";
             return (
-                <div key={id} data-card-id={id} className={wrapperOrientation === "horizontal" ? "w-[333px] h-[240px]" : "w-[240px] h-[333px]"}>
-                    <CardPreview card={card} rounded={rounded ?? false} orientation={orientation}/>
+                <div
+                    key={id}
+                    data-card-id={id}
+                    className={wrapperOrientation === "horizontal" ? "w-[333px] h-[240px]" : "w-[240px] h-[333px]"}
+                >
+                    <CardPreview card={card} rounded={rounded ?? false} orientation={orientation} />
                 </div>
             );
         });
@@ -40,22 +44,24 @@ const Render = () => {
 
         let pageNo = 1;
         let completed = 0;
-        const allData = job.data.flatMap(i => Array.from({ length: copies }).fill(i) as { id: UUID, card: IRenderCard }[]);
+        const allData = job.data.flatMap(
+            (i) => Array.from({ length: copies }).fill(i) as { id: UUID; card: IRenderCard }[]
+        );
         do {
             const pageData = allData.slice((pageNo - 1) * perPage, pageNo * perPage);
             const sheet = Array.from({ length: perPage }).map((_, index) => {
                 const data = pageData[index];
                 return (
                     <div key={data?.id ?? index} data-card-id={data?.id} className="w-[240px] h-[333px] m-[0.5px]">
-                        {data?.card !== undefined && <CardPreview card={data.card} rounded={false} orientation="vertical"/>}
+                        {data?.card !== undefined && (
+                            <CardPreview card={data.card} rounded={false} orientation="vertical" />
+                        )}
                     </div>
                 );
             });
             const page = (
                 <div className="w-[794px] h-[1124px]">
-                    <div className="h-full flex flex-row flex-wrap justify-center content-center">
-                        {sheet}
-                    </div>
+                    <div className="h-full flex flex-row flex-wrap justify-center content-center">{sheet}</div>
                 </div>
             );
             pages.push(page);

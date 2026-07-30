@@ -4,7 +4,7 @@ import { px } from "../utils";
 const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0.4 }: AutoSizeProps) => {
     const contentRef = useRef<HTMLDivElement>(null);
     const elements = useRef(new Map<HTMLElement, number>());
-    const lastFit = useRef<{ text: string, width: number, height: number } | null>(null);
+    const lastFit = useRef<{ text: string; width: number; height: number } | null>(null);
     const fontsWaited = useRef(false);
 
     useLayoutEffect(() => {
@@ -32,14 +32,20 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
             }
         };
 
-        const isOverflowing = () => content.scrollWidth > content.clientWidth || content.scrollHeight > content.clientHeight;
+        const isOverflowing = () =>
+            content.scrollWidth > content.clientWidth || content.scrollHeight > content.clientHeight;
 
         // Fitting resets and re-measures the whole subtree, so it only runs when the text or the
         // available box has actually changed. When the box is content-driven (no fixed dimensions),
         // this is also what stops a fit's own mutations from re-triggering the observer forever
         const isDirty = () => {
             const last = lastFit.current;
-            return !last || last.text !== content.textContent || last.width !== content.clientWidth || last.height !== content.clientHeight;
+            return (
+                !last ||
+                last.text !== content.textContent ||
+                last.width !== content.clientWidth ||
+                last.height !== content.clientHeight
+            );
         };
 
         const fit = () => {
@@ -55,7 +61,10 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
                 content.style.fontSize = content.style.fontSize || window.getComputedStyle(content).fontSize;
 
                 // Text reflows as it shrinks, so the measured ratio is only a first approximation - step down from there
-                let multiplier = Math.max(minimum, Math.min(content.clientWidth / content.scrollWidth, content.clientHeight / content.scrollHeight));
+                let multiplier = Math.max(
+                    minimum,
+                    Math.min(content.clientWidth / content.scrollWidth, content.clientHeight / content.scrollHeight)
+                );
                 shrink(content, multiplier);
                 while (multiplier > minimum && isOverflowing()) {
                     multiplier -= rate;
@@ -63,7 +72,11 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
                 }
             }
 
-            lastFit.current = { text: content.textContent ?? "", width: content.clientWidth, height: content.clientHeight };
+            lastFit.current = {
+                text: content.textContent ?? "",
+                width: content.clientWidth,
+                height: content.clientHeight
+            };
         };
 
         if (isDirty()) {
@@ -95,17 +108,21 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
     });
 
     return (
-        <div ref={contentRef} className={className} style={{ ...style, ...(height !== undefined && { height: px(height) }) }}>
+        <div
+            ref={contentRef}
+            className={className}
+            style={{ ...style, ...(height !== undefined && { height: px(height) }) }}
+        >
             {children}
         </div>
     );
 };
 type AutoSizeProps = {
-    children?: React.ReactNode | React.ReactNode[],
-    className?: string,
-    style?: CSSProperties,
-    height?: number,
-    rate?: number,
-    minimum?: number
-}
+    children?: React.ReactNode | React.ReactNode[];
+    className?: string;
+    style?: CSSProperties;
+    height?: number;
+    rate?: number;
+    minimum?: number;
+};
 export default AutoSize;

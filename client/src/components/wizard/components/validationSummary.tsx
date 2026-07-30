@@ -43,9 +43,7 @@ export default function ValidationSummary() {
             )}
         >
             <div className="flex flex-col gap-1">
-                {hasMappedErrors && (
-                    <div>Some inputs on this form are invalid.</div>
-                )}
+                {hasMappedErrors && <div>Some inputs on this form are invalid.</div>}
                 {unmappedErrors.length > 0 && (
                     <div className="flex items-center gap-1">
                         <span>Other issues need attention.</span>
@@ -61,7 +59,7 @@ export default function ValidationSummary() {
                                 </div>
                             }
                         >
-                            <FontAwesomeIcon icon={faInfoCircle} className="cursor-help"/>
+                            <FontAwesomeIcon icon={faInfoCircle} className="cursor-help" />
                         </TouchTooltip>
                     </div>
                 )}

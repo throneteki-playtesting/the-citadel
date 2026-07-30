@@ -11,7 +11,6 @@ import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
 import { Mutex } from "async-mutex";
 
-
 const syncIssuesMutex = new Mutex();
 
 export async function syncIssues(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
@@ -45,7 +44,10 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
                 state: "all",
                 per_page: 100
             });
-            const existingIssue = projectIssues.find((i) => i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version));
+            const existingIssue = projectIssues.find(
+                (i) =>
+                    i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version)
+            );
             if (existingIssue) {
                 merge(card, {
                     _metadata: {
@@ -80,7 +82,9 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
                         break;
                     }
                     default: {
-                        logger.warn(`Attempted to sync issue for ${card.name} (${card.version}) with missing note type`);
+                        logger.warn(
+                            `Attempted to sync issue for ${card.name} (${card.version}) with missing note type`
+                        );
                     }
                 }
             }
@@ -100,7 +104,11 @@ export async function clearIssues(cards: IPlaytestCard[]) {
         try {
             if (!isIssueMissing(card)) {
                 const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
-                const { data: issue } = await context.client.rest.issues.get({ issue_number: issueNumber, owner: context.owner, repo: context.repo });
+                const { data: issue } = await context.client.rest.issues.get({
+                    issue_number: issueNumber,
+                    owner: context.owner,
+                    repo: context.repo
+                });
                 await context.client.graphql(
                     `mutation DeleteIssue($issueId: ID!) {
                         deleteIssue(input: { issueId: $issueId }) {
@@ -151,7 +159,7 @@ async function syncUpdate(card: IPlaytestCard, project: IProject, context?: Gith
     try {
         context = context ?? githubService.getContext();
         if (card.note?.type !== "updated") {
-            new Error("Card must have a note type of \"updated\"");
+            new Error('Card must have a note type of "updated"');
         }
         let previous = await dataService.cards.previous(card);
         [card, previous] = await syncImage([card, previous]);
@@ -172,7 +180,7 @@ async function syncRework(card: IPlaytestCard, project: IProject, context?: Gith
     try {
         context = context ?? githubService.getContext();
         if (card.note?.type !== "reworked") {
-            new Error("Card must have a note type of \"reworked\"");
+            new Error('Card must have a note type of "reworked"');
         }
         let previous = await dataService.cards.previous(card);
         [card, previous] = await syncImage([card, previous]);
@@ -193,7 +201,7 @@ async function syncReplace(card: IPlaytestCard, project: IProject, context?: Git
     try {
         context = context ?? githubService.getContext();
         if (card.note?.type !== "replaced") {
-            new Error("Card must have a note type of \"replaced\"");
+            new Error('Card must have a note type of "replaced"');
         }
         let previous = await dataService.cards.previous(card);
         [card, previous] = await syncImage([card, previous]);
@@ -210,7 +218,11 @@ async function syncReplace(card: IPlaytestCard, project: IProject, context?: Git
 /**
  * Handles internal logic for creating or updating an issue for a card, if appropriate.
  */
-async function internalSync(card: IPlaytestCard, details: { title: string, body: string, labels: string[], milestone: number, owner: string, repo: string }, context: GithubContext) {
+async function internalSync(
+    card: IPlaytestCard,
+    details: { title: string; body: string; labels: string[]; milestone: number; owner: string; repo: string },
+    context: GithubContext
+) {
     if (isIssueMissing(card)) {
         const { data: issue } = await context.client.rest.issues.create(details);
         logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
@@ -258,19 +270,20 @@ const issues = {
         const imageUrl = getTimeLockedImageUrl(card);
         const title = `${card.code} | ${project.code} - Implement ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
-        const body = `## :memo: Implementation requested for ${card.name} (${project.code})`
-            + "\n\n### What needs to be done?"
-            + "\nNew card needs to be added to this repository, which will require a card file to be created and potentially code implementation."
-            + `\n\n![image](${imageUrl})`
-            + "\n\n---"
-            + "\n\n### Implementation Steps"
-            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
-            + `\n2. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on above card.`
-            + `\n3. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
-            + "\n4. (Optional) Local testing. Test files are not required for playtesting."
-            + "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
-            + "\n\n---"
-            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const body =
+            `## :memo: Implementation requested for ${card.name} (${project.code})` +
+            "\n\n### What needs to be done?" +
+            "\nNew card needs to be added to this repository, which will require a card file to be created and potentially code implementation." +
+            `\n\n![image](${imageUrl})` +
+            "\n\n---" +
+            "\n\n### Implementation Steps" +
+            "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)." +
+            `\n2. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on above card.` +
+            `\n3. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).` +
+            "\n4. (Optional) Local testing. Test files are not required for playtesting." +
+            "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging." +
+            "\n\n---" +
+            "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
         const labels = ["automated", "implement-card"];
 
         return { title, body, labels, milestone, owner: context.owner, repo: context.repo };
@@ -280,23 +293,24 @@ const issues = {
         const previousImageUrl = getTimeLockedImageUrl(previous);
         const title = `${card.code} | ${project.code} - Update ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
-        const body = `## :memo: Update requested for ${card.name} (${project.code})`
-            + "\n\n### What needs to be done?"
-            + "\nUpdate this cards version and, if there are non-keyword textbox changes, update the card's code."
-            + "\n\nPrevious Version | New Version"
-            + "\n:-------------------------:|:-------------------------:"
-            + `\n![image](${previousImageUrl}) |![image](${imageUrl})`
-            + "\n\n### Change Notes"
-            + `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}`
-            + "\n\n---"
-            + "\n\n### Implementation Steps"
-            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
-            + `\n2. Update \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` to match the new version (if applicable).`
-            + `\n3. Within \`${pascalCase(card.name)}.js\`, update version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
-            + "\n4. (Optional) Local testing. Test files are not required for playtesting."
-            + "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
-            + "\n\n---"
-            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const body =
+            `## :memo: Update requested for ${card.name} (${project.code})` +
+            "\n\n### What needs to be done?" +
+            "\nUpdate this cards version and, if there are non-keyword textbox changes, update the card's code." +
+            "\n\nPrevious Version | New Version" +
+            "\n:-------------------------:|:-------------------------:" +
+            `\n![image](${previousImageUrl}) |![image](${imageUrl})` +
+            "\n\n### Change Notes" +
+            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}` +
+            "\n\n---" +
+            "\n\n### Implementation Steps" +
+            "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)." +
+            `\n2. Update \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` to match the new version (if applicable).` +
+            `\n3. Within \`${pascalCase(card.name)}.js\`, update version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).` +
+            "\n4. (Optional) Local testing. Test files are not required for playtesting." +
+            "\n5. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging." +
+            "\n\n---" +
+            "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
         const labels = ["automated", "update-card"];
         if (!previous.implemented) {
             labels.push("implement-card");
@@ -314,24 +328,25 @@ const issues = {
         const previousImageUrl = getTimeLockedImageUrl(previous);
         const title = `${card.code} | ${project.code} - Replace with ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
-        const body = `## :memo: Replacement requested to ${card.name} (${project.code})`
-            + "\n\n### What needs to be done?"
-            + "\nPrevious card should be deleted, and replacement card needs to be added to this repository, which will require a card file to be created and potentially code implementation."
-            + "\n\nPrevious Card | Replacement Card"
-            + "\n:-------------------------:|:-------------------------:"
-            + `\n![image](${previousImageUrl}) |![image](${imageUrl})`
-            + "\n\n### Change Notes"
-            + `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}`
-            + "\n\n---"
-            + "\n\n### Implementation Steps"
-            + "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)."
-            + `\n2. Delete \`server/game/cards/${project.code}/${pascalCase(previous.name)}.js\`, and any external code which was created explicitly for it (eg. new effects).`
-            + `\n3. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on replacement card.`
-            + `\n4. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).`
-            + "\n5. (Optional) Local testing. Test files are not required for playtesting."
-            + "\n6. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging."
-            + "\n\n---"
-            + "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
+        const body =
+            `## :memo: Replacement requested to ${card.name} (${project.code})` +
+            "\n\n### What needs to be done?" +
+            "\nPrevious card should be deleted, and replacement card needs to be added to this repository, which will require a card file to be created and potentially code implementation." +
+            "\n\nPrevious Card | Replacement Card" +
+            "\n:-------------------------:|:-------------------------:" +
+            `\n![image](${previousImageUrl}) |![image](${imageUrl})` +
+            "\n\n### Change Notes" +
+            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}` +
+            "\n\n---" +
+            "\n\n### Implementation Steps" +
+            "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)." +
+            `\n2. Delete \`server/game/cards/${project.code}/${pascalCase(previous.name)}.js\`, and any external code which was created explicitly for it (eg. new effects).` +
+            `\n3. Create & implement \`server/game/cards/${project.code}/${pascalCase(card.name)}.js\` based on replacement card.` +
+            `\n4. Within \`${pascalCase(card.name)}.js\`, add version underneath card code at bottom of file (\`${pascalCase(card.name)}.version = '${card.version}';\`).` +
+            "\n5. (Optional) Local testing. Test files are not required for playtesting." +
+            "\n6. When ready, create a pull request into `development` branch, add `Closes: #[this issue number]` in the description, and await approval/merging." +
+            "\n\n---" +
+            "\n\n_:robot: Issue was automatically created, and will close itself when card implementation is pushed to the playtesting website._";
         const labels = ["automated", "update-card"];
         if (!previous.implemented) {
             labels.push("implement-card");

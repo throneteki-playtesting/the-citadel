@@ -28,7 +28,7 @@ export function parseParamSemanticVersion(param?: string) {
     if (!param) {
         return undefined;
     }
-    return (valid(param) ?? undefined) as SemanticVersion| undefined;
+    return (valid(param) ?? undefined) as SemanticVersion | undefined;
 }
 
 export function getFactionCardImage(faction: Faction) {
@@ -51,7 +51,7 @@ export function daysFromNow(days: number): Date {
 export function convertToNode(htmlString: string): React.ReactNode[] {
     const raw = htmlString
         .replace(/(?<=\n?)([^\n]+)(?=\n?)/g, "<p>$1</p>")
-        .replace(/\[([^\]]+)\]/g, "<icon name=\"$1\"></icon>")
+        .replace(/\[([^\]]+)\]/g, '<icon name="$1"></icon>')
         .replace(/\*\*\*(.*?)\*\*\*/g, "<i>$1</i>")
         .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
         .replace(/((?:<p>-.*<\/p>\s*)+)/g, "<ul>$1</ul>")
@@ -73,13 +73,29 @@ export function convertToNode(htmlString: string): React.ReactNode[] {
                 case "p":
                     return <span key={key}>{children}</span>;
                 case "b":
-                    return <b key={key} className="font-bold">{children}</b>;
+                    return (
+                        <b key={key} className="font-bold">
+                            {children}
+                        </b>
+                    );
                 case "i":
-                    return <i key={key} className="italic font-bold">{children}</i>;
+                    return (
+                        <i key={key} className="italic font-bold">
+                            {children}
+                        </i>
+                    );
                 case "ul":
-                    return <ul key={key} className="list-disc ms-1 me-1 ps-8">{children}</ul>;
+                    return (
+                        <ul key={key} className="list-disc ms-1 me-1 ps-8">
+                            {children}
+                        </ul>
+                    );
                 case "li":
-                    return <li key={key} className="py-0.5">{children}</li>;
+                    return (
+                        <li key={key} className="py-0.5">
+                            {children}
+                        </li>
+                    );
                 case "icon":
                     return <ThronesIcon key={key} name={el.getAttribute("name") as Icon} />;
                 default:
@@ -89,4 +105,4 @@ export function convertToNode(htmlString: string): React.ReactNode[] {
         return null;
     };
     return body ? Array.from(body.childNodes).map((node, i) => transformNode(node, i)) : [];
-};
+}

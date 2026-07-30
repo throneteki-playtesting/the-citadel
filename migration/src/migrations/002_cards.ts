@@ -8,7 +8,7 @@ import { fetchCardForumThreads } from "../lib/discord";
 const BATCH_SIZE = 500;
 const userId = "120834530801221634";
 
-const releasePackData: Record<string, { name: string, released: Date }> = {
+const releasePackData: Record<string, { name: string; released: Date }> = {
     WAID: {
         name: "When All Is Darkest",
         released: new Date("2025-05-18")
@@ -44,7 +44,7 @@ const factionMap: Record<string, string> = {
     "House Stark": "stark",
     "House Targaryen": "targaryen",
     "House Tyrell": "tyrell",
-    "Neutral": "neutral"
+    Neutral: "neutral"
 };
 
 const compareSemver = (a: string, b: string): number => {
@@ -88,7 +88,9 @@ export const migration: Migration = {
         const now = new Date();
         const latestMap: Record<string, { key: string; version: string }> = {};
         const docs: Record<string, any>[] = [];
-        const issueFound: string[] = [], issueMissing: string[] = [], unknownDates: string[] = [];
+        const issueFound: string[] = [],
+            issueMissing: string[] = [],
+            unknownDates: string[] = [];
 
         const transformProgress = createProgress("Transforming");
         for (let i = 0; i < allCards.length; i++) {
@@ -100,7 +102,7 @@ export const migration: Migration = {
                 project: card.projectId,
                 latest: false,
                 draft: !card.playtesting || card.version !== card.playtesting,
-                implemented: card.playtesting && (card.github?.status === "complete"),
+                implemented: card.playtesting && card.github?.status === "complete",
                 updatedBy: userId,
                 _metadata: {}
             };
@@ -192,7 +194,10 @@ export const migration: Migration = {
 
             const key = `${newDoc.project}-${newDoc.number}`;
             if (!newDoc.draft && (!latestMap[key] || compareSemver(newDoc.version, latestMap[key].version) > 0)) {
-                latestMap[key] = { key: `${newDoc.project}-${newDoc.number}-${newDoc.version}`, version: newDoc.version };
+                latestMap[key] = {
+                    key: `${newDoc.project}-${newDoc.number}-${newDoc.version}`,
+                    version: newDoc.version
+                };
             }
 
             docs.push(newDoc);
@@ -202,10 +207,12 @@ export const migration: Migration = {
         );
 
         if (unknownDates.length > 0) {
-            log.warn(`${unknownDates} cards could not have their created/updated dates resolved. Please investigate: ${unknownDates.join(", ")}`);
+            log.warn(
+                `${unknownDates} cards could not have their created/updated dates resolved. Please investigate: ${unknownDates.join(", ")}`
+            );
         }
 
-        const latestKeys = new Set(Object.values(latestMap).map(v => v.key));
+        const latestKeys = new Set(Object.values(latestMap).map((v) => v.key));
         for (const doc of docs) {
             if (latestKeys.has(`${doc.project}-${doc.number}-${doc.version}`)) doc.latest = true;
         }
@@ -221,7 +228,8 @@ export const migration: Migration = {
             const threadMap = await fetchCardForumThreads();
             log.info(`Loaded ${threadMap.size} card forum thread(s)`);
 
-            let discordMapped = 0, discordMissing = 0;
+            let discordMapped = 0,
+                discordMissing = 0;
             for (const doc of docs) {
                 if (doc.draft) continue;
                 if (doc._metadata?.discord?.messageUrl) continue;
@@ -240,7 +248,9 @@ export const migration: Migration = {
             }
             log.info(`Discord: ${discordMapped} URL(s) mapped, ${discordMissing} non-draft card(s) without a thread`);
         } catch (err) {
-            log.warn(`Discord forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn(
+                `Discord forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
 
         // Wipe metadata if its empty
@@ -255,18 +265,21 @@ export const migration: Migration = {
         }
 
         const saveProgress = createProgress("Saving");
-        let upserted = 0, modified = 0;
+        let upserted = 0,
+            modified = 0;
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batch = docs.slice(i, i + BATCH_SIZE);
             // Full replace so fields absent from the source (e.g. note) don't linger from earlier runs.
             // Docs without a source counterpart are never matched, so they stay untouched;
             // created/createdBy carry over from the existing doc when the source has no real date.
-            const existing = await dest.find(
-                { $or: batch.map(doc => ({ project: doc.project, number: doc.number, version: doc.version })) },
-                { projection: { project: 1, number: 1, version: 1, created: 1, createdBy: 1 } }
-            ).toArray();
+            const existing = await dest
+                .find(
+                    { $or: batch.map((doc) => ({ project: doc.project, number: doc.number, version: doc.version })) },
+                    { projection: { project: 1, number: 1, version: 1, created: 1, createdBy: 1 } }
+                )
+                .toArray();
             const existingMap = new Map(existing.map((e: any) => [`${e.project}|${e.number}|${e.version}`, e]));
-            const ops = batch.map(doc => {
+            const ops = batch.map((doc) => {
                 // position within the pack moves to the slots collection (derived below) - only the
                 // permanent stamp of what actually shipped stays on the card itself, see IPlaytestCard.released
                 const { created, release, ...restDoc } = doc;
@@ -305,13 +318,30 @@ export const migration: Migration = {
 
         const projectsDest = destDb.collection("projects");
         const slotsDest = destDb.collection("slots");
-        const allFactions = ["baratheon", "greyjoy", "lannister", "martell", "thenightswatch", "stark", "targaryen", "tyrell", "neutral"];
+        const allFactions = [
+            "baratheon",
+            "greyjoy",
+            "lannister",
+            "martell",
+            "thenightswatch",
+            "stark",
+            "targaryen",
+            "tyrell",
+            "neutral"
+        ];
 
         const draftProjectNumbers = new Set(
-            (await projectsDest.find({ draft: true }, { projection: { number: 1 } }).toArray()).map((p: any) => p.number)
+            (await projectsDest.find({ draft: true }, { projection: { number: 1 } }).toArray()).map(
+                (p: any) => p.number
+            )
         );
 
-        type SlotDraft = { project: number; number: number; faction: string; release?: { short: string; number: number } };
+        type SlotDraft = {
+            project: number;
+            number: number;
+            faction: string;
+            release?: { short: string; number: number };
+        };
         const bySlotKey = new Map<string, SlotDraft>();
 
         for (const doc of docs) {
@@ -320,13 +350,21 @@ export const migration: Migration = {
             const existing = bySlotKey.get(key);
             // Prefer whichever version actually carries the historical release info
             if (!existing || (doc.release && !existing.release)) {
-                bySlotKey.set(key, { project: doc.project, number: doc.number, faction: doc.faction, release: doc.release });
+                bySlotKey.set(key, {
+                    project: doc.project,
+                    number: doc.number,
+                    faction: doc.faction,
+                    release: doc.release
+                });
             }
         }
 
         // Determine each project's release sequence from the lowest absolute printed number seen per pack code,
         // and its ordered faction slot allocations from the factions of its cards in printed order
-        const releaseInfoByProject = new Map<number, Map<string, { minNumber: number; cards: { number: number; faction: string }[] }>>();
+        const releaseInfoByProject = new Map<
+            number,
+            Map<string, { minNumber: number; cards: { number: number; faction: string }[] }>
+        >();
         for (const slot of bySlotKey.values()) {
             if (!slot.release) continue;
             const projectMap = releaseInfoByProject.get(slot.project) ?? new Map();
@@ -340,39 +378,44 @@ export const migration: Migration = {
         const releaseDocsByProject = new Map<number, Record<string, any>[]>();
         for (const [project, codes] of releaseInfoByProject) {
             const ordered = [...codes.entries()].sort((a, b) => a[1].minNumber - b[1].minNumber);
-            releaseDocsByProject.set(project, ordered.map(([code, { cards }], index) => {
-                const releaseData = releasePackData[code];
-                const name = releaseData?.name ?? code;
-                const releasedDate = releaseData?.released.toISOString().split("T")[0] ?? undefined;
-                const slots: { faction: string; count: number }[] = [];
-                for (const card of [...cards].sort((a, b) => a.number - b.number)) {
-                    const allocation = slots.find((s) => s.faction === card.faction);
-                    if (allocation) {
-                        allocation.count += 1;
-                    } else {
-                        slots.push({ faction: card.faction, count: 1 });
+            releaseDocsByProject.set(
+                project,
+                ordered.map(([code, { cards }], index) => {
+                    const releaseData = releasePackData[code];
+                    const name = releaseData?.name ?? code;
+                    const releasedDate = releaseData?.released.toISOString().split("T")[0] ?? undefined;
+                    const slots: { faction: string; count: number }[] = [];
+                    for (const card of [...cards].sort((a, b) => a.number - b.number)) {
+                        const allocation = slots.find((s) => s.faction === card.faction);
+                        if (allocation) {
+                            allocation.count += 1;
+                        } else {
+                            slots.push({ faction: card.faction, count: 1 });
+                        }
                     }
-                }
-                return {
-                    code,
-                    name,
-                    number: index + 1,
-                    capacity: cards.length,
-                    slots,
-                    status: "released",
-                    releasedDate,
-                    created: releasedDate ?? now,
-                    createdBy: userId,
-                    updated: releasedDate ?? now,
-                    updatedBy: userId
-                };}
-            ));
+                    return {
+                        code,
+                        name,
+                        number: index + 1,
+                        capacity: cards.length,
+                        slots,
+                        status: "released",
+                        releasedDate,
+                        created: releasedDate ?? now,
+                        createdBy: userId,
+                        updated: releasedDate ?? now,
+                        updatedBy: userId
+                    };
+                })
+            );
         }
 
         function offsetFor(project: number, code: string): number {
             const releases = releaseDocsByProject.get(project) ?? [];
             const target = releases.find((r) => r.code === code);
-            return target ? releases.filter((r) => r.number < target.number).reduce((sum, r) => sum + r.capacity, 0) : 0;
+            return target
+                ? releases.filter((r) => r.number < target.number).reduce((sum, r) => sum + r.capacity, 0)
+                : 0;
         }
 
         const slotDocs = [...bySlotKey.values()].map((slot) => ({
@@ -403,7 +446,9 @@ export const migration: Migration = {
         }
 
         if (dryRun) {
-            log.info(`[dry-run] Would create ${slotDocs.length} slot(s) across ${cardCountByProject.size} non-draft project(s)`);
+            log.info(
+                `[dry-run] Would create ${slotDocs.length} slot(s) across ${cardCountByProject.size} non-draft project(s)`
+            );
             log.info(`[dry-run] Would set releases for ${releaseDocsByProject.size} project(s)`);
         } else {
             if (slotDocs.length > 0) {

@@ -51,6 +51,9 @@ export function EmojiSelect({ defaultValue, name = "emoji", label = "Emoji", ...
     );
 }
 
-type EmojiSelectProps = Omit<AutocompleteProps<{ name: string; unicode: string }>, "children" | "items" | "inputValue" | "onInputChange" | "allowsCustomValue" | "defaultSelectedKey"> & {
+type EmojiSelectProps = Omit<
+    AutocompleteProps<{ name: string; unicode: string }>,
+    "children" | "items" | "inputValue" | "onInputChange" | "allowsCustomValue" | "defaultSelectedKey"
+> & {
     defaultValue?: string;
 };

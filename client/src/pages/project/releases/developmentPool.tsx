@@ -23,11 +23,13 @@ export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive
                         return null;
                     }
                     const previousSlotNumber = index > 0 ? slotNumberFromItemId(sortedIds[index - 1])! : undefined;
-                    const isNewFactionGroup = previousSlotNumber !== undefined && cardsByNumber.get(previousSlotNumber)?.faction !== card.faction;
+                    const isNewFactionGroup =
+                        previousSlotNumber !== undefined &&
+                        cardsByNumber.get(previousSlotNumber)?.faction !== card.faction;
                     return (
                         <Fragment key={id}>
-                            {isNewFactionGroup && <div className="col-span-full border-t border-content3"/>}
-                            <PoolCapsule id={id} card={card} isInteractive={isInteractive}/>
+                            {isNewFactionGroup && <div className="col-span-full border-t border-content3" />}
+                            <PoolCapsule id={id} card={card} isInteractive={isInteractive} />
                         </Fragment>
                     );
                 })}
@@ -39,7 +41,7 @@ type DevelopmentPanelProps = {
     itemIds: string[];
     cardsByNumber: Map<number, IPlaytestCard>;
     isInteractive: boolean;
-}
+};
 
 function PoolCapsule({ id, card, isInteractive }: PoolCapsuleProps) {
     // Object form disabled is required to pull chips out of collision detection - boolean only disables dragging, not droppable
@@ -51,7 +53,7 @@ function PoolCapsule({ id, card, isInteractive }: PoolCapsuleProps) {
     const style = { transform: CSS.Transform.toString(transform), transition };
 
     if (isDragging) {
-        return <div ref={setNodeRef} style={style} className="h-9 rounded-md border-2 border-dashed border-content3"/>;
+        return <div ref={setNodeRef} style={style} className="h-9 rounded-md border-2 border-dashed border-content3" />;
     }
 
     return (
@@ -70,4 +72,4 @@ type PoolCapsuleProps = {
     id: string;
     card: IPlaytestCard;
     isInteractive: boolean;
-}
+};

@@ -43,66 +43,70 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
 
     switch (desc.type) {
         case "string": {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({
-                    $gt: Joi.string(),
-                    $gte: Joi.string(),
-                    $lt: Joi.string(),
-                    $lte: Joi.string(),
-                    $ne: Joi.string(),
-                    $in: Joi.array().items(Joi.string()),
-                    $nin: Joi.array().items(Joi.string()),
-                    $regex: Joi.string(),
-                    $exists: Joi.boolean()
-                })
-            ).optional();
+            return Joi.alternatives()
+                .try(
+                    fieldSchema,
+                    Joi.object({
+                        $gt: Joi.string(),
+                        $gte: Joi.string(),
+                        $lt: Joi.string(),
+                        $lte: Joi.string(),
+                        $ne: Joi.string(),
+                        $in: Joi.array().items(Joi.string()),
+                        $nin: Joi.array().items(Joi.string()),
+                        $regex: Joi.string(),
+                        $exists: Joi.boolean()
+                    })
+                )
+                .optional();
         }
 
         case "number": {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({
-                    $gt: Joi.number(),
-                    $gte: Joi.number(),
-                    $lt: Joi.number(),
-                    $lte: Joi.number(),
-                    $ne: Joi.number(),
-                    $in: Joi.array().items(Joi.number()),
-                    $nin: Joi.array().items(Joi.number()),
-                    $exists: Joi.boolean()
-                })
-            ).optional();
+            return Joi.alternatives()
+                .try(
+                    fieldSchema,
+                    Joi.object({
+                        $gt: Joi.number(),
+                        $gte: Joi.number(),
+                        $lt: Joi.number(),
+                        $lte: Joi.number(),
+                        $ne: Joi.number(),
+                        $in: Joi.array().items(Joi.number()),
+                        $nin: Joi.array().items(Joi.number()),
+                        $exists: Joi.boolean()
+                    })
+                )
+                .optional();
         }
 
         case "date": {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({
-                    $gt: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
-                    $gte: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
-                    $lt: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
-                    $lte: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
-                    $ne: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
-                    $in: Joi.array().items(Joi.alternatives().try(Joi.date(), Joi.string().isoDate())),
-                    $nin: Joi.array().items(Joi.alternatives().try(Joi.date(), Joi.string().isoDate())),
-                    $exists: Joi.boolean()
-                })
-            ).optional();
+            return Joi.alternatives()
+                .try(
+                    fieldSchema,
+                    Joi.object({
+                        $gt: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
+                        $gte: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
+                        $lt: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
+                        $lte: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
+                        $ne: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()),
+                        $in: Joi.array().items(Joi.alternatives().try(Joi.date(), Joi.string().isoDate())),
+                        $nin: Joi.array().items(Joi.alternatives().try(Joi.date(), Joi.string().isoDate())),
+                        $exists: Joi.boolean()
+                    })
+                )
+                .optional();
         }
 
         case "boolean": {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({ $exists: Joi.boolean() })
-            ).optional();
+            return Joi.alternatives()
+                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
+                .optional();
         }
 
         case "array": {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({ $exists: Joi.boolean() })
-            ).optional();
+            return Joi.alternatives()
+                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
+                .optional();
         }
 
         case "object": {
@@ -117,25 +121,22 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
                 nestedShape[key] = buildFieldFilterSchema(childSchema);
             }
 
-            return Joi.alternatives().try(
-                Joi.object(nestedShape),
-                Joi.object({ $exists: Joi.boolean() })
-            ).optional();
+            return Joi.alternatives()
+                .try(Joi.object(nestedShape), Joi.object({ $exists: Joi.boolean() }))
+                .optional();
         }
 
         case "alternatives": {
             // Handles JoiXDashNumber etc. - just allow the original schema or $exists
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({ $exists: Joi.boolean() })
-            ).optional();
+            return Joi.alternatives()
+                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
+                .optional();
         }
 
         default: {
-            return Joi.alternatives().try(
-                fieldSchema,
-                Joi.object({ $exists: Joi.boolean() })
-            ).optional();
+            return Joi.alternatives()
+                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
+                .optional();
         }
     }
 }
@@ -161,10 +162,7 @@ export function getRequestSchema<T>(
     const filterSchema = buildFilterSchema(schema);
 
     return Joi.object({
-        filter: Joi.alternatives().try(
-            filterSchema,
-            Joi.array().items(filterSchema)
-        ).optional(),
+        filter: Joi.alternatives().try(filterSchema, Joi.array().items(filterSchema)).optional(),
         ...paging(),
         ...orderBy(schema, defaultOrderBy)
     });

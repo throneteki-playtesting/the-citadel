@@ -12,8 +12,8 @@ export default function Error({ label = "The ravens have gone silent...", conten
             </div>
         </div>
     );
-};
+}
 type ErrorProps = {
     label?: string;
     content?: ReactNode | ReactNode[];
-}
+};

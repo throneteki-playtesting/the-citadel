@@ -3,7 +3,14 @@ import { ReactNode, useMemo } from "react";
 import { BaseElementProps } from "../types";
 import LoadingCard from "./loadingCard";
 
-const CardGrid = function<T>({ cards = [], size = "md", children: renderMapFunc, className, style, isLoading }: CardGridProps<T>) {
+const CardGrid = function <T>({
+    cards = [],
+    size = "md",
+    children: renderMapFunc,
+    className,
+    style,
+    isLoading
+}: CardGridProps<T>) {
     const loadingNumber = useMemo(() => {
         switch (size) {
             case "sm":
@@ -17,7 +24,7 @@ const CardGrid = function<T>({ cards = [], size = "md", children: renderMapFunc,
 
     const content = useMemo(() => {
         if (isLoading) {
-            return Array.from({ length: loadingNumber }).map((_, index) => <LoadingCard key={index}/>);
+            return Array.from({ length: loadingNumber }).map((_, index) => <LoadingCard key={index} />);
         }
         return cards.map(renderMapFunc);
     }, [cards, isLoading, loadingNumber, renderMapFunc]);
@@ -40,11 +47,10 @@ const CardGrid = function<T>({ cards = [], size = "md", children: renderMapFunc,
 };
 
 type CardGridProps<T> = Omit<BaseElementProps, "children"> & {
-    cards?: T[],
-    size?: "sm" | "md" | "lg",
-    children: (card: T, index: number) => ReactNode
-    isLoading?: boolean
-}
-
+    cards?: T[];
+    size?: "sm" | "md" | "lg";
+    children: (card: T, index: number) => ReactNode;
+    isLoading?: boolean;
+};
 
 export default CardGrid;

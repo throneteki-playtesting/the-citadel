@@ -3,11 +3,7 @@ import { statementColors, thronesColors } from "../common/utils";
 
 /** @type {import('tailwindcss').Config} */
 export default {
-    content: [
-        "./index.html",
-        "./src/**/*.{js,ts,jsx,tsx}",
-        "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}"
-    ],
+    content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}", "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}"],
     theme: {
         extend: {
             fontFamily: {
@@ -90,7 +86,7 @@ export default {
                         primary: {
                             DEFAULT: "#C5A059",
                             foreground: "#2C2416",
-                            50:  "#FAF5E8",
+                            50: "#FAF5E8",
                             100: "#F5EBD1",
                             200: "#EAD4A0",
                             300: "#DFBE70",
@@ -105,7 +101,7 @@ export default {
                         secondary: {
                             DEFAULT: "#7A6E5A",
                             foreground: "#F9F5EE",
-                            50:  "#F4F0E8",
+                            50: "#F4F0E8",
                             100: "#E8E0D0",
                             200: "#D0C4A8",
                             300: "#B8A880",
@@ -120,7 +116,7 @@ export default {
                         success: {
                             DEFAULT: "#22663C",
                             foreground: "#FFFFFF",
-                            50:  "#EBF5EE",
+                            50: "#EBF5EE",
                             100: "#D6EBDD",
                             200: "#ADD7BB",
                             300: "#84C399",
@@ -135,7 +131,7 @@ export default {
                         danger: {
                             DEFAULT: "#8A262E",
                             foreground: "#FFFFFF",
-                            50:  "#F8ECED",
+                            50: "#F8ECED",
                             100: "#F1D9DB",
                             200: "#E3B3B7",
                             300: "#D58D93",
@@ -150,7 +146,7 @@ export default {
                         warning: {
                             DEFAULT: "#B45A1E",
                             foreground: "#FFFFFF",
-                            50:  "#FDF3E6",
+                            50: "#FDF3E6",
                             100: "#FAE7CD",
                             200: "#F5CF9B",
                             300: "#F0B769",
@@ -180,7 +176,7 @@ export default {
                         primary: {
                             DEFAULT: "#C5A059",
                             foreground: "#0A0A0C",
-                            50:  "#4F2E00",
+                            50: "#4F2E00",
                             100: "#6D4A0A",
                             200: "#8A6620",
                             300: "#A8833A",
@@ -195,7 +191,7 @@ export default {
                         secondary: {
                             DEFAULT: "#8A8A9A",
                             foreground: "#0A0A0C",
-                            50:  "#101018",
+                            50: "#101018",
                             100: "#1A1A28",
                             200: "#2A2A3A",
                             300: "#3A3A4E",
@@ -210,7 +206,7 @@ export default {
                         success: {
                             DEFAULT: "#5BAF77",
                             foreground: "#0A0A0C",
-                            50:  "#07160C",
+                            50: "#07160C",
                             100: "#0E2A18",
                             200: "#143E24",
                             300: "#1B5230",
@@ -225,7 +221,7 @@ export default {
                         danger: {
                             DEFAULT: "#C7676F",
                             foreground: "#0A0A0C",
-                            50:  "#1C0709",
+                            50: "#1C0709",
                             100: "#370F13",
                             200: "#53161C",
                             300: "#6E1E25",
@@ -240,7 +236,7 @@ export default {
                         warning: {
                             DEFAULT: "#EB9F37",
                             foreground: "#0A0A0C",
-                            50:  "#241206",
+                            50: "#241206",
                             100: "#48240C",
                             200: "#6C3612",
                             300: "#904818",

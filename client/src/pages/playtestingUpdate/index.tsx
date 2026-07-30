@@ -12,5 +12,5 @@ export default function PlaytestingUpdate() {
         return <Navigate to="/" />;
     }
 
-    return <PlaytestingUpdateDetail project={project} version={version}/>;
+    return <PlaytestingUpdateDetail project={project} version={version} />;
 }

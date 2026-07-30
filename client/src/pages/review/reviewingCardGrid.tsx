@@ -9,7 +9,17 @@ import { Filter, Sort } from "common/types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 
-export default function PlaytestCardGrid({ className, style, size, filter: initialFilter, orderBy: initialOrderBy, search: initialSearch, pageSize = 10, children: renderMapFunc, menuContent }: PlaytestCardGridProps) {
+export default function PlaytestCardGrid({
+    className,
+    style,
+    size,
+    filter: initialFilter,
+    orderBy: initialOrderBy,
+    search: initialSearch,
+    pageSize = 10,
+    children: renderMapFunc,
+    menuContent
+}: PlaytestCardGridProps) {
     const [search, setSearch] = useState("");
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState<number>(pageSize);
@@ -42,7 +52,11 @@ export default function PlaytestCardGrid({ className, style, size, filter: initi
         ];
     }, [initialFilter, search]);
 
-    const { data: cardsData, isLoading, isFetching } = useGetCardsQuery({ filter, orderBy: initialOrderBy, page, perPage });
+    const {
+        data: cardsData,
+        isLoading,
+        isFetching
+    } = useGetCardsQuery({ filter, orderBy: initialOrderBy, page, perPage });
 
     return (
         <div className={classNames("w-full flex flex-col gap-2", className)} style={style}>
@@ -51,7 +65,7 @@ export default function PlaytestCardGrid({ className, style, size, filter: initi
                     placeholder="Search..."
                     value={search}
                     onValueChange={handleSearch}
-                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
+                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
                     endContent={
                         isFetching ? (
                             <Spinner size="sm" aria-label="Loading" />
@@ -69,10 +83,25 @@ export default function PlaytestCardGrid({ className, style, size, filter: initi
                 {renderMapFunc}
             </CardGrid>
             <div className="flex items-center gap-2">
-                <Select label="Per Page" labelPlacement="outside-left" className="w-34" selectedKeys={[perPage.toString()]} onSelectionChange={(keys) => setPerPage(keys.currentKey ? parseInt(keys.currentKey) : 24)}>
-                    {[10, 15, 20, 25].map((pp) => <SelectItem key={pp} textValue={pp.toString()}>{pp}</SelectItem>)}
+                <Select
+                    label="Per Page"
+                    labelPlacement="outside-left"
+                    className="w-34"
+                    selectedKeys={[perPage.toString()]}
+                    onSelectionChange={(keys) => setPerPage(keys.currentKey ? parseInt(keys.currentKey) : 24)}
+                >
+                    {[10, 15, 20, 25].map((pp) => (
+                        <SelectItem key={pp} textValue={pp.toString()}>
+                            {pp}
+                        </SelectItem>
+                    ))}
                 </Select>
-                <Pagination className="grow" page={page} onChange={setPage} total={Math.ceil((cardsData?.total ?? 0) / perPage)} />
+                <Pagination
+                    className="grow"
+                    page={page}
+                    onChange={setPage}
+                    total={Math.ceil((cardsData?.total ?? 0) / perPage)}
+                />
             </div>
         </div>
     );
@@ -86,4 +115,4 @@ type PlaytestCardGridProps = Omit<BaseElementProps, "children"> & {
     pageSize?: number;
     menuContent?: ReactNode;
     children: (card: IPlaytestCard, index: number) => ReactNode;
-}
+};

@@ -49,10 +49,7 @@ export const store = configureStore({
         [thronesdbApi.reducerPath]: thronesdbApi.reducer
     },
     middleware: (getDefaultMiddleware) =>
-        getDefaultMiddleware()
-            .concat(errorLoggerMiddleware)
-            .concat(api.middleware)
-            .concat(thronesdbApi.middleware)
+        getDefaultMiddleware().concat(errorLoggerMiddleware).concat(api.middleware).concat(thronesdbApi.middleware)
 });
 
 export type RootState = ReturnType<typeof store.getState>;

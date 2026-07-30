@@ -2,8 +2,8 @@ import { useState, useRef, useCallback, cloneElement, isValidElement, type React
 import { Popover, PopoverTrigger, type PopoverProps } from "@heroui/react";
 
 type TouchPopoverProps = Omit<PopoverProps, "isOpen" | "onOpenChange"> & {
-  holdDuration?: number;
-  trigger: React.ReactNode;
+    holdDuration?: number;
+    trigger: React.ReactNode;
 };
 
 export function TouchPopover({ holdDuration = 500, trigger, children, ...props }: TouchPopoverProps) {
@@ -31,11 +31,11 @@ export function TouchPopover({ holdDuration = 500, trigger, children, ...props }
 
     const triggerChild = isValidElement(trigger)
         ? cloneElement(trigger as ReactElement<Record<string, unknown>>, {
-            onTouchStart: handleTouchStart,
-            onTouchEnd: handleTouchEnd,
-            onTouchCancel: handleTouchEnd,
-            onTouchMove: handleTouchMove
-        })
+              onTouchStart: handleTouchStart,
+              onTouchEnd: handleTouchEnd,
+              onTouchCancel: handleTouchEnd,
+              onTouchMove: handleTouchMove
+          })
         : trigger;
 
     return (

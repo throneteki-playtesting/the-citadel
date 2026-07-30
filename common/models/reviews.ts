@@ -2,36 +2,42 @@ import { DeckLink, DecklistLink } from "common/types";
 import { SemanticVersion } from "../utils";
 import { IAuditable } from "./shared";
 
-export const statementAnswers = ["strongly disagree", "somewhat disagree", "neither agree nor disagree", "somewhat agree", "strongly agree"];
-export type StatementAnswer = typeof statementAnswers[number];
+export const statementAnswers = [
+    "strongly disagree",
+    "somewhat disagree",
+    "neither agree nor disagree",
+    "somewhat agree",
+    "strongly agree"
+];
+export type StatementAnswer = (typeof statementAnswers)[number];
 export type Statements = {
-    boring: StatementAnswer,
-    competitive: StatementAnswer,
-    creative: StatementAnswer,
-    balanced: StatementAnswer,
-    releasable: StatementAnswer
+    boring: StatementAnswer;
+    competitive: StatementAnswer;
+    creative: StatementAnswer;
+    balanced: StatementAnswer;
+    releasable: StatementAnswer;
 };
 
 export interface ReviewDeck {
-    link: DeckLink | DecklistLink,
-    shared: boolean
+    link: DeckLink | DecklistLink;
+    shared: boolean;
 }
 
 export interface IPlaytestReview extends IAuditable {
-    reviewer: string,
-    project: number,
-    number: number,
-    version: SemanticVersion,
-    decks: ReviewDeck[],
-    played: number,
-    statements: Statements,
+    reviewer: string;
+    project: number;
+    number: number;
+    version: SemanticVersion;
+    decks: ReviewDeck[];
+    played: number;
+    statements: Statements;
     _metadata?: {
         discord?: {
-            messageUrl?: string,
-            lastSynced?: Date
-        }
-    },
-    additional?: string
+            messageUrl?: string;
+            lastSynced?: Date;
+        };
+    };
+    additional?: string;
 }
 
 export enum StatementQuestions {

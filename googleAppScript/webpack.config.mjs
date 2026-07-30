@@ -21,7 +21,7 @@ export default {
     resolve: {
         extensions: [".ts", ".js"],
         alias: {
-            "common": path.resolve(__dirname, "../common")
+            common: path.resolve(__dirname, "../common")
         }
     },
     module: {
@@ -38,9 +38,7 @@ export default {
             autoGlobalExportsFiles: ["src/index.ts"]
         }),
         new CopyPlugin({
-            patterns: [
-                { from: "appsscript.json", to: "appsscript.json" }
-            ]
+            patterns: [{ from: "appsscript.json", to: "appsscript.json" }]
         })
     ]
 };

@@ -28,7 +28,7 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
             const description = isPreview(draft) ? "Preview" : "Drafting Changes";
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faFeather} size="xl"/>,
+                icon: <FontAwesomeIcon icon={faFeather} size="xl" />,
                 color: "primary",
                 description
             };
@@ -46,10 +46,13 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
             } else if (isNextRelease && nextRelease) {
                 return {
                     title,
-                    icon: <FontAwesomeIcon icon={faCrosshairs} size="xl"/>,
+                    icon: <FontAwesomeIcon icon={faCrosshairs} size="xl" />,
                     description: `Slotted for ${nextRelease.code}`,
                     color: "success",
-                    onPress: () => navigate(`/project/${project}?tab=releases`, { state: { highlight: highlightTarget.release(project, nextRelease.code) } })
+                    onPress: () =>
+                        navigate(`/project/${project}?tab=releases`, {
+                            state: { highlight: highlightTarget.release(project, nextRelease.code) }
+                        })
                 };
             } else {
                 return {
@@ -66,7 +69,7 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
         };
     }, [cardsData?.items, isNextRelease, nextRelease, navigate, project]);
 
-    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading}/>;
+    return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };
 
 type DevelopmentStatusProps = Omit<BaseElementProps, "children"> & {
@@ -74,6 +77,6 @@ type DevelopmentStatusProps = Omit<BaseElementProps, "children"> & {
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
-}
+};
 
 export default DevelopmentStatus;

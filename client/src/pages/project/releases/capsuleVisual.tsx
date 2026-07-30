@@ -4,7 +4,17 @@ import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../../components/thronesIcon";
 import { factionBgClasses, factionBorderClasses } from "../../../constants";
 
-export default function CapsuleVisual({ card, className, style, forwardRef, listeners, attributes, draggable = true, onClick, flipSlot }: CapsuleVisualProps) {
+export default function CapsuleVisual({
+    card,
+    className,
+    style,
+    forwardRef,
+    listeners,
+    attributes,
+    draggable = true,
+    onClick,
+    flipSlot
+}: CapsuleVisualProps) {
     const isClickable = !draggable && !!onClick;
 
     return (
@@ -23,8 +33,10 @@ export default function CapsuleVisual({ card, className, style, forwardRef, list
                 className
             )}
         >
-            <ThronesIcon name={card.type} className="shrink-0 text-xs opacity-60"/>
-            <span className="flex-1 min-w-0 truncate whitespace-nowrap text-xs font-sans leading-tight">{card.name}</span>
+            <ThronesIcon name={card.type} className="shrink-0 text-xs opacity-60" />
+            <span className="flex-1 min-w-0 truncate whitespace-nowrap text-xs font-sans leading-tight">
+                {card.name}
+            </span>
         </div>
     );
 }
@@ -39,4 +51,4 @@ type CapsuleVisualProps = {
     onClick?: () => void;
     // Marks this capsule as a FLIP target (see useCapsuleFlip); omit on DragOverlay copies
     flipSlot?: number;
-}
+};

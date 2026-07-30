@@ -32,7 +32,15 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
         <div className={className}>
             <ButtonGroup className="hidden sm:flex">
                 {resolvedItems.map((item) => (
-                    <TouchTooltip key={item.key} content={<div className="flex flex-col"><div className="font-bold">{item.title}</div>{item.description && <div>{item.description}</div>}</div>}>
+                    <TouchTooltip
+                        key={item.key}
+                        content={
+                            <div className="flex flex-col">
+                                <div className="font-bold">{item.title}</div>
+                                {item.description && <div>{item.description}</div>}
+                            </div>
+                        }
+                    >
                         <Button
                             isIconOnly
                             color={item.color}
@@ -49,7 +57,7 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                 <Dropdown placement="top-end">
                     <DropdownTrigger>
                         <Button isIconOnly radius="full" size="lg" color="primary" className="shadow-lg">
-                            <FontAwesomeIcon icon={faEllipsisVertical}/>
+                            <FontAwesomeIcon icon={faEllipsisVertical} />
                         </Button>
                     </DropdownTrigger>
                     <DropdownMenu
@@ -63,7 +71,13 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                         }}
                     >
                         {resolvedItems.map((item) => (
-                            <DropdownItem key={item.key} color={item.color} description={item.description} startContent={item.icon} closeOnSelect={!item.keepOpen}>
+                            <DropdownItem
+                                key={item.key}
+                                color={item.color}
+                                description={item.description}
+                                startContent={item.icon}
+                                closeOnSelect={!item.keepOpen}
+                            >
                                 {item.title}
                             </DropdownItem>
                         ))}

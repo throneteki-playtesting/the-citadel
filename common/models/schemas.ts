@@ -30,27 +30,26 @@ const GithubPRMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
-const JoiXNumber = Joi.alternatives().try(
-    Joi.number(),
-    Joi.string().valid("X")
-);
-const JoiXDashNumber = Joi.alternatives().try(
-    Joi.number(),
-    Joi.string().valid("X", "-")
-);
+const JoiXNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X"));
+const JoiXDashNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X", "-"));
 
 const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
 export type SchemaType = BaseJoi.ObjectSchema<unknown>;
 
-export const SingleOrArray = (object: BaseJoi.ObjectSchema) => Joi.alternatives().try(object, Joi.array().items(object));
+export const SingleOrArray = (object: BaseJoi.ObjectSchema) =>
+    Joi.alternatives().try(object, Joi.array().items(object));
 
 export const Card = {
     Full: Joi.object({
         code: Joi.string().regex(Regex.Card.code),
-        faction: Joi.string().required().valid(...Cards.factions),
+        faction: Joi.string()
+            .required()
+            .valid(...Cards.factions),
         name: Joi.string().required(),
-        type: Joi.string().required().valid(...Cards.types),
+        type: Joi.string()
+            .required()
+            .valid(...Cards.types),
         loyal: Joi.when("faction", {
             is: Joi.not("neutral"),
             then: Joi.boolean().required()
@@ -130,7 +129,9 @@ export const PlaytestingCard = {
         latest: Joi.boolean(),
         draft: Joi.boolean(),
         note: Joi.object({
-            type: Joi.string().required().valid(...Cards.noteTypes),
+            type: Joi.string()
+                .required()
+                .valid(...Cards.noteTypes),
             text: Joi.string().when("type", {
                 is: Joi.not("implemented"),
                 then: Joi.required()
@@ -187,7 +188,9 @@ export const PlaytestingCard = {
         latest: Joi.boolean(),
         draft: Joi.boolean(),
         note: Joi.object({
-            type: Joi.string().required().valid(...Cards.noteTypes),
+            type: Joi.string()
+                .required()
+                .valid(...Cards.noteTypes),
             text: Joi.string().when("type", {
                 is: Joi.not("implemented"),
                 then: Joi.required()
@@ -290,10 +293,14 @@ export const CardSuggestion = {
     })
 };
 
-const ReleaseSlots = Joi.array().items(Joi.object({
-    faction: Joi.string().required().valid(...Cards.factions),
-    count: Joi.number().integer().min(0).required()
-}));
+const ReleaseSlots = Joi.array().items(
+    Joi.object({
+        faction: Joi.string()
+            .required()
+            .valid(...Cards.factions),
+        count: Joi.number().integer().min(0).required()
+    })
+);
 
 export const Release = {
     Full: Joi.object({
@@ -304,7 +311,9 @@ export const Release = {
         slots: ReleaseSlots.required(),
         plannedDate: Joi.string().regex(Regex.ReleaseDate),
         releasedDate: Joi.string().regex(Regex.ReleaseDate),
-        status: Joi.string().required().valid(...Projects.releaseStatuses),
+        status: Joi.string()
+            .required()
+            .valid(...Projects.releaseStatuses),
         article: Joi.object({
             url: Joi.string().uri(),
             status: Joi.string().valid(...Projects.articleStatuses)
@@ -357,14 +366,24 @@ export const Slot = {
     Full: Joi.object({
         project: Joi.number().required(),
         number: Joi.number().required(),
-        faction: Joi.string().required().valid(...Cards.factions),
+        faction: Joi.string()
+            .required()
+            .valid(...Cards.factions),
         type: Joi.string().valid(...Cards.types),
         notes: Joi.string().allow(""),
         statuses: Joi.object({
-            development: Joi.string().required().valid(...Slots.developmentStatuses),
-            wording: Joi.string().required().valid(...Slots.wordingStatuses),
-            artwork: Joi.string().required().valid(...Slots.artworkStatuses),
-            production: Joi.string().required().valid(...Slots.productionStatuses)
+            development: Joi.string()
+                .required()
+                .valid(...Slots.developmentStatuses),
+            wording: Joi.string()
+                .required()
+                .valid(...Slots.wordingStatuses),
+            artwork: Joi.string()
+                .required()
+                .valid(...Slots.artworkStatuses),
+            production: Joi.string()
+                .required()
+                .valid(...Slots.productionStatuses)
         }).required(),
         release: Joi.object({
             code: Joi.string().required(),
@@ -409,7 +428,9 @@ export const Project = {
         draft: Joi.boolean().required(),
         description: Joi.string().allow(""),
         script: Joi.string(),
-        type: Joi.string().required().valid(...Projects.types),
+        type: Joi.string()
+            .required()
+            .valid(...Projects.types),
         cardCount: Joi.object({
             baratheon: Joi.number().required(),
             greyjoy: Joi.number().required(),
@@ -471,7 +492,9 @@ export const Project = {
         draft: Joi.boolean().required(),
         description: Joi.string(),
         script: Joi.string(),
-        type: Joi.string().required().valid(...Projects.types),
+        type: Joi.string()
+            .required()
+            .valid(...Projects.types),
         cardCount: Joi.object({
             baratheon: Joi.number(),
             greyjoy: Joi.number(),
@@ -501,10 +524,7 @@ export const PlaytestingUpdate = {
         project: Joi.number().required(),
         version: Joi.number().required(),
         description: Joi.string(),
-        cardChanges: Joi.object().pattern(
-            Joi.number(),
-            Joi.string().regex(Regex.SemanticVersion)
-        ).required(),
+        cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)).required(),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
             github: GithubPRMetadata
@@ -518,10 +538,7 @@ export const PlaytestingUpdate = {
         project: Joi.number(),
         version: Joi.number(),
         description: Joi.string(),
-        cardChanges: Joi.object().pattern(
-            Joi.number(),
-            Joi.string().regex(Regex.SemanticVersion)
-        ),
+        cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
             github: GithubPRMetadata
@@ -534,10 +551,7 @@ export const PlaytestingUpdate = {
     Draft: Joi.object({
         project: Joi.number().required(),
         description: Joi.string(),
-        cardChanges: Joi.object().pattern(
-            Joi.number(),
-            Joi.string().regex(Regex.SemanticVersion)
-        ).required(),
+        cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)).required(),
         _metadata: Joi.object({
             github: GithubPRMetadata
         }),
@@ -560,13 +574,29 @@ export const PlaytestingReview = {
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
         played: Joi.number().required(),
-        decks: Joi.array().items(ReviewDeckSchema).when("played", { is: Joi.number().greater(0), then: Joi.array().required().min(1), otherwise: Joi.array().optional() }),
+        decks: Joi.array()
+            .items(ReviewDeckSchema)
+            .when("played", {
+                is: Joi.number().greater(0),
+                then: Joi.array().required().min(1),
+                otherwise: Joi.array().optional()
+            }),
         statements: Joi.object({
-            boring: Joi.string().required().valid(...statementAnswers),
-            competitive: Joi.string().required().valid(...statementAnswers),
-            creative: Joi.string().required().valid(...statementAnswers),
-            balanced: Joi.string().required().valid(...statementAnswers),
-            releasable: Joi.string().required().valid(...statementAnswers)
+            boring: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            competitive: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            creative: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            balanced: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            releasable: Joi.string()
+                .required()
+                .valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
         _metadata: Joi.object({
@@ -606,13 +636,29 @@ export const PlaytestingReview = {
         number: Joi.number().required(),
         version: Joi.string().required().regex(Regex.SemanticVersion),
         played: Joi.number().required(),
-        decks: Joi.array().items(ReviewDeckSchema).when("played", { is: Joi.number().greater(0), then: Joi.array().required().min(1), otherwise: Joi.array().optional() }),
+        decks: Joi.array()
+            .items(ReviewDeckSchema)
+            .when("played", {
+                is: Joi.number().greater(0),
+                then: Joi.array().required().min(1),
+                otherwise: Joi.array().optional()
+            }),
         statements: Joi.object({
-            boring: Joi.string().required().valid(...statementAnswers),
-            competitive: Joi.string().required().valid(...statementAnswers),
-            creative: Joi.string().required().valid(...statementAnswers),
-            balanced: Joi.string().required().valid(...statementAnswers),
-            releasable: Joi.string().required().valid(...statementAnswers)
+            boring: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            competitive: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            creative: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            balanced: Joi.string()
+                .required()
+                .valid(...statementAnswers),
+            releasable: Joi.string()
+                .required()
+                .valid(...statementAnswers)
         }).required(),
         additional: Joi.string(),
         _metadata: Joi.object({
@@ -703,7 +749,9 @@ export const Integration = {
 export const Log = {
     Full: Joi.object({
         id: Joi.string().required(),
-        category: Joi.string().required().valid(...logCategories),
+        category: Joi.string()
+            .required()
+            .valid(...logCategories),
         action: Joi.string().required(),
         principal: Joi.object({
             type: Joi.string().required().valid("user", "integration", "anonymous", "system"),
@@ -712,7 +760,9 @@ export const Log = {
         message: Joi.string().required(),
         context: Joi.object().pattern(Joi.string(), Joi.string()).default({}),
         details: Joi.object().unknown(true),
-        severity: Joi.string().required().valid(...logSeverities),
+        severity: Joi.string()
+            .required()
+            .valid(...logSeverities),
         created: Joi.date().required()
     })
 };

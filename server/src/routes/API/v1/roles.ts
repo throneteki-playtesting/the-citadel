@@ -4,7 +4,11 @@ import * as Schemas from "common/models/schemas";
 import express from "express";
 import asyncHandler from "express-async-handler";
 import Permission from "common/models/permissions";
-import { validatePermissionDependencies, validateRequest, validateRolePermissionDependenciesForUsers } from "@/middleware/permissions";
+import {
+    validatePermissionDependencies,
+    validateRequest,
+    validateRolePermissionDependenciesForUsers
+} from "@/middleware/permissions";
 import { StatusCodes } from "http-status-codes";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse } from "@/utils";
@@ -33,10 +37,7 @@ async function getRoles(
     return generateGetResponse(withUserCounts, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.Role.Full,
-    { position: "asc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.Role.Full, { position: "asc" });
 
 const validateGetRoles = [
     validateRequest(Permission.READ_ROLES),
@@ -46,7 +47,8 @@ const validateGetRoles = [
 ];
 
 // Read roles
-router.get("/",
+router.get(
+    "/",
     ...validateGetRoles,
     asyncHandler<unknown, unknown, unknown, IGetRequest<Role>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
@@ -56,9 +58,10 @@ router.get("/",
 );
 
 // Assign the Playtesting Team Discord role to the authenticated user
-router.post("/me/playtesting-team",
-    validateRequest((principal) =>
-        hasPermission(principal, Permission.ASSIGN_OWN_PLAYTESTING_ROLE) && "discordId" in principal
+router.post(
+    "/me/playtesting-team",
+    validateRequest(
+        (principal) => hasPermission(principal, Permission.ASSIGN_OWN_PLAYTESTING_ROLE) && "discordId" in principal
     ),
     asyncHandler(async (_req, res) => {
         const { principal } = getContext();
@@ -76,7 +79,8 @@ router.post("/me/playtesting-team",
 );
 
 // Update role
-router.put("/:discordId",
+router.put(
+    "/:discordId",
     validatePermissionDependencies(),
     validateRolePermissionDependenciesForUsers(),
     celebrate({ [Segments.BODY]: Schemas.Role.Full }),
@@ -88,12 +92,10 @@ router.put("/:discordId",
 
         const result = await dataService.roles.update(role);
 
-        await logActivity(
-            LogCategory.ROLE,
-            "role.updated",
-            "<principal> updated permissions for role <role>",
-            { context: { role: roleSnapshot(result) }, details: { updated: result } }
-        );
+        await logActivity(LogCategory.ROLE, "role.updated", "<principal> updated permissions for role <role>", {
+            context: { role: roleSnapshot(result) },
+            details: { updated: result }
+        });
 
         res.status(StatusCodes.OK).json(result);
     })

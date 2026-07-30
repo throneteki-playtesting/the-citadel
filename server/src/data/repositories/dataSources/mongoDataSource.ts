@@ -1,11 +1,25 @@
-import { BulkWriteOptions, Collection, DeleteOptions, Filter as MongoFilter, FindOptions, IndexSpecification, MongoClient, OptionalUnlessRequiredId, WithId } from "mongodb";
+import {
+    BulkWriteOptions,
+    Collection,
+    DeleteOptions,
+    Filter as MongoFilter,
+    FindOptions,
+    IndexSpecification,
+    MongoClient,
+    OptionalUnlessRequiredId,
+    WithId
+} from "mongodb";
 import { Filter, isOperatorObject, SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 
 export default class MongoDataSource<T> {
     public collection: Collection<T>;
     public primaryKeys: string[];
-    constructor(client: MongoClient, protected name: string, primaryKeys: IndexSpecification = {}) {
+    constructor(
+        client: MongoClient,
+        protected name: string,
+        primaryKeys: IndexSpecification = {}
+    ) {
         this.collection = client.db().collection<T>(name);
         this.primaryKeys = Object.keys(primaryKeys);
         if (this.primaryKeys.length > 0) {
@@ -27,7 +41,12 @@ export default class MongoDataSource<T> {
                         const fullKey = prefix ? `${prefix}.${key}` : key;
                         if (isOperatorObject(val)) {
                             result[fullKey] = val;
-                        } else if (val !== null && typeof val === "object" && !Array.isArray(val) && !(val instanceof Date)) {
+                        } else if (
+                            val !== null &&
+                            typeof val === "object" &&
+                            !Array.isArray(val) &&
+                            !(val instanceof Date)
+                        ) {
                             traverse(val as Record<string, unknown>, fullKey);
                         } else {
                             result[fullKey] = val;
@@ -42,9 +61,7 @@ export default class MongoDataSource<T> {
             if (!Array.isArray(values)) {
                 query = flattenFilter(values);
             } else if (values.length > 0) {
-                query = values.length === 1
-                    ? flattenFilter(values[0])
-                    : { "$or": values.map(v => flattenFilter(v)) };
+                query = values.length === 1 ? flattenFilter(values[0]) : { $or: values.map((v) => flattenFilter(v)) };
             }
         }
 
@@ -102,7 +119,6 @@ export default class MongoDataSource<T> {
         const docs = asArray(updating);
         const result = await this.bulkWrite(docs, options);
         return result;
-
     }
     public async destroy(deleting: SingleOrArray<Filter<T>>, options?: DeleteOptions) {
         const query = this.buildFilterQuery(deleting);
@@ -110,13 +126,15 @@ export default class MongoDataSource<T> {
         return result;
     }
 
-
     // Mongo Commands //
     protected async insertMany(docs: T[], options?: BulkWriteOptions) {
         if (docs.length === 0) {
             return [];
         }
-        const results = await this.collection.insertMany(docs as OptionalUnlessRequiredId<T>[], { ordered: false, ...options });
+        const results = await this.collection.insertMany(docs as OptionalUnlessRequiredId<T>[], {
+            ordered: false,
+            ...options
+        });
 
         // Sanitise docs in case _id was added
         docs.forEach((doc) => {
@@ -146,7 +164,10 @@ export default class MongoDataSource<T> {
         return result;
     }
 
-    protected async bulkWrite(docs: T[], { upsert, ...options }: BulkWriteOptions & { upsert?: boolean } = { upsert: true }) {
+    protected async bulkWrite(
+        docs: T[],
+        { upsert, ...options }: BulkWriteOptions & { upsert?: boolean } = { upsert: true }
+    ) {
         if (docs.length === 0) {
             return [];
         }
@@ -158,12 +179,15 @@ export default class MongoDataSource<T> {
 
             return { filter, upsert };
         };
-        const results = await this.collection.bulkWrite(docs.map((doc) => ({
-            replaceOne: {
-                ...defaultOptions(doc),
-                replacement: doc
-            }
-        })), { ordered: false, ...options });
+        const results = await this.collection.bulkWrite(
+            docs.map((doc) => ({
+                replaceOne: {
+                    ...defaultOptions(doc),
+                    replacement: doc
+                }
+            })),
+            { ordered: false, ...options }
+        );
 
         const failed = new Set(results.getWriteErrors().map((we) => we.index));
         const success = docs.filter((_, index) => !failed.has(index));
@@ -179,4 +203,4 @@ export default class MongoDataSource<T> {
         await this.collection.deleteMany(query, options);
         return deleting;
     }
-};
+}

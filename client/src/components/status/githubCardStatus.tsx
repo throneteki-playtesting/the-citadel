@@ -12,7 +12,14 @@ import { useCardSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 
-export default function GithubCardStatus({ className, style, project, number, version, isIconOnly }: GithubCardStatusProps) {
+export default function GithubCardStatus({
+    className,
+    style,
+    project,
+    number,
+    version,
+    isIconOnly
+}: GithubCardStatusProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
     const card = useMemo(() => getMostRecent(cardsData?.items ?? []), [cardsData?.items]);
 
@@ -39,10 +46,21 @@ export default function GithubCardStatus({ className, style, project, number, ve
             };
         }
 
-        const syncFn = (forced?: boolean) => syncCardGithub({ project: card.project, number: card.number, version: card.version, forced });
+        const syncFn = (forced?: boolean) =>
+            syncCardGithub({ project: card.project, number: card.number, version: card.version, forced });
         const onPress = hasSyncPermission ? () => syncFn() : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: () => syncFn(true) }] : undefined;
-
+        const longPressOptions = hasSyncPermission
+            ? [
+                  {
+                      label: (
+                          <span>
+                              <FontAwesomeIcon icon={faRotate} /> Force Sync
+                          </span>
+                      ),
+                      fn: () => syncFn(true)
+                  }
+              ]
+            : undefined;
 
         if (status === "error") {
             return {
@@ -56,7 +74,7 @@ export default function GithubCardStatus({ className, style, project, number, ve
         if (card.latest && card.released) {
             return {
                 title,
-                icon: <ThronesIcon name="power"/>,
+                icon: <ThronesIcon name="power" />,
                 description: "Implemented (Live)",
                 color: "success",
                 href: "https://theironthrone.net"
@@ -74,7 +92,7 @@ export default function GithubCardStatus({ className, style, project, number, ve
         if (card.implemented) {
             return {
                 title,
-                icon: <ThronesIcon name="power"/>,
+                icon: <ThronesIcon name="power" />,
                 description: "Implemented",
                 longPressOptions,
                 color: "success",
@@ -82,7 +100,7 @@ export default function GithubCardStatus({ className, style, project, number, ve
             };
         }
         const href = card._metadata!.github!.issueUrl;
-        const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
+        const icon = <FontAwesomeIcon icon={faGithub} size="2xl" />;
         switch (card._metadata!.github!.status) {
             case "open": {
                 return {
@@ -109,11 +127,11 @@ export default function GithubCardStatus({ className, style, project, number, ve
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardGithub]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-};
+}
 
 type GithubCardStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
-}
+};

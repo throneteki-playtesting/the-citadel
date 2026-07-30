@@ -18,13 +18,7 @@ const indentMap: Record<TitleIndent, string> = {
     xl: "w-24"
 };
 
-export default function SectionTitle({
-    children,
-    size = "md",
-    indent = "sm",
-    className,
-    ...props
-}: SectionTitleProps) {
+export default function SectionTitle({ children, size = "md", indent = "sm", className, ...props }: SectionTitleProps) {
     return (
         <div className={classNames("flex items-center gap-4", className)} {...props}>
             <div className={classNames("h-px shrink-0 bg-primary/30", indentMap[indent])} />
@@ -40,6 +34,6 @@ type TitleSize = "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
 type TitleIndent = "none" | "xs" | "sm" | "md" | "lg" | "xl";
 
 export type SectionTitleProps = React.ComponentPropsWithoutRef<"div"> & {
-  size?: TitleSize;
-  indent?: TitleIndent;
+    size?: TitleSize;
+    indent?: TitleIndent;
 };

@@ -4,15 +4,25 @@ import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import ThronesIcon from "../thronesIcon";
 import { faCode, faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useGetPlaytestingUpdateCardsQuery, useGetPlaytestingUpdateQuery, useSyncPlaytestingUpdateGithubMutation } from "../../api";
+import {
+    useGetPlaytestingUpdateCardsQuery,
+    useGetPlaytestingUpdateQuery,
+    useSyncPlaytestingUpdateGithubMutation
+} from "../../api";
 import Permission from "common/models/permissions";
 import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 
 export function useCodeUpdateStatus(project: number, version: number) {
-    const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({ project, version });
-    const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery({ project: playtestingUpdate!.project, version: playtestingUpdate!.version }, { skip: !playtestingUpdate });
+    const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({
+        project,
+        version
+    });
+    const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery(
+        { project: playtestingUpdate!.project, version: playtestingUpdate!.version },
+        { skip: !playtestingUpdate }
+    );
 
     const isLoading = isLoadingPlaytestingUpdate || isLoadingCards;
 
@@ -38,7 +48,9 @@ export function useCodeUpdateStatus(project: number, version: number) {
             };
         }
 
-        const onPress = hasSyncPermission ? () => syncPlaytestingUpdateGithub({ project, version, type: "code" }) : undefined;
+        const onPress = hasSyncPermission
+            ? () => syncPlaytestingUpdateGithub({ project, version, type: "code" })
+            : undefined;
 
         if (status === "error") {
             return {
@@ -74,7 +86,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
             if (cards && cards.some((card) => !card.implemented)) {
                 return {
                     title,
-                    icon: <ThronesIcon name="power"/>,
+                    icon: <ThronesIcon name="power" />,
                     description: "Partially Implemented",
                     color: "success",
                     href: "https://playtesting.theironthrone.net"
@@ -82,14 +94,14 @@ export function useCodeUpdateStatus(project: number, version: number) {
             }
             return {
                 title,
-                icon: <ThronesIcon name="power"/>,
+                icon: <ThronesIcon name="power" />,
                 description: "Implemented",
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
             };
         }
         const href = codeMeta.pullRequestUrl;
-        const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
+        const icon = <FontAwesomeIcon icon={faGithub} size="2xl" />;
         switch (codeMeta.status) {
             case "open": {
                 return {
@@ -111,7 +123,18 @@ export function useCodeUpdateStatus(project: number, version: number) {
             }
         }
         return null;
-    }, [cards, error, hasSyncPermission, isSyncing, playtestingUpdate, project, status, step, syncPlaytestingUpdateGithub, version]);
+    }, [
+        cards,
+        error,
+        hasSyncPermission,
+        isSyncing,
+        playtestingUpdate,
+        project,
+        status,
+        step,
+        syncPlaytestingUpdateGithub,
+        version
+    ]);
 
     return { data, isLoading };
 }

@@ -16,7 +16,12 @@ export class PermissionErrorResponse extends ApiErrorResponse {
     }
 }
 
-export function validateRequest<A, B, C, D>(validate: ((principal: Principal, req: Request<A, B, C, D>, res: Response) => boolean | Promise<boolean>) | Permission | Permission[]) {
+export function validateRequest<A, B, C, D>(
+    validate:
+        | ((principal: Principal, req: Request<A, B, C, D>, res: Response) => boolean | Promise<boolean>)
+        | Permission
+        | Permission[]
+) {
     return asyncHandler<A, B, C, D>(async (req, res, next) => {
         const { principal } = getContext();
         let isValid = false;
@@ -37,7 +42,11 @@ export const validateProjectAccess = asyncHandler<unknown, unknown, unknown, unk
     const { principal } = getContext();
     const project = res.locals.project as IProject;
 
-    if (project.active ? !hasPermission(principal, Permission.READ_PROJECTS) : !hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)) {
+    if (
+        project.active
+            ? !hasPermission(principal, Permission.READ_PROJECTS)
+            : !hasPermission(principal, Permission.READ_ARCHIVED_PROJECTS)
+    ) {
         throw new PermissionErrorResponse();
     }
     next();
@@ -45,7 +54,10 @@ export const validateProjectAccess = asyncHandler<unknown, unknown, unknown, unk
 
 // Reverse map: permission -> all permissions that declare it as a dependency
 const reverseDependencyMap = new Map<Permission, Permission[]>();
-for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [Permission, { dependencies?: Permission | Permission[] }][]) {
+for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [
+    Permission,
+    { dependencies?: Permission | Permission[] }
+][]) {
     if (!dependencies) continue;
     const normalized = Array.isArray(dependencies) ? dependencies : [dependencies];
     for (const dep of normalized) {
@@ -68,17 +80,20 @@ export function validatePermissionDependencies() {
         // require explicitly adding a permission that is already covered by a role.
         if ("roles" in req.body) {
             const { roles } = req.body;
-            const rolePermissions = roles?.flatMap(r => r.permissions) ?? [];
+            const rolePermissions = roles?.flatMap((r) => r.permissions) ?? [];
             rolePermissions.forEach((rolePermission) => effectivePermissions.add(rolePermission));
         }
 
         const errors: string[] = [];
 
         // Cannot add a permission without its dependencies
-        for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [Permission, { dependencies?: Permission | Permission[] }][]) {
+        for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [
+            Permission,
+            { dependencies?: Permission | Permission[] }
+        ][]) {
             if (!permissionSet.has(permission) || !dependencies) continue;
             const required = Array.isArray(dependencies) ? dependencies : [dependencies];
-            const missing = required.filter(dep => !effectivePermissions.has(dep));
+            const missing = required.filter((dep) => !effectivePermissions.has(dep));
             for (const dep of missing) {
                 errors.push(`Cannot grant ${permission} without also granting ${dep}`);
             }
@@ -87,18 +102,14 @@ export function validatePermissionDependencies() {
         // Cannot remove a permission that another granted permission depends on
         for (const [dep, dependents] of reverseDependencyMap) {
             if (effectivePermissions.has(dep)) continue;
-            const blocking = dependents.filter(p => effectivePermissions.has(p));
+            const blocking = dependents.filter((p) => effectivePermissions.has(p));
             for (const blocker of blocking) {
                 errors.push(`Cannot remove ${dep} while ${blocker} is still granted`);
             }
         }
 
         if (errors.length > 0) {
-            throw new ApiErrorResponse(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                "Invalid Permissions",
-                errors.join("; ")
-            );
+            throw new ApiErrorResponse(StatusCodes.UNPROCESSABLE_ENTITY, "Invalid Permissions", errors.join("; "));
         }
 
         next();
@@ -124,22 +135,23 @@ export function validateRolePermissionDependenciesForUsers() {
                 for (const permission of rolePermissions) effectivePermissions.add(permission);
             }
 
-            for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [Permission, { dependencies?: Permission | Permission[] }][]) {
+            for (const [permission, { dependencies }] of Object.entries(permissionMeta) as [
+                Permission,
+                { dependencies?: Permission | Permission[] }
+            ][]) {
                 if (!user.permissions.includes(permission) || !dependencies) continue;
                 const required = Array.isArray(dependencies) ? dependencies : [dependencies];
-                const missing = required.filter(dep => !effectivePermissions.has(dep));
+                const missing = required.filter((dep) => !effectivePermissions.has(dep));
                 for (const dep of missing) {
-                    errors.push(`Cannot remove ${dep} from role while ${user.displayname} still requires it for ${permission}`);
+                    errors.push(
+                        `Cannot remove ${dep} from role while ${user.displayname} still requires it for ${permission}`
+                    );
                 }
             }
         }
 
         if (errors.length > 0) {
-            throw new ApiErrorResponse(
-                StatusCodes.UNPROCESSABLE_ENTITY,
-                "Invalid Permissions",
-                errors.join("; ")
-            );
+            throw new ApiErrorResponse(StatusCodes.UNPROCESSABLE_ENTITY, "Invalid Permissions", errors.join("; "));
         }
 
         next();

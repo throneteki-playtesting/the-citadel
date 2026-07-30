@@ -17,7 +17,10 @@ export default function AuthGuard() {
     // Let /authRedirect through so it can display OAuth error toasts before redirecting
     if (!isAuthenticated && pathname !== "/authRedirect") {
         const returnUrl = pathname + search;
-        const loginUrl = returnUrl !== "/" && isSafeRelativePath(returnUrl) ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : "/login";
+        const loginUrl =
+            returnUrl !== "/" && isSafeRelativePath(returnUrl)
+                ? `/login?returnUrl=${encodeURIComponent(returnUrl)}`
+                : "/login";
         return <Navigate to={loginUrl} replace />;
     }
 

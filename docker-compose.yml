@@ -1,88 +1,88 @@
 services:
-  client:
-    build:
-      dockerfile: client/Dockerfile
-      context: ./
-      args:
-        - VITE_SERVER_HOST=${SERVER_HOST}
-        - VITE_NODE_ENV=${NODE_ENV}
-        - VITE_VERBOSE=${VERBOSE}
-        - VITE_DISCORD_SERVER_INVITE_URL=${DISCORD_SERVER_INVITE_URL}
-        - VITE_BUG_REPORT_URL=${BUG_REPORT_URL}
-        - VITE_SENTRY_DSN=${SENTRY_CLIENT_DSN}
-    restart: always
-    container_name: citadel_client_${NODE_ENV}
-    depends_on:
-      - server
-    ports:
-      - ${CLIENT_PORT}:${CLIENT_PORT}
-    environment:
-      - CLIENT_PORT=${CLIENT_PORT}
-      - SERVER_HOST=${SERVER_HOST}
-      - SERVER_INTERNAL_HOST=http://server:${SERVER_PORT}
-  server:
-    build:
-      dockerfile: server/Dockerfile
-      context: ./
-    restart: always
-    container_name: citadel_server_${NODE_ENV}
-    ports:
-      - "${SERVER_PORT}:${SERVER_PORT}"
-    environment:
-      - NODE_ENV=${NODE_ENV}
-      - VERBOSE=${VERBOSE}
+    client:
+        build:
+            dockerfile: client/Dockerfile
+            context: ./
+            args:
+                - VITE_SERVER_HOST=${SERVER_HOST}
+                - VITE_NODE_ENV=${NODE_ENV}
+                - VITE_VERBOSE=${VERBOSE}
+                - VITE_DISCORD_SERVER_INVITE_URL=${DISCORD_SERVER_INVITE_URL}
+                - VITE_BUG_REPORT_URL=${BUG_REPORT_URL}
+                - VITE_SENTRY_DSN=${SENTRY_CLIENT_DSN}
+        restart: always
+        container_name: citadel_client_${NODE_ENV}
+        depends_on:
+            - server
+        ports:
+            - ${CLIENT_PORT}:${CLIENT_PORT}
+        environment:
+            - CLIENT_PORT=${CLIENT_PORT}
+            - SERVER_HOST=${SERVER_HOST}
+            - SERVER_INTERNAL_HOST=http://server:${SERVER_PORT}
+    server:
+        build:
+            dockerfile: server/Dockerfile
+            context: ./
+        restart: always
+        container_name: citadel_server_${NODE_ENV}
+        ports:
+            - "${SERVER_PORT}:${SERVER_PORT}"
+        environment:
+            - NODE_ENV=${NODE_ENV}
+            - VERBOSE=${VERBOSE}
 
-      - SENTRY_SERVER_DSN=${SENTRY_SERVER_DSN}
+            - SENTRY_SERVER_DSN=${SENTRY_SERVER_DSN}
 
-      - SERVER_PORT=${SERVER_PORT}
-      - SERVER_HOST=${SERVER_HOST}
-      - CLIENT_PORT=${CLIENT_PORT}
-      - CLIENT_HOST=${CLIENT_HOST}
+            - SERVER_PORT=${SERVER_PORT}
+            - SERVER_HOST=${SERVER_HOST}
+            - CLIENT_PORT=${CLIENT_PORT}
+            - CLIENT_HOST=${CLIENT_HOST}
 
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_HOST=${REDIS_HOST}
+            - WEBHOOK_URL=${WEBHOOK_URL}
 
-      - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
-      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
-      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
-      - DISCORD_AUTH_REDIRECT=${DISCORD_AUTH_REDIRECT}
+            - REDIS_PORT=${REDIS_PORT}
+            - REDIS_HOST=${REDIS_HOST}
 
-      - BUG_REPORT_URL=${BUG_REPORT_URL}
+            - DISCORD_TOKEN=${DISCORD_TOKEN}
+            - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+            - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+            - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+            - DISCORD_AUTH_REDIRECT=${DISCORD_AUTH_REDIRECT}
 
-      - THRONESDB_CLIENT_ID=${THRONESDB_CLIENT_ID}
-      - THRONESDB_CLIENT_SECRET=${THRONESDB_CLIENT_SECRET}
+            - BUG_REPORT_URL=${BUG_REPORT_URL}
 
-      - GOOGLE_PRIVATE_KEY=${GOOGLE_PRIVATE_KEY}
-      - GOOGLE_CLIENT_EMAIL=${GOOGLE_CLIENT_EMAIL}
+            - THRONESDB_CLIENT_ID=${THRONESDB_CLIENT_ID}
+            - THRONESDB_CLIENT_SECRET=${THRONESDB_CLIENT_SECRET}
 
-      - GITHUB_OWNER=${GITHUB_OWNER}
-      - GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
-      - GITHUB_REPOSITORY_DATA=${GITHUB_REPOSITORY_DATA}
-      - GITHUB_APP_ID=${GITHUB_APP_ID}
-      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
-      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+            - GOOGLE_PRIVATE_KEY=${GOOGLE_PRIVATE_KEY}
+            - GOOGLE_CLIENT_EMAIL=${GOOGLE_CLIENT_EMAIL}
 
-      - DATABASE_NAME=${DATABASE_NAME}
-      - DATABASE_URL=${DATABASE_URL}
+            - GITHUB_OWNER=${GITHUB_OWNER}
+            - GITHUB_REPOSITORY=${GITHUB_REPOSITORY}
+            - GITHUB_REPOSITORY_DATA=${GITHUB_REPOSITORY_DATA}
+            - GITHUB_APP_ID=${GITHUB_APP_ID}
+            - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
+            - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
 
-      - JWT_SECRET=${JWT_SECRET}
-      - ACCESS_TOKEN_TTL=${ACCESS_TOKEN_TTL}
-      - REFRESH_TOKEN_TTL=${REFRESH_TOKEN_TTL}
-      - IMPERSONATION_TOKEN_TTL=${IMPERSONATION_TOKEN_TTL}
+            - DATABASE_NAME=${DATABASE_NAME}
+            - DATABASE_URL=${DATABASE_URL}
 
-      - S3_BASE_URL=${S3_BASE_URL}
-      - S3_BUCKET=${S3_BUCKET}
-      - S3_ENDPOINT=${S3_ENDPOINT}
-      - S3_REGION=${S3_REGION}
-      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
-      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
-    networks:
-      - default
-      - shared_net
+            - JWT_SECRET=${JWT_SECRET}
+            - ACCESS_TOKEN_TTL=${ACCESS_TOKEN_TTL}
+            - REFRESH_TOKEN_TTL=${REFRESH_TOKEN_TTL}
+            - IMPERSONATION_TOKEN_TTL=${IMPERSONATION_TOKEN_TTL}
+
+            - S3_BASE_URL=${S3_BASE_URL}
+            - S3_BUCKET=${S3_BUCKET}
+            - S3_ENDPOINT=${S3_ENDPOINT}
+            - S3_REGION=${S3_REGION}
+            - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID}
+            - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY}
+        networks:
+            - default
+            - shared_net
 networks:
-  shared_net:
-    external: true
-    name: shared_net
+    shared_net:
+        external: true
+        name: shared_net

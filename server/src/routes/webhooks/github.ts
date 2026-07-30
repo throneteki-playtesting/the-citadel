@@ -1,7 +1,14 @@
 import express from "express";
 import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";
-import { IssuesReopenedEvent, Label, type IssuesClosedEvent, type IssuesDeletedEvent, type PullRequestClosedEvent, type PushEvent } from "@octokit/webhooks-types";
+import {
+    IssuesReopenedEvent,
+    Label,
+    type IssuesClosedEvent,
+    type IssuesDeletedEvent,
+    type PullRequestClosedEvent,
+    type PushEvent
+} from "@octokit/webhooks-types";
 import { dataService, githubService, logger } from "@/services";
 import { githubWebhookMiddleware } from "@/middleware/auth";
 import { createSyncEmitter } from "@/services/sseService";
@@ -15,7 +22,8 @@ const DATA_REPO = process.env.GITHUB_REPOSITORY_DATA;
 
 router.use(githubWebhookMiddleware);
 
-router.post("/issue",
+router.post(
+    "/issue",
     asyncHandler(async (req, res) => {
         const event = req.body;
 
@@ -44,7 +52,15 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
         for (const card of cards) {
             const emitter = createSyncEmitter("card", "github", card);
             emitter.start();
-            merge(card, { _metadata: { github: { status: issue.state, ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }), lastSynced } } });
+            merge(card, {
+                _metadata: {
+                    github: {
+                        status: issue.state,
+                        ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }),
+                        lastSynced
+                    }
+                }
+            });
             emitter.complete(card);
         }
         cards = await dataService.cards.update(cards, false, false, false);
@@ -97,7 +113,8 @@ async function onIssueDeleted({ issue }: IssuesDeletedEvent) {
     }
 }
 
-router.post("/push",
+router.post(
+    "/push",
     asyncHandler(async (req, res) => {
         const event = req.body;
 
@@ -117,7 +134,8 @@ async function onDevelopmentPush({ commits }: PushEvent) {
     logger.info("[Github] Synced pull requests after push to development");
 }
 
-router.post("/pull-request",
+router.post(
+    "/pull-request",
     asyncHandler(async (req, res) => {
         const event = req.body;
 
@@ -131,7 +149,9 @@ router.post("/pull-request",
 
 async function onPullRequestClosed({ pull_request: pullRequest, repository }: PullRequestClosedEvent) {
     const isMerged = pullRequest.merged;
-    logger.info(`[Github] Webhook recieved for pull request ${pullRequest.title} (#${pullRequest.number}) being closed${isMerged ? " & merged" : ""}`);
+    logger.info(
+        `[Github] Webhook recieved for pull request ${pullRequest.title} (#${pullRequest.number}) being closed${isMerged ? " & merged" : ""}`
+    );
 
     let type = null;
     if (repository.name === CODE_REPO) {
@@ -153,22 +173,31 @@ async function onPullRequestClosed({ pull_request: pullRequest, repository }: Pu
         if (issueNumbers.length > 0) {
             const { client, owner, repo } = githubService.getContext(type);
 
-            await Promise.all(issueNumbers.map(issueNumber =>
-                client.rest.issues.update({
-                    owner,
-                    repo,
-                    issue_number: issueNumber,
-                    state: "closed"
-                })
-            ));
+            await Promise.all(
+                issueNumbers.map((issueNumber) =>
+                    client.rest.issues.update({
+                        owner,
+                        repo,
+                        issue_number: issueNumber,
+                        state: "closed"
+                    })
+                )
+            );
 
             logger.info(`[Github] Closed ${issueNumbers.length} issues referenced in PR #${pullRequest.number}`);
         }
     }
 }
 
-async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull_request"], key: "code" | "data", isMerged: boolean, lastSynced: Date) {
-    let updates = await dataService.playtestingUpdates.read({ _metadata: { github: { [key]: { pullRequestUrl: pullRequest.html_url } } } });
+async function syncPlaytestingUpdatePR(
+    pullRequest: PullRequestClosedEvent["pull_request"],
+    key: "code" | "data",
+    isMerged: boolean,
+    lastSynced: Date
+) {
+    let updates = await dataService.playtestingUpdates.read({
+        _metadata: { github: { [key]: { pullRequestUrl: pullRequest.html_url } } }
+    });
     if (updates.length === 0) return;
 
     const operation = `github.${key}` as const;
@@ -176,17 +205,29 @@ async function syncPlaytestingUpdatePR(pullRequest: PullRequestClosedEvent["pull
         const emitter = createSyncEmitter("playtestingUpdate", operation, playtestingUpdate);
         emitter.start();
         if (isMerged) {
-            merge(playtestingUpdate, { _metadata: { github: { [key]: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced } } } });
+            merge(playtestingUpdate, {
+                _metadata: {
+                    github: {
+                        [key]: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced }
+                    }
+                }
+            });
         } else {
             playtestingUpdate._metadata.github[key] = { lastSynced };
         }
         emitter.complete(playtestingUpdate);
     }
     updates = await dataService.playtestingUpdates.update(updates, false, false, false);
-    logger.info(`[Github] ${isMerged ? "Updated" : "Deleted"} github.${key} data for ${updates.length} playtesting updates`);
+    logger.info(
+        `[Github] ${isMerged ? "Updated" : "Deleted"} github.${key} data for ${updates.length} playtesting updates`
+    );
 }
 
-async function syncClosedCards(pullRequest: PullRequestClosedEvent["pull_request"], key: "code" | "data", isMerged: boolean) {
+async function syncClosedCards(
+    pullRequest: PullRequestClosedEvent["pull_request"],
+    key: "code" | "data",
+    isMerged: boolean
+) {
     if (key !== "code" || !isMerged || pullRequest.base.ref !== "playtesting") return;
 
     let cards = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });

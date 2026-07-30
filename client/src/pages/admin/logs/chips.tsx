@@ -1,5 +1,12 @@
 import { Avatar, Skeleton } from "@heroui/react";
-import { useGetCardQuery, useGetIntegrationsQuery, useGetProjectQuery, useGetRolesQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../../api";
+import {
+    useGetCardQuery,
+    useGetIntegrationsQuery,
+    useGetProjectQuery,
+    useGetRolesQuery,
+    useGetSuggestionsQuery,
+    useGetUserQuery
+} from "../../../api";
 import { SemanticVersion } from "common/utils";
 import { Faction, Type } from "common/models/cards";
 import { CardLikeSnapshot, IntegrationSnapshot, ProjectSnapshot, RoleSnapshot, UserSnapshot } from "common/models/logs";
@@ -74,11 +81,18 @@ function LegacyRoleChip({ discordId }: { discordId: string }) {
 
 // Shared visual for anything backed by an `ICard` (faction colour + type icon + name), used by
 // both the card chip itself and any entity that wraps a card (eg. suggestions).
-function CardBadge({ faction, type, name, suffix }: { faction: Faction, type: Type, name: string, suffix?: string }) {
+function CardBadge({ faction, type, name, suffix }: { faction: Faction; type: Type; name: string; suffix?: string }) {
     return (
-        <span className={classNames("inline-flex items-center gap-1 align-middle px-2 py-0.5 rounded-full border text-xs font-medium", factionBgClasses[faction], factionBorderClasses[faction])}>
+        <span
+            className={classNames(
+                "inline-flex items-center gap-1 align-middle px-2 py-0.5 rounded-full border text-xs font-medium",
+                factionBgClasses[faction],
+                factionBorderClasses[faction]
+            )}
+        >
             <ThronesIcon name={type} />
-            {name}{suffix ? ` (${suffix})` : ""}
+            {name}
+            {suffix ? ` (${suffix})` : ""}
         </span>
     );
 }
@@ -86,7 +100,9 @@ function CardBadge({ faction, type, name, suffix }: { faction: Faction, type: Ty
 export function CardChip({ value }: { value: unknown }) {
     if (typeof value !== "string") {
         const snapshot = value as CardLikeSnapshot;
-        return <CardBadge faction={snapshot.faction} type={snapshot.type} name={snapshot.name} suffix={snapshot.version} />;
+        return (
+            <CardBadge faction={snapshot.faction} type={snapshot.type} name={snapshot.name} suffix={snapshot.version} />
+        );
     }
     return <LegacyCardChip id={value} />;
 }
@@ -95,7 +111,11 @@ function LegacyCardChip({ id }: { id: string }) {
     const [projectPart, numberPart, version] = id.split("|");
     const project = Number(projectPart);
     const number = Number(numberPart);
-    const { data: card, isLoading } = useGetCardQuery({ project, number, version: version as SemanticVersion | "latest" });
+    const { data: card, isLoading } = useGetCardQuery({
+        project,
+        number,
+        version: version as SemanticVersion | "latest"
+    });
 
     if (isLoading) {
         return <Skeleton className="inline-block w-24 h-5 rounded-full align-middle" />;
@@ -201,7 +221,7 @@ function LegacyProjectChip({ id }: { id: string }) {
     );
 }
 
-export function GenericEntityChip({ type, value }: { type: string, value: unknown }) {
+export function GenericEntityChip({ type, value }: { type: string; value: unknown }) {
     const display = typeof value === "string" ? value : JSON.stringify(value);
     return (
         <span className="inline-flex items-center align-middle px-2 py-0.5 rounded-full bg-content2 border border-content3 text-xs font-medium">

@@ -11,7 +11,13 @@ import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 
-const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelete = () => true }: ProjectHeaderProps) => {
+const ProjectHeader = ({
+    className,
+    style,
+    project,
+    onEdit = () => true,
+    onDelete = () => true
+}: ProjectHeaderProps) => {
     const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES);
     const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
     const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
@@ -22,7 +28,9 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
             <span key="number">#{project.number}</span>,
-            <span key="type" className="uppercase">{project.type}</span>
+            <span key="type" className="uppercase">
+                {project.type}
+            </span>
         ];
 
         if (project.draft) {
@@ -32,13 +40,24 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
         }
 
         if (project.mandateUrl) {
-            components.push(<Link key="mandate" href={project.mandateUrl} className="cursor-pointer">Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare}/></Link>);
+            components.push(
+                <Link key="mandate" href={project.mandateUrl} className="cursor-pointer">
+                    Mandate <FontAwesomeIcon icon={faArrowUpRightFromSquare} />
+                </Link>
+            );
         }
 
         return (
             <>
                 {components.flatMap((node, i) =>
-                    i === 0 ? [node] : [<span key={`sep-${i}`} className="mx-1">·</span>, node]
+                    i === 0
+                        ? [node]
+                        : [
+                              <span key={`sep-${i}`} className="mx-1">
+                                  ·
+                              </span>,
+                              node
+                          ]
                 )}
             </>
         );
@@ -53,40 +72,43 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
                     </div>
                     <HeaderActions
                         items={[
-                            canSyncImages && imageStatus && {
-                                key: "sync-images",
-                                title: imageStatus.title,
-                                description: imageStatus.description,
-                                icon: imageStatus.icon,
-                                color: imageStatus.color,
-                                onPress: imageStatus.onPress,
-                                isLoading: isImageStatusLoading,
-                                keepOpen: true
-                            },
+                            canSyncImages &&
+                                imageStatus && {
+                                    key: "sync-images",
+                                    title: imageStatus.title,
+                                    description: imageStatus.description,
+                                    icon: imageStatus.icon,
+                                    color: imageStatus.color,
+                                    onPress: imageStatus.onPress,
+                                    isLoading: isImageStatusLoading,
+                                    keepOpen: true
+                                },
                             canEdit && {
                                 key: "edit",
                                 title: "Edit Project",
-                                icon: <FontAwesomeIcon icon={faPencil}/>,
+                                icon: <FontAwesomeIcon icon={faPencil} />,
                                 onPress: onEdit
                             },
                             canDelete && {
                                 key: "delete",
                                 title: "Delete Project",
-                                icon: <FontAwesomeIcon icon={faTrash}/>,
+                                icon: <FontAwesomeIcon icon={faTrash} />,
                                 color: "danger",
                                 onPress: onDelete
                             },
                             canArchive && {
                                 key: "archive",
                                 title: "Archive Project",
-                                icon: <FontAwesomeIcon icon={faBoxArchive}/>,
+                                icon: <FontAwesomeIcon icon={faBoxArchive} />,
                                 color: "danger",
                                 onPress: onDelete
                             }
                         ]}
                     />
                 </div>
-                <div className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl w-full">{project.name}</div>
+                <div className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl w-full">
+                    {project.name}
+                </div>
             </div>
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
@@ -95,9 +117,9 @@ const ProjectHeader = ({ className, style, project, onEdit = () => true, onDelet
 };
 
 type ProjectHeaderProps = Omit<BaseElementProps, "children"> & {
-    project: IProject,
-    onEdit?: () => void,
-    onDelete?: () => void
+    project: IProject;
+    onEdit?: () => void;
+    onDelete?: () => void;
 };
 
 export default ProjectHeader;

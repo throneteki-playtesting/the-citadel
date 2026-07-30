@@ -5,7 +5,14 @@ import { CSSProperties } from "react";
 
 const ThronesIcon = ({ name, className, style, visible = true }: IconProps) => {
     return (
-        <span className={classNames("font-thronesdb leading-none", { invisible: !visible, "leading-relaxed": name === "unique" }, className)} style={style}>
+        <span
+            className={classNames(
+                "font-thronesdb leading-none",
+                { invisible: !visible, "leading-relaxed": name === "unique" },
+                className
+            )}
+            style={style}
+        >
             {thronesIcons[name]}
         </span>
     );
@@ -14,10 +21,10 @@ const ThronesIcon = ({ name, className, style, visible = true }: IconProps) => {
 export type Icon = Faction | ChallengeIcon | "unique" | Type;
 
 type IconProps = {
-    name: Icon,
-    className?: string,
-    style?: CSSProperties,
-    visible?: boolean
-}
+    name: Icon;
+    className?: string;
+    style?: CSSProperties;
+    visible?: boolean;
+};
 
 export default ThronesIcon;

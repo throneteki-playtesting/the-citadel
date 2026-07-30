@@ -74,22 +74,38 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                     // Do nothing
                 }
             }
-            setReview(merge({}, defaultData, { reviewer, project: card?.project, number: card?.number, version: card?.version }));
+            setReview(
+                merge({}, defaultData, {
+                    reviewer,
+                    project: card?.project,
+                    number: card?.number,
+                    version: card?.version
+                })
+            );
             setIsNew(true);
             setHasPlaytested(true);
         };
         checkCardUpdate();
     }, [card, readReview, reviewer]);
 
-    const onSubmit = useCallback(async (validReview: IPlaytestReview) => {
-        if (!hasPlaytested) {
-            validReview = { ...validReview, played: 0, decks: [] };
-        }
-        const newReview = isNew ? await createReview(validReview).unwrap() : await updateReview(validReview).unwrap();
-        setReview(newReview);
-        navigate(`/project/${newReview.project}/${newReview.number}`);
-        addToast({ title: "Successfully saved", color: "success", description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}` });
-    }, [card?.name, createReview, hasPlaytested, isNew, navigate, updateReview]);
+    const onSubmit = useCallback(
+        async (validReview: IPlaytestReview) => {
+            if (!hasPlaytested) {
+                validReview = { ...validReview, played: 0, decks: [] };
+            }
+            const newReview = isNew
+                ? await createReview(validReview).unwrap()
+                : await updateReview(validReview).unwrap();
+            setReview(newReview);
+            navigate(`/project/${newReview.project}/${newReview.number}`);
+            addToast({
+                title: "Successfully saved",
+                color: "success",
+                description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}`
+            });
+        },
+        [card?.name, createReview, hasPlaytested, isNew, navigate, updateReview]
+    );
 
     return (
         <div className="space-y-2">
@@ -97,9 +113,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                 <ValidationSummary />
                 <WizardPages>
                     <WizardPage>
-                        <div className="font-cinzel text-3xl">
-                            Choose your subject
-                        </div>
+                        <div className="font-cinzel text-3xl">Choose your subject</div>
                         <div className="font-crimson text-lg">
                             Search for and select a card from the archives, then proceed to render your verdict.
                         </div>
@@ -109,121 +123,222 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                         <div className="font-cinzel text-3xl">
                             {isNew
                                 ? "Render your Verdict"
-                                : `${isOwnReview ? "Your" : "This reviewer's"} verdict has already been rendered`
-                            }
+                                : `${isOwnReview ? "Your" : "This reviewer's"} verdict has already been rendered`}
                         </div>
                         <div className="text-lg">
-                            {isNew
-                                ? "Each verdict submitted to the Citadel provides the team with the tracked insights needed to refine a card's design — speak plainly and honestly of your findings."
-                                : isOwnReview
-                                    ? "You have already submitted a review for this version — you may amend your scroll at any time."
-                                    : <span className="inline-flex items-center gap-1 flex-wrap">You are amending <UserChip value={reviewer!} />&apos;s review for this version on their behalf.</span>
-                            }
+                            {isNew ? (
+                                "Each verdict submitted to the Citadel provides the team with the tracked insights needed to refine a card's design — speak plainly and honestly of your findings."
+                            ) : isOwnReview ? (
+                                "You have already submitted a review for this version — you may amend your scroll at any time."
+                            ) : (
+                                <span className="inline-flex items-center gap-1 flex-wrap">
+                                    You are amending <UserChip value={reviewer!} />
+                                    &apos;s review for this version on their behalf.
+                                </span>
+                            )}
                         </div>
                         {card && !card.latest && (
-                            <Alert color="warning" icon={<FontAwesomeIcon icon={faScroll} />} title="Amending an aged scroll" classNames={{ title: "font-bold text-sm md:text-md lg:text-lg" }}>
+                            <Alert
+                                color="warning"
+                                icon={<FontAwesomeIcon icon={faScroll} />}
+                                title="Amending an aged scroll"
+                                classNames={{ title: "font-bold text-sm md:text-md lg:text-lg" }}
+                            >
                                 <div className="text-xs md:text-sm lg:text-md italic">
-                                    You are editing a review for version {card.version} of this card, which is no longer the current version.
+                                    You are editing a review for version {card.version} of this card, which is no longer
+                                    the current version.
                                 </div>
                             </Alert>
                         )}
-                        <div className={classNames("flex gap-2 items-center w-full", canChangeCard ? "justify-between" : "justify-end")}>
+                        <div
+                            className={classNames(
+                                "flex gap-2 items-center w-full",
+                                canChangeCard ? "justify-between" : "justify-end"
+                            )}
+                        >
                             {canChangeCard && (
-                                <WizardBack onCancel={() => true} startContent={<FontAwesomeIcon icon={faCircleArrowLeft}/>}>
+                                <WizardBack
+                                    onCancel={() => true}
+                                    startContent={<FontAwesomeIcon icon={faCircleArrowLeft} />}
+                                >
                                     Change Card
                                 </WizardBack>
                             )}
-                            <Button as="a" color="secondary" isDisabled={!card} endContent={<FontAwesomeIcon icon={faExternalLink}/>} href={card ? `/project/${card.project}/${card.number}` : undefined} target="_blank" rel="noopener noreferrer">
+                            <Button
+                                as="a"
+                                color="secondary"
+                                isDisabled={!card}
+                                endContent={<FontAwesomeIcon icon={faExternalLink} />}
+                                href={card ? `/project/${card.project}/${card.number}` : undefined}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
                                 View Card Page
                             </Button>
                         </div>
-                        {card && <>
-                            <div className="flex flex-col items-center gap-2 md:flex-row md:items-start md:gap-4">
-                                <CardPreview card={renderPlaytestingCard(card)} className="max-w-64"/>
-                                <div className="space-y-2">
-                                    <SectionTitle>
-                                        Playtesting Information
-                                    </SectionTitle>
-                                    <div className="flex flex-col w-full gap-1">
-                                        <div className="text-base md:text-lg font-cinzel">Have you playtested this card?</div>
-                                        <ButtonGroup size="lg" className="self-start">
-                                            <Button
-                                                color={hasPlaytested ? "primary" : "default"}
-                                                variant="bordered"
-                                                onPress={() => {
-                                                    setHasPlaytested(true);
-                                                    setReview((prev) => ({ ...prev, played: prev.played || 1 }));
-                                                }}
-                                            >
-                                                Yes
-                                            </Button>
-                                            <Button
-                                                color={!hasPlaytested ? "primary" : "default"}
-                                                variant="bordered"
-                                                onPress={() => {
-                                                    setHasPlaytested(false);
-                                                    setReview((prev) => ({ ...prev, played: 0, decks: [] }));
-                                                }}
-                                            >
-                                                No
-                                            </Button>
-                                        </ButtonGroup>
-                                        {!hasPlaytested && (
-                                            <Alert color="warning" icon={<FontAwesomeIcon icon={faFlask} className="text-2xl"/>} title="Untested Review" classNames={{ title: "font-cinzel font-semibold text-sm md:text-md lg:text-lg" }}>
-                                                <div className="text-xs md:text-sm lg:text-md italic">
-                                                    Thank you for sharing your thoughts — since this verdict isn't backed by actual playtesting, it may carry less weight than reviews from those who have put the card through its paces.
+                        {card && (
+                            <>
+                                <div className="flex flex-col items-center gap-2 md:flex-row md:items-start md:gap-4">
+                                    <CardPreview card={renderPlaytestingCard(card)} className="max-w-64" />
+                                    <div className="space-y-2">
+                                        <SectionTitle>Playtesting Information</SectionTitle>
+                                        <div className="flex flex-col w-full gap-1">
+                                            <div className="text-base md:text-lg font-cinzel">
+                                                Have you playtested this card?
+                                            </div>
+                                            <ButtonGroup size="lg" className="self-start">
+                                                <Button
+                                                    color={hasPlaytested ? "primary" : "default"}
+                                                    variant="bordered"
+                                                    onPress={() => {
+                                                        setHasPlaytested(true);
+                                                        setReview((prev) => ({ ...prev, played: prev.played || 1 }));
+                                                    }}
+                                                >
+                                                    Yes
+                                                </Button>
+                                                <Button
+                                                    color={!hasPlaytested ? "primary" : "default"}
+                                                    variant="bordered"
+                                                    onPress={() => {
+                                                        setHasPlaytested(false);
+                                                        setReview((prev) => ({ ...prev, played: 0, decks: [] }));
+                                                    }}
+                                                >
+                                                    No
+                                                </Button>
+                                            </ButtonGroup>
+                                            {!hasPlaytested && (
+                                                <Alert
+                                                    color="warning"
+                                                    icon={<FontAwesomeIcon icon={faFlask} className="text-2xl" />}
+                                                    title="Untested Review"
+                                                    classNames={{
+                                                        title: "font-cinzel font-semibold text-sm md:text-md lg:text-lg"
+                                                    }}
+                                                >
+                                                    <div className="text-xs md:text-sm lg:text-md italic">
+                                                        Thank you for sharing your thoughts — since this verdict isn't
+                                                        backed by actual playtesting, it may carry less weight than
+                                                        reviews from those who have put the card through its paces.
+                                                    </div>
+                                                </Alert>
+                                            )}
+                                        </div>
+                                        {hasPlaytested && (
+                                            <>
+                                                <div className="flex flex-col w-full">
+                                                    <div className="text-base md:text-lg font-cinzel">
+                                                        How many games have you played with this card?
+                                                    </div>
+                                                    <NumberInput
+                                                        name="played"
+                                                        value={review.played ?? 0}
+                                                        onValueChange={(played) =>
+                                                            setReview((prev) => ({ ...prev, played }))
+                                                        }
+                                                        minValue={1}
+                                                        maxValue={999}
+                                                        placeholder="Test"
+                                                        size="lg"
+                                                        classNames={{
+                                                            mainWrapper: "max-w-24",
+                                                            inputWrapper: "h-10",
+                                                            input: "text-2xl"
+                                                        }}
+                                                    />
                                                 </div>
-                                            </Alert>
+                                                <SubmitDecks
+                                                    decks={review?.decks}
+                                                    card={card}
+                                                    onValueChange={(decks) => setReview((prev) => ({ ...prev, decks }))}
+                                                />
+                                            </>
                                         )}
                                     </div>
-                                    {hasPlaytested && <>
-                                        <div className="flex flex-col w-full">
-                                            <div className="text-base md:text-lg font-cinzel">How many games have you played with this card?</div>
-                                            <NumberInput
-                                                name="played"
-                                                value={review.played ?? 0}
-                                                onValueChange={(played) => setReview((prev) => ({ ...prev, played }))}
-                                                minValue={1}
-                                                maxValue={999}
-                                                placeholder="Test"
-                                                size="lg"
-                                                classNames={{ mainWrapper: "max-w-24", inputWrapper: "h-10", input: "text-2xl" }}
-                                            />
-                                        </div>
-                                        <SubmitDecks decks={review?.decks} card={card} onValueChange={(decks) => setReview((prev) => ({ ...prev, decks }))}/>
-                                    </>}
                                 </div>
-                            </div>
-                            <div className="flex flex-col gap-1 p-2 w-full">
-                                <SectionTitle>
-                                    Review Questions
-                                </SectionTitle>
-                                <div className="font-sans">Respond to the following questions in how much you agree (<StatementAnswerIcon answer="somewhat agree"/>) or disagree (<StatementAnswerIcon answer="somewhat disagree"/>).</div>
-                                <div className="space-y-1">
-                                    <StatementQuestion name="statements.boring" statement="Is it boring?" answer={review.statements?.boring} onValueChange={(boring) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, boring } }))}/>
-                                    <StatementQuestion name="statements.competitive" statement="Will it see competitive play?" answer={review.statements?.competitive} onValueChange={(competitive) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, competitive } }))}/>
-                                    <StatementQuestion name="statements.creative" statement="Does it encourage creativity?" answer={review.statements?.creative} onValueChange={(creative) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, creative } }))}/>
-                                    <StatementQuestion name="statements.balanced" statement="Is it balanced?" answer={review.statements?.balanced} onValueChange={(balanced) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, balanced } }))}/>
-                                    <StatementQuestion name="statements.releasable" statement="Could it be released as is?" answer={review.statements?.releasable} onValueChange={(releasable) => setReview((prev) => ({ ...prev, statements: { ...prev.statements, releasable } }))}/>
+                                <div className="flex flex-col gap-1 p-2 w-full">
+                                    <SectionTitle>Review Questions</SectionTitle>
+                                    <div className="font-sans">
+                                        Respond to the following questions in how much you agree (
+                                        <StatementAnswerIcon answer="somewhat agree" />) or disagree (
+                                        <StatementAnswerIcon answer="somewhat disagree" />
+                                        ).
+                                    </div>
+                                    <div className="space-y-1">
+                                        <StatementQuestion
+                                            name="statements.boring"
+                                            statement="Is it boring?"
+                                            answer={review.statements?.boring}
+                                            onValueChange={(boring) =>
+                                                setReview((prev) => ({
+                                                    ...prev,
+                                                    statements: { ...prev.statements, boring }
+                                                }))
+                                            }
+                                        />
+                                        <StatementQuestion
+                                            name="statements.competitive"
+                                            statement="Will it see competitive play?"
+                                            answer={review.statements?.competitive}
+                                            onValueChange={(competitive) =>
+                                                setReview((prev) => ({
+                                                    ...prev,
+                                                    statements: { ...prev.statements, competitive }
+                                                }))
+                                            }
+                                        />
+                                        <StatementQuestion
+                                            name="statements.creative"
+                                            statement="Does it encourage creativity?"
+                                            answer={review.statements?.creative}
+                                            onValueChange={(creative) =>
+                                                setReview((prev) => ({
+                                                    ...prev,
+                                                    statements: { ...prev.statements, creative }
+                                                }))
+                                            }
+                                        />
+                                        <StatementQuestion
+                                            name="statements.balanced"
+                                            statement="Is it balanced?"
+                                            answer={review.statements?.balanced}
+                                            onValueChange={(balanced) =>
+                                                setReview((prev) => ({
+                                                    ...prev,
+                                                    statements: { ...prev.statements, balanced }
+                                                }))
+                                            }
+                                        />
+                                        <StatementQuestion
+                                            name="statements.releasable"
+                                            statement="Could it be released as is?"
+                                            answer={review.statements?.releasable}
+                                            onValueChange={(releasable) =>
+                                                setReview((prev) => ({
+                                                    ...prev,
+                                                    statements: { ...prev.statements, releasable }
+                                                }))
+                                            }
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex flex-col gap-1 p-2 w-full">
-                                <SectionTitle>
-                                    Additional Comments
-                                </SectionTitle>
-                                <Textarea
-                                    name="additional"
-                                    placeholder="Provide comments here..."
-                                    value={review.additional ?? ""}
-                                    onValueChange={(additional) => setReview((prev) => ({ ...prev, additional }))}
-                                    classNames={{
-                                        input: "text-sm md:text-base"
-                                    }}
-                                    minRows={10}
-                                    maxRows={30}
-                                />
-                            </div>
-                        </>}
+                                <div className="flex flex-col gap-1 p-2 w-full">
+                                    <SectionTitle>Additional Comments</SectionTitle>
+                                    <Textarea
+                                        name="additional"
+                                        placeholder="Provide comments here..."
+                                        value={review.additional ?? ""}
+                                        onValueChange={(additional) => setReview((prev) => ({ ...prev, additional }))}
+                                        classNames={{
+                                            input: "text-sm md:text-base"
+                                        }}
+                                        minRows={10}
+                                        maxRows={30}
+                                    />
+                                </div>
+                            </>
+                        )}
                         <Button
                             type="submit"
                             color="primary"
@@ -238,10 +353,10 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
             </Wizard>
         </div>
     );
-};
+}
 
 type ReviewFormProps = {
     review?: DeepPartial<IPlaytestReview>;
     card?: IPlaytestCard;
     reviewer?: string;
-}
+};

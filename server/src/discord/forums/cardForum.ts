@@ -1,4 +1,14 @@
-import { ActionRowBuilder, BaseMessageOptions, ButtonBuilder, ButtonStyle, EmbedBuilder, ForumChannel, Guild, GuildForumTag, Role } from "discord.js";
+import {
+    ActionRowBuilder,
+    BaseMessageOptions,
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    ForumChannel,
+    Guild,
+    GuildForumTag,
+    Role
+} from "discord.js";
 import { emojis, colors, discordify } from "../utils";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
@@ -32,8 +42,12 @@ export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): P
     }
 }
 
-async function syncCardThread(card: IPlaytestCard, context?: CardForumContext, forced: boolean = false): Promise<IPlaytestCard> {
-    context = context ?? await getCardForumContext();
+async function syncCardThread(
+    card: IPlaytestCard,
+    context?: CardForumContext,
+    forced: boolean = false
+): Promise<IPlaytestCard> {
+    context = context ?? (await getCardForumContext());
     const emitter = createSyncEmitter("card", "discord", card);
     try {
         emitter.start();
@@ -50,17 +64,24 @@ async function syncCardThread(card: IPlaytestCard, context?: CardForumContext, f
                 } else {
                     card = await newDraft(card, context);
                 }
-                logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
+                logger.verbose(
+                    `[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`
+                );
             } else {
                 emitter.progress("Syncing");
                 logger.info(`[Discord] Syncing ${card.name} (${card.version})`);
                 const messageExists = !!card._metadata?.discord?.messageUrl;
                 if (messageExists) {
                     // TODO: Implement updating existing message (low priority, as it really shouldn't be changing)
-                    logger.warn(`[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`);
+                    logger.warn(
+                        `[Discord] Cannot sync ${card.name} (${card.version}) as you cannot update a finalised card (for now)`
+                    );
                 } else {
                     emitter.progress("Searching");
-                    const existingThread = await discordService.findForumThread(context.channel, (thread) => thread.name === threadNameFor(card));
+                    const existingThread = await discordService.findForumThread(
+                        context.channel,
+                        (thread) => thread.name === threadNameFor(card)
+                    );
                     if (existingThread) {
                         // For legacy reasons; if a thread exists before card._metadata.discord was created, we need to map it
                         const starter = await existingThread.fetchStarterMessage();
@@ -75,7 +96,9 @@ async function syncCardThread(card: IPlaytestCard, context?: CardForumContext, f
                             card = await createNewLatest(card, context);
                         }
                     }
-                    logger.verbose(`[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`);
+                    logger.verbose(
+                        `[Discord] Synced ${card.name} (${card.version}): ${card._metadata?.discord?.messageUrl}`
+                    );
                 }
             }
             [card] = await dataService.cards.update([card], false, false, false);
@@ -94,7 +117,7 @@ function isMessageOutdated(card: IPlaytestCard) {
 
 export async function createPreview(card: IPlaytestCard, context?: CardForumContext) {
     try {
-        context = context ?? await getCardForumContext();
+        context = context ?? (await getCardForumContext());
         if (!card.draft) {
             throw new Error("Card is not draft");
         }
@@ -118,7 +141,7 @@ export async function createPreview(card: IPlaytestCard, context?: CardForumCont
 
 export async function createInitial(card: IPlaytestCard, context?: CardForumContext) {
     try {
-        context = context ?? await getCardForumContext();
+        context = context ?? (await getCardForumContext());
         if (!card.latest) {
             throw new Error("Card is not latest");
         }
@@ -148,7 +171,7 @@ export async function createInitial(card: IPlaytestCard, context?: CardForumCont
 
 export async function createNewLatest(card: IPlaytestCard, context?: CardForumContext) {
     try {
-        context = context ?? await getCardForumContext();
+        context = context ?? (await getCardForumContext());
         if (!card.latest) {
             throw new Error("Card is not latest");
         }
@@ -183,7 +206,7 @@ export async function createNewLatest(card: IPlaytestCard, context?: CardForumCo
 
 export async function newDraft(card: IPlaytestCard, context?: CardForumContext) {
     try {
-        context = context ?? await getCardForumContext();
+        context = context ?? (await getCardForumContext());
         if (!card.draft) {
             throw new Error("Card is not in draft");
         }
@@ -196,7 +219,7 @@ export async function newDraft(card: IPlaytestCard, context?: CardForumContext) 
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
         // For now, simply means 1s delay on any of these - shame
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         message = await message.edit(draftMessage);
 
         merge(card, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
@@ -208,7 +231,7 @@ export async function newDraft(card: IPlaytestCard, context?: CardForumContext) 
 
 export async function updateDraft(card: IPlaytestCard, context?: CardForumContext) {
     try {
-        context = context ?? await getCardForumContext();
+        context = context ?? (await getCardForumContext());
         if (!card.draft) {
             throw new Error("Card is not in draft");
         }
@@ -231,7 +254,7 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
         // For now, simply means 1s delay on any of these - shame
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         message = await message.edit(draftMessage);
 
         merge(card, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
@@ -300,7 +323,7 @@ export async function deleteDraft(card: IPlaytestCard) {
 }
 
 interface CardForumContext {
-    guild: Guild,
+    guild: Guild;
     channel: ForumChannel;
     taggedRole: Role;
     projectTags: Record<number, GuildForumTag>;
@@ -315,7 +338,9 @@ async function getCardForumContext(): Promise<CardForumContext> {
     const guild = await discordService.getGuild();
     const errors: string[] = [];
     // Check forum channel exists
-    const channel = guild.channels.cache.find((c) => c instanceof ForumChannel && c.name.endsWith(forumName)) as ForumChannel;
+    const channel = guild.channels.cache.find(
+        (c) => c instanceof ForumChannel && c.name.endsWith(forumName)
+    ) as ForumChannel;
     if (!channel) {
         errors.push(`"${forumName}" channel does not exist or is not a forum`);
     }
@@ -323,7 +348,7 @@ async function getCardForumContext(): Promise<CardForumContext> {
     // Check DT role exists
     const taggedRole = await discordService.findRoleByName(guild, "Design Team");
     if (!taggedRole) {
-        errors.push("\"Design Team\" role does not exist");
+        errors.push('"Design Team" role does not exist');
     }
 
     const projects = await dataService.projects.read({ active: true });
@@ -381,10 +406,7 @@ function createMessageButtons(card: IPlaytestCard, previousUrl?: string) {
 function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
     // Add a time component to force discord to see it as a new url/image (as it caches based on url)
     const imageUrl = getTimeLockedImageUrl(card);
-    let imageEmbed = new EmbedBuilder()
-        .setColor(colors[card.faction])
-        .setImage(imageUrl)
-        .setTimestamp(card.updated);
+    let imageEmbed = new EmbedBuilder().setColor(colors[card.faction]).setImage(imageUrl).setTimestamp(card.updated);
     if (user) {
         imageEmbed = imageEmbed.setFooter({
             text: user.displayname,
@@ -418,7 +440,9 @@ async function getThreadFor(card: IPlaytestCard) {
         }
 
         if (!previous._metadata?.discord?.messageUrl) {
-            logger.info(`[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`);
+            logger.info(
+                `[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`
+            );
             previous = await syncCardThread(previous);
         }
 
@@ -444,10 +468,7 @@ async function createThreadFor(card: IPlaytestCard, message: BaseMessageOptions,
     logger.info(`[Discord] Creating thread for ${card.name} (${card.version})`);
     const name = threadNameFor(card);
     const reason = `Design Team discussion for ${card.code} - ${name}`;
-    const tags = [
-        context.projectTags[card.project],
-        context.factionTags[card.faction]
-    ];
+    const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
     if (card.latest && !isPreview(card)) {
         tags.unshift(context.latestTag);
     }
@@ -466,17 +487,16 @@ async function createThreadFor(card: IPlaytestCard, message: BaseMessageOptions,
 async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
     try {
         const { thread } = await getThreadFor(card);
-        logger.info(`[Discord] Closing thread for ${card.name} (${card.version}): ${card._metadata.discord.messageUrl}`);
+        logger.info(
+            `[Discord] Closing thread for ${card.name} (${card.version}): ${card._metadata.discord.messageUrl}`
+        );
         if (thread.archived) {
             await thread.setArchived(false);
         }
         if (!thread.locked) {
             await thread.setLocked(true);
         }
-        const tags = [
-            context.projectTags[card.project],
-            context.factionTags[card.faction]
-        ];
+        const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
         if (card.latest && !isPreview(card)) {
             tags.unshift(context.latestTag);
         }
@@ -489,10 +509,16 @@ async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
 }
 
 const messages = {
-    preview(card: IPlaytestCard, project: IProject, user: User | undefined, context: CardForumContext): BaseMessageOptions {
-        const content = "## Card Reveal"
-            + `\n<@&${context.taggedRole.id}> See the early preview of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} below. Feel free to give your quick feedback for us to consider prior to public reveal.`
-            + "\n\n*Please keep in mind that this card preview is subject to major change or replacement prior to the initial playtesting release, and should be treated more as an indication of direction rather than balance - opinions on balance are fine, but are not a focus at this point.*";
+    preview(
+        card: IPlaytestCard,
+        project: IProject,
+        user: User | undefined,
+        context: CardForumContext
+    ): BaseMessageOptions {
+        const content =
+            "## Card Reveal" +
+            `\n<@&${context.taggedRole.id}> See the early preview of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} below. Feel free to give your quick feedback for us to consider prior to public reveal.` +
+            "\n\n*Please keep in mind that this card preview is subject to major change or replacement prior to the initial playtesting release, and should be treated more as an indication of direction rather than balance - opinions on balance are fine, but are not a focus at this point.*";
 
         const embeds = createCardEmbeds(card, user);
 
@@ -502,9 +528,15 @@ const messages = {
             embeds
         };
     },
-    initial(card: IPlaytestCard, project: IProject, user: User | undefined, context: CardForumContext): BaseMessageOptions {
-        const content = "## Initial Card"
-            + `\n<@&${context.taggedRole.id}> Initial version of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been confirmed.`;
+    initial(
+        card: IPlaytestCard,
+        project: IProject,
+        user: User | undefined,
+        context: CardForumContext
+    ): BaseMessageOptions {
+        const content =
+            "## Initial Card" +
+            `\n<@&${context.taggedRole.id}> Initial version of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been confirmed.`;
 
         const embeds = createCardEmbeds(card, user);
 
@@ -517,9 +549,16 @@ const messages = {
             components: [buttonRow]
         };
     },
-    newLatest(card: IPlaytestCard, project: IProject, playtestingUpdate: IPlaytestingUpdate, user: User | undefined, context: CardForumContext): BaseMessageOptions {
-        const content = `## Card ${capitalize(card.note?.type ?? "adjusted")}`
-        + `\n<@&${context.taggedRole.id}> ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been adjusted & pushed to playtesting.`;
+    newLatest(
+        card: IPlaytestCard,
+        project: IProject,
+        playtestingUpdate: IPlaytestingUpdate,
+        user: User | undefined,
+        context: CardForumContext
+    ): BaseMessageOptions {
+        const content =
+            `## Card ${capitalize(card.note?.type ?? "adjusted")}` +
+            `\n<@&${context.taggedRole.id}> ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been adjusted & pushed to playtesting.`;
 
         const embeds = createCardEmbeds(card, user);
 
@@ -537,9 +576,15 @@ const messages = {
             components: [buttonRow]
         };
     },
-    newDraft(card: IPlaytestCard, user: User | undefined, previousUrl: string, context: CardForumContext): BaseMessageOptions {
-        const content = "## Draft Card Pending"
-        + `\n<@&${context.taggedRole.id}> New draft version of this card has been proposed, and will be confirmed in the next playtesting update.`;
+    newDraft(
+        card: IPlaytestCard,
+        user: User | undefined,
+        previousUrl: string,
+        context: CardForumContext
+    ): BaseMessageOptions {
+        const content =
+            "## Draft Card Pending" +
+            `\n<@&${context.taggedRole.id}> New draft version of this card has been proposed, and will be confirmed in the next playtesting update.`;
 
         const embeds = createCardEmbeds(card, user);
 
@@ -553,8 +598,8 @@ const messages = {
         };
     },
     overriddenDraft(card: IPlaytestCard): BaseMessageOptions {
-        const content = "## ~~Draft Card Pending~~"
-        + "\nDraft has been overridden by a new version, and can no longer be viewed.";
+        const content =
+            "## ~~Draft Card Pending~~" + "\nDraft has been overridden by a new version, and can no longer be viewed.";
 
         const newVersionButton = new ButtonBuilder()
             .setLabel("View New Version")
@@ -568,8 +613,9 @@ const messages = {
         };
     },
     deleteDraft(previousUrl: string): BaseMessageOptions {
-        const content = "### Draft Card Deleted"
-        + "\nA previously planned update to this card has been removed, and cannot be viewed.";
+        const content =
+            "### Draft Card Deleted" +
+            "\nA previously planned update to this card has been removed, and cannot be viewed.";
 
         const button = new ButtonBuilder()
             .setLabel("View Current Version")

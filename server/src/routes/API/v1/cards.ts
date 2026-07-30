@@ -39,10 +39,7 @@ const CardVersionParams = {
 
 const CardVersionOrLatestParams = {
     ...CardParams,
-    version: Joi.alternatives().try(
-        Joi.string().regex(Regex.SemanticVersion),
-        Joi.string().valid("latest")
-    ).required()
+    version: Joi.alternatives().try(Joi.string().regex(Regex.SemanticVersion), Joi.string().valid("latest")).required()
 };
 
 // Core data-fetching logic, shared across GET routes
@@ -59,14 +56,15 @@ async function getCards(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.PlaytestingCard.Full,
-    { project: "asc", number: "asc", version: "asc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.PlaytestingCard.Full, {
+    project: "asc",
+    number: "asc",
+    version: "asc"
+});
 
 function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boolean {
     const filters = Array.isArray(filter) ? filter : [filter];
-    return filters.length > 0 && filters.every(f => f?.latest === true);
+    return filters.length > 0 && filters.every((f) => f?.latest === true);
 }
 
 // Checks all filters to decide between READ_LATEST_CARDS and READ_CARDS being required
@@ -83,7 +81,8 @@ const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, I
 );
 
 // Read all cards
-router.get("/",
+router.get(
+    "/",
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     validateCardQueryPermission,
     asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
@@ -94,7 +93,8 @@ router.get("/",
 );
 
 // Read cards for project
-router.get("/:project",
+router.get(
+    "/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     loadProjectByParam,
@@ -111,24 +111,28 @@ router.get("/:project",
 );
 
 // Read all versions of a card in a project
-router.get("/:project/:number",
+router.get(
+    "/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     loadProjectByParam,
     validateProjectAccess,
     validateCardQueryPermission,
-    asyncHandler<{ project: number, number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
-        const { project, number } = req.params;
-        const { filter, orderBy, page, perPage } = req.query;
+    asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(
+        async (req, res) => {
+            const { project, number } = req.params;
+            const { filter, orderBy, page, perPage } = req.query;
 
-        const normalizedFilter = applyToFilter(filter, { project, number });
-        const response = await getCards(normalizedFilter, orderBy, page, perPage);
-        res.status(StatusCodes.OK).json(response);
-    })
+            const normalizedFilter = applyToFilter(filter, { project, number });
+            const response = await getCards(normalizedFilter, orderBy, page, perPage);
+            res.status(StatusCodes.OK).json(response);
+        }
+    )
 );
 
 // Read specific version of a card, or "latest"
-router.get("/:project/:number/:version",
+router.get(
+    "/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
     loadProjectByParam,
     validateProjectAccess,
@@ -141,46 +145,57 @@ router.get("/:project/:number/:version",
         }
         return false;
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion | "latest" }, unknown, unknown, IPlaytestCard>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion | "latest" },
+        unknown,
+        unknown,
+        IPlaytestCard
+    >(async (req, res) => {
         const { project, number, version } = req.params;
 
-        const filter = version === "latest"
-            ? { project, number, latest: true }
-            : { project, number, version };
+        const filter = version === "latest" ? { project, number, latest: true } : { project, number, version };
         const [response] = await dataService.cards.read(filter);
         res.status(StatusCodes.OK).json(response);
     })
 );
 
 // Read previous version of a specific card
-router.get("/:project/:number/:version/previous",
+router.get(
+    "/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
     loadProjectByParam,
     validateProjectAccess,
     validateRequest(Permission.READ_CARDS),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, unknown, IPlaytestCard>(async (req, res) => {
-        const { project, number, version } = req.params;
+    asyncHandler<{ project: number; number: number; version: SemanticVersion }, unknown, unknown, IPlaytestCard>(
+        async (req, res) => {
+            const { project, number, version } = req.params;
 
-        const filter = { project, number, version };
-        const response = await dataService.cards.previous(filter);
-        res.status(StatusCodes.OK).json(response);
-    })
+            const filter = { project, number, version };
+            const response = await dataService.cards.previous(filter);
+            res.status(StatusCodes.OK).json(response);
+        }
+    )
 );
 
 // Upsert draft card
-router.put("/:project/:number/draft",
+router.put(
+    "/:project/:number/draft",
     celebrate({
         [Segments.PARAMS]: CardParams,
         [Segments.BODY]: Schemas.PlaytestingCard.Draft
     }),
     // Load and validate entities, separate from permission check
-    asyncHandler<{ project: number, number: number }, unknown, IPlaytestCard, unknown>(async (req, res, next) => {
+    asyncHandler<{ project: number; number: number }, unknown, IPlaytestCard, unknown>(async (req, res, next) => {
         const { project: projectNumber, number } = req.params;
         const { version } = req.body;
 
         const [project] = await dataService.projects.read({ number: projectNumber });
         if (!project) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} does not exist`);
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Invalid Data",
+                `Project #${projectNumber} does not exist`
+            );
         }
 
         // Note: Can only have multiple drafts per number when project is in draft
@@ -191,13 +206,25 @@ router.put("/:project/:number/draft",
         ]);
 
         if (!project.draft && !(latest || draft)) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Card #${number} does not exist for project #${projectNumber}`);
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Invalid Data",
+                `Card #${number} does not exist for project #${projectNumber}`
+            );
         }
         if (project.draft && !/^0\.0\.\d+$/.test(version)) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.x version`);
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Invalid Data",
+                `Project #${projectNumber} is in draft and cannot accept cards with non-0.0.x version`
+            );
         }
         if (slot?.release?.released) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Data", `Card #${number} has already been released and cannot start a new draft`);
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                `Card #${number} has already been released and cannot start a new draft`
+            );
         }
 
         res.locals.project = project;
@@ -210,7 +237,7 @@ router.put("/:project/:number/draft",
         const { draft } = res.locals;
         return hasPermission(principal, draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS);
     }),
-    asyncHandler<{ project: number, number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
+    asyncHandler<{ project: number; number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
         const { number } = req.params;
         const project = res.locals.project as IProject;
         const latest = res.locals.latest as IPlaytestCard | undefined;
@@ -220,7 +247,9 @@ router.put("/:project/:number/draft",
         const code = parseCardCode(false, project.number, number);
 
         if (latest) {
-            card.version = isPreview(latest) ? latest.version : inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion;
+            card.version = isPreview(latest)
+                ? latest.version
+                : (inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion);
         }
 
         card.code = code;
@@ -254,8 +283,10 @@ router.put("/:project/:number/draft",
             // If version is 0.0.0, then it is being added as an option for that slot/number.
             // We distinct card options by incrementing the patch to the next available number
             if (card.version === "0.0.0") {
-                const usedVersions = new Set(drafts.map(d => d.version));
-                const newVersion = Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
+                const usedVersions = new Set(drafts.map((d) => d.version));
+                const newVersion = Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find(
+                    (v) => !usedVersions.has(v)
+                );
                 card.version = newVersion;
                 await process("create");
             } else {
@@ -281,7 +312,8 @@ router.put("/:project/:number/draft",
 );
 
 // Delete draft card
-router.delete("/:project/:number/draft/:version?",
+router.delete(
+    "/:project/:number/draft/:version?",
     validateRequest(Permission.DELETE_CARDS),
     celebrate({
         [Segments.PARAMS]: {
@@ -290,26 +322,34 @@ router.delete("/:project/:number/draft/:version?",
         }
     }),
     loadProjectByParam,
-    asyncHandler<{ project: number, number: number, version?: SemanticVersion }, unknown, unknown, unknown>(async (req, res) => {
-        const { number, version } = req.params;
-        const project = res.locals.project as IProject;
-        const [deleted] = await dataService.cards.destroy({ project: project.number, number, version, draft: true }, !project.draft);
-        if (!deleted) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Draft card for #${number} in project #${project} does not exist`);
+    asyncHandler<{ project: number; number: number; version?: SemanticVersion }, unknown, unknown, unknown>(
+        async (req, res) => {
+            const { number, version } = req.params;
+            const project = res.locals.project as IProject;
+            const [deleted] = await dataService.cards.destroy(
+                { project: project.number, number, version, draft: true },
+                !project.draft
+            );
+            if (!deleted) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    `Draft card for #${number} in project #${project} does not exist`
+                );
+            }
+
+            await logActivity(LogCategory.CARD, "card.draft.deleted", "<principal> deleted draft <card>", {
+                context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) },
+                severity: "warn"
+            });
+
+            res.status(StatusCodes.OK).json(deleted);
         }
-
-        await logActivity(
-            LogCategory.CARD,
-            "card.draft.deleted",
-            "<principal> deleted draft <card>",
-            { context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) }, severity: "warn" }
-        );
-
-        res.status(StatusCodes.OK).json(deleted);
-    })
+    )
 );
 
-router.post("/:project/:number/:version/sync/:type",
+router.post(
+    "/:project/:number/:version/sync/:type",
     celebrate({
         [Segments.PARAMS]: {
             ...CardVersionParams,
@@ -322,13 +362,22 @@ router.post("/:project/:number/:version/sync/:type",
     validateRequest((principal, req) => {
         const { type } = req.params;
         switch (type) {
-            case "image": return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
-            case "discord": return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
-            case "github": return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
-            default: return false;
+            case "image":
+                return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
+            case "discord":
+                return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
+            case "github":
+                return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
+            default:
+                return false;
         }
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, type: "image" | "discord" | "github" }, unknown, unknown, { forced: boolean }>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; type: "image" | "discord" | "github" },
+        unknown,
+        unknown,
+        { forced: boolean }
+    >(async (req, res) => {
         const { project, number, version, type } = req.params;
         const { forced } = req.query;
         let [card] = await dataService.cards.read({ project, number, version });
@@ -349,12 +398,9 @@ router.post("/:project/:number/:version/sync/:type",
         }
 
         if (forced) {
-            await logActivity(
-                LogCategory.CARD,
-                "card.synced",
-                `<principal> forced a ${type} sync for <card>`,
-                { context: { card: cardSnapshot(`${project}|${number}|${version}`, card) } }
-            );
+            await logActivity(LogCategory.CARD, "card.synced", `<principal> forced a ${type} sync for <card>`, {
+                context: { card: cardSnapshot(`${project}|${number}|${version}`, card) }
+            });
         }
 
         res.status(StatusCodes.OK).json(card);
@@ -362,64 +408,90 @@ router.post("/:project/:number/:version/sync/:type",
 );
 
 // Move a draft card to another slot - draft projects only. Faction follows the target slot.
-router.post("/:project/:number/:version/move",
+router.post(
+    "/:project/:number/:version/move",
     validateRequest(Permission.EDIT_CARDS),
     celebrate({
         [Segments.PARAMS]: CardVersionParams,
         [Segments.BODY]: { to: Joi.number().required() }
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion }, unknown, { to: number }, unknown>(async (req, res) => {
-        const { project: projectNumber, number, version } = req.params;
-        const { to } = req.body;
+    asyncHandler<{ project: number; number: number; version: SemanticVersion }, unknown, { to: number }, unknown>(
+        async (req, res) => {
+            const { project: projectNumber, number, version } = req.params;
+            const { to } = req.body;
 
-        const [project] = await dataService.projects.read({ number: projectNumber });
-        if (!project) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${projectNumber} does not exist`);
+            const [project] = await dataService.projects.read({ number: projectNumber });
+            if (!project) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    `Project #${projectNumber} does not exist`
+                );
+            }
+            if (!project.draft) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Project",
+                    "Cards can only be moved between slots while a project is in draft"
+                );
+            }
+
+            const [card] = await dataService.cards.read({ project: projectNumber, number, version });
+            if (!card) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_FOUND,
+                    "Invalid Data",
+                    `Card #${number} (v${version}) does not exist for project #${projectNumber}`
+                );
+            }
+
+            const [[targetSlot], targetDrafts] = await Promise.all([
+                dataService.slots.read({ project: projectNumber, number: to }),
+                dataService.cards.read({ project: projectNumber, number: to, draft: true })
+            ]);
+            if (!targetSlot) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    `Slot #${to} does not exist for project #${projectNumber}`
+                );
+            }
+
+            // Keep the card's version if it is free in the target slot; otherwise take the next available 0.0.x
+            const usedVersions = new Set(targetDrafts.map((draft) => draft.version));
+            const newVersion = usedVersions.has(version)
+                ? Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find(
+                      (v) => !usedVersions.has(v)
+                  )
+                : version;
+
+            const movedCard: IPlaytestCard = {
+                ...card,
+                number: to,
+                version: newVersion,
+                faction: targetSlot.faction,
+                code: parseCardCode(false, projectNumber, to)
+            };
+
+            // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
+            await dataService.cards.destroy({ project: projectNumber, number, version }, false);
+            const [created] = await dataService.cards.create([movedCard], false);
+
+            await logActivity(
+                LogCategory.CARD,
+                "card.moved",
+                `<principal> moved <card> from slot ${number} to slot ${to} in <project>`,
+                {
+                    context: {
+                        card: cardSnapshot(`${projectNumber}|${to}|${newVersion}`, movedCard),
+                        project: projectSnapshot(project)
+                    }
+                }
+            );
+
+            res.status(StatusCodes.OK).json(created);
         }
-        if (!project.draft) {
-            throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Project", "Cards can only be moved between slots while a project is in draft");
-        }
-
-        const [card] = await dataService.cards.read({ project: projectNumber, number, version });
-        if (!card) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Card #${number} (v${version}) does not exist for project #${projectNumber}`);
-        }
-
-        const [[targetSlot], targetDrafts] = await Promise.all([
-            dataService.slots.read({ project: projectNumber, number: to }),
-            dataService.cards.read({ project: projectNumber, number: to, draft: true })
-        ]);
-        if (!targetSlot) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Slot #${to} does not exist for project #${projectNumber}`);
-        }
-
-        // Keep the card's version if it is free in the target slot; otherwise take the next available 0.0.x
-        const usedVersions = new Set(targetDrafts.map((draft) => draft.version));
-        const newVersion = usedVersions.has(version)
-            ? Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v))
-            : version;
-
-        const movedCard: IPlaytestCard = {
-            ...card,
-            number: to,
-            version: newVersion,
-            faction: targetSlot.faction,
-            code: parseCardCode(false, projectNumber, to)
-        };
-
-        // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
-        await dataService.cards.destroy({ project: projectNumber, number, version }, false);
-        const [created] = await dataService.cards.create([movedCard], false);
-
-        await logActivity(
-            LogCategory.CARD,
-            "card.moved",
-            `<principal> moved <card> from slot ${number} to slot ${to} in <project>`,
-            { context: { card: cardSnapshot(`${projectNumber}|${to}|${newVersion}`, movedCard), project: projectSnapshot(project) } }
-        );
-
-        res.status(StatusCodes.OK).json(created);
-    })
+    )
 );
 
 export default router;

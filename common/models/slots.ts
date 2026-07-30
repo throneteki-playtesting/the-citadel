@@ -8,37 +8,37 @@ export const wordingStatuses = ["pending", "reviewing", "approved"] as const;
 export const artworkStatuses = ["pending", "commissioned", "received", "approved"] as const;
 export const productionStatuses = ["pending", "filed"] as const;
 
-export type DevelopmentStatus = typeof developmentStatuses[number];
-export type WordingStatus = typeof wordingStatuses[number];
-export type ArtworkStatus = typeof artworkStatuses[number];
-export type ProductionStatus = typeof productionStatuses[number];
+export type DevelopmentStatus = (typeof developmentStatuses)[number];
+export type WordingStatus = (typeof wordingStatuses)[number];
+export type ArtworkStatus = (typeof artworkStatuses)[number];
+export type ProductionStatus = (typeof productionStatuses)[number];
 
 export interface SlotStatuses {
-    development: DevelopmentStatus,
-    wording: WordingStatus,
-    artwork: ArtworkStatus,
-    production: ProductionStatus
+    development: DevelopmentStatus;
+    wording: WordingStatus;
+    artwork: ArtworkStatus;
+    production: ProductionStatus;
 }
 
 export interface SlotRelease {
-    code: string,
+    code: string;
     /** Position within the release, 1..release.capacity. NOT the absolute printed number - see getFinalCardNumber */
-    position: number,
+    position: number;
     /** Set by publish; once true the position is immutable and no new draft can be started against it */
-    released?: boolean
+    released?: boolean;
 }
 
 export interface ISlot extends IAuditable {
-    project: number,
+    project: number;
     /** Permanent key alongside project; matches ICard.number */
-    number: number,
+    number: number;
     /** Fixed at creation - determines which faction carousel this slot belongs to */
-    faction: Faction,
+    faction: Faction;
     /** Recommended card type for this slot; advisory only, never enforced */
-    type?: Type,
-    notes?: string,
-    statuses: SlotStatuses,
-    release?: SlotRelease
+    type?: Type;
+    notes?: string;
+    statuses: SlotStatuses;
+    release?: SlotRelease;
 }
 
 export const DefaultSlotStatuses: SlotStatuses = {

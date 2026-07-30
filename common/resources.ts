@@ -6,7 +6,18 @@ import { ISlot } from "./models/slots";
 import { ILogEntry } from "./models/logs";
 import { IDeck } from "./models/decks";
 
-export type ResourceType = "user" | "role" | "integration" | "card" | "suggestion" | "project" | "playtestingUpdate" | "review" | "slot" | "log" | "deck";
+export type ResourceType =
+    | "user"
+    | "role"
+    | "integration"
+    | "card"
+    | "suggestion"
+    | "project"
+    | "playtestingUpdate"
+    | "review"
+    | "slot"
+    | "log"
+    | "deck";
 
 export interface ResourceDataMap {
     user: User;
@@ -36,7 +47,11 @@ type ResourceIdKeys = {
     deck: "identifier";
 };
 
-export const resourceIdFuncs: { [K in ResourceType]: (resource: Pick<ResourceDataMap[K], Extract<ResourceIdKeys[K], keyof ResourceDataMap[K]>>) => string } = {
+export const resourceIdFuncs: {
+    [K in ResourceType]: (
+        resource: Pick<ResourceDataMap[K], Extract<ResourceIdKeys[K], keyof ResourceDataMap[K]>>
+    ) => string;
+} = {
     user: (u) => u.discordId,
     role: (r) => r.discordId,
     integration: (i) => i.id,

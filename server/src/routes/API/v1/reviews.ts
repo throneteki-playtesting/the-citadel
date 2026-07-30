@@ -39,13 +39,11 @@ async function getReviews(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.PlaytestingReview.Full,
-    { updated: "desc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.PlaytestingReview.Full, { updated: "desc" });
 
 // Read reviews
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_REVIEWS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestReview>>(async (req, res) => {
@@ -56,23 +54,35 @@ router.get("/",
 );
 
 // Read review by project/number/version/reviewer
-router.get("/:project/:number/:version/:reviewer",
+router.get(
+    "/:project/:number/:version/:reviewer",
     validateRequest(Permission.READ_REVIEWS),
     celebrate({
         [Segments.PARAMS]: reviewParams,
         [Segments.QUERY]: getQuerySchema
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, IGetRequest<IPlaytestReview>>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string },
+        unknown,
+        unknown,
+        IGetRequest<IPlaytestReview>
+    >(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
-        const response = await getReviews(applyToFilter(filter, { project, number, version, reviewer }), orderBy, page, perPage);
+        const response = await getReviews(
+            applyToFilter(filter, { project, number, version, reviewer }),
+            orderBy,
+            page,
+            perPage
+        );
         const [review] = response.items;
         res.status(StatusCodes.OK).json(review);
     })
 );
 
 // Create review
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.MAKE_REVIEWS),
     celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
     // Reviewers may only submit their own review for the card's current latest version, unless they hold EDIT_REVIEWS
@@ -84,37 +94,55 @@ router.post("/",
         if (!("discordId" in principal) || principal.discordId !== review.reviewer) {
             return false;
         }
-        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+        const [card] = await dataService.cards.read({
+            project: review.project,
+            number: review.number,
+            version: review.version
+        });
         return !!card?.latest;
     }),
     asyncHandler<unknown, unknown, IPlaytestReview, unknown>(async (req, res) => {
         let review = req.body;
         review = await dataService.reviews.create(review);
 
-        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+        const [card] = await dataService.cards.read({
+            project: review.project,
+            number: review.number,
+            version: review.version
+        });
 
-        await logActivity(
-            LogCategory.REVIEW,
-            "review.created",
-            "<principal> submitted a review for <card>",
-            { context: { card: cardSnapshot(`${review.project}|${review.number}|${review.version}`, card) } }
-        );
+        await logActivity(LogCategory.REVIEW, "review.created", "<principal> submitted a review for <card>", {
+            context: { card: cardSnapshot(`${review.project}|${review.number}|${review.version}`, card) }
+        });
 
         res.status(StatusCodes.OK).json(review);
     })
 );
 
 // Update review
-router.put("/:project/:number/:version/:reviewer",
+router.put(
+    "/:project/:number/:version/:reviewer",
     // Initial check to see if they have one of the appropriate permissions
-    validateRequest((principal) => hasPermission(principal, Permission.EDIT_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)),
+    validateRequest(
+        (principal) =>
+            hasPermission(principal, Permission.EDIT_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)
+    ),
     celebrate({ [Segments.PARAMS]: reviewParams }),
     // Load review for ownership check
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string },
+        unknown,
+        unknown,
+        unknown
+    >(async (req, res, next) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
         if (!review) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", "Review for that project, number, version & reviewer does not exist");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Not Found",
+                "Review for that project, number, version & reviewer does not exist"
+            );
         }
         res.locals.review = review;
         next();
@@ -126,16 +154,31 @@ router.put("/:project/:number/:version/:reviewer",
             return true;
         }
 
-        if (!validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer)) {
+        if (
+            !validate(
+                principal,
+                Permission.MAKE_REVIEWS,
+                (principal) => "discordId" in principal && principal.discordId === review.reviewer
+            )
+        ) {
             return false;
         }
 
         // Without EDIT_REVIEWS, reviewers may only amend their review for the card's current latest version
-        const [card] = await dataService.cards.read({ project: review.project, number: review.number, version: review.version });
+        const [card] = await dataService.cards.read({
+            project: review.project,
+            number: review.number,
+            version: review.version
+        });
         return !!card?.latest;
     }),
     celebrate({ [Segments.BODY]: Schemas.PlaytestingReview.Draft }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, IPlaytestReview, unknown>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string },
+        unknown,
+        IPlaytestReview,
+        unknown
+    >(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         let review = req.body;
 
@@ -155,8 +198,15 @@ router.put("/:project/:number/:version/:reviewer",
         await logActivity(
             LogCategory.REVIEW,
             "review.updated",
-            reviewerUser ? "<principal> updated <targetUser>'s review for <card>" : "<principal> updated their review for <card>",
-            { context: { card: cardSnapshot(`${project}|${number}|${version}`, card), ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) }) } }
+            reviewerUser
+                ? "<principal> updated <targetUser>'s review for <card>"
+                : "<principal> updated their review for <card>",
+            {
+                context: {
+                    card: cardSnapshot(`${project}|${number}|${version}`, card),
+                    ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) })
+                }
+            }
         );
 
         res.status(StatusCodes.OK).json(review);
@@ -164,16 +214,29 @@ router.put("/:project/:number/:version/:reviewer",
 );
 
 // Delete review
-router.delete("/:project/:number/:version/:reviewer",
+router.delete(
+    "/:project/:number/:version/:reviewer",
     // Initial check to see if they have one of the appropriate permissions
-    validateRequest((principal) => hasPermission(principal, Permission.DELETE_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)),
+    validateRequest(
+        (principal) =>
+            hasPermission(principal, Permission.DELETE_REVIEWS) || hasPermission(principal, Permission.MAKE_REVIEWS)
+    ),
     celebrate({ [Segments.PARAMS]: reviewParams }),
     // Load review for ownership check
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res, next) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string },
+        unknown,
+        unknown,
+        unknown
+    >(async (req, res, next) => {
         const { project, number, version, reviewer } = req.params;
         const [review] = await dataService.reviews.read({ project, number, version, reviewer });
         if (!review) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", "Review for that project, number, version & reviewer does not exist");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Not Found",
+                "Review for that project, number, version & reviewer does not exist"
+            );
         }
         res.locals.review = review;
         next();
@@ -181,10 +244,21 @@ router.delete("/:project/:number/:version/:reviewer",
     // Further permission check, now with context of the review
     validateRequest((principal, req, res) => {
         const review = res.locals.review as IPlaytestReview;
-        return hasPermission(principal, Permission.DELETE_REVIEWS) ||
-            validate(principal, Permission.MAKE_REVIEWS, (principal) => "discordId" in principal && principal.discordId === review.reviewer);
+        return (
+            hasPermission(principal, Permission.DELETE_REVIEWS) ||
+            validate(
+                principal,
+                Permission.MAKE_REVIEWS,
+                (principal) => "discordId" in principal && principal.discordId === review.reviewer
+            )
+        );
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string },
+        unknown,
+        unknown,
+        unknown
+    >(async (req, res) => {
         const { project, number, version, reviewer } = req.params;
         const [deleted] = await dataService.reviews.destroy({ project, number, version, reviewer });
 
@@ -197,15 +271,24 @@ router.delete("/:project/:number/:version/:reviewer",
         await logActivity(
             LogCategory.REVIEW,
             "review.deleted",
-            reviewerUser ? "<principal> deleted <targetUser>'s review for <card>" : "<principal> deleted their review for <card>",
-            { context: { card: cardSnapshot(`${project}|${number}|${version}`, card), ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) }) }, severity: "warn" }
+            reviewerUser
+                ? "<principal> deleted <targetUser>'s review for <card>"
+                : "<principal> deleted their review for <card>",
+            {
+                context: {
+                    card: cardSnapshot(`${project}|${number}|${version}`, card),
+                    ...(reviewerUser && { targetUser: userSnapshot(reviewerUser) })
+                },
+                severity: "warn"
+            }
         );
 
         res.status(StatusCodes.OK).json(deleted);
     })
 );
 
-router.post("/:project/:number/:version/:reviewer/sync/:type",
+router.post(
+    "/:project/:number/:version/:reviewer/sync/:type",
     celebrate({
         [Segments.PARAMS]: {
             ...reviewParams,
@@ -218,11 +301,18 @@ router.post("/:project/:number/:version/:reviewer/sync/:type",
     validateRequest((principal, req) => {
         const { type } = req.params;
         switch (type) {
-            case "discord": return hasPermission(principal, Permission.SYNC_REVIEW_DISCORD);
-            default: return false;
+            case "discord":
+                return hasPermission(principal, Permission.SYNC_REVIEW_DISCORD);
+            default:
+                return false;
         }
     }),
-    asyncHandler<{ project: number, number: number, version: SemanticVersion, reviewer: string, type: "discord" }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
+    asyncHandler<
+        { project: number; number: number; version: SemanticVersion; reviewer: string; type: "discord" },
+        unknown,
+        unknown,
+        { forced?: boolean }
+    >(async (req, res) => {
         const { project, number, version, reviewer, type } = req.params;
         const { forced } = req.query;
 

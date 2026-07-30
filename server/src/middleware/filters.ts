@@ -1,24 +1,24 @@
 import { DeepPartial, isOperatorObject, SingleOrArray } from "common/types";
 
 type DotPath<T, Prefix extends string = ""> = DeepPartial<
-  Record<
-    {
-      [K in keyof T]: T[K] extends object
-        ? T[K] extends Array<unknown>
-          ? `${Prefix}${Extract<K, string>}`
-          : `${Prefix}${Extract<K, string>}` | DotPathKeys<T[K], `${Prefix}${Extract<K, string>}.`>
-        : `${Prefix}${Extract<K, string>}`
-    }[keyof T],
-    string | number | boolean
-  >
+    Record<
+        {
+            [K in keyof T]: T[K] extends object
+                ? T[K] extends Array<unknown>
+                    ? `${Prefix}${Extract<K, string>}`
+                    : `${Prefix}${Extract<K, string>}` | DotPathKeys<T[K], `${Prefix}${Extract<K, string>}.`>
+                : `${Prefix}${Extract<K, string>}`;
+        }[keyof T],
+        string | number | boolean
+    >
 >;
 
 type DotPathKeys<T, Prefix extends string = ""> = {
-  [K in keyof T]: T[K] extends object
-    ? T[K] extends Array<unknown>
-      ? `${Prefix}${Extract<K, string>}`
-      : `${Prefix}${Extract<K, string>}` | DotPathKeys<T[K], `${Prefix}${Extract<K, string>}.`>
-    : `${Prefix}${Extract<K, string>}`
+    [K in keyof T]: T[K] extends object
+        ? T[K] extends Array<unknown>
+            ? `${Prefix}${Extract<K, string>}`
+            : `${Prefix}${Extract<K, string>}` | DotPathKeys<T[K], `${Prefix}${Extract<K, string>}.`>
+        : `${Prefix}${Extract<K, string>}`;
 }[keyof T];
 
 function expandDotPaths<T extends object>(flat: DotPath<T>): T {
@@ -56,9 +56,7 @@ function castIsoDates(value: unknown): unknown {
     }
     if (Array.isArray(value)) return value.map(castIsoDates);
     if (value !== null && typeof value === "object") {
-        return Object.fromEntries(
-            Object.entries(value).map(([k, v]) => [k, castIsoDates(v)])
-        );
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, castIsoDates(v)]));
     }
     return value;
 }

@@ -1,4 +1,19 @@
-import { addToast, Avatar, AvatarGroup, Button, Chip, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, Pagination, Input, Spinner } from "@heroui/react";
+import {
+    addToast,
+    Avatar,
+    AvatarGroup,
+    Button,
+    Chip,
+    Table,
+    TableBody,
+    TableCell,
+    TableColumn,
+    TableHeader,
+    TableRow,
+    Pagination,
+    Input,
+    Spinner
+} from "@heroui/react";
 import { useDeleteIntegrationMutation, useGetIntegrationsQuery, useGetUserQuery } from "../../../api";
 import { Key, useCallback, useMemo, useState } from "react";
 import Permission from "common/models/permissions";
@@ -23,9 +38,13 @@ export default function Integrations() {
     const [page, setPage] = useState(1);
     const [sort, setSort] = useState<ColumnSort>();
     const perPage = 10;
-    const orderBy = useMemo(() => sort ? { [sort.key]: sort.dir } : undefined, [sort]);
+    const orderBy = useMemo(() => (sort ? { [sort.key]: sort.dir } : undefined), [sort]);
     const filter = useMemo<Filter<SafeIntegration>>(() => ({ name: { $regex: `(?i)${search}` } }), [search]);
-    const { data: integrationsData, isLoading, isFetching } = useGetIntegrationsQuery({ filter, orderBy, page, perPage });
+    const {
+        data: integrationsData,
+        isLoading,
+        isFetching
+    } = useGetIntegrationsQuery({ filter, orderBy, page, perPage });
 
     // Reset to page 1 when search changes
     const handleSearch = (value: string) => {
@@ -35,7 +54,7 @@ export default function Integrations() {
 
     const [editing, setEditing] = useState<{ integration?: SafeIntegration }>();
     const [deletingIntegration, setDeletingIntegration] = useState<SafeIntegration>();
-    const [tokenView, setTokenView] = useState<{ integration: SafeIntegration, token?: string }>();
+    const [tokenView, setTokenView] = useState<{ integration: SafeIntegration; token?: string }>();
 
     const [deleteIntegration, { isLoading: isDeleting }] = useDeleteIntegrationMutation();
 
@@ -50,7 +69,11 @@ export default function Integrations() {
             if (response.error) {
                 addToast({ title: "Error", color: "danger", description: "Failed to delete integration" });
             } else {
-                addToast({ title: "Integration deleted", color: "success", description: `${deletingIntegration.name} was deleted successfully.` });
+                addToast({
+                    title: "Integration deleted",
+                    color: "success",
+                    description: `${deletingIntegration.name} was deleted successfully.`
+                });
                 setDeletingIntegration(undefined);
             }
         }
@@ -64,52 +87,81 @@ export default function Integrations() {
         { key: "actions", label: "" }
     ] as { key: string; label: string; sortKey?: string; className?: string }[];
 
-    const renderCell = useCallback((integration: SafeIntegration, columnKey: Key) => {
-        switch (columnKey) {
-            case "name":
-                return (
-                    <div className="flex flex-col">
-                        <span className="text-small">{integration.name}</span>
-                        <span className="text-tiny text-default-400">{integration.id}</span>
-                    </div>
-                );
-            case "status":
-                return (
-                    <Chip size="sm" variant="flat" color={integration.enabled ? "success" : "default"}>
-                        {integration.enabled ? "Enabled" : "Disabled"}
-                    </Chip>
-                );
-            case "owners":
-                return <OwnerAvatars ownerIds={integration.ownerIds ?? []}/>;
-            case "lastUsedAt":
-                return <span>{integration.lastUsedAt ? format(integration.lastUsedAt) : "Never"}</span>;
-            case "actions":
-                return (
-                    <div className="flex justify-end">
-                        <Button isIconOnly size="sm" variant="light" title="View token" onPress={() => setTokenView({ integration })}>
-                            <FontAwesomeIcon icon={faEye} />
-                        </Button>
-                        {canEdit && (
-                            <Button isIconOnly size="sm" variant="light" title="Edit" isDisabled={!!editing} onPress={() => setEditing({ integration })}>
-                                <FontAwesomeIcon icon={faPencil} />
+    const renderCell = useCallback(
+        (integration: SafeIntegration, columnKey: Key) => {
+            switch (columnKey) {
+                case "name":
+                    return (
+                        <div className="flex flex-col">
+                            <span className="text-small">{integration.name}</span>
+                            <span className="text-tiny text-default-400">{integration.id}</span>
+                        </div>
+                    );
+                case "status":
+                    return (
+                        <Chip size="sm" variant="flat" color={integration.enabled ? "success" : "default"}>
+                            {integration.enabled ? "Enabled" : "Disabled"}
+                        </Chip>
+                    );
+                case "owners":
+                    return <OwnerAvatars ownerIds={integration.ownerIds ?? []} />;
+                case "lastUsedAt":
+                    return <span>{integration.lastUsedAt ? format(integration.lastUsedAt) : "Never"}</span>;
+                case "actions":
+                    return (
+                        <div className="flex justify-end">
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="light"
+                                title="View token"
+                                onPress={() => setTokenView({ integration })}
+                            >
+                                <FontAwesomeIcon icon={faEye} />
                             </Button>
-                        )}
-                        {canDelete && (
-                            <Button isIconOnly size="sm" variant="light" color="danger" title="Delete" onPress={() => setDeletingIntegration(integration)}>
-                                <FontAwesomeIcon icon={faTrash} />
-                            </Button>
-                        )}
-                    </div>
-                );
-        }
-    }, [canDelete, canEdit, editing, format]);
+                            {canEdit && (
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    title="Edit"
+                                    isDisabled={!!editing}
+                                    onPress={() => setEditing({ integration })}
+                                >
+                                    <FontAwesomeIcon icon={faPencil} />
+                                </Button>
+                            )}
+                            {canDelete && (
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    color="danger"
+                                    title="Delete"
+                                    onPress={() => setDeletingIntegration(integration)}
+                                >
+                                    <FontAwesomeIcon icon={faTrash} />
+                                </Button>
+                            )}
+                        </div>
+                    );
+            }
+        },
+        [canDelete, canEdit, editing, format]
+    );
 
     return (
         <div className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Integrations</div>
-                <div className="text-sm md:text-base">Integrations grant external tools & services access to the API via a bearer token, limited to the permissions assigned here.</div>
-                <div className="text-sm md:text-base">Tokens are only shown once upon creation or refresh; refreshing a token immediately invalidates the previous one.</div>
+                <div className="text-sm md:text-base">
+                    Integrations grant external tools & services access to the API via a bearer token, limited to the
+                    permissions assigned here.
+                </div>
+                <div className="text-sm md:text-base">
+                    Tokens are only shown once upon creation or refresh; refreshing a token immediately invalidates the
+                    previous one.
+                </div>
             </div>
             <Table
                 topContentPlacement="outside"
@@ -120,7 +172,7 @@ export default function Integrations() {
                             placeholder="Search..."
                             value={search}
                             onValueChange={handleSearch}
-                            startContent={<FontAwesomeIcon icon={faMagnifyingGlass}/>}
+                            startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
                             endContent={
                                 isFetching ? (
                                     <Spinner size="sm" aria-label="Loading" />
@@ -133,7 +185,12 @@ export default function Integrations() {
                             className="max-w-98"
                         />
                         {canCreate && (
-                            <Button color="primary" className="shrink-0" startContent={<FontAwesomeIcon icon={faPlus} />} onPress={() => setEditing({})}>
+                            <Button
+                                color="primary"
+                                className="shrink-0"
+                                startContent={<FontAwesomeIcon icon={faPlus} />}
+                                onPress={() => setEditing({})}
+                            >
                                 Create
                             </Button>
                         )}
@@ -141,7 +198,11 @@ export default function Integrations() {
                 }
                 bottomContent={
                     <div className="px-4">
-                        <Pagination page={page} onChange={setPage} total={Math.max(1, Math.ceil((integrationsData?.total ?? 0) / perPage))} />
+                        <Pagination
+                            page={page}
+                            onChange={setPage}
+                            total={Math.max(1, Math.ceil((integrationsData?.total ?? 0) / perPage))}
+                        />
                     </div>
                 }
             >
@@ -149,17 +210,33 @@ export default function Integrations() {
                     {(column) => (
                         <TableColumn key={column.key} className={column.className}>
                             {column.sortKey ? (
-                                <SortableColumnHeader label={column.label} sortKey={column.sortKey} sort={sort} onChange={setSort} />
-                            ) : column.label}
+                                <SortableColumnHeader
+                                    label={column.label}
+                                    sortKey={column.sortKey}
+                                    sort={sort}
+                                    onChange={setSort}
+                                />
+                            ) : (
+                                column.label
+                            )}
                         </TableColumn>
                     )}
                 </TableHeader>
-                <TableBody emptyContent="No integrations have been created" items={integrationsData?.items ?? []} isLoading={isLoading} loadingContent={<Loading />}>
+                <TableBody
+                    emptyContent="No integrations have been created"
+                    items={integrationsData?.items ?? []}
+                    isLoading={isLoading}
+                    loadingContent={<Loading />}
+                >
                     {(item) => (
                         <TableRow key={item.id}>
                             {(columnKey) => {
                                 const column = columns.find((c) => c.key === columnKey);
-                                return <TableCell className={classNames("text-tiny sm:text-small", column?.className)}>{renderCell(item, columnKey)}</TableCell>;
+                                return (
+                                    <TableCell className={classNames("text-tiny sm:text-small", column?.className)}>
+                                        {renderCell(item, columnKey)}
+                                    </TableCell>
+                                );
                             }}
                         </TableRow>
                     )}
@@ -180,10 +257,14 @@ export default function Integrations() {
                 onClose={() => setDeletingIntegration(undefined)}
                 onConfirm={onDelete}
             />
-            <TokenModal integration={tokenView?.integration} initialToken={tokenView?.token} onClose={() => setTokenView(undefined)} />
+            <TokenModal
+                integration={tokenView?.integration}
+                initialToken={tokenView?.token}
+                onClose={() => setTokenView(undefined)}
+            />
         </div>
     );
-};
+}
 
 function OwnerAvatars({ ownerIds }: { ownerIds: string[] }) {
     const canReadUser = usePermission(Permission.READ_USER);
@@ -197,7 +278,7 @@ function OwnerAvatars({ ownerIds }: { ownerIds: string[] }) {
     return (
         <AvatarGroup size="sm" max={4} className="justify-start">
             {ownerIds.map((id) => (
-                <OwnerAvatar key={id} discordId={id}/>
+                <OwnerAvatar key={id} discordId={id} />
             ))}
         </AvatarGroup>
     );
@@ -206,5 +287,5 @@ function OwnerAvatars({ ownerIds }: { ownerIds: string[] }) {
 function OwnerAvatar({ discordId }: { discordId: string }) {
     const { data: owner } = useGetUserQuery({ discordId });
 
-    return <Avatar size="sm" src={owner?.avatarUrl} name={owner?.displayname ?? discordId} showFallback/>;
+    return <Avatar size="sm" src={owner?.avatarUrl} name={owner?.displayname ?? discordId} showFallback />;
 }

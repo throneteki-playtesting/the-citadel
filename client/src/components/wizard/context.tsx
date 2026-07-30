@@ -15,7 +15,7 @@ export function useWizard<T>(): WizardContextProps<T> {
 // A schema re-check on a field may clear its own or a prior server verdict, but never an "external" one
 // (eg. a DB uniqueness check) - Joi has no way to know whether that still applies.
 export type WizardErrorSource = "schema" | "external" | "server";
-export type WizardFieldError = { message: string, source: WizardErrorSource };
+export type WizardFieldError = { message: string; source: WizardErrorSource };
 
 export function countErrorsInDirection(
     fieldErrors: Record<string, WizardFieldError>,
@@ -42,24 +42,24 @@ export function titleizeFieldName(name: string): string {
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-export type WizardFieldMeta = { onPage: number, label: string };
+export type WizardFieldMeta = { onPage: number; label: string };
 
 export type WizardContextProps<T> = {
-    id: string,
-    currentPage: number,
-    totalPages: number,
-    setTotalPages: React.Dispatch<React.SetStateAction<number>>,
-    data: DeepPartial<T>,
-    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>
-    isFirstPage: boolean,
-    isLastPage: boolean,
-    validationErrors: Record<string, string>,
-    fieldErrors: Record<string, WizardFieldError>,
-    setError: (path: string, message: string) => void,
-    clearError: (path: string) => void,
-    isValidationError: (err: unknown) => boolean,
-    fieldMeta: Record<string, WizardFieldMeta>,
-    setFieldMeta: React.Dispatch<React.SetStateAction<Record<string, WizardFieldMeta>>>,
-    onPageSubmit: (data: Record<string, any>) => void,
-    onPageBack: () => void
-}
+    id: string;
+    currentPage: number;
+    totalPages: number;
+    setTotalPages: React.Dispatch<React.SetStateAction<number>>;
+    data: DeepPartial<T>;
+    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>;
+    isFirstPage: boolean;
+    isLastPage: boolean;
+    validationErrors: Record<string, string>;
+    fieldErrors: Record<string, WizardFieldError>;
+    setError: (path: string, message: string) => void;
+    clearError: (path: string) => void;
+    isValidationError: (err: unknown) => boolean;
+    fieldMeta: Record<string, WizardFieldMeta>;
+    setFieldMeta: React.Dispatch<React.SetStateAction<Record<string, WizardFieldMeta>>>;
+    onPageSubmit: (data: Record<string, any>) => void;
+    onPageBack: () => void;
+};

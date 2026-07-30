@@ -45,7 +45,10 @@ function scopeKeyFromFilter(fields: string[], filter: Record<string, unknown>): 
 }
 
 // Falls back to flat "LIST" if there's no scope config, no filter, or any filter entry isn't an exact scope.
-function listScopeTagsFromArgs(tag: ApiTag, args: { filter?: SingleOrArray<Record<string, unknown>> } | undefined): PendingTag[] {
+function listScopeTagsFromArgs(
+    tag: ApiTag,
+    args: { filter?: SingleOrArray<Record<string, unknown>> } | undefined
+): PendingTag[] {
     const fields = listScopeFields[tag];
     const filters = args?.filter !== undefined ? asArray(args.filter) : undefined;
     if (!fields || !filters) {
@@ -106,21 +109,24 @@ export function generateFor<T>(
 ): PendingTag[] {
     const resolve = (options?.idFunc ?? defaultIdFuncs[tag]) as (result: T) => string | number | undefined;
 
-    const resultTags = results
-        ? asArray(results).map((result) => ({ type: tag, id: resolve(result) }))
-        : [];
+    const resultTags = results ? asArray(results).map((result) => ({ type: tag, id: resolve(result) })) : [];
 
-    const listTags = (options?.includeList ?? true)
-        ? listTagsFor(tag, results, resolve, options?.args as { filter?: SingleOrArray<Record<string, unknown>> } | undefined)
-        : [];
+    const listTags =
+        (options?.includeList ?? true)
+            ? listTagsFor(
+                  tag,
+                  results,
+                  resolve,
+                  options?.args as { filter?: SingleOrArray<Record<string, unknown>> } | undefined
+              )
+            : [];
 
     // Also tag by query args in case the result is empty (eg. 404)
-    const argId = options?.args !== undefined
-        ? (defaultIdFuncs[tag] as (args: unknown) => string | number | undefined)(options.args)
-        : undefined;
-    const argTag = argId !== undefined && !resultTags.some((t) => t.id === argId)
-        ? [{ type: tag, id: argId }]
-        : [];
+    const argId =
+        options?.args !== undefined
+            ? (defaultIdFuncs[tag] as (args: unknown) => string | number | undefined)(options.args)
+            : undefined;
+    const argTag = argId !== undefined && !resultTags.some((t) => t.id === argId) ? [{ type: tag, id: argId }] : [];
 
     return [...resultTags, ...listTags, ...argTag];
 }
@@ -128,10 +134,7 @@ export function generateFor<T>(
 // Every tag a change to this resource could affect: its own identity tag, plus its full ancestor scope chain.
 function tagsForResource<K extends ResourceType>(type: K, resource: ResourceDataMap[K]): PendingTag[] {
     const id = resourceIdFuncs[type](resource);
-    return [
-        { type, id },
-        ...listScopeTagsFromId(type, id)
-    ];
+    return [{ type, id }, ...listScopeTagsFromId(type, id)];
 }
 
 // Pending-tag queue driving the "data outdated" toast; refreshToast.tsx subscribes to show/hide it.
@@ -178,7 +181,9 @@ export function flushPending(): void {
 /** True if anything currently on screen is actively subscribed to one of these tags (not just cached). */
 function hasActiveSubscriber(tags: PendingTag[]): boolean {
     const affectedQueries = api.util.selectInvalidatedBy(store.getState(), tags);
-    const subscriptions = (store.getState() as unknown as { api: { subscriptions: Record<string, Record<string, unknown>> } }).api.subscriptions;
+    const subscriptions = (
+        store.getState() as unknown as { api: { subscriptions: Record<string, Record<string, unknown>> } }
+    ).api.subscriptions;
 
     return affectedQueries.some(({ queryCacheKey }) => Object.keys(subscriptions[queryCacheKey] ?? {}).length > 0);
 }

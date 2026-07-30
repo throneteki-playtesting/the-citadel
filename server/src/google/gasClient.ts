@@ -2,7 +2,6 @@ import { JWT } from "google-auth-library";
 import { Response } from "gas/restClient";
 import { buildUrl } from "common/utils";
 
-
 export default class GasClient {
     private readonly scriptSuffix: string;
     private clientEmail: string;
@@ -38,13 +37,17 @@ export default class GasClient {
         const response = await fetch(url, request);
 
         if (!response.ok) {
-            throw Error(`Google App Script ${request.method} request failed`, { cause: { status: response.status, message: response.statusText } });
+            throw Error(`Google App Script ${request.method} request failed`, {
+                cause: { status: response.status, message: response.statusText }
+            });
         }
 
-        const json = await response.json() as Response<T>;
+        const json = (await response.json()) as Response<T>;
 
         if (json.error) {
-            throw Error(`Google App Script ${request.method} request successful, but returned error(s)`, { cause: json.error });
+            throw Error(`Google App Script ${request.method} request successful, but returned error(s)`, {
+                cause: json.error
+            });
         }
 
         return json.data;

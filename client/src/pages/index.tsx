@@ -18,9 +18,9 @@ import PlaytestingUpdate from "./playtestingUpdate";
 import Privacy from "./privacy";
 
 export type NavItem = PageItem | MenuItem;
-export type PageItem = BaseNav & { path: string, element?: ReactElement, endContent?: ReactElement };
-export type MenuItem = BaseNav & { subPages: NavItem[] }
-type BaseNav = { label?: string, permission?: SingleOrArray<Permission> }
+export type PageItem = BaseNav & { path: string; element?: ReactElement; endContent?: ReactElement };
+export type MenuItem = BaseNav & { subPages: NavItem[] };
+type BaseNav = { label?: string; permission?: SingleOrArray<Permission> };
 
 export const navItems: NavItem[] = [
     {
@@ -58,7 +58,7 @@ export const navItems: NavItem[] = [
                 path: "/project/create",
                 label: "+ New Project",
                 permission: Permission.CREATE_PROJECTS,
-                element: <Project isCreating={true}/>
+                element: <Project isCreating={true} />
             }
         ]
     },
@@ -116,8 +116,7 @@ export const navItems: NavItem[] = [
     }
 ] as const;
 
-export const profileItems: PageItem[] = [
-] as const;
+export const profileItems: PageItem[] = [] as const;
 
 export const isVisibleFor = (page: NavItem, user?: User): boolean => {
     const pagePermissions = asArray(page.permission ?? []);

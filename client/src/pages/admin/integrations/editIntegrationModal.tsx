@@ -1,4 +1,14 @@
-import { addToast, Button, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Switch } from "@heroui/react";
+import {
+    addToast,
+    Button,
+    Input,
+    Modal,
+    ModalBody,
+    ModalContent,
+    ModalFooter,
+    ModalHeader,
+    Switch
+} from "@heroui/react";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
 import { useCreateIntegrationMutation, useUpdateIntegrationMutation } from "../../../api";
@@ -38,7 +48,11 @@ export default function EditIntegrationModal({ isOpen, integration, onOpenChange
             if (response.error) {
                 addToast({ title: "Error", color: "danger", description: "Failed to save integration" });
             } else {
-                addToast({ title: "Integration saved", color: "success", description: `${model.name} was updated successfully.` });
+                addToast({
+                    title: "Integration saved",
+                    color: "success",
+                    description: `${model.name} was updated successfully.`
+                });
                 onOpenChange();
             }
         } else {
@@ -46,44 +60,51 @@ export default function EditIntegrationModal({ isOpen, integration, onOpenChange
             if (response.error) {
                 addToast({ title: "Error", color: "danger", description: "Failed to create integration" });
             } else {
-                addToast({ title: "Integration created", color: "success", description: `${model.name} was created successfully.` });
+                addToast({
+                    title: "Integration created",
+                    color: "success",
+                    description: `${model.name} was created successfully.`
+                });
                 onOpenChange();
                 onCreated(response.data.token, response.data.integration);
             }
         }
-    }, [createIntegration, enabled, integration, name, onCreated, onOpenChange, ownerIds, permissions, updateIntegration]);
+    }, [
+        createIntegration,
+        enabled,
+        integration,
+        name,
+        onCreated,
+        onOpenChange,
+        ownerIds,
+        permissions,
+        updateIntegration
+    ]);
 
     return (
         <Modal isOpen={isOpen} size="2xl" scrollBehavior="inside" placement="top-center" onOpenChange={onOpenChange}>
             <ModalContent>
                 {(onClose) => (
                     <>
-                        <ModalHeader>
-                            {integration ? `Edit ${integration.name}` : "Create Integration"}
-                        </ModalHeader>
+                        <ModalHeader>{integration ? `Edit ${integration.name}` : "Create Integration"}</ModalHeader>
                         <ModalBody>
                             <div className="flex gap-3 items-end">
-                                <Input
-                                    label="Name"
-                                    isRequired
-                                    value={name}
-                                    onValueChange={setName}
-                                />
+                                <Input label="Name" isRequired value={name} onValueChange={setName} />
                                 <Switch isSelected={enabled} onValueChange={setEnabled} className="pb-2">
                                     Enabled
                                 </Switch>
                             </div>
-                            <UserSelect label="Owners" selectedIds={ownerIds} onChange={setOwnerIds}/>
-                            <PermissionCheckboxes
-                                selectedPermissions={permissions}
-                                onChange={setPermissions}
-                            />
+                            <UserSelect label="Owners" selectedIds={ownerIds} onChange={setOwnerIds} />
+                            <PermissionCheckboxes selectedPermissions={permissions} onChange={setPermissions} />
                         </ModalBody>
                         <ModalFooter>
-                            <Button onPress={onClose}>
-                                Cancel
-                            </Button>
-                            <Button color="primary" isDisabled={!name.trim()} isLoading={isCreating || isUpdating} onPress={onSave}>
+                            <Button onPress={onClose}>Cancel</Button>
+                            <Button
+                                color="primary"
+                                isDisabled={!name.trim()}
+                                isLoading={isCreating || isUpdating}
+                                onPress={onSave}
+                            >
                                 {integration ? "Save" : "Create"}
                             </Button>
                         </ModalFooter>
@@ -92,7 +113,7 @@ export default function EditIntegrationModal({ isOpen, integration, onOpenChange
             </ModalContent>
         </Modal>
     );
-};
+}
 
 type IntegrationModalProps = Omit<BaseElementProps, "children"> & {
     isOpen: boolean;

@@ -6,11 +6,22 @@ import { BaseElementProps } from "../../types";
 const SENTINEL_KEY = "__searchable-select-sentinel__";
 
 function SearchableMultiSelect<T extends object>({
-    className, style, label, placeholder = "Search...",
-    items, getKey, renderItem, renderSelected,
-    selectedKeys, onSelectionChange,
-    search, onSearchChange,
-    hasMore, onLoadMore, isLoading, isDisabled
+    className,
+    style,
+    label,
+    placeholder = "Search...",
+    items,
+    getKey,
+    renderItem,
+    renderSelected,
+    selectedKeys,
+    onSelectionChange,
+    search,
+    onSearchChange,
+    hasMore,
+    onLoadMore,
+    isLoading,
+    isDisabled
 }: SearchableMultiSelectProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
@@ -72,35 +83,34 @@ function SearchableMultiSelect<T extends object>({
             className={className}
             style={style}
         >
-            {(item) => item === sentinel
-                ? <SelectItem key={SENTINEL_KEY} textValue="" className="hidden" aria-hidden="true"/>
-                : (
-                    <SelectItem
-                        key={getKey(item)}
-                        classNames={{ title: "min-w-0 overflow-hidden" }}
-                    >
+            {(item) =>
+                item === sentinel ? (
+                    <SelectItem key={SENTINEL_KEY} textValue="" className="hidden" aria-hidden="true" />
+                ) : (
+                    <SelectItem key={getKey(item)} classNames={{ title: "min-w-0 overflow-hidden" }}>
                         {renderItem(item)}
                     </SelectItem>
-                )}
+                )
+            }
         </Select>
     );
 }
 
 type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
-    label?: string,
-    placeholder?: string,
-    items: T[],
-    getKey: (item: T) => string,
-    renderItem: (item: T) => ReactNode,
-    renderSelected: (items: T[]) => ReactNode,
-    selectedKeys: string[],
-    onSelectionChange: (keys: SharedSelection) => void,
-    search: string,
-    onSearchChange: (value: string) => void,
-    hasMore: boolean,
-    onLoadMore: () => void,
-    isLoading?: boolean,
-    isDisabled?: boolean
+    label?: string;
+    placeholder?: string;
+    items: T[];
+    getKey: (item: T) => string;
+    renderItem: (item: T) => ReactNode;
+    renderSelected: (items: T[]) => ReactNode;
+    selectedKeys: string[];
+    onSelectionChange: (keys: SharedSelection) => void;
+    search: string;
+    onSearchChange: (value: string) => void;
+    hasMore: boolean;
+    onLoadMore: () => void;
+    isLoading?: boolean;
+    isDisabled?: boolean;
 };
 
 export default SearchableMultiSelect;

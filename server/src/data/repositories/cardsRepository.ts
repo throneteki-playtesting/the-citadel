@@ -18,7 +18,11 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
     }
 
     public override async create(creating: IPlaytestCard, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard>;
-    public override async create(creating: IPlaytestCard[], sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard[]>;
+    public override async create(
+        creating: IPlaytestCard[],
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<IPlaytestCard[]>;
     public override async create(creating: SingleOrArray<IPlaytestCard>, sync = true, broadcast = true) {
         let data = asArray(creating);
         data = await super.create(data, broadcast);
@@ -28,8 +32,18 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async update(updating: IPlaytestCard, upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard>;
-    public override async update(updating: IPlaytestCard[], upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<IPlaytestCard[]>;
+    public override async update(
+        updating: IPlaytestCard,
+        upsert?: boolean,
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<IPlaytestCard>;
+    public override async update(
+        updating: IPlaytestCard[],
+        upsert?: boolean,
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<IPlaytestCard[]>;
     public override async update(updating: SingleOrArray<IPlaytestCard>, upsert = true, sync = true, broadcast = true) {
         let data = asArray(updating);
         data = await super.update(data, upsert, broadcast);
@@ -52,9 +66,27 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
         let data = asArray(syncing);
         const syncs = [
-            { priority: 0, func: () => syncImage(data).then(result => { data = result; }) },
-            { priority: 1, func: () => syncCardForum(data).then(result => { data = result; }) },
-            { priority: 1, func: () => syncIssues(data).then(result => { data = result; }) },
+            {
+                priority: 0,
+                func: () =>
+                    syncImage(data).then((result) => {
+                        data = result;
+                    })
+            },
+            {
+                priority: 1,
+                func: () =>
+                    syncCardForum(data).then((result) => {
+                        data = result;
+                    })
+            },
+            {
+                priority: 1,
+                func: () =>
+                    syncIssues(data).then((result) => {
+                        data = result;
+                    })
+            },
             { priority: 1, func: () => syncCodePullRequests() }
         ];
 
@@ -69,7 +101,7 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
         const data = asArray(desyncing);
         const syncs = [
             () => deleteImage(data),
-            () => Promise.all(data.filter(card => card.draft).map(draft => deleteDraft(draft))),
+            () => Promise.all(data.filter((card) => card.draft).map((draft) => deleteDraft(draft))),
             () => clearIssues(data),
             () => syncCodePullRequests()
         ];
@@ -79,22 +111,25 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
         return Array.isArray(desyncing) ? data : data[0];
     }
 
-    public async previous(card: { project: number, number: number, version: SemanticVersion }) {
+    public async previous(card: { project: number; number: number; version: SemanticVersion }) {
         const all = await this.read({ project: card.project, number: card.number });
-        const lower = all.filter(item => lt(item.version, card.version));
+        const lower = all.filter((item) => lt(item.version, card.version));
         const sorted = lower.sort((x, y) => rcompare(x.version, y.version));
         return sorted.at(0);
     }
 
     public async forUpdate(playtestingUpdate: IPlaytestingUpdate) {
-        const filters = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ project: playtestingUpdate.project, number: parseInt(number), version }));
+        const filters = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({
+            project: playtestingUpdate.project,
+            number: parseInt(number),
+            version
+        }));
         if (filters.length === 0) {
             return [];
         }
         const cards = await this.read(filters);
         return cards;
     }
-
 }
 
 class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
@@ -159,7 +194,13 @@ class CardMongoDataSource extends MongoDataSource<IPlaytestCard> {
         await this.bulkWrite(allChanges);
 
         // If the card was updated in the recent changes, then use that. Otherwise, use original card.
-        const result = syncingArray.map((card) => allChanges.find(({ project, number, version }) => project === card.project && number === card.number && version === card.version) ?? card);
+        const result = syncingArray.map(
+            (card) =>
+                allChanges.find(
+                    ({ project, number, version }) =>
+                        project === card.project && number === card.number && version === card.version
+                ) ?? card
+        );
         return Array.isArray(syncing) ? result : result[0];
     }
 }

@@ -1,4 +1,11 @@
-import { BaseQueryFn, createApi, FetchArgs, fetchBaseQuery, FetchBaseQueryError, FetchBaseQueryMeta } from "@reduxjs/toolkit/query/react";
+import {
+    BaseQueryFn,
+    createApi,
+    FetchArgs,
+    fetchBaseQuery,
+    FetchBaseQueryError,
+    FetchBaseQueryMeta
+} from "@reduxjs/toolkit/query/react";
 import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
 import { ReleaseDate } from "common/models/shared";
 import { buildUrl, SemanticVersion } from "common/utils";
@@ -49,7 +56,10 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
     }
 
     if (result.error) {
-        result = { ...result, error: { ...result.error, data: toNormalizedError(result.error) } as FetchBaseQueryError };
+        result = {
+            ...result,
+            error: { ...result.error, data: toNormalizedError(result.error) } as FetchBaseQueryError
+        };
     }
 
     return result;
@@ -84,9 +94,11 @@ const api = createApi({
                     url,
                     method: "GET",
                     // 401 (eg. no authentication provided) is treated as an undefined user rather than an error
-                    validateStatus: (response) => [StatusCodes.OK, StatusCodes.UNAUTHORIZED].includes(response.status) };
+                    validateStatus: (response) => [StatusCodes.OK, StatusCodes.UNAUTHORIZED].includes(response.status)
+                };
             },
-            transformResponse: (response: MeResponse, meta: FetchBaseQueryMeta) => (meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response),
+            transformResponse: (response: MeResponse, meta: FetchBaseQueryMeta) =>
+                meta?.response?.status === StatusCodes.UNAUTHORIZED ? undefined : response,
             providesTags: (result) => [
                 ...generateFor(result, "me", { includeList: false }),
                 ...generateFor(result?.roles, "role", { includeList: false })
@@ -192,7 +204,10 @@ const api = createApi({
             },
             providesTags: (results) => generateFor(results?.items, "integration")
         }),
-        createIntegration: builder.mutation<{ token: string, integration: SafeIntegration }, Pick<SafeIntegration, "name" | "enabled" | "permissions" | "ownerIds">>({
+        createIntegration: builder.mutation<
+            { token: string; integration: SafeIntegration },
+            Pick<SafeIntegration, "name" | "enabled" | "permissions" | "ownerIds">
+        >({
             query: (integration) => {
                 const url = buildUrl("integrations");
                 const body = integration;
@@ -200,7 +215,10 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result?.integration, "integration")
         }),
-        updateIntegration: builder.mutation<SafeIntegration, Pick<SafeIntegration, "id" | "name" | "enabled" | "permissions" | "ownerIds">>({
+        updateIntegration: builder.mutation<
+            SafeIntegration,
+            Pick<SafeIntegration, "id" | "name" | "enabled" | "permissions" | "ownerIds">
+        >({
             query: (integration) => {
                 const { id, ...body } = integration;
                 const url = buildUrl(`integrations/${id}`);
@@ -215,7 +233,7 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "integration")
         }),
-        recycleIntegrationToken: builder.mutation<{ token: string, integration: SafeIntegration }, { id: string }>({
+        recycleIntegrationToken: builder.mutation<{ token: string; integration: SafeIntegration }, { id: string }>({
             query: (options) => {
                 const url = buildUrl(`integrations/${options.id}/token`);
                 return { url, method: "POST" };
@@ -230,14 +248,16 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "card", { args })
         }),
-        getCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion | "latest" }>({
-            query: (options) => {
-                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
-                return { url, method: "GET" };
-            },
-            providesTags: (response, _error, args) => generateFor(response, "card", { includeList: false, args })
-        }),
-        getPreviousCard: builder.query<IPlaytestCard, { project: number, number: number, version: SemanticVersion }>({
+        getCard: builder.query<IPlaytestCard, { project: number; number: number; version: SemanticVersion | "latest" }>(
+            {
+                query: (options) => {
+                    const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
+                    return { url, method: "GET" };
+                },
+                providesTags: (response, _error, args) => generateFor(response, "card", { includeList: false, args })
+            }
+        ),
+        getPreviousCard: builder.query<IPlaytestCard, { project: number; number: number; version: SemanticVersion }>({
             query: (options) => {
                 const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/previous`);
                 return { url, method: "GET" };
@@ -259,7 +279,10 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        moveCard: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, to: number }>({
+        moveCard: builder.mutation<
+            IPlaytestCard,
+            { project: number; number: number; version: SemanticVersion; to: number }
+        >({
             query: ({ project, number, version, to }) => {
                 const url = buildUrl(`cards/${project}/${number}/${version}/move`);
                 return { url, method: "POST", body: { to } };
@@ -287,10 +310,7 @@ const api = createApi({
                 const body = suggestion;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => [
-                ...generateFor(result, "suggestion"),
-                ...generateFor(result?.tags, "tag")
-            ]
+            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
         }),
         updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
             query: (suggestion) => {
@@ -298,20 +318,14 @@ const api = createApi({
                 const body = suggestion;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => [
-                ...generateFor(result, "suggestion"),
-                ...generateFor(result?.tags, "tag")
-            ]
+            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
         }),
         deleteSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
             query: (options) => {
                 const url = buildUrl(`suggestions/${options.id}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => [
-                ...generateFor(result, "suggestion"),
-                ...generateFor(result?.tags, "tag")
-            ]
+            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
         }),
         getTags: builder.query<string[], void>({
             query: () => {
@@ -329,9 +343,7 @@ const api = createApi({
                     method: "POST",
                     responseHandler: (response) => response.blob()
                 });
-                return result.error
-                    ? { error: result.error }
-                    : { data: result.data as Blob };
+                return result.error ? { error: result.error } : { data: result.data as Blob };
             }
         }),
         renderPrintSheet: builder.mutation<Blob, IRenderCard | IRenderCard[]>({
@@ -342,12 +354,10 @@ const api = createApi({
                     method: "POST",
                     responseHandler: (response) => response.blob()
                 });
-                return result.error
-                    ? { error: result.error }
-                    : { data: result.data as Blob };
+                return result.error ? { error: result.error } : { data: result.data as Blob };
             }
         }),
-        getRenderJob: builder.query<SingleRenderJob|BatchRenderJob, { id: UUID }>({
+        getRenderJob: builder.query<SingleRenderJob | BatchRenderJob, { id: UUID }>({
             query: (options) => {
                 const url = buildUrl("render/job", options);
                 return { url, method: "GET" };
@@ -376,7 +386,7 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
-        initialiseProject: builder.mutation<{ project: IProject, cards: IPlaytestCard[] }, { number: number }>({
+        initialiseProject: builder.mutation<{ project: IProject; cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
                 const url = buildUrl(`projects/${options.number}/initialise`);
                 return { url, method: "POST" };
@@ -410,7 +420,7 @@ const api = createApi({
             invalidatesTags: (result) => generateFor(result, "project")
         }),
         // Slots API
-        getSlot: builder.query<ISlot, { project: number, number: number }>({
+        getSlot: builder.query<ISlot, { project: number; number: number }>({
             query: ({ project, number }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "GET" };
@@ -424,28 +434,34 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
         }),
-        createSlot: builder.mutation<ISlot, { project: number, faction: Faction }>({
+        createSlot: builder.mutation<ISlot, { project: number; faction: Faction }>({
             query: ({ project, faction }) => {
                 const url = buildUrl(`projects/${project}/slots`);
                 return { url, method: "POST", body: { faction } };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
-        deleteSlot: builder.mutation<ISlot, { project: number, number: number }>({
+        deleteSlot: builder.mutation<ISlot, { project: number; number: number }>({
             query: ({ project, number }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
-        updateSlot: builder.mutation<ISlot, { project: number, number: number } & Partial<Pick<ISlot, "type" | "notes" | "statuses">>>({
+        updateSlot: builder.mutation<
+            ISlot,
+            { project: number; number: number } & Partial<Pick<ISlot, "type" | "notes" | "statuses">>
+        >({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "PATCH", body };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
-        assignSlotRelease: builder.mutation<{ slot: ISlot, evictedSlot?: ISlot }, { project: number, number: number, code: string | null, position?: number }>({
+        assignSlotRelease: builder.mutation<
+            { slot: ISlot; evictedSlot?: ISlot },
+            { project: number; number: number; code: string | null; position?: number }
+        >({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}/release`);
                 return { url, method: "PATCH", body };
@@ -456,14 +472,26 @@ const api = createApi({
             ]
         }),
         // Releases API
-        createRelease: builder.mutation<IProject, { project: number } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity">>({
+        createRelease: builder.mutation<
+            IProject,
+            { project: number } & Omit<
+                IProjectRelease,
+                "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity"
+            >
+        >({
             query: ({ project, ...body }) => {
                 const url = buildUrl(`projects/${project}/releases`);
                 return { url, method: "POST", body };
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
-        updateRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number, originalCode: string } & Omit<IProjectRelease, "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity">>({
+        updateRelease: builder.mutation<
+            { project: IProject; evictedSlots: ISlot[] },
+            { project: number; originalCode: string } & Omit<
+                IProjectRelease,
+                "created" | "updated" | "createdBy" | "updatedBy" | "releasedDate" | "number" | "capacity"
+            >
+        >({
             query: ({ project, originalCode, ...body }) => {
                 const url = buildUrl(`projects/${project}/releases/${originalCode}`);
                 return { url, method: "PUT", body };
@@ -473,14 +501,14 @@ const api = createApi({
                 ...generateFor(result?.evictedSlots, "slot")
             ]
         }),
-        reorderReleases: builder.mutation<IProject, { project: number, codes: string[] }>({
+        reorderReleases: builder.mutation<IProject, { project: number; codes: string[] }>({
             query: ({ project, codes }) => {
                 const url = buildUrl(`projects/${project}/releases/reorder`);
                 return { url, method: "PATCH", body: { codes } };
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
-        publishRelease: builder.mutation<IProject, { project: number, code: string, releasedDate: ReleaseDate }>({
+        publishRelease: builder.mutation<IProject, { project: number; code: string; releasedDate: ReleaseDate }>({
             query: ({ project, code, ...body }) => {
                 const url = buildUrl(`projects/${project}/releases/${code}/publish`);
                 return { url, method: "POST", body };
@@ -491,7 +519,10 @@ const api = createApi({
                 { type: "card" as const, id: "LIST" }
             ]
         }),
-        deleteRelease: builder.mutation<{ project: IProject, evictedSlots: ISlot[] }, { project: number, code: string }>({
+        deleteRelease: builder.mutation<
+            { project: IProject; evictedSlots: ISlot[] },
+            { project: number; code: string }
+        >({
             query: ({ project, code }) => {
                 const url = buildUrl(`projects/${project}/releases/${code}`);
                 return { url, method: "DELETE" };
@@ -509,49 +540,54 @@ const api = createApi({
             },
             providesTags: (results) => generateFor(results?.items, "playtestingUpdate")
         }),
-        getPlaytestingUpdate: builder.query<IPlaytestingUpdate, { project: number, version: number }>({
+        getPlaytestingUpdate: builder.query<IPlaytestingUpdate, { project: number; version: number }>({
             query: (options) => {
                 const url = buildUrl(`playtesting-updates/${options.project}/${options.version}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result, _error, args) => generateFor(result, "playtestingUpdate", { includeList: false, args })
+            providesTags: (result, _error, args) =>
+                generateFor(result, "playtestingUpdate", { includeList: false, args })
         }),
-        createPlaytestingUpdate: builder.mutation<{ playtestingUpdate: IPlaytestingUpdate, project: IProject, cards: IPlaytestCard[] }, Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">>({
+        createPlaytestingUpdate: builder.mutation<
+            { playtestingUpdate: IPlaytestingUpdate; project: IProject; cards: IPlaytestCard[] },
+            Omit<IPlaytestingUpdate, "version" | "pullRequest" | "createdBy" | "created" | "updated">
+        >({
             query: (playtestingUpdate) => {
                 const url = buildUrl(`playtesting-updates/${playtestingUpdate.project}`);
                 const body = playtestingUpdate;
                 return { url, method: "POST", body };
             },
             invalidatesTags: (result) => {
-                const projectTags = generateFor(result?.playtestingUpdate?.project, "project", { idFunc: (project) => project });
-                const cardTags = result?.playtestingUpdate ? Object.entries(result.playtestingUpdate.cardChanges).map(([number, version]) => ({ type: "card" as ApiTag, id: `${result.playtestingUpdate.project}|${number}|${version}` })) : [];
-                return [
-                    ...generateFor(result?.playtestingUpdate, "playtestingUpdate"),
-                    ...projectTags,
-                    ...cardTags
-                ];
+                const projectTags = generateFor(result?.playtestingUpdate?.project, "project", {
+                    idFunc: (project) => project
+                });
+                const cardTags = result?.playtestingUpdate
+                    ? Object.entries(result.playtestingUpdate.cardChanges).map(([number, version]) => ({
+                          type: "card" as ApiTag,
+                          id: `${result.playtestingUpdate.project}|${number}|${version}`
+                      }))
+                    : [];
+                return [...generateFor(result?.playtestingUpdate, "playtestingUpdate"), ...projectTags, ...cardTags];
             }
         }),
-        getPlaytestingUpdateCards: builder.query<IPlaytestCard[], { project: number, version: number }>({
+        getPlaytestingUpdateCards: builder.query<IPlaytestCard[], { project: number; version: number }>({
             query: (options) => {
                 const url = buildUrl(`playtesting-updates/${options.project}/${options.version}/cards`);
                 return { url, method: "GET" };
             },
             providesTags: (results) => generateFor(results, "card")
         }),
-        playtestingUpdatePrintSheet: builder.mutation<Blob, { project: number, version: number }>({
+        playtestingUpdatePrintSheet: builder.mutation<Blob, { project: number; version: number }>({
             queryFn: async ({ project, version }, _api, _extraOptions, baseQuery) => {
                 const result = await baseQuery({
                     url: `playtesting-updates/${project}/${version}/print-sheet`,
                     method: "GET",
                     responseHandler: (response) => response.blob()
                 });
-                return result.error
-                    ? { error: result.error }
-                    : { data: result.data as Blob };
+                return result.error ? { error: result.error } : { data: result.data as Blob };
             }
         }),
-        getPlaytestingUpdateImplemented: builder.query<IPlaytestCard[], { project: number, version: number }>({
+        getPlaytestingUpdateImplemented: builder.query<IPlaytestCard[], { project: number; version: number }>({
             query: (options) => {
                 const url = buildUrl(`playtesting-updates/${options.project}/${options.version}/implemented`);
                 return { url, method: "GET" };
@@ -559,35 +595,50 @@ const api = createApi({
             providesTags: (results) => generateFor(results, "card")
         }),
         // Syncing API
-        syncProjectImages: builder.mutation<IPlaytestCard[], { project: number, number?: number, version?: SemanticVersion, latest?: boolean, forced?: boolean }>({
+        syncProjectImages: builder.mutation<
+            IPlaytestCard[],
+            { project: number; number?: number; version?: SemanticVersion; latest?: boolean; forced?: boolean }
+        >({
             query: ({ project, number, version, latest, forced }) => {
                 const url = buildUrl(`projects/${project}/sync/image`, { number, version, latest, forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardImage: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+        syncCardImage: builder.mutation<
+            IPlaytestCard,
+            { project: number; number: number; version: SemanticVersion; forced?: boolean }
+        >({
             query: ({ project, number, version, forced }) => {
                 const url = buildUrl(`cards/${project}/${number}/${version}/sync/image`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardDiscord: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+        syncCardDiscord: builder.mutation<
+            IPlaytestCard,
+            { project: number; number: number; version: SemanticVersion; forced?: boolean }
+        >({
             query: ({ project, number, version, forced }) => {
                 const url = buildUrl(`cards/${project}/${number}/${version}/sync/discord`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncCardGithub: builder.mutation<IPlaytestCard, { project: number, number: number, version: SemanticVersion, forced?: boolean }>({
+        syncCardGithub: builder.mutation<
+            IPlaytestCard,
+            { project: number; number: number; version: SemanticVersion; forced?: boolean }
+        >({
             query: ({ project, number, version, forced }) => {
                 const url = buildUrl(`cards/${project}/${number}/${version}/sync/github`, { forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
-        syncPlaytestingUpdateGithub: builder.mutation<IPlaytestingUpdate[], { project: number, version: number, type: "code" | "data", forced?: boolean }>({
+        syncPlaytestingUpdateGithub: builder.mutation<
+            IPlaytestingUpdate[],
+            { project: number; version: number; type: "code" | "data"; forced?: boolean }
+        >({
             query: ({ project, version, type, forced }) => {
                 const url = buildUrl(`playtesting-updates/${project}/${version}/sync/github/${type}`, { forced });
                 return { url, method: "POST" };
@@ -596,17 +647,25 @@ const api = createApi({
                 if (!result) {
                     return [];
                 }
-                const tags: { type: ApiTag, id: string | number | undefined }[] = [];
+                const tags: { type: ApiTag; id: string | number | undefined }[] = [];
                 for (const playtestingUpdate of result) {
-                    const projectTags = generateFor(playtestingUpdate.project, "project", { idFunc: (project) => project });
-                    const cardTags = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({ type: "card" as ApiTag, id: `${playtestingUpdate.project}|${number}|${version}` }));
+                    const projectTags = generateFor(playtestingUpdate.project, "project", {
+                        idFunc: (project) => project
+                    });
+                    const cardTags = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({
+                        type: "card" as ApiTag,
+                        id: `${playtestingUpdate.project}|${number}|${version}`
+                    }));
                     tags.push(...generateFor(playtestingUpdate, "playtestingUpdate"), ...projectTags, ...cardTags);
                 }
 
                 return tags;
             }
         }),
-        syncReviewDiscord: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string, forced?: boolean }>({
+        syncReviewDiscord: builder.mutation<
+            IPlaytestReview,
+            { project: number; number: number; version: SemanticVersion; reviewer: string; forced?: boolean }
+        >({
             query: ({ project, number, version, reviewer, forced }) => {
                 const url = buildUrl(`reviews/${project}/${number}/${version}/${reviewer}/sync/discord`, { forced });
                 return { url, method: "POST" };
@@ -614,9 +673,14 @@ const api = createApi({
             invalidatesTags: (result) => generateFor(result, "review")
         }),
         // Reviews API
-        getReview: builder.query<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
+        getReview: builder.query<
+            IPlaytestReview,
+            { project: number; number: number; version: SemanticVersion; reviewer: string }
+        >({
             query: (options) => {
-                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
+                const url = buildUrl(
+                    `reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`
+                );
                 return { url, method: "GET" };
             },
             providesTags: (result, _error, args) => generateFor(result, "review", { args })
@@ -644,9 +708,14 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "review")
         }),
-        deleteReview: builder.mutation<IPlaytestReview, { project: number, number: number, version: SemanticVersion, reviewer: string }>({
+        deleteReview: builder.mutation<
+            IPlaytestReview,
+            { project: number; number: number; version: SemanticVersion; reviewer: string }
+        >({
             query: (options) => {
-                const url = buildUrl(`reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`);
+                const url = buildUrl(
+                    `reviews/${options.project}/${options.number}/${options.version}/${options.reviewer}`
+                );
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => generateFor(result, "review")

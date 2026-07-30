@@ -23,15 +23,16 @@ const client = new S3Client({
 
 const syncImageMutex = new Mutex();
 
-export async function syncImage(card: IPlaytestCard, forced?: boolean): Promise<IPlaytestCard>
-export async function syncImage(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]>
+export async function syncImage(card: IPlaytestCard, forced?: boolean): Promise<IPlaytestCard>;
+export async function syncImage(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]>;
 export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: boolean = false) {
     const unlock = await syncImageMutex.acquire();
     try {
         let cards = asArray(data);
         const uploaded: string[] = [];
 
-        const releaseFor = (card: IPlaytestCard) => card.released && { short: card.released.code, number: card.released.number };
+        const releaseFor = (card: IPlaytestCard) =>
+            card.released && { short: card.released.code, number: card.released.number };
 
         const packages = await Promise.all(
             cards.map(async (card) => {
@@ -56,9 +57,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: bool
                 }
             })
         );
-        const renders = packages
-            .filter(({ render, release }) => render && !release)
-            .map(({ render }) => render);
+        const renders = packages.filter(({ render, release }) => render && !release).map(({ render }) => render);
 
         const buffers = (await asPNG(renders)).reduce<Record<string, Buffer<ArrayBufferLike>>>((all, response) => {
             all[response.card.key] = all[response.card.key] ?? response.buffer;
@@ -97,10 +96,17 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: bool
         const successful = results.filter((result) => result.status === "fulfilled").length;
         const errored = packages.length - successful;
         if (uploaded.length > 0) {
-            logger.info(`[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${errored > 0 ? `, ${errored} errored` : ""}`);
+            logger.info(
+                `[Hosting] Successfully uploaded ${uploaded.length} files to S3 bucket${errored > 0 ? `, ${errored} errored` : ""}`
+            );
         }
 
-        cards = await dataService.cards.update(packages.map(({ card }) => card), false, false, false);
+        cards = await dataService.cards.update(
+            packages.map(({ card }) => card),
+            false,
+            false,
+            false
+        );
         return Array.isArray(data) ? cards : cards[0];
     } finally {
         unlock();
@@ -122,9 +128,11 @@ async function isImageOutdated(card: IPlaytestCard) {
     return card.updated > lastModified;
 }
 
-export async function deleteImage(card: { project: number, number: number, version: SemanticVersion }): Promise<string>
-export async function deleteImage(cards: { project: number, number: number, version: SemanticVersion }[]): Promise<string[]>
-export async function deleteImage(data: SingleOrArray<{ project: number, number: number, version: SemanticVersion }>) {
+export async function deleteImage(card: { project: number; number: number; version: SemanticVersion }): Promise<string>;
+export async function deleteImage(
+    cards: { project: number; number: number; version: SemanticVersion }[]
+): Promise<string[]>;
+export async function deleteImage(data: SingleOrArray<{ project: number; number: number; version: SemanticVersion }>) {
     const cards = asArray(data);
     const keys: string[] = [];
 
@@ -202,15 +210,15 @@ async function deleteS3Files(keys: string[]) {
 
     try {
         await client.send(command);
-        logger.verbose(`[Hosting] Successfully deleted ${keys.length} files:\n- ${keys.join(("\n- "))}`);
+        logger.verbose(`[Hosting] Successfully deleted ${keys.length} files:\n- ${keys.join("\n- ")}`);
     } catch (err) {
-        logger.error(new Error (`[Hosting] Failed to delete keys "${keys.join(", ")}"`, { cause: err }));
+        logger.error(new Error(`[Hosting] Failed to delete keys "${keys.join(", ")}"`, { cause: err }));
         return [];
     }
 
     const urls = keys.map((key) => `${baseUrl}/${key}`);
     return urls;
 }
-function createImgFilenameFor(card: { project: number, number: number, version: SemanticVersion }) {
+function createImgFilenameFor(card: { project: number; number: number; version: SemanticVersion }) {
     return `${parseCardCode(false, card.project, card.number)}@${card.version.replaceAll(".", "_")}.png`;
 }

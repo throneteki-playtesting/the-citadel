@@ -13,15 +13,12 @@ import { refreshSession } from "../api/refresh";
 import { emitLogCreate, emitResync, hasLogListeners } from "../pages/admin/logs/logStream";
 import { ILogEntry } from "common/models/logs";
 
-function updateCachedEntity<T extends object>(
-    draft: unknown,
-    matchFn: (entity: T) => boolean,
-    data: DeepPartial<T>
-) {
-    const update = (entity: T) => mergeWith(entity, data, (_entityVal, dataVal) => {
-        if (Array.isArray(dataVal)) return dataVal;
-        if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) return {};
-    });
+function updateCachedEntity<T extends object>(draft: unknown, matchFn: (entity: T) => boolean, data: DeepPartial<T>) {
+    const update = (entity: T) =>
+        mergeWith(entity, data, (_entityVal, dataVal) => {
+            if (Array.isArray(dataVal)) return dataVal;
+            if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) return {};
+        });
 
     if (Array.isArray(draft)) {
         const entity = (draft as T[]).find(matchFn);
@@ -34,10 +31,7 @@ function updateCachedEntity<T extends object>(
     }
 }
 
-function handlePatch<K extends ResourceType>(
-    type: K,
-    items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[]
-) {
+function handlePatch<K extends ResourceType>(type: K, items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[]) {
     const idFunc = resourceIdFuncs[type];
 
     items.forEach(({ id, data }) => {
@@ -48,11 +42,7 @@ function handlePatch<K extends ResourceType>(
             try {
                 store.dispatch(
                     api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                        updateCachedEntity(
-                            draft,
-                            (entity) => idFunc(entity as ResourceDataMap[K]) === id,
-                            data
-                        );
+                        updateCachedEntity(draft, (entity) => idFunc(entity as ResourceDataMap[K]) === id, data);
                     })
                 );
             } catch (error) {
@@ -74,12 +64,12 @@ function handleMePatch(data: DeepPartial<ResourceDataMap["user"]>) {
                 })
             );
         } catch (error) {
-            console.error("SSE cache update failed for \"me\"", error);
+            console.error('SSE cache update failed for "me"', error);
         }
     });
 }
 
-const reconnectTags = tagTypes.map(type => ({ type }));
+const reconnectTags = tagTypes.map((type) => ({ type }));
 
 export function SSEProvider({ children }: { children: React.ReactNode }) {
     const esRef = useRef<EventSource | null>(null);
@@ -152,7 +142,9 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (event.status === "complete") {
-                handlePatch(event.type as ResourceType, [{ id: event.id, data: event.data as DeepPartial<ResourceDataMap[ResourceType]> }]);
+                handlePatch(event.type as ResourceType, [
+                    { id: event.id, data: event.data as DeepPartial<ResourceDataMap[ResourceType]> }
+                ]);
                 return;
             }
 

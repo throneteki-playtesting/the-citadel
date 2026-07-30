@@ -76,11 +76,10 @@ export const changeTypeClasses: Record<ChangeType, string> = {
     wording: "border-primary-300 bg-primary-100 text-primary-700"
 };
 
-
 export const dismoji: { [emoji: string]: string } = {};
 
 for (const categoryName in discordEmojis) {
-    const categoryEmojis = (discordEmojis as { [category: string]: { [emoji: string]: string }})[categoryName];
+    const categoryEmojis = (discordEmojis as { [category: string]: { [emoji: string]: string } })[categoryName];
     if (typeof categoryEmojis == "object" && categoryEmojis !== null && !Array.isArray(categoryEmojis)) {
         Object.assign(dismoji, categoryEmojis);
     }
@@ -103,12 +102,16 @@ export const emojis = {
 } as { [emoji: string]: string };
 
 export const highlightTarget = {
-    review: (review: IPlaytestReview) => `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
+    review: (review: IPlaytestReview) =>
+        `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
     release: (project: number, code: string) => `release-${project}|${code}`
 } as const;
 
-export const statementOptions: { value: StatementAnswer; color: "danger" | "warning" | "default" | "secondary" | "success" }[] = [
+export const statementOptions: {
+    value: StatementAnswer;
+    color: "danger" | "warning" | "default" | "secondary" | "success";
+}[] = [
     { value: "strongly disagree", color: "danger" },
     { value: "somewhat disagree", color: "warning" },
     { value: "neither agree nor disagree", color: "default" },

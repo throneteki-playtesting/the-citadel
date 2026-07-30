@@ -3,7 +3,13 @@ import { MongoClient } from "mongodb";
 import { IDeck } from "common/models/decks";
 import { DeckLink, DecklistLink, DeepPartial, Filter, SingleOrArray } from "common/types";
 import { Code, IPlaytestCard } from "common/models/cards";
-import { extractDeckIdentifier, isPlaytestingCode, parseCardCode, parsePlaytestCode, resolveDeckCardVersions } from "common/utils";
+import {
+    extractDeckIdentifier,
+    isPlaytestingCode,
+    parseCardCode,
+    parsePlaytestCode,
+    resolveDeckCardVersions
+} from "common/utils";
 import { uniqBy } from "lodash-es";
 import { BasicAuditableRepository } from "./shared";
 import { fetchTDBDeck } from "@/utils";
@@ -29,7 +35,10 @@ export default class DecksRepository extends BasicAuditableRepository<"deck"> {
         // Released codes can't be reverse-mapped to a project/number, so pull in every released
         // card instead and let resolveDeckCardVersions match them forward.
         const codes = Object.keys(decklist.slots) as Code[];
-        const playtestFilters = codes.filter(isPlaytestingCode).map(parsePlaytestCode).filter((filter): filter is { project: number, number: number } => !!filter);
+        const playtestFilters = codes
+            .filter(isPlaytestingCode)
+            .map(parsePlaytestCode)
+            .filter((filter): filter is { project: number; number: number } => !!filter);
         const hasReleasedCodes = codes.some((code) => !isPlaytestingCode(code));
         const cardFilters = [...playtestFilters, ...(hasReleasedCodes ? [{ released: { $exists: true } }] : [])];
         const cards = cardFilters.length > 0 ? await dataService.cards.read(cardFilters) : [];
@@ -57,8 +66,9 @@ export default class DecksRepository extends BasicAuditableRepository<"deck"> {
             return [];
         }
 
-        const orFilters = uniqBy(cards, (card) => `${card.project}|${card.number}|${card.version}`)
-            .map((card) => ({ cards: { [parseCardCode(false, card.project, card.number)]: card.version } }));
+        const orFilters = uniqBy(cards, (card) => `${card.project}|${card.number}|${card.version}`).map((card) => ({
+            cards: { [parseCardCode(false, card.project, card.number)]: card.version }
+        }));
 
         return this.read(orFilters);
     }

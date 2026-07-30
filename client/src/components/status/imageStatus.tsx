@@ -37,14 +37,26 @@ export default function ImageStatus({ className, style, project, number, isIconO
             };
         }
 
-        const syncFn = (forced?: boolean) => syncCardImage({ project: card.project, number: card.number, version: card.version, forced });
+        const syncFn = (forced?: boolean) =>
+            syncCardImage({ project: card.project, number: card.number, version: card.version, forced });
         const onPress = hasSyncPermission ? () => syncFn() : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: () => syncFn(true) }] : undefined;
+        const longPressOptions = hasSyncPermission
+            ? [
+                  {
+                      label: (
+                          <span>
+                              <FontAwesomeIcon icon={faRotate} /> Force Sync
+                          </span>
+                      ),
+                      fn: () => syncFn(true)
+                  }
+              ]
+            : undefined;
 
         if (status === "error") {
             return {
                 title,
-                icon: <FontAwesomeIcon icon={faRotate} size="xl"/>,
+                icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
                 onPress,
                 color: "danger",
                 description: error ?? "Failed to Sync"
@@ -71,11 +83,11 @@ export default function ImageStatus({ className, style, project, number, isIconO
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardImage]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-};
+}
 
 type ImageStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
-}
+};

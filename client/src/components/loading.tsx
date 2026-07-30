@@ -10,6 +10,10 @@ const Loading = ({ className, style, label = "Loading...", content, size = "lg" 
     );
 };
 
-type LoadingProps = Omit<BaseElementProps, "children"> & { label?: string, content?: ReactNode | ReactNode[], size?: "lg" | "md" | "sm" }
+type LoadingProps = Omit<BaseElementProps, "children"> & {
+    label?: string;
+    content?: ReactNode | ReactNode[];
+    size?: "lg" | "md" | "sm";
+};
 
 export default Loading;

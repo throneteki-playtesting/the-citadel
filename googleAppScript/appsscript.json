@@ -1,10 +1,10 @@
 {
-  "timeZone": "Etc/UTC",
-  "exceptionLogging": "STACKDRIVER",
-  "runtimeVersion": "V8",
-  "dependencies": {},
-  "webapp": {
-    "access": "ANYONE",
-    "executeAs": "USER_DEPLOYING"
-  }
+    "timeZone": "Etc/UTC",
+    "exceptionLogging": "STACKDRIVER",
+    "runtimeVersion": "V8",
+    "dependencies": {},
+    "webapp": {
+        "access": "ANYONE",
+        "executeAs": "USER_DEPLOYING"
+    }
 }

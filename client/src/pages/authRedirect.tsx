@@ -17,11 +17,19 @@ export default function AuthRedirect() {
     const returnUrlParam = searchParams.get("returnUrl");
 
     useEffect(() => {
-        const process = async function() {
+        const process = async function () {
             if (status === "error") {
-                addToast({ title: "Failed to login", description: "An error has occurred during login process. Please contact an administrator", color: "danger" });
+                addToast({
+                    title: "Failed to login",
+                    description: "An error has occurred during login process. Please contact an administrator",
+                    color: "danger"
+                });
             } else if (status === "success") {
-                addToast({ title: "Welcome back, Maester", description: "You have successfully signed in.", color: "success" });
+                addToast({
+                    title: "Welcome back, Maester",
+                    description: "You have successfully signed in.",
+                    color: "success"
+                });
             }
             const state: OnboardingLocationState | undefined = onboarding ? { onboarding } : undefined;
             const target = returnUrlParam && isSafeRelativePath(returnUrlParam) ? returnUrlParam : "/";
@@ -29,5 +37,5 @@ export default function AuthRedirect() {
         };
         process();
     }, [dispatch, navigate, onboarding, returnUrlParam, status]);
-    return <Spinner size="lg" className="h-full"/>;
-};
+    return <Spinner size="lg" className="h-full" />;
+}

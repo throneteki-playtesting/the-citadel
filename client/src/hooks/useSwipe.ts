@@ -26,4 +26,4 @@ export default function useSwipe(onSwipe: (direction: SwipeDirection) => void, t
             }
         }
     };
-};
+}

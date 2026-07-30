@@ -5,7 +5,8 @@ import { PaginateInterface } from "@octokit/plugin-paginate-rest";
 import { Api } from "@octokit/plugin-rest-endpoint-methods";
 import { paginateGraphQLInterface } from "@octokit/plugin-paginate-graphql";
 
-type GithubClient = Octokit & { paginate: PaginateInterface; } & paginateGraphQLInterface & Api & { retry: { retryRequest: (error: RequestError, retries: number, retryAfter: number) => RequestError; }; };
+type GithubClient = Octokit & { paginate: PaginateInterface } & paginateGraphQLInterface &
+    Api & { retry: { retryRequest: (error: RequestError, retries: number, retryAfter: number) => RequestError } };
 
 class GithubService {
     private client: GithubClient;
@@ -57,9 +58,7 @@ class GithubService {
             },
             {
                 context: "data",
-                webhooks: [
-                    { path: "/webhooks/github/pull-request", events: ["pull_request"] }
-                ]
+                webhooks: [{ path: "/webhooks/github/pull-request", events: ["pull_request"] }]
             }
         ];
 
@@ -69,7 +68,7 @@ class GithubService {
 
             for (const { path, events } of webhooks) {
                 const url = `${baseUrl}${path}`;
-                if (existing.some(w => w.config.url === url)) continue;
+                if (existing.some((w) => w.config.url === url)) continue;
 
                 const { data: webhook } = await client.rest.repos.createWebhook({
                     owner,
@@ -88,9 +87,9 @@ class GithubService {
 }
 
 export interface GithubContext {
-    client: GithubClient,
-    owner: string,
-    repo: string
+    client: GithubClient;
+    owner: string;
+    repo: string;
 }
 
 export default GithubService;

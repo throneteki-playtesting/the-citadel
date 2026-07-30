@@ -6,13 +6,12 @@ import { BaseElementProps } from "../../types";
 const TagFilter = ({ className, style, label, tags, setTags }: TagFilterProps) => {
     const { data, isLoading } = useGetTagsQuery();
 
-    const handleSelectionChange = useCallback((keys: SharedSelection) => {
-        setTags(
-            keys === "all"
-                ? data!
-                : Array.from(keys).map(key => key.toString())
-        );
-    }, [data, setTags]);
+    const handleSelectionChange = useCallback(
+        (keys: SharedSelection) => {
+            setTags(keys === "all" ? data! : Array.from(keys).map((key) => key.toString()));
+        },
+        [data, setTags]
+    );
     return (
         <Select
             isLoading={isLoading}
@@ -21,7 +20,15 @@ const TagFilter = ({ className, style, label, tags, setTags }: TagFilterProps) =
             selectionMode={"multiple"}
             items={data?.map((tag) => ({ tag })) ?? []}
             selectedKeys={tags}
-            renderValue={(items) => <div className="py-1 flex flex-wrap gap-1">{items.map((item) => <Chip key={item.data?.tag} color="primary">{item.data?.tag}</Chip>)}</div>}
+            renderValue={(items) => (
+                <div className="py-1 flex flex-wrap gap-1">
+                    {items.map((item) => (
+                        <Chip key={item.data?.tag} color="primary">
+                            {item.data?.tag}
+                        </Chip>
+                    ))}
+                </div>
+            )}
             onSelectionChange={handleSelectionChange}
             className={className}
             style={style}
@@ -31,6 +38,10 @@ const TagFilter = ({ className, style, label, tags, setTags }: TagFilterProps) =
     );
 };
 
-type TagFilterProps = Omit<BaseElementProps, "children"> & { label?: string, tags: string[], setTags: (tags: string[]) => void };
+type TagFilterProps = Omit<BaseElementProps, "children"> & {
+    label?: string;
+    tags: string[];
+    setTags: (tags: string[]) => void;
+};
 
 export default TagFilter;

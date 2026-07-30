@@ -15,7 +15,8 @@ class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
 
     constructor(items: T[]) {
         const nMap = new Map<number, ICardVersionCollection<T>>();
-        const compareFn = (a: T, b: T) => a.project - b.project || a.number - b.number || Ver.compare(a.version, b.version);
+        const compareFn = (a: T, b: T) =>
+            a.project - b.project || a.number - b.number || Ver.compare(a.version, b.version);
         for (const item of items) {
             pushSorted(this.all, item, compareFn);
 
@@ -63,17 +64,17 @@ class CardCollection<T extends IPlaytestCard> implements ICardCollection<T> {
 }
 
 export interface ICardCollection<T> {
-    latest: T[],
-    all: T[],
-    draft: T[],
-    [number: number]: ICardVersionCollection<T> | undefined
+    latest: T[];
+    all: T[];
+    draft: T[];
+    [number: number]: ICardVersionCollection<T> | undefined;
 }
 
 export interface ICardVersionCollection<T> {
-    latest: T,
-    all: T[],
-    draft?: T,
-    [version: SemanticVersion]: T
+    latest: T;
+    all: T[];
+    draft?: T;
+    [version: SemanticVersion]: T;
 }
 
 export default CardCollection;

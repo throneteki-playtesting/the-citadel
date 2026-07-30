@@ -2,11 +2,11 @@ import { IAuditable } from "./shared";
 import Permission from "./permissions";
 
 export interface RefreshToken {
-    discordId: string,
-    sessionId: string,
-    tokenHash: string,
-    expiresAt: Date,
-    createdAt: Date
+    discordId: string;
+    sessionId: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdAt: Date;
 }
 
 export interface Anonymous extends IPrincipal {
@@ -40,11 +40,11 @@ export type RoleWithUserCount = Role & { userCount: number };
 export const PLAYTESTING_TEAM_ROLE_NAME = "Playtesting Team";
 
 export interface User extends IPrincipal {
-    username: string,
-    displayname: string,
-    discordId: string,
-    avatarUrl: string,
-    lastLogin?: Date
+    username: string;
+    displayname: string;
+    discordId: string;
+    avatarUrl: string;
+    lastLogin?: Date;
 }
 
 export interface Integration extends IAuditable, IPrincipal {

@@ -25,7 +25,11 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
                     addToast({ title: "Error", color: "danger", description: "Failed to save user" });
                 }
             } else {
-                addToast({ title: "User saved", color: "success", description: `${model.displayname} was updated successfully.` });
+                addToast({
+                    title: "User saved",
+                    color: "success",
+                    description: `${model.displayname} was updated successfully.`
+                });
                 if (onUserSave) {
                     onUserSave(model);
                 }
@@ -65,13 +69,12 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
             <ModalContent>
                 {(onClose) => (
                     <>
-                        <ModalHeader>
-                            {isGuestProfile ? "Edit Guest Profile" : `Edit ${user?.displayname}`}
-                        </ModalHeader>
+                        <ModalHeader>{isGuestProfile ? "Edit Guest Profile" : `Edit ${user?.displayname}`}</ModalHeader>
                         <ModalBody>
                             {isGuestProfile && (
                                 <p className="text-sm text-default-500">
-                                    These permissions are granted as a default to all authenticated users, on top of their individual and role-based permissions.
+                                    These permissions are granted as a default to all authenticated users, on top of
+                                    their individual and role-based permissions.
                                 </p>
                             )}
                             <PermissionCheckboxes
@@ -82,9 +85,7 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
                             />
                         </ModalBody>
                         <ModalFooter>
-                            <Button onPress={onClose}>
-                                Cancel
-                            </Button>
+                            <Button onPress={onClose}>Cancel</Button>
                             <Button color="primary" isLoading={isLoading} onPress={onSave}>
                                 Save
                             </Button>
@@ -94,7 +95,7 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
             </ModalContent>
         </Modal>
     );
-};
+}
 
 type EditUserModalProps = Omit<BaseElementProps, "children"> & {
     user?: User;

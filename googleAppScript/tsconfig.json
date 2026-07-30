@@ -1,17 +1,17 @@
 {
-	"compilerOptions": {
-		"target": "es5",
-		"module": "esnext",
-		"moduleResolution": "node",
-		"forceConsistentCasingInFileNames": true,
-		"skipLibCheck": true,
-		"allowSyntheticDefaultImports": true,
-		"outDir": "dist",
-		"baseUrl": ".",
-		"paths": {
-			"common/*": ["../common/*"]
-		}
-	},
-	"include": ["src", "../common"],
-	"exclude": ["node_modules", "dist"]
+    "compilerOptions": {
+        "target": "es5",
+        "module": "esnext",
+        "moduleResolution": "node",
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "allowSyntheticDefaultImports": true,
+        "outDir": "dist",
+        "baseUrl": ".",
+        "paths": {
+            "common/*": ["../common/*"]
+        }
+    },
+    "include": ["src", "../common"],
+    "exclude": ["node_modules", "dist"]
 }

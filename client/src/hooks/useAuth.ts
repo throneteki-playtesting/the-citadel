@@ -1,7 +1,12 @@
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../api/store";
 import { setIsProcessing } from "../api/authSlice";
-import api, { useImpersonateRoleMutation, useImpersonateUserMutation, useLogoutMutation, useStopImpersonatingMutation } from "../api";
+import api, {
+    useImpersonateRoleMutation,
+    useImpersonateUserMutation,
+    useLogoutMutation,
+    useStopImpersonatingMutation
+} from "../api";
 import { addToast } from "@heroui/react";
 import { useNavigate } from "react-router-dom";
 import { showApiErrorToast } from "../api/errors";
@@ -40,7 +45,11 @@ export function useAuth() {
     const impersonateRole = async (roleId: string) => {
         try {
             const result = await impersonateRoleMutation({ roleId }).unwrap();
-            addToast({ title: "Viewing as Role", color: "warning", description: `Now viewing as ${result.roles[0]?.name}` });
+            addToast({
+                title: "Viewing as Role",
+                color: "warning",
+                description: `Now viewing as ${result.roles[0]?.name}`
+            });
             await navigate("/");
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Impersonate" });
@@ -50,7 +59,11 @@ export function useAuth() {
     const impersonateUser = async (discordId: string) => {
         try {
             const result = await impersonateUserMutation({ discordId }).unwrap();
-            addToast({ title: "Viewing as User", color: "warning", description: `Now viewing as ${result.displayname}` });
+            addToast({
+                title: "Viewing as User",
+                color: "warning",
+                description: `Now viewing as ${result.displayname}`
+            });
             await navigate("/");
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Impersonate" });
@@ -60,7 +73,11 @@ export function useAuth() {
     const stopImpersonating = async () => {
         try {
             await stopImpersonatingMutation().unwrap();
-            addToast({ title: "Impersonation Ended", color: "success", description: "You're back to viewing as yourself" });
+            addToast({
+                title: "Impersonation Ended",
+                color: "success",
+                description: "You're back to viewing as yourself"
+            });
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Exit Impersonation" });
         }
@@ -79,6 +96,7 @@ export function useAuth() {
         impersonateRole,
         impersonateUser,
         stopImpersonating,
-        isImpersonationActionPending: isStartingRoleImpersonation || isStartingUserImpersonation || isStoppingImpersonation
+        isImpersonationActionPending:
+            isStartingRoleImpersonation || isStartingUserImpersonation || isStoppingImpersonation
     };
 }

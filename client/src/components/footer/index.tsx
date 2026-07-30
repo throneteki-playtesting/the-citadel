@@ -11,17 +11,32 @@ export default function Footer() {
                     <p className="font-semibold text-default-600 mb-3">Resources</p>
                     <ul className="space-y-2">
                         <li>
-                            <Link href="https://www.theironthrone.net" isExternal color="foreground" className="text-default-500 text-small">
+                            <Link
+                                href="https://www.theironthrone.net"
+                                isExternal
+                                color="foreground"
+                                className="text-default-500 text-small"
+                            >
                                 The Iron Throne
                             </Link>
                         </li>
                         <li>
-                            <Link href="https://thronesdb.com" isExternal color="foreground" className="text-default-500 text-small">
+                            <Link
+                                href="https://thronesdb.com"
+                                isExternal
+                                color="foreground"
+                                className="text-default-500 text-small"
+                            >
                                 ThronesDB
                             </Link>
                         </li>
                         <li>
-                            <Link href="https://agot.cards" isExternal color="foreground" className="text-default-500 text-small">
+                            <Link
+                                href="https://agot.cards"
+                                isExternal
+                                color="foreground"
+                                className="text-default-500 text-small"
+                            >
                                 AGOT Cards
                             </Link>
                         </li>
@@ -31,12 +46,22 @@ export default function Footer() {
                     <p className="font-semibold text-default-600 mb-3">Community</p>
                     <ul className="space-y-2">
                         <li>
-                            <Link href="https://discord.gg/pJHTyzgHJv" isExternal color="foreground" className="text-default-500 text-small gap-1.5">
+                            <Link
+                                href="https://discord.gg/pJHTyzgHJv"
+                                isExternal
+                                color="foreground"
+                                className="text-default-500 text-small gap-1.5"
+                            >
                                 <FontAwesomeIcon icon={faDiscord} /> Design & Playtesting
                             </Link>
                         </li>
                         <li>
-                            <Link href="https://discord.gg/H3NrebVzUn" isExternal color="foreground" className="text-default-500 text-small gap-1.5">
+                            <Link
+                                href="https://discord.gg/H3NrebVzUn"
+                                isExternal
+                                color="foreground"
+                                className="text-default-500 text-small gap-1.5"
+                            >
                                 <FontAwesomeIcon icon={faDiscord} /> GOT
                             </Link>
                         </li>
@@ -46,7 +71,12 @@ export default function Footer() {
                     <p className="font-semibold text-default-600 mb-3">Legal</p>
                     <ul className="space-y-2">
                         <li>
-                            <Link as={RouterLink} to="/privacy" color="foreground" className="text-default-500 text-small">
+                            <Link
+                                as={RouterLink}
+                                to="/privacy"
+                                color="foreground"
+                                className="text-default-500 text-small"
+                            >
                                 Privacy Policy
                             </Link>
                         </li>
@@ -58,4 +88,4 @@ export default function Footer() {
             </div>
         </footer>
     );
-};
+}

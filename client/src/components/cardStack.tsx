@@ -12,19 +12,17 @@ export default function CardStack<T>({
 }: CardStackProps<T>) {
     return (
         <div className={classNames("relative", className)} {...props}>
-            {
-                cards.map((card, index) =>
-                    <StackedCard
-                        key={index}
-                        card={card}
-                        renderCard={renderCard}
-                        selectedIndex={selectedIndex}
-                        index={index}
-                        tilt={tilt}
-                        shadow={shadow}
-                    />
-                )
-            }
+            {cards.map((card, index) => (
+                <StackedCard
+                    key={index}
+                    card={card}
+                    renderCard={renderCard}
+                    selectedIndex={selectedIndex}
+                    index={index}
+                    tilt={tilt}
+                    shadow={shadow}
+                />
+            ))}
         </div>
     );
 }
@@ -37,19 +35,12 @@ type CardStackProps<T> = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> 
     shadow?: boolean;
 };
 
-function StackedCard<T>({
-    card,
-    renderCard,
-    selectedIndex,
-    index,
-    tilt = 0,
-    shadow = true
-}: StackedCardProps<T>) {
+function StackedCard<T>({ card, renderCard, selectedIndex, index, tilt = 0, shadow = true }: StackedCardProps<T>) {
     const isTop = index === selectedIndex;
     const isDismissed = index > selectedIndex;
     const isBase = index === 0;
 
-    const animateNew = typeof tilt === "object" ? tilt.animateNew ?? true : true;
+    const animateNew = typeof tilt === "object" ? (tilt.animateNew ?? true) : true;
     const hasRevealed = useRef(!isDismissed);
     useEffect(() => {
         if (!isDismissed) {
@@ -69,20 +60,24 @@ function StackedCard<T>({
         return (amount + variance) * alternate;
     }, [index, tilt]);
 
-    const depth = useMemo(() => typeof tilt === "object" && tilt?.depth ? (selectedIndex - index) * -tilt.depth : 1, [index, selectedIndex, tilt]);
+    const depth = useMemo(
+        () => (typeof tilt === "object" && tilt?.depth ? (selectedIndex - index) * -tilt.depth : 1),
+        [index, selectedIndex, tilt]
+    );
 
     return (
         <div
             key={index}
-            className={classNames(
-                "size-full transition-all duration-400 ease-in-out",
-                {
-                    "absolute inset-0": !isBase,
-                    "translate-x-[150%] rotate-10 opacity-0": isDismissed && !isBase && !fadeOnly,
-                    "brightness-50": shadow && !isDismissed && !isTop
-                }
-            )}
-            style={!isDismissed && !isTop ? { rotate: `${cardTilt * depth}deg`, transform: `translateX(${-depth / 4}rem)` } : undefined}
+            className={classNames("size-full transition-all duration-400 ease-in-out", {
+                "absolute inset-0": !isBase,
+                "translate-x-[150%] rotate-10 opacity-0": isDismissed && !isBase && !fadeOnly,
+                "brightness-50": shadow && !isDismissed && !isTop
+            })}
+            style={
+                !isDismissed && !isTop
+                    ? { rotate: `${cardTilt * depth}deg`, transform: `translateX(${-depth / 4}rem)` }
+                    : undefined
+            }
         >
             {renderCard(card, index)}
         </div>
@@ -96,12 +91,14 @@ type StackedCardProps<T> = {
     index: number;
     tilt?: TiltOptions;
     shadow?: boolean;
-}
-
-type TiltOptions = number | {
-    amount?: number;
-    variance?: number;
-    alternate?: boolean;
-    depth?: number;
-    animateNew?: boolean;
 };
+
+type TiltOptions =
+    | number
+    | {
+          amount?: number;
+          variance?: number;
+          alternate?: boolean;
+          depth?: number;
+          animateNew?: boolean;
+      };

@@ -32,9 +32,20 @@ function CardChangesStat() {
 
     const footer = (
         <div className="flex gap-0.5 flex-wrap">
-            {data && Object.entries(data.cardChanges.byNoteType).filter(([, count]) => count > 0).map(([type, count]) => (
-                <div key={type} className={classNames("bg-content3/50 px-2 rounded-full font-sans opacity-50 border-1", changeTypeClasses[type as ChangeType])}>{count} {type}</div>
-            ))}
+            {data &&
+                Object.entries(data.cardChanges.byNoteType)
+                    .filter(([, count]) => count > 0)
+                    .map(([type, count]) => (
+                        <div
+                            key={type}
+                            className={classNames(
+                                "bg-content3/50 px-2 rounded-full font-sans opacity-50 border-1",
+                                changeTypeClasses[type as ChangeType]
+                            )}
+                        >
+                            {count} {type}
+                        </div>
+                    ))}
         </div>
     );
 
@@ -68,12 +79,14 @@ function CardsInTestingStat() {
         <StatCard
             label="Cards in testing"
             value={data?.cardsInTesting.total}
-            footer={data && `across ${data.cardsInTesting.projectCount} project${data.cardsInTesting.projectCount !== 1 ? "s" : ""}`}
+            footer={
+                data &&
+                `across ${data.cardsInTesting.projectCount} project${data.cardsInTesting.projectCount !== 1 ? "s" : ""}`
+            }
             isLoading={isLoading}
         />
     );
 }
-
 
 function ReviewsStat() {
     const { data, isLoading } = useGetGlobalStatsQuery();
@@ -88,30 +101,27 @@ function ReviewsStat() {
     );
 }
 
-
 function StatCard({ label, value, footer, isLoading = false }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="bg-content2 px-5 py-5 border-b-2 space-y-2">
-                <Skeleton className="h-4 w-32 rounded-sm"/>
-                <Skeleton className="h-12 w-28 rounded-sm"/>
+                <Skeleton className="h-4 w-32 rounded-sm" />
+                <Skeleton className="h-12 w-28 rounded-sm" />
                 <Skeleton className="h-4 w-42 rounded-sm" />
             </div>
         );
     }
     return (
         <div className="bg-content2 px-5 py-5">
-            <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">
-                {label}
-            </div>
+            <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">{label}</div>
             <div className="text-5xl font-sans text-foreground mt-2 leading-none">{value ?? "-"}</div>
             {footer && <div className="text-sm font-serif italic text-foreground/50 mt-2">{footer}</div>}
         </div>
     );
 }
 type StatCardProps = {
-  label: string;
-  value?: ReactNode;
-  footer?: ReactNode;
-  isLoading?: boolean;
+    label: string;
+    value?: ReactNode;
+    footer?: ReactNode;
+    isLoading?: boolean;
 };

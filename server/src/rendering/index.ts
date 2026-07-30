@@ -6,7 +6,7 @@ import { randomUUID, UUID } from "crypto";
 import { BatchRenderJob, BatchRenderJobOptions, RenderType, SingleRenderJob, SingleRenderJobOptions } from "@/types";
 import { IRenderCard } from "common/models/cards";
 
-type PNGResponse = { id: UUID, card: IRenderCard, buffer: Buffer<ArrayBufferLike> };
+type PNGResponse = { id: UUID; card: IRenderCard; buffer: Buffer<ArrayBufferLike> };
 
 export async function asPNG(card: IRenderCard, options?: SingleRenderJobOptions): Promise<PNGResponse>;
 export async function asPNG(cards: IRenderCard[], options?: SingleRenderJobOptions): Promise<PNGResponse[]>;
@@ -23,7 +23,7 @@ export async function asPNG(data: SingleOrArray<IRenderCard>, options?: SingleRe
         height: 1080,
         deviceScaleFactor: 1.25
     });
-    const page = (await browser.pages())[0] ?? await browser.newPage();
+    const page = (await browser.pages())[0] ?? (await browser.newPage());
     const job = await createJob("single", cards, options);
     try {
         attachDiagnostics(page, job.id);
@@ -58,7 +58,7 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
         width: 794,
         height: 1124 // For some reason, puppeteer wants this as 1124, rather than the 1122 that it SHOULD be for A4 *shrug*
     });
-    const page = (await browser.pages())[0] ?? await browser.newPage();
+    const page = (await browser.pages())[0] ?? (await browser.newPage());
 
     try {
         attachDiagnostics(page, job.id);
@@ -90,7 +90,11 @@ function attachDiagnostics(page: Page, jobId: UUID) {
     });
     page.on("response", (response) => {
         const url = response.url();
-        const isFont = url.includes("fonts.googleapis.com") || url.includes("fonts.gstatic.com") || url.includes(".ttf") || url.includes(".woff");
+        const isFont =
+            url.includes("fonts.googleapis.com") ||
+            url.includes("fonts.gstatic.com") ||
+            url.includes(".ttf") ||
+            url.includes(".woff");
         if (isFont && !response.ok()) {
             logger.warn(`[render ${jobId}] font request returned ${response.status()}: ${url}`);
         }
@@ -99,7 +103,13 @@ function attachDiagnostics(page: Page, jobId: UUID) {
 
 async function logFontStatus(page: Page, jobId: UUID) {
     // "unloaded" just means unused so far - only "error" indicates an actual failed fetch/parse
-    const errored = await page.evaluate(() => [...new Set(Array.from(document.fonts).filter((f) => f.status === "error").map((f) => f.family))]);
+    const errored = await page.evaluate(() => [
+        ...new Set(
+            Array.from(document.fonts)
+                .filter((f) => f.status === "error")
+                .map((f) => f.family)
+        )
+    ]);
     if (errored.length > 0) {
         logger.warn(`[render ${jobId}] fonts failed to load: ${errored.join(", ")}`);
     }
@@ -135,9 +145,17 @@ async function checkRenderError(page: Page): Promise<void> {
     }
 }
 
-async function createJob(type: "single", cards: IRenderCard[], options?: SingleRenderJobOptions): Promise<SingleRenderJob>;
+async function createJob(
+    type: "single",
+    cards: IRenderCard[],
+    options?: SingleRenderJobOptions
+): Promise<SingleRenderJob>;
 async function createJob(type: "batch", cards: IRenderCard[], options?: BatchRenderJobOptions): Promise<BatchRenderJob>;
-async function createJob(type: RenderType, cards: IRenderCard[], options?: SingleRenderJobOptions|BatchRenderJobOptions) {
+async function createJob(
+    type: RenderType,
+    cards: IRenderCard[],
+    options?: SingleRenderJobOptions | BatchRenderJobOptions
+) {
     const id = randomUUID();
     const data = cards.map((card) => ({ id: randomUUID(), card }));
     const job = {

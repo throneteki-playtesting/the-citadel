@@ -25,41 +25,41 @@ function cartesianProduct(obj: Filter<object>): Record<string, unknown>[] | unde
 
         if (entries.length === 0) return undefined;
 
-        return entries.reduce<Record<string, unknown>[]>((acc, [key, v]) => {
-            if (isOperatorObject(v)) {
-                return acc.map(item => ({ ...item, [key]: v }));
-            }
+        return entries.reduce<Record<string, unknown>[]>(
+            (acc, [key, v]) => {
+                if (isOperatorObject(v)) {
+                    return acc.map((item) => ({ ...item, [key]: v }));
+                }
 
-            if (isIterable(v)) {
-                const values = Array.from(v as Iterable<unknown>);
-                return acc.flatMap(item => values.map(val => ({ ...item, [key]: val })));
-            }
+                if (isIterable(v)) {
+                    const values = Array.from(v as Iterable<unknown>);
+                    return acc.flatMap((item) => values.map((val) => ({ ...item, [key]: val })));
+                }
 
-            if (typeof v !== "object") {
-                return acc.map(item => ({ ...item, [key]: v }));
-            }
+                if (typeof v !== "object") {
+                    return acc.map((item) => ({ ...item, [key]: v }));
+                }
 
-            const nested = worker(v);
-            if (!nested) return acc;
-            return acc.flatMap(item => nested.map(n => ({ ...item, [key]: n })));
-        }, [{}]);
+                const nested = worker(v);
+                if (!nested) return acc;
+                return acc.flatMap((item) => nested.map((n) => ({ ...item, [key]: n })));
+            },
+            [{}]
+        );
     };
 
     return worker(obj);
 }
 
-export default function useFilter<T extends object>(
-    filter?: SingleOrArray<Explodable<T>>
-): Filter<T>[] | undefined {
+export default function useFilter<T extends object>(filter?: SingleOrArray<Explodable<T>>): Filter<T>[] | undefined {
     return useMemo(() => {
         if (!filter) return undefined;
 
         if (Array.isArray(filter)) {
-            const results = filter.flatMap(f => cartesianProduct(f as Filter<object>) ?? [{}]);
+            const results = filter.flatMap((f) => cartesianProduct(f as Filter<object>) ?? [{}]);
             return results as Filter<T>[];
         }
 
         return (cartesianProduct(filter as Filter<object>) ?? [{}]) as Filter<T>[];
     }, [filter]);
 }
-

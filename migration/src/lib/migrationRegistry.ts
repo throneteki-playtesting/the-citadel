@@ -11,7 +11,7 @@ type MigrationRecord = {
 export async function getAppliedMigrations(db: Db): Promise<Set<string>> {
     const col = db.collection<MigrationRecord>(COLLECTION);
     const records = await col.find({}).toArray();
-    return new Set(records.map(r => r.name));
+    return new Set(records.map((r) => r.name));
 }
 
 export async function markMigrationApplied(db: Db, name: string): Promise<void> {

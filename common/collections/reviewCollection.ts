@@ -54,15 +54,15 @@ class ReviewCollection<T extends IPlaytestReview> implements IReviewCollection<T
 }
 
 export interface IReviewCollection<T> {
-    latest: T[],
-    all: T[],
-    [number: number]: IReviewVersionCollection<T>
+    latest: T[];
+    all: T[];
+    [number: number]: IReviewVersionCollection<T>;
 }
 
 export interface IReviewVersionCollection<T> {
-    latest: T[],
-    all: T[],
-    [version: SemanticVersion]: T[]
+    latest: T[];
+    all: T[];
+    [version: SemanticVersion]: T[];
 }
 
 export default ReviewCollection;

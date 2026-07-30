@@ -1,7 +1,31 @@
-import { Accordion, AccordionItem, Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Link, Navbar, NavbarContent, NavbarItem, NavbarMenu, NavbarMenuItem, NavbarMenuToggle } from "@heroui/react";
+import {
+    Accordion,
+    AccordionItem,
+    Button,
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
+    DropdownTrigger,
+    Link,
+    Navbar,
+    NavbarContent,
+    NavbarItem,
+    NavbarMenu,
+    NavbarMenuItem,
+    NavbarMenuToggle
+} from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProfileSection from "./profileSection";
-import { isMenuItem, isPageItem, isVisibleFor, MenuItem as MenuItemType, NavItem, navItems, PageItem as PageItemType, profileItems } from "../../pages";
+import {
+    isMenuItem,
+    isPageItem,
+    isVisibleFor,
+    MenuItem as MenuItemType,
+    NavItem,
+    navItems,
+    PageItem as PageItemType,
+    profileItems
+} from "../../pages";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronUp, faEye, faFeather } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
@@ -33,10 +57,10 @@ const NavigationBar = () => {
 
     const createItem = useCallback((navItem: NavItem) => {
         if (isPageItem(navItem)) {
-            return <PageItem item={navItem}/>;
+            return <PageItem item={navItem} />;
         }
         if (isMenuItem(navItem)) {
-            return <MenuItem item={navItem}/>;
+            return <MenuItem item={navItem} />;
         }
     }, []);
 
@@ -55,7 +79,9 @@ const NavigationBar = () => {
                 path: `/project/${project.number}`,
                 label: `${project.number}. ${project.name}`,
                 permission: project.draft ? Permission.READ_ARCHIVED_PROJECTS : Permission.READ_PROJECTS,
-                endContent: project.draft ? <FontAwesomeIcon className="animate-pulse" size="sm" icon={faFeather}/> : undefined
+                endContent: project.draft ? (
+                    <FontAwesomeIcon className="animate-pulse" size="sm" icon={faFeather} />
+                ) : undefined
             }));
 
         const archivedProjectItems = (archivedProjectData?.items ?? [])
@@ -67,9 +93,10 @@ const NavigationBar = () => {
                 permission: Permission.READ_ARCHIVED_PROJECTS
             }));
 
-        const archivedMenuItem: MenuItemType | undefined = archivedProjectItems.length > 0
-            ? { label: "Archived", permission: Permission.READ_ARCHIVED_PROJECTS, subPages: archivedProjectItems }
-            : undefined;
+        const archivedMenuItem: MenuItemType | undefined =
+            archivedProjectItems.length > 0
+                ? { label: "Archived", permission: Permission.READ_ARCHIVED_PROJECTS, subPages: archivedProjectItems }
+                : undefined;
 
         return {
             label: projectsNavItem.label,
@@ -117,37 +144,56 @@ const NavigationBar = () => {
             {isImpersonating && impersonation && (
                 <div className="flex items-center justify-center gap-2 bg-warning-100 text-warning-800 text-sm py-1 px-4">
                     <FontAwesomeIcon icon={faEye} />
-                    <span>Viewing as {impersonation.type} <strong>{impersonation.target.name}</strong></span>
-                    <Button size="sm" variant="light" color="warning" isDisabled={isImpersonationActionPending} onPress={stopImpersonating}>
+                    <span>
+                        Viewing as {impersonation.type} <strong>{impersonation.target.name}</strong>
+                    </span>
+                    <Button
+                        size="sm"
+                        variant="light"
+                        color="warning"
+                        isDisabled={isImpersonationActionPending}
+                        onPress={stopImpersonating}
+                    >
                         Exit
                     </Button>
                 </div>
             )}
             <Navbar isMenuOpen={isMenuOpen} onMenuOpenChange={setIsMenuOpen}>
-                {collapsed &&
-            <NavbarContent justify="center" className="flex-none basis-auto">
-                <NavbarMenuToggle
-                    aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-                />
-            </NavbarContent>}
+                {collapsed && (
+                    <NavbarContent justify="center" className="flex-none basis-auto">
+                        <NavbarMenuToggle aria-label={isMenuOpen ? "Close menu" : "Open menu"} />
+                    </NavbarContent>
+                )}
                 <NavbarContent className="flex-1 min-w-0" justify="start">
                     <div ref={itemsRowRef} className="relative flex w-full min-w-0 overflow-hidden">
                         {!collapsed && (
                             <div className="flex gap-4 font-cinzel">
-                                {items.map((navItem, index) => <NavbarItem key={index}>{navItem}</NavbarItem>)}
+                                {items.map((navItem, index) => (
+                                    <NavbarItem key={index}>{navItem}</NavbarItem>
+                                ))}
                             </div>
                         )}
-                        <div ref={measureRef} className="invisible absolute left-0 top-0 flex gap-4 whitespace-nowrap font-cinzel" aria-hidden="true">
-                            {items.map((navItem, index) => <span key={index}>{navItem}</span>)}
+                        <div
+                            ref={measureRef}
+                            className="invisible absolute left-0 top-0 flex gap-4 whitespace-nowrap font-cinzel"
+                            aria-hidden="true"
+                        >
+                            {items.map((navItem, index) => (
+                                <span key={index}>{navItem}</span>
+                            ))}
                         </div>
                     </div>
                 </NavbarContent>
-                <Link href="/" className="font-cinzel text-primary font-semibold text-2xl hover:text-primary-3 00">The Citadel</Link>
-                <ProfileSection>
-                    {profileItems}
-                </ProfileSection>
-                <NavbarMenu className="font-cinzel" >
-                    {visibleItems.map((navItem, index) => <NavbarMenuItem key={index}><SubMenuItem item={navItem}/></NavbarMenuItem>)}
+                <Link href="/" className="font-cinzel text-primary font-semibold text-2xl hover:text-primary-3 00">
+                    The Citadel
+                </Link>
+                <ProfileSection>{profileItems}</ProfileSection>
+                <NavbarMenu className="font-cinzel">
+                    {visibleItems.map((navItem, index) => (
+                        <NavbarMenuItem key={index}>
+                            <SubMenuItem item={navItem} />
+                        </NavbarMenuItem>
+                    ))}
                 </NavbarMenu>
             </Navbar>
         </>
@@ -169,14 +215,17 @@ const PageItem = ({ item }: PageItemProps) => {
     const isActive = isNavItemActive(item, location.pathname);
 
     return (
-        <Link href={item.path} className={classNames("text-lg flex gap-2 items-center", { "text-primary-600 font-semibold": isActive })}>
+        <Link
+            href={item.path}
+            className={classNames("text-lg flex gap-2 items-center", { "text-primary-600 font-semibold": isActive })}
+        >
             <span>{item.label}</span>
             {item.endContent}
         </Link>
     );
 };
 
-type PageItemProps = { item: PageItemType }
+type PageItemProps = { item: PageItemType };
 
 const accordionItemClasses = {
     base: "px-0",
@@ -195,7 +244,14 @@ const SubMenuItem = ({ item, depth = 0, onNavigate }: SubMenuItemProps) => {
 
     if (isPageItem(item)) {
         return (
-            <Link href={item.path} onPress={onNavigate} className={classNames("text-lg flex gap-2 items-center", { "text-primary-600 font-semibold": isActive })} style={indentStyle}>
+            <Link
+                href={item.path}
+                onPress={onNavigate}
+                className={classNames("text-lg flex gap-2 items-center", {
+                    "text-primary-600 font-semibold": isActive
+                })}
+                style={indentStyle}
+            >
                 <span>{item.label}</span>
                 {item.endContent}
             </Link>
@@ -209,11 +265,18 @@ const SubMenuItem = ({ item, depth = 0, onNavigate }: SubMenuItemProps) => {
                 <AccordionItem
                     key={item.label}
                     aria-label={item.label}
-                    title={<span className={classNames({ "text-primary-600 font-semibold": isActive })}>{item.label}</span>}
+                    title={
+                        <span className={classNames({ "text-primary-600 font-semibold": isActive })}>{item.label}</span>
+                    }
                     style={indentStyle}
                 >
                     {visibleSubPages.map((subPage) => (
-                        <SubMenuItem key={subPage.label ?? (isPageItem(subPage) ? subPage.path : undefined)} item={subPage} depth={depth + 1} onNavigate={onNavigate}/>
+                        <SubMenuItem
+                            key={subPage.label ?? (isPageItem(subPage) ? subPage.path : undefined)}
+                            item={subPage}
+                            depth={depth + 1}
+                            onNavigate={onNavigate}
+                        />
                     ))}
                 </AccordionItem>
             </Accordion>
@@ -223,7 +286,7 @@ const SubMenuItem = ({ item, depth = 0, onNavigate }: SubMenuItemProps) => {
     return null;
 };
 
-type SubMenuItemProps = { item: NavItem, depth?: number, onNavigate?: () => void }
+type SubMenuItemProps = { item: NavItem; depth?: number; onNavigate?: () => void };
 
 const MenuItem = ({ item }: MenuItemProps) => {
     const { user } = useAuth();
@@ -238,14 +301,22 @@ const MenuItem = ({ item }: MenuItemProps) => {
             <DropdownTrigger className="cursor-pointer">
                 <Link className={classNames("flex gap-1 text-lg", { "text-primary-600 font-semibold": isActive })}>
                     <span>{item.label}</span>
-                    <FontAwesomeIcon size="xs" className={classNames("duration-300", { "scale-y-[-1]": isOpen })} icon={faChevronUp}/>
+                    <FontAwesomeIcon
+                        size="xs"
+                        className={classNames("duration-300", { "scale-y-[-1]": isOpen })}
+                        icon={faChevronUp}
+                    />
                 </Link>
             </DropdownTrigger>
             <DropdownMenu>
                 <DropdownItem key="content" isReadOnly className="cursor-default p-0 data-[hover=true]:bg-transparent">
                     <div className="flex flex-col gap-1">
                         {visibleSubPages.map((subPage) => (
-                            <SubMenuItem key={subPage.label ?? (isPageItem(subPage) ? subPage.path : undefined)} item={subPage} onNavigate={() => setIsOpen(false)}/>
+                            <SubMenuItem
+                                key={subPage.label ?? (isPageItem(subPage) ? subPage.path : undefined)}
+                                item={subPage}
+                                onNavigate={() => setIsOpen(false)}
+                            />
                         ))}
                     </div>
                 </DropdownItem>
@@ -254,6 +325,6 @@ const MenuItem = ({ item }: MenuItemProps) => {
     );
 };
 
-type MenuItemProps = { item: MenuItemType }
+type MenuItemProps = { item: MenuItemType };
 
 export default NavigationBar;

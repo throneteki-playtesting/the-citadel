@@ -6,7 +6,12 @@ import { ApiError, ApiFieldError, isApiError } from "./types";
 import { isEnvironment } from "./env";
 
 export class ApiErrorResponse extends Error implements ApiError {
-    constructor(public code: StatusCodes, public error: string, public message: string, public cause?: unknown) {
+    constructor(
+        public code: StatusCodes,
+        public error: string,
+        public message: string,
+        public cause?: unknown
+    ) {
         super();
     }
 }

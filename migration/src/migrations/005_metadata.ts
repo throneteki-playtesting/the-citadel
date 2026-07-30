@@ -17,7 +17,7 @@ async function migrateMetadataFields(
     metadataFields: string[],
     dryRun: boolean
 ): Promise<number> {
-    const filter = { $or: metadataFields.map(f => ({ [f]: { $exists: true } })) };
+    const filter = { $or: metadataFields.map((f) => ({ [f]: { $exists: true } })) };
     const docs = await col.find(filter).toArray();
 
     if (docs.length === 0) {
@@ -28,7 +28,7 @@ async function migrateMetadataFields(
     if (dryRun) {
         log.info(`${label}: [dry-run] would migrate ${docs.length} document(s)`);
         for (const doc of docs.slice(0, 3)) {
-            const fields = metadataFields.filter(f => doc[f] !== undefined);
+            const fields = metadataFields.filter((f) => doc[f] !== undefined);
             log.verbose(`  would move { ${fields.join(", ")} } → _metadata for _id ${doc._id}`);
         }
         if (docs.length > 3) log.verbose(`  ... and ${docs.length - 3} more`);
@@ -94,7 +94,10 @@ export const migration: Migration = {
             if (dryRun) {
                 log.info(`cards: [dry-run] would remove cardUpdated from ${cardUpdatedCount} document(s)`);
             } else {
-                const result = await cardsCol.updateMany({ cardUpdated: { $exists: true } }, { $unset: { cardUpdated: "" } });
+                const result = await cardsCol.updateMany(
+                    { cardUpdated: { $exists: true } },
+                    { $unset: { cardUpdated: "" } }
+                );
                 log.info(`cards: removed cardUpdated from ${result.modifiedCount} document(s)`);
             }
         }

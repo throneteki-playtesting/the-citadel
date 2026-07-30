@@ -24,7 +24,8 @@ export function useProjectImageStatus(project: number) {
 
         const title = "Project Images";
         const allSynced = synced === total;
-        const onPress = hasSyncPermission && !isSyncing ? () => syncProjectImages({ project, latest: true }) : undefined;
+        const onPress =
+            hasSyncPermission && !isSyncing ? () => syncProjectImages({ project, latest: true }) : undefined;
 
         if (isSyncing) {
             return {

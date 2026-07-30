@@ -2,7 +2,13 @@
 import { ObjectId } from "mongodb";
 import { Migration } from "../lib/types";
 import { log } from "../lib/logger";
-import { resolveUsernameToId, fetchAllGuildMembers, fetchForumThreads, getDisplayNamesFor, ForumThread } from "../lib/discord";
+import {
+    resolveUsernameToId,
+    fetchAllGuildMembers,
+    fetchForumThreads,
+    getDisplayNamesFor,
+    ForumThread
+} from "../lib/discord";
 import { writeUnresolvedUsers, getResolvedMappings } from "../lib/userMappings";
 import { normalizeDeckLink } from "../lib/deckLinks";
 
@@ -33,7 +39,7 @@ export const migration: Migration = {
             log.info(`Loaded ${Object.keys(manualMappings).length} manual user mapping(s)`);
         }
 
-        const uniqueReviewers = [...new Set(allReviews.map(r => r.reviewer as string))];
+        const uniqueReviewers = [...new Set(allReviews.map((r) => r.reviewer as string))];
         log.info(`Resolving ${uniqueReviewers.length} unique reviewer(s)...`);
 
         const resolvedMap = new Map<string, string>();
@@ -69,7 +75,8 @@ export const migration: Migration = {
 
         // Fetch card names from already-migrated destination cards for thread name matching
         const cardNameMap = new Map<string, string>();
-        const destCards = await destDb.collection("cards")
+        const destCards = await destDb
+            .collection("cards")
             .find({}, { projection: { project: 1, number: 1, version: 1, name: 1 } })
             .toArray();
         for (const card of destCards) {
@@ -84,7 +91,9 @@ export const migration: Migration = {
             threadMap = await fetchForumThreads("playtesting-reviews");
             log.info(`Loaded ${threadMap.size} review forum thread(s)`);
         } catch (err) {
-            log.warn(`Discord review forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`);
+            log.warn(
+                `Discord review forum lookup failed — skipping Discord URL population: ${err instanceof Error ? err.message : String(err)}`
+            );
         }
 
         let skipped = 0;
@@ -116,7 +125,10 @@ export const migration: Migration = {
                     releasable: (review.statements.releasable as string).toLowerCase()
                 },
                 // Source decks are raw link strings - defaults to shared for all pre-existing links
-                decks: (review.decks as string[] ?? []).map((link) => ({ link: normalizeDeckLink(link), shared: true }))
+                decks: ((review.decks as string[]) ?? []).map((link) => ({
+                    link: normalizeDeckLink(link),
+                    shared: true
+                }))
             };
 
             // Carry through any other fields not explicitly remapped
@@ -144,7 +156,10 @@ export const migration: Migration = {
                         const thread = threadMap.get(threadName);
                         if (thread) {
                             const lastSynced = thread.createdAt < setDoc.updated ? thread.createdAt : setDoc.updated;
-                            setDoc._metadata = { ...(setDoc._metadata ?? {}), discord: { messageUrl: thread.url, lastSynced } };
+                            setDoc._metadata = {
+                                ...(setDoc._metadata ?? {}),
+                                discord: { messageUrl: thread.url, lastSynced }
+                            };
                             break;
                         }
                     }
@@ -169,7 +184,9 @@ export const migration: Migration = {
         }
 
         if (dryRun) {
-            log.info(`[dry-run] Would upsert ${ops.length} review(s) into dest (match on project + number + version + reviewer)`);
+            log.info(
+                `[dry-run] Would upsert ${ops.length} review(s) into dest (match on project + number + version + reviewer)`
+            );
             log.info(`[dry-run] ${skipped} review(s) skipped (unresolved reviewers)`);
             log.info("[dry-run] Would create unique index on { project, number, version, reviewer }");
             return;
@@ -180,13 +197,16 @@ export const migration: Migration = {
             return;
         }
 
-        let upserted = 0, modified = 0;
+        let upserted = 0,
+            modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
             const batch = ops.slice(i, i + BATCH_SIZE);
             const result = await dest.bulkWrite(batch as any, { ordered: false });
             upserted += result.upsertedCount;
             modified += result.modifiedCount;
-            log.info(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`);
+            log.info(
+                `Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${result.upsertedCount} inserted, ${result.modifiedCount} updated`
+            );
         }
 
         await dest.dropIndex("project_1_number_1_version_1_reviewer_1").catch(() => undefined);

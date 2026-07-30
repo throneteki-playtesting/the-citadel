@@ -58,10 +58,7 @@ async function applyCardNote(
 
     if (dryRun) return "applied";
 
-    await cardsCol.updateOne(
-        { _id: card._id },
-        { $set: { note: { type: change.noteType, text: change.noteText } } }
-    );
+    await cardsCol.updateOne({ _id: card._id }, { $set: { note: { type: change.noteType, text: change.noteText } } });
     return "applied";
 }
 
@@ -78,9 +75,10 @@ export const migration: Migration = {
         const allPRs = await fetchAllPullRequests();
 
         const matchedPRs = allPRs
-            .map(pr => ({ pr, parsed: parsePRTitle(pr.title) }))
-            .filter((x): x is { pr: typeof allPRs[0]; parsed: NonNullable<ReturnType<typeof parsePRTitle>> } =>
-                x.parsed !== null
+            .map((pr) => ({ pr, parsed: parsePRTitle(pr.title) }))
+            .filter(
+                (x): x is { pr: (typeof allPRs)[0]; parsed: NonNullable<ReturnType<typeof parsePRTitle>> } =>
+                    x.parsed !== null
             );
 
         log.info(`${matchedPRs.length} / ${allPRs.length} PRs match the playtesting update format`);
@@ -92,7 +90,9 @@ export const migration: Migration = {
 
         const now = new Date();
         const ops: object[] = [];
-        let notesApplied = 0, notesSkipped = 0, cardsNotFound = 0;
+        let notesApplied = 0,
+            notesSkipped = 0,
+            cardsNotFound = 0;
 
         const prProgress = createProgress("Processing PRs");
         for (let i = 0; i < matchedPRs.length; i++) {
@@ -113,11 +113,15 @@ export const migration: Migration = {
                 cardChanges[change.cardNumber] = change.version;
 
                 const result = await applyCardNote(cardsCol, projectNumber, change, now, dryRun);
-                if (result === "applied") {notesApplied++;}
-                else if (result === "skipped") {notesSkipped++;}
-                else {
+                if (result === "applied") {
+                    notesApplied++;
+                } else if (result === "skipped") {
+                    notesSkipped++;
+                } else {
                     cardsNotFound++;
-                    log.verbose(`  Card not found: project=${projectNumber} number=${change.cardNumber} version=${change.version}`);
+                    log.verbose(
+                        `  Card not found: project=${projectNumber} number=${change.cardNumber} version=${change.version}`
+                    );
                 }
             }
 
@@ -150,13 +154,22 @@ export const migration: Migration = {
                 }
             });
         }
-        prProgress.done(`done — ${ops.length} updates built, ${notesApplied} notes applied, ${notesSkipped} already present${cardsNotFound > 0 ? `, ${cardsNotFound} cards not found` : ""}`);
+        prProgress.done(
+            `done — ${ops.length} updates built, ${notesApplied} notes applied, ${notesSkipped} already present${cardsNotFound > 0 ? `, ${cardsNotFound} cards not found` : ""}`
+        );
 
         if (dryRun) {
             log.info(`[dry-run] Would upsert ${ops.length} playtestingUpdate record(s)`);
-            const unmatched = await playtestingUpdatesCol.countDocuments({ $or: [{ "_metadata.github.code.lastSynced": { $exists: false } }, { "_metadata.github.data.lastSynced": { $exists: false } }] });
+            const unmatched = await playtestingUpdatesCol.countDocuments({
+                $or: [
+                    { "_metadata.github.code.lastSynced": { $exists: false } },
+                    { "_metadata.github.data.lastSynced": { $exists: false } }
+                ]
+            });
             if (unmatched > 0) {
-                log.info(`[dry-run] Would set base-case code/data lastSynced on ${unmatched} unmatched playtestingUpdate(s)`);
+                log.info(
+                    `[dry-run] Would set base-case code/data lastSynced on ${unmatched} unmatched playtestingUpdate(s)`
+                );
             }
             return;
         }
@@ -167,7 +180,8 @@ export const migration: Migration = {
         }
 
         const saveProgress = createProgress("Saving");
-        let upserted = 0, modified = 0;
+        let upserted = 0,
+            modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
             const batch = ops.slice(i, i + BATCH_SIZE);
             const result = await playtestingUpdatesCol.bulkWrite(batch as any, { ordered: false });
@@ -178,7 +192,12 @@ export const migration: Migration = {
         saveProgress.done(`done — ${upserted} inserted, ${modified} updated`);
 
         const baseCase = await playtestingUpdatesCol.updateMany(
-            { $or: [{ "_metadata.github.code.lastSynced": { $exists: false } }, { "_metadata.github.data.lastSynced": { $exists: false } }] },
+            {
+                $or: [
+                    { "_metadata.github.code.lastSynced": { $exists: false } },
+                    { "_metadata.github.data.lastSynced": { $exists: false } }
+                ]
+            },
             { $set: { "_metadata.github.code.lastSynced": now, "_metadata.github.data.lastSynced": now } }
         );
         if (baseCase.modifiedCount > 0) {

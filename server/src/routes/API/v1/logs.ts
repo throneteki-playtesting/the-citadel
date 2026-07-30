@@ -26,13 +26,11 @@ async function getLogs(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.Log.Full,
-    { created: "desc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.Log.Full, { created: "desc" });
 
 // Read logs
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_LOGS),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<ILogEntry>>(async (req, res) => {

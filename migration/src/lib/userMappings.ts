@@ -42,12 +42,10 @@ export function writeUnresolvedUsers(unresolvedUsernames: string[]): void {
 export function getResolvedMappings(): UserMappingFile {
     const mappings = loadUserMappings();
     // Only return entries that have been filled in
-    return Object.fromEntries(
-        Object.entries(mappings).filter(([, id]) => id.trim() !== "")
-    );
+    return Object.fromEntries(Object.entries(mappings).filter(([, id]) => id.trim() !== ""));
 }
 
 export function hasUnresolvedMappings(): boolean {
     const mappings = loadUserMappings();
-    return Object.values(mappings).some(id => id.trim() === "");
+    return Object.values(mappings).some((id) => id.trim() === "");
 }

@@ -97,18 +97,42 @@ class DataService {
         await this.connectDb();
     }
 
-    get projects() { return this.getRepository<ProjectsRepository>("projects"); }
-    get playtestingUpdates() { return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates"); }
-    get cards() { return this.getRepository<CardsRepository>("cards"); }
-    get slots() { return this.getRepository<SlotsRepository>("slots"); }
-    get reviews() { return this.getRepository<ReviewsRepository>("reviews"); }
-    get decks() { return this.getRepository<DecksRepository>("decks"); }
-    get users() { return this.getRepository<UsersRepository>("users"); }
-    get roles() { return this.getRepository<RolesRepository>("roles"); }
-    get suggestions() { return this.getRepository<SuggestionsRepository>("suggestions"); }
-    get auth() { return this.getRepository<AuthRepository>("auth"); }
-    get integrations() { return this.getRepository<IntegrationRepository>("integrations"); }
-    get logs() { return this.getRepository<LogsRepository>("logs"); }
+    get projects() {
+        return this.getRepository<ProjectsRepository>("projects");
+    }
+    get playtestingUpdates() {
+        return this.getRepository<PlaytestingUpdateRepository>("playtestingUpdates");
+    }
+    get cards() {
+        return this.getRepository<CardsRepository>("cards");
+    }
+    get slots() {
+        return this.getRepository<SlotsRepository>("slots");
+    }
+    get reviews() {
+        return this.getRepository<ReviewsRepository>("reviews");
+    }
+    get decks() {
+        return this.getRepository<DecksRepository>("decks");
+    }
+    get users() {
+        return this.getRepository<UsersRepository>("users");
+    }
+    get roles() {
+        return this.getRepository<RolesRepository>("roles");
+    }
+    get suggestions() {
+        return this.getRepository<SuggestionsRepository>("suggestions");
+    }
+    get auth() {
+        return this.getRepository<AuthRepository>("auth");
+    }
+    get integrations() {
+        return this.getRepository<IntegrationRepository>("integrations");
+    }
+    get logs() {
+        return this.getRepository<LogsRepository>("logs");
+    }
 }
 
 export default DataService;

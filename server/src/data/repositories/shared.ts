@@ -22,8 +22,7 @@ export class Database<T> {
 }
 
 const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
-const stripAudit = (obj: object) =>
-    Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
+const stripAudit = (obj: object) => Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
 
 async function doApplyAudit<T extends IAuditable>(
     database: MongoDataSource<T>,
@@ -35,26 +34,25 @@ async function doApplyAudit<T extends IAuditable>(
     const items = asArray(auditing);
 
     if (isNew) {
-        return items.map(data => ({
-            ...data,
-            updated: now,
-            updatedBy: principal.id,
-            created: now,
-            createdBy: principal.id
-        } as T));
+        return items.map(
+            (data) =>
+                ({
+                    ...data,
+                    updated: now,
+                    updatedBy: principal.id,
+                    created: now,
+                    createdBy: principal.id
+                }) as T
+        );
     }
 
     const pks = database.primaryKeys;
-    const filters = items.map(item =>
-        pks.reduce((f, pk) => ({ ...f, [pk]: item[pk] }), {} as Filter<T>)
-    );
+    const filters = items.map((item) => pks.reduce((f, pk) => ({ ...f, [pk]: item[pk] }), {} as Filter<T>));
     const existing = await database.read(filters);
-    const byKey = new Map(
-        existing.map(e => [pks.map(pk => String(e[pk])).join("|"), e])
-    );
+    const byKey = new Map(existing.map((e) => [pks.map((pk) => String(e[pk])).join("|"), e]));
 
-    return items.map(data => {
-        const key = pks.map(pk => String(data[pk])).join("|");
+    return items.map((data) => {
+        const key = pks.map((pk) => String(data[pk])).join("|");
         const current = byKey.get(key);
         if (current && isEqual(stripAudit(data as object), stripAudit(current as object))) {
             // Only _metadata (or nothing) changed — preserve existing audit timestamps
@@ -65,9 +63,18 @@ async function doApplyAudit<T extends IAuditable>(
 }
 
 export abstract class IAuditableDatabase<T extends IAuditable> extends Database<T> {
-    protected applyAudit(auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">, isNew: boolean): Promise<T>;
-    protected applyAudit(auditing: (T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">)[], isNew: boolean): Promise<T[]>;
-    protected async applyAudit(auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>, isNew: boolean) {
+    protected applyAudit(
+        auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">,
+        isNew: boolean
+    ): Promise<T>;
+    protected applyAudit(
+        auditing: (T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">)[],
+        isNew: boolean
+    ): Promise<T[]>;
+    protected async applyAudit(
+        auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>,
+        isNew: boolean
+    ) {
         const result = await doApplyAudit(this.database, auditing, isNew);
         return Array.isArray(auditing) ? result : result[0];
     }
@@ -75,8 +82,10 @@ export abstract class IAuditableDatabase<T extends IAuditable> extends Database<
 
 // ── Broadcast-capable base ───────────────────────────────────────────────────
 
-export class BroadcastDatabase<K extends ResourceType, T extends ResourceDataMap[K] = ResourceDataMap[K]>
-    extends Database<T> {
+export class BroadcastDatabase<
+    K extends ResourceType,
+    T extends ResourceDataMap[K] = ResourceDataMap[K]
+> extends Database<T> {
     protected readonly updateType: K;
 
     constructor(database: MongoDataSource<T>, updateType: K) {
@@ -100,11 +109,22 @@ export class BroadcastDatabase<K extends ResourceType, T extends ResourceDataMap
     }
 }
 
-export abstract class BroadcastIAuditableDatabase<K extends ResourceType, T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K]>
-    extends BroadcastDatabase<K, T> {
-    protected applyAudit(auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">, isNew: boolean): Promise<T>;
-    protected applyAudit(auditing: (T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">)[], isNew: boolean): Promise<T[]>;
-    protected async applyAudit(auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>, isNew: boolean) {
+export abstract class BroadcastIAuditableDatabase<
+    K extends ResourceType,
+    T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K]
+> extends BroadcastDatabase<K, T> {
+    protected applyAudit(
+        auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">,
+        isNew: boolean
+    ): Promise<T>;
+    protected applyAudit(
+        auditing: (T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">)[],
+        isNew: boolean
+    ): Promise<T[]>;
+    protected async applyAudit(
+        auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>,
+        isNew: boolean
+    ) {
         const result = await doApplyAudit(this.database, auditing, isNew);
         return Array.isArray(auditing) ? result : result[0];
     }
@@ -112,8 +132,13 @@ export abstract class BroadcastIAuditableDatabase<K extends ResourceType, T exte
 
 // ── Repository base classes ──────────────────────────────────────────────────
 
-export class BasicAuditableRepository<K extends ResourceType, T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K]>
-    extends BroadcastIAuditableDatabase<K, T> implements IRepository<T> {
+export class BasicAuditableRepository<
+        K extends ResourceType,
+        T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K]
+    >
+    extends BroadcastIAuditableDatabase<K, T>
+    implements IRepository<T>
+{
     public async create(creating: T, broadcast?: boolean): Promise<T>;
     public async create(creating: T[], broadcast?: boolean): Promise<T[]>;
     public async create(creating: SingleOrArray<T>, broadcast = true) {
@@ -126,7 +151,7 @@ export class BasicAuditableRepository<K extends ResourceType, T extends IAuditab
     }
 
     public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as MongoSort : undefined;
+        const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
         const limit = perPage;
         const skip = (page - 1) * perPage;
         return await this.database.read(reading, { sort, limit, skip });
@@ -159,14 +184,19 @@ export class BasicAuditableRepository<K extends ResourceType, T extends IAuditab
         if (tasks.length === 0) return;
         const { source } = getContext();
 
-        const syncs = tasks.map((task) => typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task);
+        const syncs = tasks.map((task) =>
+            typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task
+        );
         if (source === "client") {
             const priorityGroups = groupBy(syncs, "priority");
-            const sortedPriorities = Object.keys(priorityGroups).map(Number).sort((a, b) => a - b);
+            const sortedPriorities = Object.keys(priorityGroups)
+                .map(Number)
+                .sort((a, b) => a - b);
             void sortedPriorities.reduce(
-                (chain, priority) => chain.then(() =>
-                    Promise.all(priorityGroups[priority].map(({ func }) => func().catch(err => logger.warn(err))))
-                ),
+                (chain, priority) =>
+                    chain.then(() =>
+                        Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))))
+                    ),
                 Promise.resolve() as Promise<unknown>
             );
         } else {
@@ -180,10 +210,12 @@ export class BasicAuditableRepository<K extends ResourceType, T extends IAuditab
         }
     }
 }
-type SyncTask = (() => Promise<unknown>) | { priority: number, func: () => Promise<unknown> };
+type SyncTask = (() => Promise<unknown>) | { priority: number; func: () => Promise<unknown> };
 
 export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K] = ResourceDataMap[K]>
-    extends BroadcastDatabase<K, T> implements IRepository<T> {
+    extends BroadcastDatabase<K, T>
+    implements IRepository<T>
+{
     public async create(creating: T, broadcast?: boolean): Promise<T>;
     public async create(creating: T[], broadcast?: boolean): Promise<T[]>;
     public async create(creating: SingleOrArray<T>, broadcast = true) {
@@ -195,7 +227,7 @@ export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K
     }
 
     public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as MongoSort : undefined;
+        const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
         const limit = perPage;
         const skip = (page - 1) * perPage;
         return await this.database.read(reading, { sort, limit, skip });

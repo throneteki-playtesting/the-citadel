@@ -5,17 +5,28 @@ import { useGetProjectsQuery } from "../../api";
 import { fuzzyMatch } from "common/utils";
 import { IProject } from "common/models/projects";
 
-export default function ProjectsAutocomplete({ filter, orderBy, children = (project) => (<div>{project.name}</div>), isLoading: isForcedLoading = false, selectedKey, onSelectionChange = () => true, ...autocompleteProps }: ProjectsAutocompleteProps) {
+export default function ProjectsAutocomplete({
+    filter,
+    orderBy,
+    children = (project) => <div>{project.name}</div>,
+    isLoading: isForcedLoading = false,
+    selectedKey,
+    onSelectionChange = () => true,
+    ...autocompleteProps
+}: ProjectsAutocompleteProps) {
     const { data, isLoading } = useGetProjectsQuery({ filter, orderBy });
     const [selected, setSelected] = useState<IProject | undefined>();
     const [input, setInput] = useState<string>("");
 
-    const handleSelect = useCallback((key: Key | null) => {
-        const selectedProject = key ? data?.items.find((project) => key === project.number) : undefined;
-        setSelected(selectedProject);
-        setInput(selectedProject?.name ?? "");
-        onSelectionChange(selectedProject);
-    }, [data?.items, onSelectionChange]);
+    const handleSelect = useCallback(
+        (key: Key | null) => {
+            const selectedProject = key ? data?.items.find((project) => key === project.number) : undefined;
+            setSelected(selectedProject);
+            setInput(selectedProject?.name ?? "");
+            onSelectionChange(selectedProject);
+        },
+        [data?.items, onSelectionChange]
+    );
 
     useEffect(() => {
         handleSelect(selectedKey ?? null);
@@ -48,9 +59,12 @@ export default function ProjectsAutocomplete({ filter, orderBy, children = (proj
             )}
         </Autocomplete>
     );
-};
+}
 
-type ProjectsAutocompleteProps = Omit<AutocompleteProps<IProject>, "isLoading" | "children" | "selectedKey" | "onSelectionChange"> & {
+type ProjectsAutocompleteProps = Omit<
+    AutocompleteProps<IProject>,
+    "isLoading" | "children" | "selectedKey" | "onSelectionChange"
+> & {
     filter?: SingleOrArray<Filter<IProject>>;
     orderBy?: Sort<IProject>;
     children?: (project: IProject) => ReactNode;

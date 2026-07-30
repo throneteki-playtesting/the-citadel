@@ -23,11 +23,6 @@ const thronesdbApi = createApi({
     })
 });
 
-export const {
-    useGetTDBCardQuery,
-    useLazyGetTDBCardQuery,
-    useGetTDBDeckQuery,
-    useLazyGetTDBDeckQuery
-} = thronesdbApi;
+export const { useGetTDBCardQuery, useLazyGetTDBCardQuery, useGetTDBDeckQuery, useLazyGetTDBDeckQuery } = thronesdbApi;
 
 export default thronesdbApi;

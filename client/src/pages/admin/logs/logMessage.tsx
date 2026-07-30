@@ -1,6 +1,16 @@
 import { Fragment } from "react";
 import { ILogEntry, LOG_PLACEHOLDER_REGEX } from "common/models/logs";
-import { AnonymousChip, CardChip, GenericEntityChip, IntegrationChip, ProjectChip, RoleChip, SuggestionChip, SystemChip, UserChip } from "./chips";
+import {
+    AnonymousChip,
+    CardChip,
+    GenericEntityChip,
+    IntegrationChip,
+    ProjectChip,
+    RoleChip,
+    SuggestionChip,
+    SystemChip,
+    UserChip
+} from "./chips";
 
 // Substitutes each `<type:{{key}}>` placeholder in `message` with its rendered entity chip.
 export default function LogMessage({ entry }: { entry: ILogEntry }) {
@@ -33,7 +43,7 @@ export default function LogMessage({ entry }: { entry: ILogEntry }) {
     return <span className="leading-6">{parts}</span>;
 }
 
-function EntityChip({ type, value }: { type: string, value: unknown }) {
+function EntityChip({ type, value }: { type: string; value: unknown }) {
     switch (type) {
         case "user":
             return <UserChip value={value} />;

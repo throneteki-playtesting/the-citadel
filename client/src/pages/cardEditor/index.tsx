@@ -39,10 +39,13 @@ export default function CardEditorPage() {
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Card Editor</div>
                 <div className="text-sm md:text-base">
-                    Use this page to sketch out a card idea and see how it looks as a finished card. Fill in the details below and the preview will
-                    update automatically, so you can check the wording, icons and layout read coherently.
+                    Use this page to sketch out a card idea and see how it looks as a finished card. Fill in the details
+                    below and the preview will update automatically, so you can check the wording, icons and layout read
+                    coherently.
                 </div>
-                <div className="text-sm md:text-base">Happy with it? Use Export PNG to download the card image and share your idea.</div>
+                <div className="text-sm md:text-base">
+                    Happy with it? Use Export PNG to download the card image and share your idea.
+                </div>
             </div>
             <div className="px-4 md:px-0 flex justify-between items-center">
                 <Button
@@ -57,7 +60,7 @@ export default function CardEditorPage() {
             </div>
             <div className="flex flex-col md:flex-row gap-2">
                 <CardPreview card={renderCard} className="self-center md:self-start shrink-0 max-w-86" />
-                <CardEditor onUpdate={setCard} inputOptions={{ flavor: "hidden", deckLimit: "hidden" }}/>
+                <CardEditor onUpdate={setCard} inputOptions={{ flavor: "hidden", deckLimit: "hidden" }} />
             </div>
         </div>
     );

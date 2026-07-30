@@ -13,7 +13,7 @@ export function useForm<T>(): FormContextProps<T> {
 }
 
 export type FormContextProps<T> = {
-    data: DeepPartial<T>,
-    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>
-    validationErrors: Record<string, string>
-}
+    data: DeepPartial<T>;
+    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>;
+    validationErrors: Record<string, string>;
+};

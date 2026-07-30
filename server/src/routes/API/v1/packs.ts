@@ -15,7 +15,8 @@ const ProjectParams = {
     project: Joi.number().required()
 };
 
-router.get("/:project/development",
+router.get(
+    "/:project/development",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     loadProjectByParam,
     asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
@@ -35,27 +36,33 @@ router.get("/:project/development",
     })
 );
 
-router.get("/:project/release/:code",
+router.get(
+    "/:project/release/:code",
     celebrate({
         [Segments.PARAMS]: { ...ProjectParams, code: Joi.string().required() }
     }),
     loadProjectByParam,
-    asyncHandler<{ project: number, code: string }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number; code: string }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.params;
 
         const release = project.releases.find((r) => r.code === code);
         if (!release) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Release "${code}" does not exist for project #${project.number}`);
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Release "${code}" does not exist for project #${project.number}`
+            );
         }
 
         const slots = await dataService.slots.read({ project: project.number, release: { code } });
         const slotsByNumber = new Map(slots.map((slot) => [slot.number, slot]));
         const numbers = [...slotsByNumber.keys()];
 
-        const cards = numbers.length > 0
-            ? await dataService.cards.read({ project: project.number, number: { $in: numbers }, latest: true })
-            : [];
+        const cards =
+            numbers.length > 0
+                ? await dataService.cards.read({ project: project.number, number: { $in: numbers }, latest: true })
+                : [];
 
         const exportCards = cards
             .map((card) => {

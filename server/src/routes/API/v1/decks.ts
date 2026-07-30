@@ -16,10 +16,9 @@ import { UUID } from "crypto";
 const router = express.Router();
 
 const identifierParam = {
-    identifier: Joi.alternatives().try(
-        Joi.number().integer(),
-        Joi.string().guid({ version: ["uuidv4"] })
-    ).required()
+    identifier: Joi.alternatives()
+        .try(Joi.number().integer(), Joi.string().guid({ version: ["uuidv4"] }))
+        .required()
 };
 
 // `filter` here is matched against the cards collection (project/number/version, etc.), not IDeck's
@@ -27,18 +26,22 @@ const identifierParam = {
 const cardFilterSchema = getRequestSchema(Schemas.PlaytestingCard.Full).extract("filter");
 
 // Read decks, optionally scoped to those containing any card matching the given filter(s)
-router.get("/",
+router.get(
+    "/",
     validateRequest(Permission.READ_DECKS),
     celebrate({ [Segments.QUERY]: { filter: cardFilterSchema } }),
-    asyncHandler<unknown, unknown, unknown, { filter?: SingleOrArray<DeepPartial<IPlaytestCard>> }>(async (req, res) => {
-        const { filter } = req.query;
-        const result = filter ? await dataService.decks.forCards(filter) : await dataService.decks.read();
-        res.status(StatusCodes.OK).json(generateGetResponse(result));
-    })
+    asyncHandler<unknown, unknown, unknown, { filter?: SingleOrArray<DeepPartial<IPlaytestCard>> }>(
+        async (req, res) => {
+            const { filter } = req.query;
+            const result = filter ? await dataService.decks.forCards(filter) : await dataService.decks.read();
+            res.status(StatusCodes.OK).json(generateGetResponse(result));
+        }
+    )
 );
 
 // Read a single deck
-router.get("/:identifier",
+router.get(
+    "/:identifier",
     validateRequest(Permission.READ_DECKS),
     celebrate({ [Segments.PARAMS]: identifierParam }),
     asyncHandler<{ identifier: number | UUID }, unknown, unknown, unknown>(async (req, res) => {
@@ -49,21 +52,27 @@ router.get("/:identifier",
 );
 
 // Add a deck to the pool directly, outside of the review process
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.CREATE_DECKS),
     celebrate({ [Segments.BODY]: Schemas.Deck.Add }),
     asyncHandler<unknown, unknown, { link: DeckLink | DecklistLink }, unknown>(async (req, res) => {
         const { link } = req.body;
         const deck = await dataService.decks.refresh(link, "manual");
         if (!deck) {
-            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Link", "ThronesDB deck does not exist or is not public");
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Link",
+                "ThronesDB deck does not exist or is not public"
+            );
         }
         res.status(StatusCodes.OK).json(deck);
     })
 );
 
 // Refresh a deck's data from ThronesDB
-router.post("/:identifier/refresh",
+router.post(
+    "/:identifier/refresh",
     validateRequest(Permission.EDIT_DECKS),
     celebrate({ [Segments.PARAMS]: identifierParam }),
     asyncHandler<{ identifier: number | UUID }, unknown, unknown, unknown>(async (req, res) => {

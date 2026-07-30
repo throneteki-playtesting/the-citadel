@@ -17,8 +17,8 @@ export default function Page({ children, required }: PageProps) {
     }
 
     return <>{children}</>;
-};
+}
 type PageProps = {
     children: ReactNode;
-    required?: SingleOrArray<Permission>
-}
+    required?: SingleOrArray<Permission>;
+};

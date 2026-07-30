@@ -33,7 +33,7 @@ const ChangeTypeChip = ({ card, className, style }: ChangeTypeChipProps) => {
     );
 };
 type ChangeTypeChipProps = {
-    card: IPlaytestCard
-} & Omit<BaseElementProps, "children">
+    card: IPlaytestCard;
+} & Omit<BaseElementProps, "children">;
 
 export default ChangeTypeChip;

@@ -10,13 +10,13 @@ import { StatusCodes } from "http-status-codes";
 
 const router = express.Router();
 
-router.get("/deck/:identifier",
+router.get(
+    "/deck/:identifier",
     celebrate({
         [Segments.PARAMS]: {
-            identifier: Joi.alternatives().try(
-                Joi.number().integer(),
-                Joi.string().guid({ version: ["uuidv4"] })
-            ).required()
+            identifier: Joi.alternatives()
+                .try(Joi.number().integer(), Joi.string().guid({ version: ["uuidv4"] }))
+                .required()
         }
     }),
     asyncHandler<{ identifier: number | UUID }, unknown, unknown, IDecklist>(async (req, res) => {
@@ -27,7 +27,8 @@ router.get("/deck/:identifier",
     })
 );
 
-router.get("/card/:code",
+router.get(
+    "/card/:code",
     celebrate({
         [Segments.PARAMS]: {
             code: Joi.string().regex(Regex.Card.code).required()

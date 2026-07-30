@@ -5,21 +5,34 @@ import { log } from "../lib/logger";
 const userId = "120834530801221634";
 
 // Canonical faction order - matches common/models/cards factions
-const factions = ["baratheon", "greyjoy", "lannister", "martell", "thenightswatch", "stark", "targaryen", "tyrell", "neutral"];
+const factions = [
+    "baratheon",
+    "greyjoy",
+    "lannister",
+    "martell",
+    "thenightswatch",
+    "stark",
+    "targaryen",
+    "tyrell",
+    "neutral"
+];
 
 export const migration: Migration = {
     name: "006_expansionReleases",
-    description: "Seed the single fixed release (with slot position assignments) for initialised expansion projects that lack one",
+    description:
+        "Seed the single fixed release (with slot position assignments) for initialised expansion projects that lack one",
 
     async run({ destDb, dryRun }) {
         const projectsCol = destDb.collection("projects");
         const slotsCol = destDb.collection("slots");
 
-        const projects = await projectsCol.find({
-            type: "expansion",
-            draft: false,
-            $or: [{ releases: { $size: 0 } }, { releases: { $exists: false } }]
-        }).toArray();
+        const projects = await projectsCol
+            .find({
+                type: "expansion",
+                draft: false,
+                $or: [{ releases: { $size: 0 } }, { releases: { $exists: false } }]
+            })
+            .toArray();
         log.info(`Found ${projects.length} initialised expansion project(s) without a release`);
 
         for (const project of projects) {
@@ -47,7 +60,9 @@ export const migration: Migration = {
             let position = 1;
             const slotOps: object[] = [];
             for (const { faction } of allocations) {
-                const factionSlots = slots.filter((slot: any) => slot.faction === faction).sort((a: any, b: any) => a.number - b.number);
+                const factionSlots = slots
+                    .filter((slot: any) => slot.faction === faction)
+                    .sort((a: any, b: any) => a.number - b.number);
                 for (const slot of factionSlots) {
                     slotOps.push({
                         updateOne: {
@@ -59,7 +74,9 @@ export const migration: Migration = {
             }
 
             if (dryRun) {
-                log.info(`[dry-run] Would seed release "${release.code}" (${capacity} slots) for project #${project.number} and assign ${slotOps.length} slot position(s)`);
+                log.info(
+                    `[dry-run] Would seed release "${release.code}" (${capacity} slots) for project #${project.number} and assign ${slotOps.length} slot position(s)`
+                );
                 continue;
             }
 
@@ -67,7 +84,9 @@ export const migration: Migration = {
             if (slotOps.length > 0) {
                 await slotsCol.bulkWrite(slotOps as any, { ordered: false });
             }
-            log.success(`Seeded release "${release.code}" for project #${project.number} - ${slotOps.length} slot(s) assigned`);
+            log.success(
+                `Seeded release "${release.code}" for project #${project.number} - ${slotOps.length} slot(s) assigned`
+            );
         }
     }
 };

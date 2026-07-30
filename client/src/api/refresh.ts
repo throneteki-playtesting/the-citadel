@@ -23,7 +23,7 @@ export async function refreshSession(): Promise<RefreshOutcome> {
                 return "failed";
             }
 
-            const result = await response.json() as RefreshAuthResponse;
+            const result = (await response.json()) as RefreshAuthResponse;
             return result.status === "success" ? "refreshed" : "failed";
         } catch {
             return "failed";
@@ -33,5 +33,8 @@ export async function refreshSession(): Promise<RefreshOutcome> {
 
 export function redirectToLogin() {
     const returnUrl = window.location.pathname + window.location.search;
-    window.location.href = returnUrl !== "/" && isSafeRelativePath(returnUrl) ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}` : "/auth/discord";
+    window.location.href =
+        returnUrl !== "/" && isSafeRelativePath(returnUrl)
+            ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}`
+            : "/auth/discord";
 }

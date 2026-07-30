@@ -7,21 +7,21 @@ import { IPlaytestReview } from "common/models/reviews";
 import { ResourceDataMap, ResourceType } from "common/resources";
 
 export interface AccessTokenPayload {
-    discordId: string,
-    expiresAt: Date
+    discordId: string;
+    expiresAt: Date;
 }
 export type AuthStatus = "success" | "error" | "cancelled";
 
 export interface ApiFieldError {
-    path: string,
-    message: string
+    path: string;
+    message: string;
 }
 
 export interface ApiError {
-    code: StatusCodes,
-    error: string,
-    message: string,
-    fields?: ApiFieldError[]
+    code: StatusCodes;
+    error: string;
+    message: string;
+    fields?: ApiFieldError[];
 }
 
 export function isApiError(err: unknown): err is ApiError {
@@ -29,15 +29,15 @@ export function isApiError(err: unknown): err is ApiError {
 }
 
 export interface RefreshAuthResponse {
-    status: "success" | "failure",
-    message?: string
+    status: "success" | "failure";
+    message?: string;
 }
 
 export interface OAuthTokenResponse {
-  access_token: string;
-  expires_in: number;
-  token_type: string;
-  scope?: string;
+    access_token: string;
+    expires_in: number;
+    token_type: string;
+    scope?: string;
 }
 
 export interface IRepository<T> {
@@ -57,18 +57,40 @@ export interface IRepository<T> {
 }
 
 export type RenderType = "single" | "batch";
-export interface RenderJob { id: UUID, type: RenderType, data: { id: UUID, card: IRenderCard }[] };
-export interface SingleRenderJob extends RenderJob { type: "single", options?: SingleRenderJobOptions };
-export type SingleRenderJobOptions = { orientation?: "horizontal" | "vertical", rounded?: boolean };
-export interface BatchRenderJob extends RenderJob { type: "batch", options?: BatchRenderJobOptions };
-export type BatchRenderJobOptions = { copies?: number, perPage?: number, rounded?: boolean };
+export interface RenderJob {
+    id: UUID;
+    type: RenderType;
+    data: { id: UUID; card: IRenderCard }[];
+}
+export interface SingleRenderJob extends RenderJob {
+    type: "single";
+    options?: SingleRenderJobOptions;
+}
+export type SingleRenderJobOptions = { orientation?: "horizontal" | "vertical"; rounded?: boolean };
+export interface BatchRenderJob extends RenderJob {
+    type: "batch";
+    options?: BatchRenderJobOptions;
+}
+export type BatchRenderJobOptions = { copies?: number; perPage?: number; rounded?: boolean };
 
-export interface IGetRequest<T> { filter?: SingleOrArray<Filter<T>>; orderBy?: Sort<T>; page?: number; perPage?: number; }
-export interface IGetResponse<T> { total: number, items: T[] }
+export interface IGetRequest<T> {
+    filter?: SingleOrArray<Filter<T>>;
+    orderBy?: Sort<T>;
+    page?: number;
+    perPage?: number;
+}
+export interface IGetResponse<T> {
+    total: number;
+    items: T[];
+}
 
-export interface IDeleteRequest<T> { filter?: SingleOrArray<Filter<T>> }
-export interface IDeleteResponse<T> { total: number, deleted: T[] }
-
+export interface IDeleteRequest<T> {
+    filter?: SingleOrArray<Filter<T>>;
+}
+export interface IDeleteResponse<T> {
+    total: number;
+    deleted: T[];
+}
 
 export type SyncType = "card" | "review" | "playtestingUpdate";
 export interface SyncDataMap {

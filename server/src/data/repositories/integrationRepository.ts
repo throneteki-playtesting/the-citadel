@@ -49,7 +49,7 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
     }
 
     async fetchInternalToken() {
-        const rawToken = await dataService.redis.get(this.internalKey) as string;
+        const rawToken = (await dataService.redis.get(this.internalKey)) as string;
         return rawToken;
     }
 
@@ -70,20 +70,23 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
 
     private excludeInternal(filter?: SingleOrArray<Filter<Integration>>) {
         const filters = filter !== undefined ? asArray(filter) : [{}];
-        return filters.map((f) => ({ ...f, internal: { $ne: true } } as Filter<Integration>));
+        return filters.map((f) => ({ ...f, internal: { $ne: true } }) as Filter<Integration>);
     }
 
-    async generate(data: { name: string, enabled?: boolean, permissions?: Permission[], ownerIds?: string[] }) {
+    async generate(data: { name: string; enabled?: boolean; permissions?: Permission[]; ownerIds?: string[] }) {
         const { id, rawToken, tokenHash } = this.generateKeys();
-        let integration = await this.applyAudit({
-            id,
-            tokenHash,
-            name: data.name,
-            enabled: data.enabled ?? true,
-            permissions: data.permissions ?? [],
-            roles: [],
-            ownerIds: data.ownerIds ?? []
-        }, true);
+        let integration = await this.applyAudit(
+            {
+                id,
+                tokenHash,
+                name: data.name,
+                enabled: data.enabled ?? true,
+                permissions: data.permissions ?? [],
+                roles: [],
+                ownerIds: data.ownerIds ?? []
+            },
+            true
+        );
 
         [integration] = await this.database.create(integration);
 
@@ -98,8 +101,13 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
         return { rawToken: `${integration.id}.${secret}`, integration: updated };
     }
 
-    public async read(reading?: SingleOrArray<Filter<Integration>>, orderBy?: Sort<Integration>, page?: number, perPage?: number) {
-        const sort = orderBy ? flatten(orderBy) as MongoSort : undefined;
+    public async read(
+        reading?: SingleOrArray<Filter<Integration>>,
+        orderBy?: Sort<Integration>,
+        page?: number,
+        perPage?: number
+    ) {
+        const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
         const limit = perPage;
         const skip = (page - 1) * perPage;
         return await this.database.read(this.excludeInternal(reading), { sort, limit, skip });

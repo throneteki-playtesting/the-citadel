@@ -22,7 +22,13 @@ import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { isEnvironment } from "@/env";
 import { blockMutationsWhileImpersonating } from "@/middleware/impersonation";
-import { ACCESS_TOKEN_COOKIE, IMPERSONATION_COOKIE, impersonationCookieOptions, REFRESH_TOKEN_COOKIE, SESSION_ID_COOKIE } from "@/middleware/cookies";
+import {
+    ACCESS_TOKEN_COOKIE,
+    IMPERSONATION_COOKIE,
+    impersonationCookieOptions,
+    REFRESH_TOKEN_COOKIE,
+    SESSION_ID_COOKIE
+} from "@/middleware/cookies";
 
 const router = express.Router();
 router.use("/users", parseAPIRequest, blockMutationsWhileImpersonating, users);
@@ -51,20 +57,23 @@ const cookieOptions = {
     sameSite: "lax" as const
 };
 
-router.post("/logout", asyncHandler(async (req, res) => {
-    const sessionId = req.cookies[SESSION_ID_COOKIE];
-    const context = getContext();
+router.post(
+    "/logout",
+    asyncHandler(async (req, res) => {
+        const sessionId = req.cookies[SESSION_ID_COOKIE];
+        const context = getContext();
 
-    if (sessionId && context.source === "client") {
-        await dataService.auth.deleteSession(context.principal.discordId, sessionId);
-        await logActivity(LogCategory.AUTH, "auth.logout", "<principal> logged out");
-    }
+        if (sessionId && context.source === "client") {
+            await dataService.auth.deleteSession(context.principal.discordId, sessionId);
+            await logActivity(LogCategory.AUTH, "auth.logout", "<principal> logged out");
+        }
 
-    res.clearCookie(ACCESS_TOKEN_COOKIE, cookieOptions);
-    res.clearCookie(REFRESH_TOKEN_COOKIE, cookieOptions);
-    res.clearCookie(SESSION_ID_COOKIE, cookieOptions);
-    res.clearCookie(IMPERSONATION_COOKIE, impersonationCookieOptions);
-    res.sendStatus(200);
-}));
+        res.clearCookie(ACCESS_TOKEN_COOKIE, cookieOptions);
+        res.clearCookie(REFRESH_TOKEN_COOKIE, cookieOptions);
+        res.clearCookie(SESSION_ID_COOKIE, cookieOptions);
+        res.clearCookie(IMPERSONATION_COOKIE, impersonationCookieOptions);
+        res.sendStatus(200);
+    })
+);
 
 export default router;

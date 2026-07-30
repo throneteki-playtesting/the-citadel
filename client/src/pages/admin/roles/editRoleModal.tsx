@@ -23,36 +23,41 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
         [usersData, role]
     );
 
-    const getUserBlockers = useCallback((value: string): string[] => {
-        if (!role) return [];
-        const blockers: string[] = [];
+    const getUserBlockers = useCallback(
+        (value: string): string[] => {
+            if (!role) return [];
+            const blockers: string[] = [];
 
-        for (const user of affectedUsers) {
-            // Would the user still have `value` from another source if removed from this role?
-            const otherSources = new Set<string>();
-            for (const p of user.permissions) otherSources.add(p.toString());
-            for (const userRole of user.roles) {
-                if (userRole.discordId === role.discordId) continue;
-                for (const p of userRole.permissions) otherSources.add(p.toString());
-            }
-            for (const p of permissions) {
-                if (p !== value) otherSources.add(p);
-            }
-            if (otherSources.has(value)) continue;
+            for (const user of affectedUsers) {
+                // Would the user still have `value` from another source if removed from this role?
+                const otherSources = new Set<string>();
+                for (const p of user.permissions) otherSources.add(p.toString());
+                for (const userRole of user.roles) {
+                    if (userRole.discordId === role.discordId) continue;
+                    for (const p of userRole.permissions) otherSources.add(p.toString());
+                }
+                for (const p of permissions) {
+                    if (p !== value) otherSources.add(p);
+                }
+                if (otherSources.has(value)) continue;
 
-            // Check if any of the user's direct permissions depend on `value`
-            for (const permission of user.permissions) {
-                const deps = permissionMeta[permission]?.dependencies;
-                if (!deps) continue;
-                const required = Array.isArray(deps) ? deps : [deps];
-                if (required.includes(value as Permission)) {
-                    blockers.push(`${user.displayname} (requires ${permissionFullLabel.get(permission) ?? permission})`);
+                // Check if any of the user's direct permissions depend on `value`
+                for (const permission of user.permissions) {
+                    const deps = permissionMeta[permission]?.dependencies;
+                    if (!deps) continue;
+                    const required = Array.isArray(deps) ? deps : [deps];
+                    if (required.includes(value as Permission)) {
+                        blockers.push(
+                            `${user.displayname} (requires ${permissionFullLabel.get(permission) ?? permission})`
+                        );
+                    }
                 }
             }
-        }
 
-        return blockers;
-    }, [affectedUsers, permissions, role]);
+            return blockers;
+        },
+        [affectedUsers, permissions, role]
+    );
 
     const onSave = useCallback(async () => {
         if (role) {
@@ -67,7 +72,11 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
                     addToast({ title: "Error", color: "danger", description: "Failed to save role" });
                 }
             } else {
-                addToast({ title: "Role saved", color: "success", description: `${model.name} was updated successfully.` });
+                addToast({
+                    title: "Role saved",
+                    color: "success",
+                    description: `${model.name} was updated successfully.`
+                });
                 if (onRoleSave) {
                     onRoleSave(model);
                 }
@@ -87,13 +96,17 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
                     <>
                         <ModalHeader>Edit {role?.name}</ModalHeader>
                         <ModalBody>
-                            <p className="text-sm text-default-500">Changing permissions will refresh the permissions for each user with this role.</p>
-                            <PermissionCheckboxes selectedPermissions={permissions} getUserBlockers={getUserBlockers} onChange={setPermissions} />
+                            <p className="text-sm text-default-500">
+                                Changing permissions will refresh the permissions for each user with this role.
+                            </p>
+                            <PermissionCheckboxes
+                                selectedPermissions={permissions}
+                                getUserBlockers={getUserBlockers}
+                                onChange={setPermissions}
+                            />
                         </ModalBody>
                         <ModalFooter>
-                            <Button onPress={onClose}>
-                                Cancel
-                            </Button>
+                            <Button onPress={onClose}>Cancel</Button>
                             <Button color="primary" isLoading={isLoading} onPress={onSave}>
                                 Save
                             </Button>
@@ -103,7 +116,7 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
             </ModalContent>
         </Modal>
     );
-};
+}
 
 type EditRoleModalProps = Omit<BaseElementProps, "children"> & {
     role?: Role;

@@ -19,7 +19,8 @@ export type ResourceFormat = "JSON" | "TXT" | "PNG" | "PDF";
 
 const router = express.Router();
 
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.RENDER_CARDS),
     celebrate({
         [Segments.QUERY]: {
@@ -30,13 +31,23 @@ router.post("/",
             perPage: Joi.number()
         },
         [Segments.BODY]: Schemas.SingleOrArray(Schemas.RenderedCard.Full)
-    }), asyncHandler<unknown, unknown, SingleOrArray<IRenderCard>, { format?: ResourceFormat } & SingleRenderJobOptions & BatchRenderJobOptions>(async (req, res) => {
+    }),
+    asyncHandler<
+        unknown,
+        unknown,
+        SingleOrArray<IRenderCard>,
+        { format?: ResourceFormat } & SingleRenderJobOptions & BatchRenderJobOptions
+    >(async (req, res) => {
         const { format } = req.query;
         const body = req.body;
 
         const cards = asArray(body);
         if (cards.length === 0) {
-            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Arguments", "Must provide at least one card to render");
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Invalid Arguments",
+                "Must provide at least one card to render"
+            );
         }
 
         switch (format) {
@@ -61,7 +72,12 @@ router.post("/",
                     archive.pipe(res);
 
                     archive.on("error", (err: unknown) => {
-                        throw new ApiErrorResponse(StatusCodes.INTERNAL_SERVER_ERROR, "Archive Error", "An internal server error has occurred during archive process of multiple rendered images", err);
+                        throw new ApiErrorResponse(
+                            StatusCodes.INTERNAL_SERVER_ERROR,
+                            "Archive Error",
+                            "An internal server error has occurred during archive process of multiple rendered images",
+                            err
+                        );
                     });
                     for (const image of images) {
                         archive.append(image.buffer, { name: `${image.card.key}.png}` });
@@ -75,12 +91,16 @@ router.post("/",
     })
 );
 
-router.get("/job",
+router.get(
+    "/job",
     celebrate({
         [Segments.QUERY]: {
-            id: Joi.string().guid({ version: ["uuidv4"] }).required()
+            id: Joi.string()
+                .guid({ version: ["uuidv4"] })
+                .required()
         }
-    }), asyncHandler<unknown, unknown, unknown, { id: UUID }>(async (req, res) => {
+    }),
+    asyncHandler<unknown, unknown, unknown, { id: UUID }>(async (req, res) => {
         const { id } = req.query;
 
         const job = await dataService.redis.get(id);

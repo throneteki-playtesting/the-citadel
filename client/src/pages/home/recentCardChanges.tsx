@@ -16,14 +16,20 @@ import Watermark from "../../components/watermark";
 export default function RecentCardChanges() {
     const items = 5;
     const { data: projectsData, isLoading: isProjectsDataLoading } = useGetProjectsQuery({ filter: { active: true } });
-    const { data: cardsData, isLoading: isCardsDataLoading } = useGetCardsQuery({
-        filter: projectsData?.items.map((project) => [{ project: project.number, latest: true }]).flat(),
-        orderBy: { updated: "desc" },
-        page: 1,
-        perPage: items
-    }, { skip: !projectsData });
+    const { data: cardsData, isLoading: isCardsDataLoading } = useGetCardsQuery(
+        {
+            filter: projectsData?.items.map((project) => [{ project: project.number, latest: true }]).flat(),
+            orderBy: { updated: "desc" },
+            page: 1,
+            perPage: items
+        },
+        { skip: !projectsData }
+    );
 
-    const isLoading = useMemo(() => isProjectsDataLoading || isCardsDataLoading, [isCardsDataLoading, isProjectsDataLoading]);
+    const isLoading = useMemo(
+        () => isProjectsDataLoading || isCardsDataLoading,
+        [isCardsDataLoading, isProjectsDataLoading]
+    );
 
     const content = useMemo(() => {
         if (isLoading) {
@@ -32,10 +38,10 @@ export default function RecentCardChanges() {
                 <div key={index} className="relative overflow-hidden bg-content1 hover:bg-content3">
                     <div className="relative z-10">
                         <div className="grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
-                            <Skeleton className="w-16 h-6 rounded-sm"/>
+                            <Skeleton className="w-16 h-6 rounded-sm" />
                             <div className="min-w-0 space-y-1">
-                                <Skeleton className="w-32 h-4 rounded-sm"/>
-                                <Skeleton className="w-20 h-4 rounded-sm"/>
+                                <Skeleton className="w-32 h-4 rounded-sm" />
+                                <Skeleton className="w-20 h-4 rounded-sm" />
                             </div>
                         </div>
                     </div>
@@ -43,7 +49,11 @@ export default function RecentCardChanges() {
             ));
         }
         return cardsData?.items.map((card) => (
-            <ChangeRow key={`${card.project}|${card.number}|${card.version}`} card={card} projects={projectsData?.items} />
+            <ChangeRow
+                key={`${card.project}|${card.number}|${card.version}`}
+                card={card}
+                projects={projectsData?.items}
+            />
         ));
     }, [cardsData?.items, isLoading, projectsData?.items]);
 
@@ -52,9 +62,7 @@ export default function RecentCardChanges() {
             <SectionTitle size="sm" indent="xs">
                 Recent Card Changes
             </SectionTitle>
-            <div className="border border-content3 divide-y divide-content3">
-                {content}
-            </div>
+            <div className="border border-content3 divide-y divide-content3">{content}</div>
         </div>
     );
 }
@@ -64,17 +72,26 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
     return (
         <Watermark
             position="center"
-            icon={<ThronesIcon name={card.faction} className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}/>}
+            icon={
+                <ThronesIcon
+                    name={card.faction}
+                    className={classNames("ml-32 text-7xl", watermarkClasses[card.faction])}
+                />
+            }
             containerClassName="bg-content1 hover:bg-content3"
         >
             <PermissionedLink to={`/project/${project?.number}/${card.number}`} requires={Permission.READ_CARDS}>
                 <div className="relative grid grid-cols-[5rem_1fr] sm:grid-cols-[3.5rem_1fr] items-center gap-3 p-3 transition-colors">
                     <ChangeTypeChip className="text-xs sm:text-[0.5rem]" card={card} />
                     <div className="min-w-0">
-                        <div className="text-sm font-cinzel text-foreground truncate"><ThronesIcon name={card.type}/> {card.name}</div>
+                        <div className="text-sm font-cinzel text-foreground truncate">
+                            <ThronesIcon name={card.type} /> {card.name}
+                        </div>
                         <div className="flex text-xs font-crimson text-foreground/40 mt-0.5 truncate leading-none">
-                            <span>{project?.code} #{card.number} · v{card.version}</span>
-                            <Timestamp className="ml-auto text-right" date={card.updated}/>
+                            <span>
+                                {project?.code} #{card.number} · v{card.version}
+                            </span>
+                            <Timestamp className="ml-auto text-right" date={card.updated} />
                         </div>
                     </div>
                 </div>
@@ -82,5 +99,4 @@ function ChangeRow({ card, projects }: ChangeRowProps) {
         </Watermark>
     );
 }
-type ChangeRowProps = { card: IPlaytestCard, projects?: IProject[] };
-
+type ChangeRowProps = { card: IPlaytestCard; projects?: IProject[] };

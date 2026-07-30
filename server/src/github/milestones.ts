@@ -13,7 +13,9 @@ export async function getMilestone(project: IProject) {
             });
             let milestone = existing.find((m) => m.title === title);
             if (milestone) {
-                logger.info(`[Github] Found existing milestone "${milestone.title}" (${milestone.number}) for project: ${milestone.html_url}`);
+                logger.info(
+                    `[Github] Found existing milestone "${milestone.title}" (${milestone.number}) for project: ${milestone.html_url}`
+                );
             } else {
                 const { data } = await client.rest.issues.createMilestone({
                     owner,
@@ -21,7 +23,9 @@ export async function getMilestone(project: IProject) {
                     title,
                     description: `Development related to the "${project.name}" playtesting project`
                 });
-                logger.info(`[Github] Created new milestone "${data.title}" (${data.number}) for project: ${data.html_url}`);
+                logger.info(
+                    `[Github] Created new milestone "${data.title}" (${data.number}) for project: ${data.html_url}`
+                );
                 milestone = data;
             }
             project.milestone = milestone.number;

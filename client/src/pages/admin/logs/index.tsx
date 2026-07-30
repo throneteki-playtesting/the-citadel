@@ -82,15 +82,18 @@ export default function Logs() {
         const existingTimer = flashTimersRef.current.get(id);
         if (existingTimer) clearTimeout(existingTimer);
 
-        flashTimersRef.current.set(id, setTimeout(() => {
-            flashTimersRef.current.delete(id);
-            setFlashingIds((prev) => {
-                if (!prev.has(id)) return prev;
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        }, 2000));
+        flashTimersRef.current.set(
+            id,
+            setTimeout(() => {
+                flashTimersRef.current.delete(id);
+                setFlashingIds((prev) => {
+                    if (!prev.has(id)) return prev;
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
+            }, 2000)
+        );
     }, []);
 
     useEffect(() => {
@@ -148,31 +151,39 @@ export default function Logs() {
     }, [pending]);
 
     // Merges in live if scrolled to top, otherwise buffers behind the "N new logs" pill.
-    useEffect(() => subscribeToLogCreates((entry) => {
-        if (categories.length > 0 && !categories.includes(entry.category)) return;
-        if (severities.length > 0 && !severities.includes(entry.severity)) return;
-        if (dateBounds) {
-            const created = new Date(entry.created).getTime();
-            if (dateBounds.from && created < dateBounds.from.getTime()) return;
-            if (dateBounds.to && created > dateBounds.to.getTime()) return;
-        }
+    useEffect(
+        () =>
+            subscribeToLogCreates((entry) => {
+                if (categories.length > 0 && !categories.includes(entry.category)) return;
+                if (severities.length > 0 && !severities.includes(entry.severity)) return;
+                if (dateBounds) {
+                    const created = new Date(entry.created).getTime();
+                    if (dateBounds.from && created < dateBounds.from.getTime()) return;
+                    if (dateBounds.to && created > dateBounds.to.getTime()) return;
+                }
 
-        markFlashing(entry.id);
+                markFlashing(entry.id);
 
-        if (isAtTopRef.current) {
-            setItems((prev) => mergeItems([entry], prev));
-        } else {
-            setPending((prev) => mergeItems([entry], prev));
-        }
-    }), [categories, severities, dateBounds, markFlashing]);
+                if (isAtTopRef.current) {
+                    setItems((prev) => mergeItems([entry], prev));
+                } else {
+                    setPending((prev) => mergeItems([entry], prev));
+                }
+            }),
+        [categories, severities, dateBounds, markFlashing]
+    );
 
     // On SSE resync, drop back to page 1 so the whole list is fetched fresh.
-    useEffect(() => subscribeToResync(() => {
-        setPage(1);
-        setItems([]);
-        setPending([]);
-        isAtTopRef.current = true;
-    }), []);
+    useEffect(
+        () =>
+            subscribeToResync(() => {
+                setPage(1);
+                setItems([]);
+                setPending([]);
+                isAtTopRef.current = true;
+            }),
+        []
+    );
 
     const isFetchingRef = useRef(isFetching);
     isFetchingRef.current = isFetching;
@@ -187,11 +198,18 @@ export default function Logs() {
         const sentinel = sentinelRef.current;
         if (!root || !sentinel) return;
 
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0].isIntersecting && !isFetchingRef.current && itemsLengthRef.current < (totalRef.current ?? 0)) {
-                setPage((prev) => prev + 1);
-            }
-        }, { root, threshold: 0 });
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0].isIntersecting &&
+                    !isFetchingRef.current &&
+                    itemsLengthRef.current < (totalRef.current ?? 0)
+                ) {
+                    setPage((prev) => prev + 1);
+                }
+            },
+            { root, threshold: 0 }
+        );
 
         observer.observe(sentinel);
         return () => observer.disconnect();
@@ -238,7 +256,10 @@ export default function Logs() {
         <div className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Activity Logs</div>
-                <div className="text-sm md:text-base">A live feed of important actions taken across the site, along with the user or integration responsible.</div>
+                <div className="text-sm md:text-base">
+                    A live feed of important actions taken across the site, along with the user or integration
+                    responsible.
+                </div>
             </div>
             <Card className="border-1 border-content3 p-2 sm:p-4 gap-3">
                 <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
@@ -249,17 +270,19 @@ export default function Logs() {
                         value={dateFrom}
                         onChange={setDateFrom}
                         maxValue={dateTo ?? undefined}
-                        endContent={dateFrom && (
-                            <Button
-                                isIconOnly
-                                size="sm"
-                                variant="light"
-                                aria-label="Clear from date"
-                                onPress={() => setDateFrom(null)}
-                            >
-                                <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
-                            </Button>
-                        )}
+                        endContent={
+                            dateFrom && (
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    aria-label="Clear from date"
+                                    onPress={() => setDateFrom(null)}
+                                >
+                                    <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                                </Button>
+                            )
+                        }
                     />
                     <DatePicker
                         label="To"
@@ -268,17 +291,19 @@ export default function Logs() {
                         value={dateTo}
                         onChange={setDateTo}
                         minValue={dateFrom ?? undefined}
-                        endContent={dateTo && (
-                            <Button
-                                isIconOnly
-                                size="sm"
-                                variant="light"
-                                aria-label="Clear to date"
-                                onPress={() => setDateTo(null)}
-                            >
-                                <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
-                            </Button>
-                        )}
+                        endContent={
+                            dateTo && (
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    aria-label="Clear to date"
+                                    onPress={() => setDateTo(null)}
+                                >
+                                    <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                                </Button>
+                            )
+                        }
                     />
                     <Select
                         label="Category"
@@ -290,12 +315,18 @@ export default function Logs() {
                         renderValue={(selected) => (
                             <div className="flex flex-wrap gap-1">
                                 {selected.map((item) => (
-                                    <Chip key={item.key} size="sm" variant="flat" className="capitalize">{item.data?.label}</Chip>
+                                    <Chip key={item.key} size="sm" variant="flat" className="capitalize">
+                                        {item.data?.label}
+                                    </Chip>
                                 ))}
                             </div>
                         )}
                     >
-                        {(item) => <SelectItem key={item.key} className="capitalize">{item.label}</SelectItem>}
+                        {(item) => (
+                            <SelectItem key={item.key} className="capitalize">
+                                {item.label}
+                            </SelectItem>
+                        )}
                     </Select>
                     <Select
                         label="Severity"
@@ -307,14 +338,24 @@ export default function Logs() {
                         renderValue={(selected) => (
                             <div className="flex flex-wrap gap-1">
                                 {selected.map((item) => (
-                                    <Chip key={item.key} size="sm" variant="flat" color={severityColors[item.key as LogSeverity]} className="capitalize">
+                                    <Chip
+                                        key={item.key}
+                                        size="sm"
+                                        variant="flat"
+                                        color={severityColors[item.key as LogSeverity]}
+                                        className="capitalize"
+                                    >
                                         {item.data?.label}
                                     </Chip>
                                 ))}
                             </div>
                         )}
                     >
-                        {(item) => <SelectItem key={item.key} className="capitalize">{item.label}</SelectItem>}
+                        {(item) => (
+                            <SelectItem key={item.key} className="capitalize">
+                                {item.label}
+                            </SelectItem>
+                        )}
                     </Select>
                     {isRefreshing && (
                         <div className="flex items-center gap-2 text-xs text-default-500">
@@ -358,7 +399,9 @@ export default function Logs() {
                                 {hasActiveFilters ? (
                                     <>
                                         <div className="text-sm">No logs match these filters.</div>
-                                        <Button size="sm" variant="light" onPress={clearFilters}>Clear filters</Button>
+                                        <Button size="sm" variant="light" onPress={clearFilters}>
+                                            Clear filters
+                                        </Button>
                                     </>
                                 ) : (
                                     <div className="text-sm">No logs have been made yet.</div>
@@ -372,7 +415,14 @@ export default function Logs() {
     );
 }
 
-function LogRow({ entry, timezone, isExpanded, hasOpened, isFlashing, onToggle }: {
+function LogRow({
+    entry,
+    timezone,
+    isExpanded,
+    hasOpened,
+    isFlashing,
+    onToggle
+}: {
     entry: ILogEntry;
     timezone: string;
     isExpanded: boolean;
@@ -393,26 +443,49 @@ function LogRow({ entry, timezone, isExpanded, hasOpened, isFlashing, onToggle }
                 )}
             >
                 <div className="flex items-center justify-between gap-3 sm:contents">
-                    <span className="font-mono text-xs text-foreground/50 sm:order-1">{formatLogTimestamp(new Date(entry.created), timezone)}</span>
-                    <Chip size="sm" variant="flat" color={severityColors[entry.severity]} className="capitalize justify-center sm:order-2">
+                    <span className="font-mono text-xs text-foreground/50 sm:order-1">
+                        {formatLogTimestamp(new Date(entry.created), timezone)}
+                    </span>
+                    <Chip
+                        size="sm"
+                        variant="flat"
+                        color={severityColors[entry.severity]}
+                        className="capitalize justify-center sm:order-2"
+                    >
                         {entry.severity}
                     </Chip>
-                    <FontAwesomeIcon icon={faChevronLeft} className={classNames("text-foreground/50 transition-transform duration-200 sm:order-4", { "-rotate-90": isExpanded })} />
+                    <FontAwesomeIcon
+                        icon={faChevronLeft}
+                        className={classNames("text-foreground/50 transition-transform duration-200 sm:order-4", {
+                            "-rotate-90": isExpanded
+                        })}
+                    />
                 </div>
-                <div className="min-w-0 text-sm sm:order-3"><LogMessage entry={entry} /></div>
+                <div className="min-w-0 text-sm sm:order-3">
+                    <LogMessage entry={entry} />
+                </div>
             </button>
-            <div className={classNames("grid transition-[grid-template-rows] duration-200 ease-out", isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+            <div
+                className={classNames(
+                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                )}
+            >
                 <div className="overflow-hidden">
                     {hasOpened && (
                         <pre className="max-h-64 overflow-auto m-2 p-2 bg-content2 rounded-md text-xs">
-                            {JSON.stringify({
-                                id: entry.id,
-                                category: entry.category,
-                                action: entry.action,
-                                principal: entry.principal,
-                                context: entry.context,
-                                details: entry.details
-                            }, null, 2)}
+                            {JSON.stringify(
+                                {
+                                    id: entry.id,
+                                    category: entry.category,
+                                    action: entry.action,
+                                    principal: entry.principal,
+                                    context: entry.context,
+                                    details: entry.details
+                                },
+                                null,
+                                2
+                            )}
                         </pre>
                     )}
                 </div>
@@ -446,7 +519,9 @@ function LogsSkeleton() {
                     <Skeleton className="w-48 h-14 rounded-md" />
                 </div>
                 <div className="h-[70vh] overflow-hidden border border-content3 rounded-lg">
-                    {Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => <SkeletonRow key={index} />)}
+                    {Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => (
+                        <SkeletonRow key={index} />
+                    ))}
                 </div>
             </Card>
         </div>

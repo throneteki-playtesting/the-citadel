@@ -26,7 +26,12 @@ function resolveContextPrincipal(): ILogPrincipal {
 
 function resolvePrincipal(principal: Principal): ILogPrincipal {
     if ("discordId" in principal) {
-        return { type: "user", id: principal.discordId, displayname: principal.displayname, avatarUrl: principal.avatarUrl };
+        return {
+            type: "user",
+            id: principal.discordId,
+            displayname: principal.displayname,
+            avatarUrl: principal.avatarUrl
+        };
     }
     if ("name" in principal) {
         return { type: "integration", id: principal.id, name: principal.name };
@@ -35,7 +40,10 @@ function resolvePrincipal(principal: Principal): ILogPrincipal {
 }
 
 // Snapshot builders - context holds a snapshot of relevant log data at time of log
-export function cardSnapshot(id: string, card: { faction: Faction; type: Type; name: string; version?: SemanticVersion }): CardLikeSnapshot {
+export function cardSnapshot(
+    id: string,
+    card: { faction: Faction; type: Type; name: string; version?: SemanticVersion }
+): CardLikeSnapshot {
     return { id, faction: card.faction, type: card.type, name: card.name, version: card.version };
 }
 
@@ -102,7 +110,9 @@ export async function logActivity(
         const value = mapping?.resolveValue ? mapping.resolveValue(principal) : context[key];
 
         if (value === undefined) {
-            logger.warn(`[ActivityLog] "${action}" message references "<${name}>" with no matching context["${key}"] value`);
+            logger.warn(
+                `[ActivityLog] "${action}" message references "<${name}>" with no matching context["${key}"] value`
+            );
             return match;
         }
 

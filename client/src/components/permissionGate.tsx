@@ -13,9 +13,9 @@ export default function PermissionGate({ children, requires }: PermissionGatePro
         return children;
     }
     return null;
-};
+}
 
 type PermissionGateProps = {
     children?: SingleOrArray<ReactNode>;
     requires?: SingleOrArray<ValidationStep<User>>;
-}
+};

@@ -61,21 +61,21 @@ export async function resolveUsernameToId(username: string): Promise<string | nu
     const normalised = username.toLowerCase();
 
     // 1. Guild-specific nickname
-    let match = members.find(m => m.nickname?.toLowerCase() === normalised);
+    let match = members.find((m) => m.nickname?.toLowerCase() === normalised);
     if (match) {
         log.verbose(`"${username}" matched on guild nickname`);
         return match.user.id;
     }
 
     // 2. Global display name set on their profile
-    match = members.find(m => m.user.displayName?.toLowerCase() === normalised);
+    match = members.find((m) => m.user.displayName?.toLowerCase() === normalised);
     if (match) {
         log.verbose(`"${username}" matched on display name`);
         return match.user.id;
     }
 
     // 3. Unique username handle (e.g. "john_doe")
-    match = members.find(m => m.user.username.toLowerCase() === normalised);
+    match = members.find((m) => m.user.username.toLowerCase() === normalised);
     if (match) {
         log.verbose(`"${username}" matched on username`);
         return match.user.id;
@@ -85,8 +85,8 @@ export async function resolveUsernameToId(username: string): Promise<string | nu
 }
 
 export interface ForumThread {
-    url: string,
-    createdAt: Date
+    url: string;
+    createdAt: Date;
 }
 
 /**
@@ -96,7 +96,7 @@ export interface ForumThread {
  */
 export function getDisplayNamesFor(discordId: string): string[] {
     if (!membersCache) return [];
-    const member = membersCache.find(m => m.user.id === discordId);
+    const member = membersCache.find((m) => m.user.id === discordId);
     if (!member) return [];
     const names: string[] = [];
     if (member.nickname) names.push(member.nickname);
@@ -116,7 +116,7 @@ export async function fetchForumThreads(forumName: string): Promise<Map<string, 
     const guildId = guild.id;
 
     const channels = await guild.channels.fetch();
-    const channel = channels.find(c => c?.name?.endsWith(forumName));
+    const channel = channels.find((c) => c?.name?.endsWith(forumName));
     if (!channel) {
         throw new Error(`Forum channel "${forumName}" not found in guild "${guild.name}"`);
     }

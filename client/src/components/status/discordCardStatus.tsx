@@ -11,7 +11,14 @@ import { useCardSync } from "../../hooks/useSync";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 
-export default function DiscordCardStatus({ className, style, project, number, version, isIconOnly }: DiscordCardStatusProps) {
+export default function DiscordCardStatus({
+    className,
+    style,
+    project,
+    number,
+    version,
+    isIconOnly
+}: DiscordCardStatusProps) {
     const { data: card, isLoading } = useGetCardQuery({ project, number, version: version ?? "latest" });
 
     const [syncCardDiscord, { isLoading: isSyncing }] = useSyncCardDiscordMutation();
@@ -37,9 +44,21 @@ export default function DiscordCardStatus({ className, style, project, number, v
             };
         }
 
-        const syncFn = (forced?: boolean) => syncCardDiscord({ project: card.project, number: card.number, version: card.version, forced });
+        const syncFn = (forced?: boolean) =>
+            syncCardDiscord({ project: card.project, number: card.number, version: card.version, forced });
         const onPress = hasSyncPermission ? () => syncFn() : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: () => syncFn(true) }] : undefined;
+        const longPressOptions = hasSyncPermission
+            ? [
+                  {
+                      label: (
+                          <span>
+                              <FontAwesomeIcon icon={faRotate} /> Force Sync
+                          </span>
+                      ),
+                      fn: () => syncFn(true)
+                  }
+              ]
+            : undefined;
 
         if (status === "error") {
             return {
@@ -50,7 +69,10 @@ export default function DiscordCardStatus({ className, style, project, number, v
                 description: error ?? "Failed to Sync"
             };
         }
-        if (!card._metadata?.discord?.messageUrl || (card._metadata?.discord?.lastSynced && card._metadata.discord.lastSynced < card.updated)) {
+        if (
+            !card._metadata?.discord?.messageUrl ||
+            (card._metadata?.discord?.lastSynced && card._metadata.discord.lastSynced < card.updated)
+        ) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -71,11 +93,11 @@ export default function DiscordCardStatus({ className, style, project, number, v
     }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardDiscord]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-};
+}
 
 type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
     version?: SemanticVersion;
     isIconOnly?: boolean;
-}
+};

@@ -28,7 +28,13 @@ export default function Home() {
                     <div className="text-lg font-crimson italic text-secondary">— The archive of card design</div>
                 </div>
                 {isEligible && (
-                    <Button color="primary" variant="flat" startContent={<FontAwesomeIcon icon={faCircleQuestion} />} onPress={open} className="font-cinzel shrink-0 font-semibold">
+                    <Button
+                        color="primary"
+                        variant="flat"
+                        startContent={<FontAwesomeIcon icon={faCircleQuestion} />}
+                        onPress={open}
+                        className="font-cinzel shrink-0 font-semibold"
+                    >
                         How do I playtest?
                     </Button>
                 )}
@@ -38,9 +44,7 @@ export default function Home() {
             <StatCards />
             <PermissionGate requires={Permission.READ_PROJECTS}>
                 <div className="space-y-2">
-                    <SectionTitle>
-                        Active Projects
-                    </SectionTitle>
+                    <SectionTitle>Active Projects</SectionTitle>
                     <ProjectsSummary />
                 </div>
             </PermissionGate>
@@ -48,7 +52,11 @@ export default function Home() {
                 <PermissionGate requires={Permission.READ_CARDS}>
                     <RecentCardChanges />
                 </PermissionGate>
-                <PermissionGate requires={(user) => hasPermission(user, Permission.READ_REVIEWS) || hasPermission(user, Permission.READ_SUGGESTIONS)}>
+                <PermissionGate
+                    requires={(user) =>
+                        hasPermission(user, Permission.READ_REVIEWS) || hasPermission(user, Permission.READ_SUGGESTIONS)
+                    }
+                >
                     <RecentSubmissions />
                 </PermissionGate>
                 <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
@@ -57,4 +65,4 @@ export default function Home() {
             </RecentSummary>
         </div>
     );
-};
+}

@@ -140,33 +140,89 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.EDIT_PROJECTS]: { label: "Edit", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.DELETE_PROJECTS]: { label: "Delete", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.ARCHIVE_PROJECTS]: { label: "Archive", group: "Projects", dependencies: Permission.READ_PROJECTS },
-    [Permission.INITIALISE_PROJECTS]: { label: "Initialise", group: "Projects", dependencies: Permission.READ_PROJECTS },
+    [Permission.INITIALISE_PROJECTS]: {
+        label: "Initialise",
+        group: "Projects",
+        dependencies: Permission.READ_PROJECTS
+    },
     [Permission.READ_SLOTS]: { label: "Read Slots", group: "Projects", dependencies: Permission.READ_PROJECTS },
     [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
-    [Permission.READ_RELEASES]: { label: "Read Releases", group: "Projects", dependencies: [Permission.READ_PROJECTS, Permission.READ_SLOTS] },
-    [Permission.CREATE_RELEASES]: { label: "Create Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
+    [Permission.READ_RELEASES]: {
+        label: "Read Releases",
+        group: "Projects",
+        dependencies: [Permission.READ_PROJECTS, Permission.READ_SLOTS]
+    },
+    [Permission.CREATE_RELEASES]: {
+        label: "Create Releases",
+        group: "Projects",
+        dependencies: Permission.READ_RELEASES
+    },
     [Permission.EDIT_RELEASES]: { label: "Edit Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
-    [Permission.DELETE_RELEASES]: { label: "Delete Releases", group: "Projects", dependencies: Permission.READ_RELEASES },
-    [Permission.READ_PLAYTESTING_UPDATES]: { label: "Read Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
-    [Permission.CREATE_PLAYTESTING_UPDATES]: { label: "Create Updates", group: "Playtesting", dependencies: Permission.READ_PROJECTS },
+    [Permission.DELETE_RELEASES]: {
+        label: "Delete Releases",
+        group: "Projects",
+        dependencies: Permission.READ_RELEASES
+    },
+    [Permission.READ_PLAYTESTING_UPDATES]: {
+        label: "Read Updates",
+        group: "Playtesting",
+        dependencies: Permission.READ_PROJECTS
+    },
+    [Permission.CREATE_PLAYTESTING_UPDATES]: {
+        label: "Create Updates",
+        group: "Playtesting",
+        dependencies: Permission.READ_PROJECTS
+    },
     [Permission.READ_CARDS]: { label: "Read All", group: "Cards", dependencies: Permission.READ_PROJECTS },
     [Permission.READ_LATEST_CARDS]: { label: "Read Latest", group: "Cards", dependencies: Permission.READ_PROJECTS },
-    [Permission.CREATE_CARDS]: { label: "Create", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
-    [Permission.EDIT_CARDS]: { label: "Edit", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
-    [Permission.DELETE_CARDS]: { label: "Delete", group: "Cards", dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS] },
+    [Permission.CREATE_CARDS]: {
+        label: "Create",
+        group: "Cards",
+        dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS]
+    },
+    [Permission.EDIT_CARDS]: {
+        label: "Edit",
+        group: "Cards",
+        dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS]
+    },
+    [Permission.DELETE_CARDS]: {
+        label: "Delete",
+        group: "Cards",
+        dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS]
+    },
     [Permission.RENDER_CARDS]: { label: "Render", group: "Cards" },
     [Permission.USE_CARD_EDITOR]: { label: "Use Card Editor", group: "Cards" },
     [Permission.READ_SUGGESTIONS]: { label: "Read", group: "Suggestions" },
-    [Permission.MAKE_SUGGESTIONS]: { label: "Make Own", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
-    [Permission.EDIT_SUGGESTIONS]: { label: "Edit Others", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
-    [Permission.DELETE_SUGGESTIONS]: { label: "Delete Others", group: "Suggestions", dependencies: Permission.READ_SUGGESTIONS },
+    [Permission.MAKE_SUGGESTIONS]: {
+        label: "Make Own",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
+    [Permission.EDIT_SUGGESTIONS]: {
+        label: "Edit Others",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
+    [Permission.DELETE_SUGGESTIONS]: {
+        label: "Delete Others",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
     [Permission.IMPORT_SUGGESTIONS]: { label: "Import", group: "Suggestions" },
     [Permission.EXPORT_SUGGESTIONS]: { label: "Export", group: "Suggestions" },
     [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
-    [Permission.MAKE_REVIEWS]: { label: "Make Own", group: "Reviews", dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS] },
-    [Permission.EDIT_REVIEWS]: { label: "Edit Others", group: "Reviews", dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS] },
+    [Permission.MAKE_REVIEWS]: {
+        label: "Make Own",
+        group: "Reviews",
+        dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS]
+    },
+    [Permission.EDIT_REVIEWS]: {
+        label: "Edit Others",
+        group: "Reviews",
+        dependencies: [Permission.READ_REVIEWS, Permission.CREATE_DECKS, Permission.EDIT_DECKS]
+    },
     [Permission.DELETE_REVIEWS]: { label: "Delete Others", group: "Reviews", dependencies: Permission.READ_REVIEWS },
     [Permission.READ_DECKS]: { label: "Read", group: "Decks" },
     [Permission.CREATE_DECKS]: { label: "Create", group: "Decks", dependencies: Permission.READ_DECKS },
@@ -179,10 +235,26 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.READ_INTEGRATIONS]: { label: "Read", group: "Integrations" },
     [Permission.READ_LOGS]: { label: "Read", group: "Logs" },
-    [Permission.CREATE_INTEGRATIONS]: { label: "Create", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
-    [Permission.EDIT_INTEGRATIONS]: { label: "Edit", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
-    [Permission.DELETE_INTEGRATIONS]: { label: "Delete", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
-    [Permission.REFRESH_INTEGRATION_TOKENS]: { label: "Refresh Tokens", group: "Integrations", dependencies: Permission.READ_INTEGRATIONS },
+    [Permission.CREATE_INTEGRATIONS]: {
+        label: "Create",
+        group: "Integrations",
+        dependencies: Permission.READ_INTEGRATIONS
+    },
+    [Permission.EDIT_INTEGRATIONS]: {
+        label: "Edit",
+        group: "Integrations",
+        dependencies: Permission.READ_INTEGRATIONS
+    },
+    [Permission.DELETE_INTEGRATIONS]: {
+        label: "Delete",
+        group: "Integrations",
+        dependencies: Permission.READ_INTEGRATIONS
+    },
+    [Permission.REFRESH_INTEGRATION_TOKENS]: {
+        label: "Refresh Tokens",
+        group: "Integrations",
+        dependencies: Permission.READ_INTEGRATIONS
+    },
     [Permission.EDIT_ROLES]: { label: "Edit", group: "Roles", dependencies: Permission.READ_ROLES },
     [Permission.IMPERSONATE_ROLE]: { label: "Impersonate", group: "Roles", dependencies: Permission.READ_ROLES },
     [Permission.IMPERSONATE_USER]: { label: "Impersonate", group: "Users", dependencies: Permission.READ_USERS },
@@ -200,7 +272,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
 export const permissionGroups = (Object.entries(permissionMeta) as [Permission, PermissionMeta][]).reduce<
     { label: string; permissions: { value: Permission; label: string }[] }[]
 >((groups, [value, { label, group }]) => {
-    let existing = groups.find(g => g.label === group);
+    let existing = groups.find((g) => g.label === group);
     if (!existing) {
         existing = { label: group, permissions: [] };
         groups.push(existing);

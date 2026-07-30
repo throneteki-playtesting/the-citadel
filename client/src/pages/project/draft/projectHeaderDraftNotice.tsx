@@ -21,7 +21,9 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
             return false;
         }
 
-        const slotCounts = slotsData.items.map((slot) => cardsData.items.filter((item) => item.number === slot.number).length);
+        const slotCounts = slotsData.items.map(
+            (slot) => cardsData.items.filter((item) => item.number === slot.number).length
+        );
 
         if (slotCounts.some((count) => count === 0)) {
             return "You cannot initialise a project without filling all available card slots. Either add cards to all missing slots, or remove empty slots.";
@@ -38,7 +40,11 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
         try {
             await initialiseProject(project).unwrap();
             setIsModalOpen(false);
-            addToast({ title: "Successfully initialised", color: "success", description: `${project.name} has been initialised` });
+            addToast({
+                title: "Successfully initialised",
+                color: "success",
+                description: `${project.name} has been initialised`
+            });
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Initialise" });
         }
@@ -49,30 +55,56 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
     }
     return (
         <div className={classNames("bg-content1 p-4 flex flex-col gap-2", className)} style={style}>
-            <div className="font-cinzel text-lg md:text-xl"><FontAwesomeIcon icon={faCrow} /> The Project Awaits Its First Raven...</div>
+            <div className="font-cinzel text-lg md:text-xl">
+                <FontAwesomeIcon icon={faCrow} /> The Project Awaits Its First Raven...
+            </div>
             <div className="font-sans text-sm md:text-base text-foreground/70">
-        This project is in an experimental phase where it can be freely edited or reset as the initial concept is finalised. Once moved to Active status, the card designs are locked into their first official versions and any future changes will be formally tracked.
+                This project is in an experimental phase where it can be freely edited or reset as the initial concept
+                is finalised. Once moved to Active status, the card designs are locked into their first official
+                versions and any future changes will be formally tracked.
             </div>
             <PermissionGate requires={Permission.INITIALISE_PROJECTS}>
-                <Button variant="flat" className="mt-2 w-full md:text-lg font-cinzel" onPress={() => setIsModalOpen(true)}>
+                <Button
+                    variant="flat"
+                    className="mt-2 w-full md:text-lg font-cinzel"
+                    onPress={() => setIsModalOpen(true)}
+                >
                     Initialise Project
                 </Button>
                 <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg" placement="center">
                     <ModalContent>
                         {(onClose) => (
                             <>
-                                <ModalHeader className="font-cinzel text-medium lg:text-large">Send the Raven?</ModalHeader>
+                                <ModalHeader className="font-cinzel text-medium lg:text-large">
+                                    Send the Raven?
+                                </ModalHeader>
                                 <ModalBody className="font-sans">
-                                    <span className="text-small lg:text-medium">The project will become Active — card counts will be sealed and all chosen cards locked into their first official versions.</span>
-                                    <span className="text-small lg:text-medium">This marks the official start of playtesting, and is generally a good time to announce it to the community.</span>
-                                    {!errorMessage
-                                        ? <span>Do you wish to proceed?</span>
-                                        : <div className="text-danger animate-pulse text-small lg:text-medium"><FontAwesomeIcon icon={faExclamationCircle} /> {errorMessage}</div>
-                                    }
+                                    <span className="text-small lg:text-medium">
+                                        The project will become Active — card counts will be sealed and all chosen cards
+                                        locked into their first official versions.
+                                    </span>
+                                    <span className="text-small lg:text-medium">
+                                        This marks the official start of playtesting, and is generally a good time to
+                                        announce it to the community.
+                                    </span>
+                                    {!errorMessage ? (
+                                        <span>Do you wish to proceed?</span>
+                                    ) : (
+                                        <div className="text-danger animate-pulse text-small lg:text-medium">
+                                            <FontAwesomeIcon icon={faExclamationCircle} /> {errorMessage}
+                                        </div>
+                                    )}
                                 </ModalBody>
                                 <ModalFooter>
                                     <Button onPress={onClose}>Turn Back</Button>
-                                    <Button color="primary" isDisabled={!!errorMessage} onPress={onSubmit} isLoading={isInitialising}>Proceed</Button>
+                                    <Button
+                                        color="primary"
+                                        isDisabled={!!errorMessage}
+                                        onPress={onSubmit}
+                                        isLoading={isInitialising}
+                                    >
+                                        Proceed
+                                    </Button>
                                 </ModalFooter>
                             </>
                         )}
@@ -81,8 +113,8 @@ export default function ProjectHeaderDraftNotice({ className, style, project }: 
             </PermissionGate>
         </div>
     );
-};
+}
 
 type ProjectHeaderDraftNoticeProps = Omit<BaseElementProps, "children"> & {
     project: IProject;
-}
+};

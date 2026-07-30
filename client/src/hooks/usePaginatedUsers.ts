@@ -26,7 +26,9 @@ export default function usePaginatedUsers(baseFilter?: Filter<User> | Filter<Use
     }, [debouncedSearch]);
 
     const filter = useMemo((): Filter<User>[] => {
-        const baseClauses = (Array.isArray(baseFilter) ? baseFilter : baseFilter ? [baseFilter] : [{}]) as Filter<User>[];
+        const baseClauses = (
+            Array.isArray(baseFilter) ? baseFilter : baseFilter ? [baseFilter] : [{}]
+        ) as Filter<User>[];
         if (!debouncedSearch) {
             return baseClauses;
         }
@@ -43,11 +45,7 @@ export default function usePaginatedUsers(baseFilter?: Filter<User> | Filter<Use
     useEffect(() => {
         if (data?.items) {
             pagesRef.current.set(page, data.items);
-            setItems(
-                [...pagesRef.current.entries()]
-                    .sort(([a], [b]) => a - b)
-                    .flatMap(([, pageItems]) => pageItems)
-            );
+            setItems([...pagesRef.current.entries()].sort(([a], [b]) => a - b).flatMap(([, pageItems]) => pageItems));
         }
     }, [data, page]);
 

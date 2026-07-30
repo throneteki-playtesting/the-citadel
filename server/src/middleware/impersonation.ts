@@ -12,7 +12,9 @@ export interface ImpersonationTokenPayload {
 }
 
 export function signImpersonationToken(payload: ImpersonationTokenPayload): string {
-    return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: Number.parseInt(process.env.IMPERSONATION_TOKEN_TTL) });
+    return jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: Number.parseInt(process.env.IMPERSONATION_TOKEN_TTL)
+    });
 }
 
 export function verifyImpersonationToken(token: string): ImpersonationTokenPayload | undefined {

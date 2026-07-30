@@ -49,7 +49,9 @@ export default function LoginPage() {
 
                     <div className="flex items-center gap-3 w-full mb-8">
                         <div className="flex-1 h-px bg-gradient-to-r from-transparent to-primary/30" />
-                        <span className="text-primary/40 text-xs" aria-hidden="true">✦</span>
+                        <span className="text-primary/40 text-xs" aria-hidden="true">
+                            ✦
+                        </span>
                         <div className="flex-1 h-px bg-gradient-to-l from-transparent to-primary/30" />
                     </div>
 
@@ -62,9 +64,11 @@ export default function LoginPage() {
                         color="primary"
                         variant="bordered"
                         startContent={
-                            isProcessing
-                                ? <Spinner size="sm" color="primary" />
-                                : <FontAwesomeIcon icon={faDiscord} size="lg" />
+                            isProcessing ? (
+                                <Spinner size="sm" color="primary" />
+                            ) : (
+                                <FontAwesomeIcon icon={faDiscord} size="lg" />
+                            )
                         }
                         isDisabled={isProcessing}
                         onPress={() => login(returnUrl)}

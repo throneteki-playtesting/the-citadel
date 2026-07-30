@@ -17,4 +17,4 @@ export default function useTimezone() {
     };
 
     return { timezone, format };
-};
+}

@@ -7,17 +7,17 @@ const BATCH_SIZE = 500;
 
 export const migration: Migration = {
     name: "007_reviewDeckShape",
-    description: "Converts IPlaytestReview.decks from a raw link-string array into { link, shared } objects, and fixes legacy /deck/edit/ links - operates on dest only, since dest-only reviews (submitted live) are never touched by 003_reviews",
+    description:
+        "Converts IPlaytestReview.decks from a raw link-string array into { link, shared } objects, and fixes legacy /deck/edit/ links - operates on dest only, since dest-only reviews (submitted live) are never touched by 003_reviews",
 
     async run({ destDb, dryRun }) {
         const reviewsCol = destDb.collection("reviews");
 
-        const reviews = await reviewsCol.find({
-            $or: [
-                { decks: { $elemMatch: { $type: "string" } } },
-                { "decks.link": /\/deck\/edit\// }
-            ]
-        }).toArray();
+        const reviews = await reviewsCol
+            .find({
+                $or: [{ decks: { $elemMatch: { $type: "string" } } }, { "decks.link": /\/deck\/edit\// }]
+            })
+            .toArray();
         log.info(`Found ${reviews.length} review(s) needing deck shape/link fixes`);
 
         if (reviews.length === 0) {

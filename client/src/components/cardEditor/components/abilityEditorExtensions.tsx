@@ -24,10 +24,10 @@ export const TriggeredAbility = Mark.create({
     addCommands: () => ({
         toggleTriggeredAbility:
             () =>
-                ({ commands }) => {
-                    commands.unsetMark("trait");
-                    return commands.toggleMark("triggeredAbility");
-                }
+            ({ commands }) => {
+                commands.unsetMark("trait");
+                return commands.toggleMark("triggeredAbility");
+            }
     }),
 
     addKeyboardShortcuts() {
@@ -58,7 +58,8 @@ export const TriggeredAbility = Mark.create({
     }
 });
 
-const ABILITY_TEXT_REGEX = /^((?:(?:Forced )?(?:Reaction|Interrupt)|(?:When Revealed)|(?:(?:Plot |Draw |Marshaling |Challenges |Dominance |Standing |Taxation )?Action)):)/;
+const ABILITY_TEXT_REGEX =
+    /^((?:(?:Forced )?(?:Reaction|Interrupt)|(?:When Revealed)|(?:(?:Plot |Draw |Marshaling |Challenges |Dominance |Standing |Taxation )?Action)):)/;
 const TRAIT_HIGHLIGHT_REGEX = /\*\*\*(.+?)\*\*\*/;
 const ICON_REGEX = /(?::([a-zA-Z0-9_]+):|\[([a-zA-Z0-9_]+)\])/;
 
@@ -72,16 +73,13 @@ export const AutoTextConversions = Extension.create({
         new Plugin({
             key: autoConvertKey,
             appendTransaction: (transactions, _oldState, newState) => {
-
                 const isOurs = transactions.some((t) => t.getMeta(autoConvertKey));
                 if (isOurs) return null;
 
                 const docChangedTrs = transactions.filter((t) => t.docChanged);
                 if (docChangedTrs.length === 0) return null;
 
-                const allAreHistory = docChangedTrs.every(
-                    (t) => t.getMeta("addToHistory") === false
-                );
+                const allAreHistory = docChangedTrs.every((t) => t.getMeta("addToHistory") === false);
                 if (allAreHistory) return null;
 
                 const removedMarkName: string | null = transactions.reduce<string | null>(
@@ -96,7 +94,6 @@ export const AutoTextConversions = Extension.create({
                 const thronesIconType = newState.schema.nodes.thronesIcon;
 
                 newState.doc.descendants((node, pos) => {
-
                     if (!node.isText) return;
 
                     const text = node.text || "";
@@ -140,11 +137,7 @@ export const AutoTextConversions = Extension.create({
 
                         if (node.marks.some((m) => m.type === triggeredAbility)) return;
                         if (removedMarkName === "triggeredAbility") return;
-                        tr.replaceRangeWith(
-                            start,
-                            end,
-                            newState.schema.text(innerText, [triggeredAbility.create()])
-                        );
+                        tr.replaceRangeWith(start, end, newState.schema.text(innerText, [triggeredAbility.create()]));
                         tr.removeStoredMark(triggeredAbility);
                         modified = true;
                     });
@@ -177,18 +170,14 @@ export const Trait = Mark.create({
     name: "trait",
     addOptions: () => ({ HTMLAttributes: { class: "italics" } }),
     parseHTML: () => [{ tag: "i" }],
-    renderHTML: ({ HTMLAttributes }) => [
-        "i",
-        mergeAttributes(HTMLAttributes, { style: "font-weight: 700" }),
-        0
-    ],
+    renderHTML: ({ HTMLAttributes }) => ["i", mergeAttributes(HTMLAttributes, { style: "font-weight: 700" }), 0],
     addCommands: () => ({
         toggleTrait:
             () =>
-                ({ commands }) => {
-                    commands.unsetMark("triggeredAbility");
-                    return commands.toggleMark("trait");
-                }
+            ({ commands }) => {
+                commands.unsetMark("triggeredAbility");
+                return commands.toggleMark("trait");
+            }
     }),
 
     addKeyboardShortcuts() {
@@ -235,26 +224,22 @@ export const AbilityIcon = Node.create({
             })
         }
     ],
-    renderHTML: ({ node }) => [
-        "span",
-        { "data-thrones-icon": node.attrs.name },
-        `[${node.attrs.name}]`
-    ],
+    renderHTML: ({ node }) => ["span", { "data-thrones-icon": node.attrs.name }, `[${node.attrs.name}]`],
     addNodeView:
         () =>
-            ({ node }) => {
-                const span = document.createElement("span");
-                span.className = "font-thronesdb";
-                span.textContent = abilityIcons[node.attrs.name] ?? `[${node.attrs.name}]`;
-                span.setAttribute("data-thrones-icon", node.attrs.name);
+        ({ node }) => {
+            const span = document.createElement("span");
+            span.className = "font-thronesdb";
+            span.textContent = abilityIcons[node.attrs.name] ?? `[${node.attrs.name}]`;
+            span.setAttribute("data-thrones-icon", node.attrs.name);
 
-                return { dom: span };
-            },
+            return { dom: span };
+        },
     addCommands: () => ({
         insertThronesIcon:
             (name: string) =>
-                ({ commands }) =>
-                    commands.insertContent(`[${name}]`)
+            ({ commands }) =>
+                commands.insertContent(`[${name}]`)
     })
 });
 

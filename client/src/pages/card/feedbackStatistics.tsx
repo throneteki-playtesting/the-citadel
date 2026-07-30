@@ -1,9 +1,38 @@
-import { Accordion, AccordionItem, Alert, Avatar, Button, Card, Chip, Link, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, ScrollShadow, Select, SelectItem, SharedSelection, Skeleton } from "@heroui/react";
+import {
+    Accordion,
+    AccordionItem,
+    Alert,
+    Avatar,
+    Button,
+    Card,
+    Chip,
+    Link,
+    Modal,
+    ModalBody,
+    ModalContent,
+    ModalFooter,
+    ModalHeader,
+    ScrollShadow,
+    Select,
+    SelectItem,
+    SharedSelection,
+    Skeleton
+} from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
 import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCircleCheck, faExternalLink, faFlask, faLightbulb, faMeh, faPencil, faScaleBalanced, faScroll, faTrophy } from "@fortawesome/free-solid-svg-icons";
+import {
+    faCircleCheck,
+    faExternalLink,
+    faFlask,
+    faLightbulb,
+    faMeh,
+    faPencil,
+    faScaleBalanced,
+    faScroll,
+    faTrophy
+} from "@fortawesome/free-solid-svg-icons";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeckLink, DecklistLink } from "common/types";
 import { IPlaytestReview, statementAnswers, StatementQuestions, Statements } from "common/models/reviews";
@@ -34,11 +63,23 @@ const iconMap: Record<keyof Statements, IconDefinition> = {
 };
 
 export default function FeedbackStatistics({ className, style, project, number }: ReviewsSectionProps) {
-    const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({ filter: { project, number }, orderBy: { version: "desc", updated: "desc" } });
+    const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({
+        filter: { project, number },
+        orderBy: { version: "desc", updated: "desc" }
+    });
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({ filter: { project, number } });
     const [dataSets, setDataSets] = useState<SharedSelection>("all");
-    const dataSetOptions = useMemo(() => cardsData?.items.map((card) => ({ key: card.version, value: `Version ${card.version}` })) ?? [], [cardsData?.items]);
-    const dataSetReviews = useMemo(() => (dataSets === "all" ? reviewsData?.items : reviewsData?.items.filter((review) => dataSets.has(review.version))) ?? [], [dataSets, reviewsData?.items]);
+    const dataSetOptions = useMemo(
+        () => cardsData?.items.map((card) => ({ key: card.version, value: `Version ${card.version}` })) ?? [],
+        [cardsData?.items]
+    );
+    const dataSetReviews = useMemo(
+        () =>
+            (dataSets === "all"
+                ? reviewsData?.items
+                : reviewsData?.items.filter((review) => dataSets.has(review.version))) ?? [],
+        [dataSets, reviewsData?.items]
+    );
 
     const isLoading = isLoadingReviews || isLoadingCards;
 
@@ -48,28 +89,33 @@ export default function FeedbackStatistics({ className, style, project, number }
         return (
             <div className={classNames("flex flex-col md:flex-row gap-2", className)} style={style}>
                 <div className="flex flex-col items-center gap-2">
-                    <Skeleton className="w-full h-10 rounded-xl"/>
-                    <Skeleton className="w-full h-72 rounded-xl"/>
+                    <Skeleton className="w-full h-10 rounded-xl" />
+                    <Skeleton className="w-full h-72 rounded-xl" />
                 </div>
                 <div className="grow space-y-2">
-                    <Skeleton className="w-full h-32 rounded-xl"/>
-                    <Skeleton className="w-full h-32 rounded-xl"/>
+                    <Skeleton className="w-full h-32 rounded-xl" />
+                    <Skeleton className="w-full h-32 rounded-xl" />
                 </div>
             </div>
         );
     }
     return (
         <div className="space-y-2">
-            <SectionTitle>
-                Feedback & Statistics
-            </SectionTitle>
+            <SectionTitle>Feedback & Statistics</SectionTitle>
             {reviewsData && reviewsData.total === 0 ? (
                 <div className="p-4 bg-content1 border border-content3 flex-shrink-0">
-                    <div className="text-2xl font-cinzel"><FontAwesomeIcon icon={faScroll} /> No maester has rendered a verdict...</div>
+                    <div className="text-2xl font-cinzel">
+                        <FontAwesomeIcon icon={faScroll} /> No maester has rendered a verdict...
+                    </div>
                     <PermissionGate requires={Permission.MAKE_REVIEWS}>
-                        <div className="text-sm font-sans">The Citadel awaits the first review for this card — submit your verdict to begin the chain.</div>
+                        <div className="text-sm font-sans">
+                            The Citadel awaits the first review for this card — submit your verdict to begin the chain.
+                        </div>
                         <div className="pt-2 flex justify-center w-full">
-                            <Button color="primary" onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}>
+                            <Button
+                                color="primary"
+                                onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}
+                            >
                                 Render your verdict!
                             </Button>
                         </div>
@@ -93,58 +139,89 @@ export default function FeedbackStatistics({ className, style, project, number }
                                 classNames={{ mainWrapper: "w-auto", value: "text-base font-cinzel" }}
                                 disallowEmptySelection
                             >
-                                {dataSetOptions.map(({ key, value }) => <SelectItem key={key} className="font-cinzel">{value}</SelectItem>)}
+                                {dataSetOptions.map(({ key, value }) => (
+                                    <SelectItem key={key} className="font-cinzel">
+                                        {value}
+                                    </SelectItem>
+                                ))}
                             </Select>
                         </div>
                         <div className="flex-1 flex flex-wrap gap-2 px-6 py-2 items-center justify-between text-lg font-cinzel">
                             <div>{dataSetReviews.length} Playtesting Reviews</div>
                             <div>{dataSetReviews.reduce((total, review) => review.played + total, 0)} Games Played</div>
-                            <div>{new Set(dataSetReviews.reduce<string[]>((total, review) => [...total, review.reviewer], [])).size} Playtesters Involved</div>
+                            <div>
+                                {
+                                    new Set(
+                                        dataSetReviews.reduce<string[]>(
+                                            (total, review) => [...total, review.reviewer],
+                                            []
+                                        )
+                                    ).size
+                                }{" "}
+                                Playtesters Involved
+                            </div>
                         </div>
                     </div>
                     <div className={classNames("flex flex-col md:flex-row gap-2", className)} style={style}>
                         <ReviewGraph dataSet={dataSetReviews} />
-                        <ReviewSummaries project={project} number={number} dataSet={dataSetReviews} className="flex-1" />
+                        <ReviewSummaries
+                            project={project}
+                            number={number}
+                            dataSet={dataSetReviews}
+                            className="flex-1"
+                        />
                     </div>
                 </>
             )}
         </div>
     );
-};
+}
 
 type ReviewsSectionProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
-}
+};
 
 function ReviewGraph({ className, style, dataSet }: ReviewGraphProps) {
     const radarData = useMemo(() => {
-        const all = (dataSet).reduce<{ [s in keyof Statements]: number[] }>((avg, review) => {
-            avg.boring.push(statementAnswers.indexOf(review.statements.boring.toLowerCase()));
-            avg.competitive.push(statementAnswers.indexOf(review.statements.competitive.toLowerCase()));
-            avg.creative.push(statementAnswers.indexOf(review.statements.creative.toLowerCase()));
-            avg.balanced.push(statementAnswers.indexOf(review.statements.balanced.toLowerCase()));
-            avg.releasable.push(statementAnswers.indexOf(review.statements.releasable.toLowerCase()));
-            return avg;
-        }, {
-            boring: [],
-            competitive: [],
-            creative: [],
-            balanced: [],
-            releasable: []
-        });
+        const all = dataSet.reduce<{ [s in keyof Statements]: number[] }>(
+            (avg, review) => {
+                avg.boring.push(statementAnswers.indexOf(review.statements.boring.toLowerCase()));
+                avg.competitive.push(statementAnswers.indexOf(review.statements.competitive.toLowerCase()));
+                avg.creative.push(statementAnswers.indexOf(review.statements.creative.toLowerCase()));
+                avg.balanced.push(statementAnswers.indexOf(review.statements.balanced.toLowerCase()));
+                avg.releasable.push(statementAnswers.indexOf(review.statements.releasable.toLowerCase()));
+                return avg;
+            },
+            {
+                boring: [],
+                competitive: [],
+                creative: [],
+                balanced: [],
+                releasable: []
+            }
+        );
 
-        const data: { key: keyof Statements, question: string, average: number }[] = [];
+        const data: { key: keyof Statements; question: string; average: number }[] = [];
         for (const [questionKey, answers] of Object.entries(all)) {
             const key = questionKey as keyof Statements;
-            data.push({ key, question: StatementQuestions[key], average: answers.length > 0 ? answers.reduce((a, b) => a + b) / answers.length : 0 });
+            data.push({
+                key,
+                question: StatementQuestions[key],
+                average: answers.length > 0 ? answers.reduce((a, b) => a + b) / answers.length : 0
+            });
         }
         return data;
     }, [dataSet]);
 
     const iconOffset = 10;
-    const RenderCustomAxisTick: React.FC<BaseTickContentProps & { cx?: number; cy?: number, offset: number }> = ({
-        x, y, payload, cx, cy, offset
+    const RenderCustomAxisTick: React.FC<BaseTickContentProps & { cx?: number; cy?: number; offset: number }> = ({
+        x,
+        y,
+        payload,
+        cx,
+        cy,
+        offset
     }) => {
         const icon = iconMap[payload.value as keyof Statements];
 
@@ -172,16 +249,17 @@ function ReviewGraph({ className, style, dataSet }: ReviewGraphProps) {
     return (
         <div className={classNames("size-72 mx-auto", className)} style={style}>
             <ResponsiveContainer>
-                <RadarChart data={radarData} margin={{ top: marginValue, right: marginValue, bottom: marginValue, left: marginValue }}>
+                <RadarChart
+                    data={radarData}
+                    margin={{ top: marginValue, right: marginValue, bottom: marginValue, left: marginValue }}
+                >
                     <PolarGrid />
-                    <PolarAngleAxis className="capitalize" dataKey="key" tick={(props) => <RenderCustomAxisTick offset={iconOffset} {...props} />} />
-                    <Radar
-                        name="Review Averages"
-                        dataKey="average"
-                        stroke="#8884d8"
-                        fill="#8884d8"
-                        fillOpacity={0.6}
+                    <PolarAngleAxis
+                        className="capitalize"
+                        dataKey="key"
+                        tick={(props) => <RenderCustomAxisTick offset={iconOffset} {...props} />}
                     />
+                    <Radar name="Review Averages" dataKey="average" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
                 </RadarChart>
             </ResponsiveContainer>
         </div>
@@ -189,37 +267,52 @@ function ReviewGraph({ className, style, dataSet }: ReviewGraphProps) {
 }
 
 type ReviewGraphProps = Omit<BaseElementProps, "children"> & {
-    dataSet: IPlaytestReview[]
-}
+    dataSet: IPlaytestReview[];
+};
 
 function ReviewSummaries({ className, style, project, number, dataSet }: ReviewSummariesProps) {
     const [isOutdatedModalOpen, setIsOutdatedModalOpen] = useState(false);
     const navigate = useNavigate();
     const { user } = useAuth();
 
-    const onEdit = useCallback((review: IPlaytestReview, isLatest: boolean) => {
-        if (isLatest) {
-            navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}`);
-        } else if (hasPermission(user, Permission.EDIT_REVIEWS)) {
-            navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}&version=${review.version}`);
-        } else {
-            setIsOutdatedModalOpen(true);
-        }
-    }, [navigate, number, project, user]);
+    const onEdit = useCallback(
+        (review: IPlaytestReview, isLatest: boolean) => {
+            if (isLatest) {
+                navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}`);
+            } else if (hasPermission(user, Permission.EDIT_REVIEWS)) {
+                navigate(
+                    `/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}&version=${review.version}`
+                );
+            } else {
+                setIsOutdatedModalOpen(true);
+            }
+        },
+        [navigate, number, project, user]
+    );
 
     return (
         <>
             <div className={classNames("space-y-2 min-w-0", className)} style={style}>
                 <PermissionGate requires={Permission.MAKE_REVIEWS}>
                     <div className="pt-2 flex justify-center md:justify-end">
-                        <Button className="text-lg" color="primary" onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}>
-                                Submit a review
+                        <Button
+                            className="text-lg"
+                            color="primary"
+                            onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}
+                        >
+                            Submit a review
                         </Button>
                     </div>
                 </PermissionGate>
                 <ScrollShadow className="max-h-[50rem] overflow-x-hidden">
                     <div className="flex flex-col border border-content3 divide-y divide-content3">
-                        {dataSet?.map((review) => <ReviewSummary key={`${review.reviewer}|${review.version}`} review={review} onEdit={onEdit} />)}
+                        {dataSet?.map((review) => (
+                            <ReviewSummary
+                                key={`${review.reviewer}|${review.version}`}
+                                review={review}
+                                onEdit={onEdit}
+                            />
+                        ))}
                     </div>
                 </ScrollShadow>
             </div>
@@ -227,20 +320,28 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader className="font-cinzel text-xl"><span><FontAwesomeIcon icon={faScroll}/> This scroll is sealed</span></ModalHeader>
+                            <ModalHeader className="font-cinzel text-xl">
+                                <span>
+                                    <FontAwesomeIcon icon={faScroll} /> This scroll is sealed
+                                </span>
+                            </ModalHeader>
                             <ModalBody>
                                 <p className="font-sans text-base">
-                                    Your review was submitted for an older version of this card. To provide feedback on the current version, you must submit a new review.
+                                    Your review was submitted for an older version of this card. To provide feedback on
+                                    the current version, you must submit a new review.
                                 </p>
                             </ModalBody>
                             <ModalFooter>
                                 <Button variant="light" onPress={onClose}>
                                     Return
                                 </Button>
-                                <Button color="primary" onPress={() => {
-                                    onClose();
-                                    navigate(`/review/submit?project=${project}&number=${number}`);
-                                }}>
+                                <Button
+                                    color="primary"
+                                    onPress={() => {
+                                        onClose();
+                                        navigate(`/review/submit?project=${project}&number=${number}`);
+                                    }}
+                                >
                                     Submit a new review
                                 </Button>
                             </ModalFooter>
@@ -250,17 +351,21 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
             </Modal>
         </>
     );
-};
+}
 
 type ReviewSummariesProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
-    dataSet?: IPlaytestReview[]
-}
+    dataSet?: IPlaytestReview[];
+};
 
 function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps) {
     const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
-    const { data: card, isLoading: isCardLoading } = useGetCardQuery({ project: review.project, number: review.number, version: review.version });
+    const { data: card, isLoading: isCardLoading } = useGetCardQuery({
+        project: review.project,
+        number: review.number,
+        version: review.version
+    });
 
     const additionalRef = useRef<HTMLDivElement>(null);
     const [isOverflowing, setIsOverflowing] = useState(false);
@@ -316,35 +421,51 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
     }
 
     return (
-        <HighlightTarget targetId={highlightTarget.review(review)} className={classNames("bg-content1 p-4 flex flex-col ", className)} style={style}>
+        <HighlightTarget
+            targetId={highlightTarget.review(review)}
+            className={classNames("bg-content1 p-4 flex flex-col ", className)}
+            style={style}
+        >
             <div className="flex gap-2 items-center">
-                <div className="flex-1 text-lg font-cinzel text-foreground truncate">{card.name} <span className="text-foreground/50">{card.version}</span></div>
+                <div className="flex-1 text-lg font-cinzel text-foreground truncate">
+                    {card.name} <span className="text-foreground/50">{card.version}</span>
+                </div>
                 <div className="flex flex-col-reverse md:flex-row">
-                    <Timestamp className="self-end px-2 md:mb-auto text-xs italic text-foreground/40" date={new Date(review.updated)} />
+                    <Timestamp
+                        className="self-end px-2 md:mb-auto text-xs italic text-foreground/40"
+                        date={new Date(review.updated)}
+                    />
                     <div className="flex flex-wrap gap-1">
-                        <PermissionGate requires={(user) => hasPermission(user, Permission.EDIT_REVIEWS) || hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer}>
-                            <TouchTooltip content={
-                                <div className="max-w-64">
-                                    <div className="text-sm">Amend your verdict</div>
-                                    <div className="text-xs">Reviews may only be amended for the current version of the card.</div>
-                                </div>
-                            }>
-                                <Button
-                                    isIconOnly
-                                    onPress={() => onEdit(review, card.latest)}
-                                    color="primary"
-                                >
-                                    <FontAwesomeIcon icon={faPencil}/>
+                        <PermissionGate
+                            requires={(user) =>
+                                hasPermission(user, Permission.EDIT_REVIEWS) ||
+                                (hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer)
+                            }
+                        >
+                            <TouchTooltip
+                                content={
+                                    <div className="max-w-64">
+                                        <div className="text-sm">Amend your verdict</div>
+                                        <div className="text-xs">
+                                            Reviews may only be amended for the current version of the card.
+                                        </div>
+                                    </div>
+                                }
+                            >
+                                <Button isIconOnly onPress={() => onEdit(review, card.latest)} color="primary">
+                                    <FontAwesomeIcon icon={faPencil} />
                                 </Button>
                             </TouchTooltip>
                         </PermissionGate>
                         <PermissionGate requires={Permission.READ_DISCORD_REVIEW_FORUM}>
-                            <TouchTooltip content={
-                                <div className="max-w-64">
-                                    <div className="text-sm">Join the discussion</div>
-                                    <div className="text-xs">You will be redirected to discord.</div>
-                                </div>
-                            }>
+                            <TouchTooltip
+                                content={
+                                    <div className="max-w-64">
+                                        <div className="text-sm">Join the discussion</div>
+                                        <div className="text-xs">You will be redirected to discord.</div>
+                                    </div>
+                                }
+                            >
                                 <DiscordReviewStatus
                                     project={review.project}
                                     number={review.number}
@@ -356,43 +477,63 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                         </PermissionGate>
                     </div>
                 </div>
-
             </div>
             <div className="flex gap-2">
                 <div className="flex gap-2 items-center">
-                    <Avatar src={user?.avatarUrl} name={user?.displayname ?? "?"} classNames={{ name: "text-2xl" }}className="shrink-0 size-12"/>
+                    <Avatar
+                        src={user?.avatarUrl}
+                        name={user?.displayname ?? "?"}
+                        classNames={{ name: "text-2xl" }}
+                        className="shrink-0 size-12"
+                    />
                     <div className="flex flex-col min-w-0">
                         <div className="text-lg font-crimson italic">
                             Review by {user?.displayname ?? "Unknown Playtester"}
                         </div>
-                        {review.played > 0
-                            ? (
-                                <div className="text-base font-crimson italic truncate text-foreground/40">
-                                    {review.played} {review.played !== 1 ? "games" : "game"} played
-                                </div>
-                            )
-                            : (
-                                <TouchTooltip content={
+                        {review.played > 0 ? (
+                            <div className="text-base font-crimson italic truncate text-foreground/40">
+                                {review.played} {review.played !== 1 ? "games" : "game"} played
+                            </div>
+                        ) : (
+                            <TouchTooltip
+                                content={
                                     <div className="max-w-64 text-xs">
-                                        This feedback should be treated as an early impression rather than a battle-tested verdict.
+                                        This feedback should be treated as an early impression rather than a
+                                        battle-tested verdict.
                                     </div>
-                                }>
-                                    <Chip size="sm" color="secondary" variant="flat" className="w-fit" startContent={<FontAwesomeIcon icon={faFlask} className="ml-1"/>}>
-                                        Untested Review
-                                    </Chip>
-                                </TouchTooltip>
-                            )
-                        }
+                                }
+                            >
+                                <Chip
+                                    size="sm"
+                                    color="secondary"
+                                    variant="flat"
+                                    className="w-fit"
+                                    startContent={<FontAwesomeIcon icon={faFlask} className="ml-1" />}
+                                >
+                                    Untested Review
+                                </Chip>
+                            </TouchTooltip>
+                        )}
                     </div>
                 </div>
             </div>
             <div className="flex flex-col sm:flex-row max-sm:divide-y sm:divide-x divide-content3 py-2">
                 <div className="shrink-0 flex flex-wrap sm:flex-col gap-2 text-sm px-2 pb-2">
-                    <span>Boring: <StatementAnswerIcon answer={review.statements.boring}/></span>
-                    <span>Competitive: <StatementAnswerIcon answer={review.statements.competitive}/></span>
-                    <span>Creative: <StatementAnswerIcon answer={review.statements.creative}/></span>
-                    <span>Balanced: <StatementAnswerIcon answer={review.statements.balanced}/></span>
-                    <span>Releasable: <StatementAnswerIcon answer={review.statements.releasable}/></span>
+                    <span>
+                        Boring: <StatementAnswerIcon answer={review.statements.boring} />
+                    </span>
+                    <span>
+                        Competitive: <StatementAnswerIcon answer={review.statements.competitive} />
+                    </span>
+                    <span>
+                        Creative: <StatementAnswerIcon answer={review.statements.creative} />
+                    </span>
+                    <span>
+                        Balanced: <StatementAnswerIcon answer={review.statements.balanced} />
+                    </span>
+                    <span>
+                        Releasable: <StatementAnswerIcon answer={review.statements.releasable} />
+                    </span>
                 </div>
                 <div className="px-2 py-1 min-w-0 flex-1">
                     <div className="font-crimson italic text-lg">Additional Comments</div>
@@ -409,7 +550,10 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                         )}
                     </div>
                     {isOverflowing && (
-                        <button className="text-xs text-foreground/50 hover:text-default-600 mt-1" onClick={() => setIsExpanded((prev) => !prev)}>
+                        <button
+                            className="text-xs text-foreground/50 hover:text-default-600 mt-1"
+                            onClick={() => setIsExpanded((prev) => !prev)}
+                        >
                             {isExpanded ? "Show less" : "Read more..."}
                         </button>
                     )}
@@ -417,9 +561,16 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
             </div>
             {review.decks.length > 0 && (
                 <Accordion>
-                    <AccordionItem title={<span className="font-crimson italic text-lg">Submitted Decks</span>} classNames={{ trigger: "py-1" }} textValue="Submitted Decks" keepContentMounted>
+                    <AccordionItem
+                        title={<span className="font-crimson italic text-lg">Submitted Decks</span>}
+                        classNames={{ trigger: "py-1" }}
+                        textValue="Submitted Decks"
+                        keepContentMounted
+                    >
                         <div className="overflow-hidden min-w-0">
-                            {review.decks.map((deck) => <ReviewSummaryDeck key={deck.link} url={deck.link} className="p-1" />)}
+                            {review.decks.map((deck) => (
+                                <ReviewSummaryDeck key={deck.link} url={deck.link} className="p-1" />
+                            ))}
                         </div>
                     </AccordionItem>
                 </Accordion>
@@ -431,7 +582,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
 type ReviewSummaryProps = Omit<BaseElementProps, "children"> & {
     review: IPlaytestReview;
     onEdit: (review: IPlaytestReview, isLatest: boolean) => void;
-}
+};
 
 function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {
     const [fetchDeck] = useLazyGetTDBDeckQuery();
@@ -472,12 +623,12 @@ function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {
                 <Card className="p-2 w-full">
                     <div className="flex flex-col flex-1 min-w-0">
                         <div className="w-full flex items-center gap-2 min-w-0">
-                            <Skeleton className="h-6 w-40 rounded-md"/>
-                            <Skeleton className="size-4 rounded-full ml-auto shrink-0"/>
+                            <Skeleton className="h-6 w-40 rounded-md" />
+                            <Skeleton className="size-4 rounded-full ml-auto shrink-0" />
                         </div>
                         <div className="flex items-center gap-2 mt-1">
-                            <Skeleton className="size-6 rounded-full shrink-0"/>
-                            <Skeleton className="h-5 w-48 rounded-md"/>
+                            <Skeleton className="size-6 rounded-full shrink-0" />
+                            <Skeleton className="h-5 w-48 rounded-md" />
                         </div>
                     </div>
                 </Card>
@@ -498,7 +649,10 @@ function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {
                         <FontAwesomeIcon icon={faExternalLink} className="shrink-0" />
                     </div>
                     <div className="text-xl">
-                        <span><ThronesIcon name={faction} className="text-2xl"/> {agendas.map((agenda) => agenda.name).join(", ")}</span>
+                        <span>
+                            <ThronesIcon name={faction} className="text-2xl" />{" "}
+                            {agendas.map((agenda) => agenda.name).join(", ")}
+                        </span>
                     </div>
                 </div>
             </Card>
@@ -507,5 +661,5 @@ function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {
 }
 
 type ReviewSummaryDeckProps = Omit<BaseElementProps, "children"> & {
-    url: DeckLink | DecklistLink
-}
+    url: DeckLink | DecklistLink;
+};

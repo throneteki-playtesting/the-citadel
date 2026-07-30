@@ -7,7 +7,6 @@ import { paginateGraphQLInterface } from "@octokit/plugin-paginate-graphql";
 import { log, createProgress } from "./logger";
 import { Endpoints } from "@octokit/types";
 
-
 type Issue = Endpoints["GET /repos/{owner}/{repo}/issues/{issue_number}"]["response"]["data"];
 
 type GithubClient = Octokit & { paginate: PaginateInterface } & paginateGraphQLInterface &
@@ -25,7 +24,7 @@ export async function getGithubClient(): Promise<GithubClient> {
     const app = new App({ appId, privateKey });
     const { data: installation } = await app.octokit.rest.apps.getOrgInstallation({ org: owner });
     log.info(`GitHub connected with ${installation.app_slug}`);
-    client = await app.getInstallationOctokit(installation.id) as unknown as GithubClient;
+    client = (await app.getInstallationOctokit(installation.id)) as unknown as GithubClient;
 
     return client;
 }
@@ -197,13 +196,13 @@ export async function fetchAllPullRequests(): Promise<GithubPR[]> {
 // ─── PR description parsing ───────────────────────────────────────────────────
 
 export const VALID_NOTE_TYPES = ["replaced", "updated", "reworked"] as const;
-export type ValidNoteType = typeof VALID_NOTE_TYPES[number];
+export type ValidNoteType = (typeof VALID_NOTE_TYPES)[number];
 
 // Hardcoded emoji -> note type map; consistent across all PRs regardless of legend presence
 const EMOJI_NOTE_TYPE_MAP: Record<string, ValidNoteType> = {
     ":twisted_rightwards_arrows:": "replaced",
-    ":arrows_clockwise:":          "reworked",
-    ":arrow_double_up:":           "updated"
+    ":arrows_clockwise:": "reworked",
+    ":arrow_double_up:": "updated"
 };
 
 export type ParsedCardChange = {
@@ -256,9 +255,9 @@ export function parsePRBody(body: string, prNumber: number): ParsedCardChange[] 
         const cardNumber = rawCard >= 500 ? rawCard - 500 : rawCard;
 
         // Resolve note type from hardcoded emoji map — no legend dependency
-        const emojisInHeading = [...emojiStr.matchAll(/:[a-z_]+:/g)].map(m => m[0]);
+        const emojisInHeading = [...emojiStr.matchAll(/:[a-z_]+:/g)].map((m) => m[0]);
         const resolvedTypes = emojisInHeading
-            .map(e => EMOJI_NOTE_TYPE_MAP[e])
+            .map((e) => EMOJI_NOTE_TYPE_MAP[e])
             .filter((t): t is ValidNoteType => t !== undefined);
 
         if (resolvedTypes.length === 0) {

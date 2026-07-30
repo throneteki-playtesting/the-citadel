@@ -29,7 +29,9 @@ export function useDataUpdateStatus(project: number, version: number) {
             };
         }
 
-        const onPress = hasSyncPermission ? () => syncPlaytestingUpdateGithub({ project, version, type: "data" }) : undefined;
+        const onPress = hasSyncPermission
+            ? () => syncPlaytestingUpdateGithub({ project, version, type: "data" })
+            : undefined;
 
         if (status === "error") {
             return {
@@ -71,7 +73,7 @@ export function useDataUpdateStatus(project: number, version: number) {
             };
         }
         const href = dataMeta.pullRequestUrl;
-        const icon = <FontAwesomeIcon icon={faGithub} size="2xl"/>;
+        const icon = <FontAwesomeIcon icon={faGithub} size="2xl" />;
         switch (dataMeta.status) {
             case "open": {
                 return {
@@ -93,7 +95,17 @@ export function useDataUpdateStatus(project: number, version: number) {
             }
         }
         return null;
-    }, [playtestingUpdate, status, isSyncing, hasSyncPermission, step, syncPlaytestingUpdateGithub, project, version, error]);
+    }, [
+        playtestingUpdate,
+        status,
+        isSyncing,
+        hasSyncPermission,
+        step,
+        syncPlaytestingUpdateGithub,
+        project,
+        version,
+        error
+    ]);
 
     return { data, isLoading };
 }

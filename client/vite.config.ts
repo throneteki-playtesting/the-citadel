@@ -14,20 +14,14 @@ export default defineConfig(({ command, mode }) => {
         throw new Error("VITE_SENTRY_DSN must be provided when building for production");
     }
     return {
-        plugins: [
-            tailwindcss(),
-            react(),
-            tsconfigPaths()
-        ],
+        plugins: [tailwindcss(), react(), tsconfigPaths()],
         server: {
             host: true,
             port: 5173,
             watch: {
                 usePolling: true
             },
-            proxy: Object.fromEntries(
-                proxyPaths.map((path) => [path, { target: serverHost, changeOrigin: true }])
-            ),
+            proxy: Object.fromEntries(proxyPaths.map((path) => [path, { target: serverHost, changeOrigin: true }])),
             fs: {
                 allow: [".."]
             }

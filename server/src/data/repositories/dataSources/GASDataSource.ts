@@ -6,10 +6,10 @@ abstract class GASDataSource<T> {
     constructor() {
         this.client = new GasClient();
     }
-    abstract create(creating: SingleOrArray<T>, options?: object): Promise<T[]>
-    abstract read(reading?: SingleOrArray<DeepPartial<T>>, options?: object): Promise<T[]>
-    abstract update(updating: SingleOrArray<T>, options?: object): Promise<T[]>
-    abstract destroy(deleting: SingleOrArray<DeepPartial<T>>, options?: object): Promise<number>
+    abstract create(creating: SingleOrArray<T>, options?: object): Promise<T[]>;
+    abstract read(reading?: SingleOrArray<DeepPartial<T>>, options?: object): Promise<T[]>;
+    abstract update(updating: SingleOrArray<T>, options?: object): Promise<T[]>;
+    abstract destroy(deleting: SingleOrArray<DeepPartial<T>>, options?: object): Promise<number>;
 }
 
 export default GASDataSource;

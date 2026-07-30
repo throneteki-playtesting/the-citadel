@@ -11,7 +11,15 @@ import { useReviewSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 
-export default function DiscordReviewStatus({ className, style, project, number, version, reviewer, isIconOnly }: DiscordCardStatusProps) {
+export default function DiscordReviewStatus({
+    className,
+    style,
+    project,
+    number,
+    version,
+    reviewer,
+    isIconOnly
+}: DiscordCardStatusProps) {
     const { data: review, isLoading } = useGetReviewQuery({ project, number, version, reviewer });
 
     const [syncReviewDiscord, { isLoading: isSyncing }] = useSyncReviewDiscordMutation();
@@ -39,7 +47,18 @@ export default function DiscordReviewStatus({ className, style, project, number,
 
         const syncFn = () => syncReviewDiscord({ project, number, version, reviewer });
         const onPress = hasSyncPermission ? syncFn : undefined;
-        const longPressOptions = hasSyncPermission ? [{ label: <span><FontAwesomeIcon icon={faRotate} /> Force Sync</span>, fn: syncFn }] : undefined;
+        const longPressOptions = hasSyncPermission
+            ? [
+                  {
+                      label: (
+                          <span>
+                              <FontAwesomeIcon icon={faRotate} /> Force Sync
+                          </span>
+                      ),
+                      fn: syncFn
+                  }
+              ]
+            : undefined;
 
         if (status === "error") {
             return {
@@ -68,10 +87,22 @@ export default function DiscordReviewStatus({ className, style, project, number,
             color: "default",
             description: "Join the discussion"
         };
-    }, [error, hasSyncPermission, isSyncing, number, project, review, reviewer, status, step, syncReviewDiscord, version]);
+    }, [
+        error,
+        hasSyncPermission,
+        isSyncing,
+        number,
+        project,
+        review,
+        reviewer,
+        status,
+        step,
+        syncReviewDiscord,
+        version
+    ]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
-};
+}
 
 type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
     project: number;
@@ -79,4 +110,4 @@ type DiscordCardStatusProps = Omit<BaseElementProps, "children"> & {
     version: SemanticVersion;
     reviewer: string;
     isIconOnly?: boolean;
-}
+};

@@ -28,7 +28,7 @@ function isPlaytestingCode(code: string): boolean {
     return remainder >= 500 && remainder <= 999;
 }
 
-function parsePlaytestCode(code: string): { project: number, number: number } | undefined {
+function parsePlaytestCode(code: string): { project: number; number: number } | undefined {
     if (!isPlaytestingCode(code)) {
         return undefined;
     }
@@ -67,7 +67,7 @@ async function getThronesDBToken(): Promise<string | undefined> {
         log.warn(`Failed to fetch ThronesDB OAuth2 token: ${response.statusText} — private/UUID decks will be skipped`);
         return undefined;
     }
-    const data = await response.json() as { access_token: string };
+    const data = (await response.json()) as { access_token: string };
     cachedToken = data.access_token;
     return cachedToken;
 }
@@ -152,19 +152,26 @@ export const migration: Migration = {
             const cardVersions: Record<string, string> = {};
             for (const code of Object.keys(decklist.slots ?? {})) {
                 // Real (post-release) codes are reverse-mapped via the matching card's `released` stamp.
-                const parsed = parsePlaytestCode(code)
-                    ?? cards.find((card: any) => card.released && releasedCardCode(card.project, card.released.number) === code);
+                const parsed =
+                    parsePlaytestCode(code) ??
+                    cards.find(
+                        (card: any) => card.released && releasedCardCode(card.project, card.released.number) === code
+                    );
                 if (!parsed) {
                     continue;
                 }
-                const candidates = cards.filter((card: any) =>
-                    !card.draft &&
-                    card.project === parsed.project &&
-                    card.number === parsed.number &&
-                    new Date(card.updated).getTime() <= deckUpdatedTime
+                const candidates = cards.filter(
+                    (card: any) =>
+                        !card.draft &&
+                        card.project === parsed.project &&
+                        card.number === parsed.number &&
+                        new Date(card.updated).getTime() <= deckUpdatedTime
                 );
-                const latest = candidates.reduce((best: any, card: any) =>
-                    (!best || new Date(card.updated).getTime() > new Date(best.updated).getTime()) ? card : best, undefined);
+                const latest = candidates.reduce(
+                    (best: any, card: any) =>
+                        !best || new Date(card.updated).getTime() > new Date(best.updated).getTime() ? card : best,
+                    undefined
+                );
                 if (latest && !latest.released) {
                     cardVersions[playtestCode(latest.project, latest.number)] = latest.version;
                 }
@@ -200,7 +207,8 @@ export const migration: Migration = {
             return;
         }
 
-        let upserted = 0, modified = 0;
+        let upserted = 0,
+            modified = 0;
         for (let i = 0; i < ops.length; i += BATCH_SIZE) {
             const batch = ops.slice(i, i + BATCH_SIZE);
             const result = await decksCol.bulkWrite(batch as any, { ordered: false });

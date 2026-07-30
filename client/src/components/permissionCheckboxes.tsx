@@ -9,7 +9,9 @@ function PermissionTooltipList({ label, items }: { label: string; items: string[
         <div className="text-xs">
             <div className="font-semibold mb-0.5">{label}</div>
             <ul className="space-y-0.5">
-                {items.map(item => <li key={item}>• {item}</li>)}
+                {items.map((item) => (
+                    <li key={item}>• {item}</li>
+                ))}
             </ul>
         </div>
     );
@@ -32,7 +34,13 @@ for (const [permission, { dependencies }] of Object.entries(permissionMeta)) {
     }
 }
 
-export default function PermissionCheckboxes({ selectedPermissions, roleGrantedPermissions, guestProfilePermissions, getUserBlockers, onChange }: PermissionCheckboxesProps) {
+export default function PermissionCheckboxes({
+    selectedPermissions,
+    roleGrantedPermissions,
+    guestProfilePermissions,
+    getUserBlockers,
+    onChange
+}: PermissionCheckboxesProps) {
     const isRoleLocked = (v: string) => roleGrantedPermissions?.has(v) ?? false;
     const isGuestLocked = (v: string) => guestProfilePermissions?.has(v) ?? false;
     const isLocked = (v: string) => isRoleLocked(v) || isGuestLocked(v);
@@ -41,7 +49,7 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
     // Permissions that are checked and depend on `value` — prevents unchecking
     const getBlockingDependents = (value: string): string[] => {
         const dependents = reverseDependencyMap.get(value) ?? [];
-        return dependents.filter(dep => isChecked(dep) && !isLocked(dep));
+        return dependents.filter((dep) => isChecked(dep) && !isLocked(dep));
     };
 
     // Dependencies of `value` that are not yet checked — prevents checking
@@ -49,7 +57,7 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
         const deps = permissionMeta[value as keyof typeof permissionMeta]?.dependencies;
         if (!deps) return [];
         const normalized = Array.isArray(deps) ? deps : [deps];
-        return normalized.filter(dep => !isChecked(dep));
+        return normalized.filter((dep) => !isChecked(dep));
     };
 
     const toggle = (value: string, checked: boolean) => {
@@ -70,17 +78,16 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
     const hasGuestLocked = (guestProfilePermissions?.size ?? 0) > 0;
     const allLocked = allPermissionValues.every(isLocked);
 
-    const bannerSources = [
-        hasRoleLocked && "roles",
-        hasGuestLocked && "the guest profile"
-    ].filter(Boolean).join(" and ");
+    const bannerSources = [hasRoleLocked && "roles", hasGuestLocked && "the guest profile"]
+        .filter(Boolean)
+        .join(" and ");
 
     const renderCheckbox = (perm: { value: string; label: string }) => {
         const locked = isLocked(perm.value);
         const checked = isChecked(perm.value);
-        const blocking = (!locked && checked) ? getBlockingDependents(perm.value) : [];
-        const userBlocking = (!locked && checked) ? (getUserBlockers?.(perm.value) ?? []) : [];
-        const missing = (!locked && !checked) ? getMissingDependencies(perm.value) : [];
+        const blocking = !locked && checked ? getBlockingDependents(perm.value) : [];
+        const userBlocking = !locked && checked ? (getUserBlockers?.(perm.value) ?? []) : [];
+        const missing = !locked && !checked ? getMissingDependencies(perm.value) : [];
 
         const checkbox = (
             <Checkbox
@@ -101,8 +108,15 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
                     placement="top"
                     content={
                         <div className="space-y-1">
-                            {blocking.length > 0 && <PermissionTooltipList label="Required by" items={blocking.map(d => permissionFullLabel.get(d) ?? d)} />}
-                            {userBlocking.length > 0 && <PermissionTooltipList label="Required by users" items={userBlocking} />}
+                            {blocking.length > 0 && (
+                                <PermissionTooltipList
+                                    label="Required by"
+                                    items={blocking.map((d) => permissionFullLabel.get(d) ?? d)}
+                                />
+                            )}
+                            {userBlocking.length > 0 && (
+                                <PermissionTooltipList label="Required by users" items={userBlocking} />
+                            )}
                         </div>
                     }
                 >
@@ -116,7 +130,12 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
                 <TouchTooltip
                     key={perm.value}
                     placement="top"
-                    content={<PermissionTooltipList label="Requires" items={missing.map(d => permissionFullLabel.get(d) ?? d)} />}
+                    content={
+                        <PermissionTooltipList
+                            label="Requires"
+                            items={missing.map((d) => permissionFullLabel.get(d) ?? d)}
+                        />
+                    }
                 >
                     <div className="inline-flex">{checkbox}</div>
                 </TouchTooltip>
@@ -130,7 +149,8 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
         <div className="space-y-2">
             {(hasRoleLocked || hasGuestLocked) && (
                 <div className="text-sm p-2 border border-default rounded-md animate-pulse">
-                    <FontAwesomeIcon icon={faExclamationCircle}/> Some permissions are being granted via {bannerSources}, and cannot be removed here.
+                    <FontAwesomeIcon icon={faExclamationCircle} /> Some permissions are being granted via{" "}
+                    {bannerSources}, and cannot be removed here.
                 </div>
             )}
             <div>
@@ -141,7 +161,7 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
                     isDisabled={allLocked}
                     onValueChange={toggleAll}
                 >
-                Select All
+                    Select All
                 </Checkbox>
             </div>
             {permissionGroups.map((group) => (
@@ -154,7 +174,7 @@ export default function PermissionCheckboxes({ selectedPermissions, roleGrantedP
             ))}
         </div>
     );
-};
+}
 type PermissionCheckboxesProps = {
     selectedPermissions: Set<string>;
     roleGrantedPermissions?: Set<string>;

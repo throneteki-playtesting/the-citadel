@@ -9,8 +9,10 @@ npm install @agot/card-preview
 ```
 
 ### Peer Dependencies
+
 Ensure your host project has the following installed:
-* **react** (^19.1.0)
+
+- **react** (^19.1.0)
 
 ---
 
@@ -23,7 +25,7 @@ import { CardPreview } from '@agot/card-preview';
 
 const App = () => {
   return (
-    <CardPreview 
+    <CardPreview
       card={{ ... }}
     />
   );

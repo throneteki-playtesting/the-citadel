@@ -36,13 +36,11 @@ async function readIntegration(id: string) {
     return integration;
 }
 
-const getQuerySchema = getRequestSchema(
-    Schemas.Integration.Full,
-    { name: "asc" }
-);
+const getQuerySchema = getRequestSchema(Schemas.Integration.Full, { name: "asc" });
 
 // Read integrations; users without READ_INTEGRATIONS only see integrations they own
-router.get("/",
+router.get(
+    "/",
     validateRequest((principal) => principal.id !== "anonymous"),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<Integration>>(async (req, res) => {
@@ -51,7 +49,7 @@ router.get("/",
 
         let scopedFilter = filter;
         if (!hasPermission(principal, Permission.READ_INTEGRATIONS)) {
-            scopedFilter = asArray(filter ?? {}).map((f) => ({ ...f, ownerIds: principal.id } as Filter<Integration>));
+            scopedFilter = asArray(filter ?? {}).map((f) => ({ ...f, ownerIds: principal.id }) as Filter<Integration>);
         }
 
         const [result, count] = await Promise.all([
@@ -63,14 +61,20 @@ router.get("/",
 );
 
 // Create integration; the raw token is only ever returned here
-router.post("/",
+router.post(
+    "/",
     validateRequest(Permission.CREATE_INTEGRATIONS),
     validatePermissionDependencies(),
     celebrate({ [Segments.BODY]: Schemas.Integration.Full }),
     asyncHandler<unknown, unknown, Integration, unknown>(async (req, res) => {
         const { name, enabled, permissions, ownerIds } = req.body;
 
-        const { rawToken, integration } = await dataService.integrations.generate({ name, enabled, permissions, ownerIds });
+        const { rawToken, integration } = await dataService.integrations.generate({
+            name,
+            enabled,
+            permissions,
+            ownerIds
+        });
 
         await logActivity(
             LogCategory.INTEGRATION,
@@ -84,7 +88,8 @@ router.post("/",
 );
 
 // Update integration; owners may edit their own, but cannot change its permissions
-router.put("/:id",
+router.put(
+    "/:id",
     validateRequest((principal) => principal.id !== "anonymous"),
     validatePermissionDependencies(),
     celebrate({
@@ -122,7 +127,8 @@ router.put("/:id",
 );
 
 // Recycle integration token; immediately invalidates the previous token
-router.post("/:id/token",
+router.post(
+    "/:id/token",
     validateRequest((principal) => principal.id !== "anonymous"),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
@@ -130,7 +136,10 @@ router.post("/:id/token",
         const { id } = req.params;
 
         const existing = await readIntegration(id);
-        if (!hasPermission(principal, Permission.REFRESH_INTEGRATION_TOKENS) && !existing.ownerIds?.includes(principal.id)) {
+        if (
+            !hasPermission(principal, Permission.REFRESH_INTEGRATION_TOKENS) &&
+            !existing.ownerIds?.includes(principal.id)
+        ) {
             throw new PermissionErrorResponse();
         }
 
@@ -148,7 +157,8 @@ router.post("/:id/token",
 );
 
 // Delete integration
-router.delete("/:id",
+router.delete(
+    "/:id",
     validateRequest(Permission.DELETE_INTEGRATIONS),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {

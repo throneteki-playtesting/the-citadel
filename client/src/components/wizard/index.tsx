@@ -1,5 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { Children, cloneElement, FormEvent, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+    Children,
+    cloneElement,
+    FormEvent,
+    ReactNode,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
 import classNames from "classnames";
 import { Badge, Button, ButtonProps, Form } from "@heroui/react";
 import Joi from "joi";
@@ -8,12 +19,27 @@ import { flatten, unflatten } from "flat";
 import { isEqual, merge } from "lodash-es";
 import { BaseElementProps } from "../../types";
 import { showApiErrorToast, toNormalizedError } from "../../api/errors";
-import { countErrorsInDirection, titleizeFieldName, useWizard, WizardContext, WizardContextProps, WizardFieldError, WizardFieldMeta } from "./context";
+import {
+    countErrorsInDirection,
+    titleizeFieldName,
+    useWizard,
+    WizardContext,
+    WizardContextProps,
+    WizardFieldError,
+    WizardFieldMeta
+} from "./context";
 
 export { default as ValidationSummary } from "./components/validationSummary";
 
-export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubmit = () => undefined, onValidationError = () => true, children }: WizardProps<T>) {
-    const [internalData, setInternalData] = useState(initial ?? {} as DeepPartial<T>);
+export function Wizard<T>({
+    schema,
+    data: initial,
+    page: initialPage = 1,
+    onSubmit = () => undefined,
+    onValidationError = () => true,
+    children
+}: WizardProps<T>) {
+    const [internalData, setInternalData] = useState(initial ?? ({} as DeepPartial<T>));
     const [currentPage, setCurrentPage] = useState(initialPage);
     const [fieldErrors, setFieldErrors] = useState<Record<string, WizardFieldError>>({});
     const [totalPages, setTotalPages] = useState(0);
@@ -28,7 +54,7 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
     const isLastPage = useMemo(() => currentPage >= totalPages, [currentPage, totalPages]);
 
     useEffect(() => {
-        setInternalData(initial ?? {} as DeepPartial<T>);
+        setInternalData(initial ?? ({} as DeepPartial<T>));
     }, [initial]);
 
     useEffect(() => {
@@ -50,130 +76,140 @@ export function Wizard<T>({ schema, data: initial, page: initialPage = 1, onSubm
         });
     }, []);
 
-    const setServerErrors = useCallback((fields: { path: string, message: string }[]) => {
+    const setServerErrors = useCallback((fields: { path: string; message: string }[]) => {
         setFieldErrors((prev) => {
             const next = { ...prev };
-            fields.forEach(({ path, message }) => { next[path] = { message, source: "server" }; });
+            fields.forEach(({ path, message }) => {
+                next[path] = { message, source: "server" };
+            });
             return next;
         });
     }, []);
 
-    const isValidationError = useCallback((err: unknown): boolean => {
-        const normalized = toNormalizedError(err);
-        if (normalized.kind === "validation" && normalized.fields) {
-            setServerErrors(normalized.fields);
-            return true;
-        }
-        return false;
-    }, [setServerErrors]);
-
-    const validate = useCallback((data: Record<string, any>, partial = false) => {
-        const { error } = schema.validate(data, {
-            allowUnknown: true,
-            abortEarly: false,
-            errors: { label: false }
-        });
-
-        const inputErrors: Record<string, string> = {};
-        if (error) {
-            error.details.forEach((detail) => {
-                if (partial && !(detail.path[0] in data)) {
-                    return;
-                }
-                const inputId = detail.path.join(".");
-                const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
-                inputErrors[inputId] = message;
-            });
-        }
-
-        const touchedPaths = Object.keys(flatten(data as object));
-        setFieldErrors((prev) => {
-            const next = { ...prev };
-            touchedPaths.forEach((path) => {
-                if (next[path]?.source !== "external") {
-                    delete next[path];
-                }
-            });
-            Object.entries(inputErrors).forEach(([path, message]) => {
-                next[path] = { message, source: "schema" };
-            });
-            return next;
-        });
-
-        if (Object.keys(inputErrors).length > 0) {
-            console.error("Validation Error Details:", inputErrors);
-            onValidationError(inputErrors, partial);
+    const isValidationError = useCallback(
+        (err: unknown): boolean => {
+            const normalized = toNormalizedError(err);
+            if (normalized.kind === "validation" && normalized.fields) {
+                setServerErrors(normalized.fields);
+                return true;
+            }
             return false;
-        }
-        return true;
-    }, [onValidationError, schema]);
+        },
+        [setServerErrors]
+    );
 
-    const onPageSubmit = useCallback(async (data: Record<string, any>) => {
-        const pageData = data ?? {};
+    const validate = useCallback(
+        (data: Record<string, any>, partial = false) => {
+            const { error } = schema.validate(data, {
+                allowUnknown: true,
+                abortEarly: false,
+                errors: { label: false }
+            });
 
-        if (validate(pageData, true)) {
-            const submitData = merge({}, internalData, pageData);
-            setInternalData(submitData);
-            if (isLastPage) {
-                if (validate(submitData as Record<string, any>)) {
-                    try {
-                        await onSubmit(submitData as T, isValidationError);
-                    } catch (err) {
-                        if (!isValidationError(err)) {
-                            showApiErrorToast(err);
+            const inputErrors: Record<string, string> = {};
+            if (error) {
+                error.details.forEach((detail) => {
+                    if (partial && !(detail.path[0] in data)) {
+                        return;
+                    }
+                    const inputId = detail.path.join(".");
+                    const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
+                    inputErrors[inputId] = message;
+                });
+            }
+
+            const touchedPaths = Object.keys(flatten(data as object));
+            setFieldErrors((prev) => {
+                const next = { ...prev };
+                touchedPaths.forEach((path) => {
+                    if (next[path]?.source !== "external") {
+                        delete next[path];
+                    }
+                });
+                Object.entries(inputErrors).forEach(([path, message]) => {
+                    next[path] = { message, source: "schema" };
+                });
+                return next;
+            });
+
+            if (Object.keys(inputErrors).length > 0) {
+                console.error("Validation Error Details:", inputErrors);
+                onValidationError(inputErrors, partial);
+                return false;
+            }
+            return true;
+        },
+        [onValidationError, schema]
+    );
+
+    const onPageSubmit = useCallback(
+        async (data: Record<string, any>) => {
+            const pageData = data ?? {};
+
+            if (validate(pageData, true)) {
+                const submitData = merge({}, internalData, pageData);
+                setInternalData(submitData);
+                if (isLastPage) {
+                    if (validate(submitData as Record<string, any>)) {
+                        try {
+                            await onSubmit(submitData as T, isValidationError);
+                        } catch (err) {
+                            if (!isValidationError(err)) {
+                                showApiErrorToast(err);
+                            }
                         }
                     }
+                } else {
+                    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
                 }
-            } else {
-                setCurrentPage((prev) => Math.min(prev + 1, totalPages));
             }
-        }
-    }, [validate, isLastPage, internalData, onSubmit, totalPages, isValidationError]);
+        },
+        [validate, isLastPage, internalData, onSubmit, totalPages, isValidationError]
+    );
 
     const onPageBack = useCallback(() => {
         setCurrentPage((prev) => Math.max(prev - 1, 0));
     }, [setCurrentPage]);
 
-    const contextValue = useMemo<WizardContextProps<T>>(() => ({
-        id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
-        currentPage,
-        totalPages,
-        setTotalPages,
-        data: internalData,
-        setData: setInternalData,
-        isFirstPage,
-        isLastPage,
-        validationErrors,
-        fieldErrors,
-        setError,
-        clearError,
-        isValidationError,
-        fieldMeta,
-        setFieldMeta,
-        onPageSubmit,
-        onPageBack
-    }), [
-        currentPage,
-        totalPages,
-        internalData,
-        isFirstPage,
-        isLastPage,
-        validationErrors,
-        fieldErrors,
-        setError,
-        clearError,
-        isValidationError,
-        fieldMeta,
-        onPageSubmit,
-        onPageBack
-    ]);
-
-    return (
-        <WizardContext.Provider value={contextValue}>
-            {children}
-        </WizardContext.Provider>
+    const contextValue = useMemo<WizardContextProps<T>>(
+        () => ({
+            id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
+            currentPage,
+            totalPages,
+            setTotalPages,
+            data: internalData,
+            setData: setInternalData,
+            isFirstPage,
+            isLastPage,
+            validationErrors,
+            fieldErrors,
+            setError,
+            clearError,
+            isValidationError,
+            fieldMeta,
+            setFieldMeta,
+            onPageSubmit,
+            onPageBack
+        }),
+        [
+            currentPage,
+            totalPages,
+            internalData,
+            isFirstPage,
+            isLastPage,
+            validationErrors,
+            fieldErrors,
+            setError,
+            clearError,
+            isValidationError,
+            fieldMeta,
+            onPageSubmit,
+            onPageBack
+        ]
     );
-};
+
+    return <WizardContext.Provider value={contextValue}>{children}</WizardContext.Provider>;
+}
 
 type WizardProps<T> = {
     schema: Joi.Schema;
@@ -182,13 +218,15 @@ type WizardProps<T> = {
     page?: number;
     onValidationError?: (errors: Record<string, string>, partial: boolean) => void;
     children: ReactNode | ReactNode[];
-}
+};
 
 function resolveFieldLabel(el: Element, name: string): string {
-    return el.getAttribute("aria-label")
-        || el.getAttribute("data-label")
-        || el.getAttribute("placeholder")
-        || titleizeFieldName(name);
+    return (
+        el.getAttribute("aria-label") ||
+        el.getAttribute("data-label") ||
+        el.getAttribute("placeholder") ||
+        titleizeFieldName(name)
+    );
 }
 
 export function WizardPages({ className, style, children: pages }: WizardPagesProps) {
@@ -224,7 +262,7 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
             });
 
             // Preserve the old reference on an unchanged scan, or a re-render here can retrigger the observer.
-            setFieldMeta((prev) => isEqual(prev, meta) ? prev : meta);
+            setFieldMeta((prev) => (isEqual(prev, meta) ? prev : meta));
         };
 
         scan();
@@ -305,7 +343,7 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
             </div>
         </div>
     );
-};
+}
 
 type WizardPageComponent = React.ReactElement<React.ComponentProps<typeof WizardPage>> | false;
 type WizardPagesProps = Omit<BaseElementProps, "children"> & {
@@ -315,33 +353,38 @@ type WizardPagesProps = Omit<BaseElementProps, "children"> & {
 export function WizardPage({ className, style, children, controlledData, pageNo }: WizardPageProps) {
     const { id, validationErrors, onPageSubmit } = useWizard();
 
-    const onSubmit = useCallback((e: FormEvent<HTMLFormElement>) => {
-        e.preventDefault();
+    const onSubmit = useCallback(
+        (e: FormEvent<HTMLFormElement>) => {
+            e.preventDefault();
 
-        // If controlled, simply submit that (ignore form data)
-        if (controlledData !== undefined) {
-            onPageSubmit(controlledData);
-            return;
-        }
-
-        // Collect natural (named) inputs via FormData
-        const formData = new FormData(e.target as HTMLFormElement);
-        const pageData: Record<string, any> = Object.fromEntries(
-            // Sanitise empty strings to undefined
-            [...formData.entries()].map(([k, v]) => [k, v === "" ? undefined : v])
-        );
-
-        if (process.env.NODE_ENV === "development") {
-            // Warn if nothing was collected by either path — likely a misconfigured page
-            const formDataEmpty = Object.keys(pageData).length === 0;
-            if (formDataEmpty) {
-                console.warn(`WizardPage ${pageNo}: No FormData collected and no controlledData provided. Check that inputs have name props, or pass controlledData for controlled inputs.`);
+            // If controlled, simply submit that (ignore form data)
+            if (controlledData !== undefined) {
+                onPageSubmit(controlledData);
+                return;
             }
-        }
 
-        // Unflatten data before sending through (eg. "inner.data": "value" -> "inner" : { "data": "value" })
-        onPageSubmit(unflatten(pageData));
-    }, [controlledData, onPageSubmit, pageNo]);
+            // Collect natural (named) inputs via FormData
+            const formData = new FormData(e.target as HTMLFormElement);
+            const pageData: Record<string, any> = Object.fromEntries(
+                // Sanitise empty strings to undefined
+                [...formData.entries()].map(([k, v]) => [k, v === "" ? undefined : v])
+            );
+
+            if (process.env.NODE_ENV === "development") {
+                // Warn if nothing was collected by either path — likely a misconfigured page
+                const formDataEmpty = Object.keys(pageData).length === 0;
+                if (formDataEmpty) {
+                    console.warn(
+                        `WizardPage ${pageNo}: No FormData collected and no controlledData provided. Check that inputs have name props, or pass controlledData for controlled inputs.`
+                    );
+                }
+            }
+
+            // Unflatten data before sending through (eg. "inner.data": "value" -> "inner" : { "data": "value" })
+            onPageSubmit(unflatten(pageData));
+        },
+        [controlledData, onPageSubmit, pageNo]
+    );
 
     return (
         <Form
@@ -354,15 +397,20 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
             {children}
         </Form>
     );
-};
+}
 
 type WizardPageProps = BaseElementProps & {
     controlledData?: Record<string, any>;
     ignoreFormData?: boolean;
     pageNo?: number;
-}
+};
 
-export function WizardNext({ children, nextContent = "Next", submitContent = "Submit", ...buttonProps }: WizardNextButtonProps) {
+export function WizardNext({
+    children,
+    nextContent = "Next",
+    submitContent = "Submit",
+    ...buttonProps
+}: WizardNextButtonProps) {
     const { id, currentPage, isLastPage, fieldErrors, fieldMeta } = useWizard();
 
     const errorCount = useMemo(
@@ -376,17 +424,27 @@ export function WizardNext({ children, nextContent = "Next", submitContent = "Su
         </Button>
     );
 
-    return errorCount > 0
-        ? <Badge color="danger" content={errorCount} size="lg" placement="top-right">{button}</Badge>
-        : button;
-};
+    return errorCount > 0 ? (
+        <Badge color="danger" content={errorCount} size="lg" placement="top-right">
+            {button}
+        </Badge>
+    ) : (
+        button
+    );
+}
 
 type WizardNextButtonProps = Omit<ButtonProps, "onPress"> & {
     nextContent?: ReactNode;
     submitContent?: ReactNode;
 };
 
-export function WizardBack({ children, backContent = "Back", cancelContent = "Cancel", onCancel, ...buttonProps }: WizardBackButtonProps) {
+export function WizardBack({
+    children,
+    backContent = "Back",
+    cancelContent = "Cancel",
+    onCancel,
+    ...buttonProps
+}: WizardBackButtonProps) {
     const { onPageBack, isFirstPage, currentPage, fieldErrors, fieldMeta } = useWizard();
 
     const onPress = useCallback(() => {
@@ -411,10 +469,14 @@ export function WizardBack({ children, backContent = "Back", cancelContent = "Ca
         </Button>
     );
 
-    return errorCount > 0
-        ? <Badge color="danger" content={errorCount} size="lg" placement="top-left">{button}</Badge>
-        : button;
-};
+    return errorCount > 0 ? (
+        <Badge color="danger" content={errorCount} size="lg" placement="top-left">
+            {button}
+        </Badge>
+    ) : (
+        button
+    );
+}
 
 type WizardBackButtonProps = Omit<ButtonProps, "onPress"> & {
     backContent?: ReactNode;

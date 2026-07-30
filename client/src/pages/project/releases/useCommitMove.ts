@@ -10,9 +10,10 @@ export function useCommitMove(projectNumber: number, captureFlip: (excludeSlotNu
     const dispatch = useDispatch<AppDispatch>();
 
     return async (slotNumber: number, code: string | null, position?: number) => {
-        const payload = code === null
-            ? { project: projectNumber, number: slotNumber, code: null as null }
-            : { project: projectNumber, number: slotNumber, code, position: position! };
+        const payload =
+            code === null
+                ? { project: projectNumber, number: slotNumber, code: null as null }
+                : { project: projectNumber, number: slotNumber, code, position: position! };
 
         // Snapshot capsule positions so any occupant displaced by this move animates to its new
         // home; the dragged capsule is excluded as its flight is the DragOverlay drop animation
@@ -27,7 +28,12 @@ export function useCommitMove(projectNumber: number, captureFlip: (excludeSlotNu
                 if (payload.code === null) {
                     delete dragged.release;
                 } else {
-                    const occupant = draft.items.find((s) => s.release?.code === payload.code && s.release?.position === payload.position && s.number !== slotNumber);
+                    const occupant = draft.items.find(
+                        (s) =>
+                            s.release?.code === payload.code &&
+                            s.release?.position === payload.position &&
+                            s.number !== slotNumber
+                    );
                     if (occupant) {
                         if (previousRelease) {
                             occupant.release = previousRelease;

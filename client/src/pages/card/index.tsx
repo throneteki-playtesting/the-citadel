@@ -12,7 +12,7 @@ const Card = () => {
         return <Navigate to="/" />;
     }
 
-    return <CardDetail key={`${project}|${number}`} project={project} number={number}/>;
+    return <CardDetail key={`${project}|${number}`} project={project} number={number} />;
 };
 
 export default Card;

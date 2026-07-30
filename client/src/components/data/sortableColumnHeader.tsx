@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import { SortDirection } from "common/types";
 
-export type ColumnSort = { key: string, dir: SortDirection };
+export type ColumnSort = { key: string; dir: SortDirection };
 
 const SortableColumnHeader = ({ label, sortKey, sort, onChange }: SortableColumnHeaderProps) => {
     const dir = sort?.key === sortKey ? sort.dir : undefined;
@@ -33,6 +33,11 @@ const SortableColumnHeader = ({ label, sortKey, sort, onChange }: SortableColumn
     );
 };
 
-type SortableColumnHeaderProps = { label: string, sortKey: string, sort?: ColumnSort, onChange: (next?: ColumnSort) => void };
+type SortableColumnHeaderProps = {
+    label: string;
+    sortKey: string;
+    sort?: ColumnSort;
+    onChange: (next?: ColumnSort) => void;
+};
 
 export default SortableColumnHeader;
