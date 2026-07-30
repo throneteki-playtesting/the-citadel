@@ -1,16 +1,71 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
+    "compounds": [
+        {
+            "name": "Launch Program (Edge)",
+            "configurations": ["Launch (Server)", "Launch (Client)", "Launch (Browser)"],
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 1
+            }
+        },
+        {
+            "name": "Launch Program",
+            "configurations": ["Launch (Server)", "Launch (Client)"],
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "",
+                "order": 1
+            }
+        }
+    ],
     "configurations": [
         {
+            "name": "Launch (Browser)",
+            "type": "msedge",
+            "request": "launch",
+            "url": "http://localhost:5173/",
+            "webRoot": "${workspaceFolder}/client/src",
+            "sourceMaps": true
+        },
+        {
+            "name": "Launch (Client)",
             "type": "node",
             "request": "launch",
-            "name": "Launch Program",
-            "program": "${workspaceFolder}/Service/index.ts",
-            "preLaunchTask": "tsc: build - tsconfig.json",
-            "outFiles": ["${workspaceFolder}/out/**/*.js"]
+            "cwd": "${workspaceFolder}/client",
+            "stopOnEntry": false,
+            "runtimeExecutable": "vite",
+            "env": {
+                "NODE_ENV": "development"
+            },
+            "console": "internalConsole",
+            "sourceMaps": true
+        },
+        {
+            "name": "Launch (Server)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/server",
+            "runtimeExecutable": "tsx",
+            "runtimeArgs": [
+                // "watch", -- Fails to watch on "internalConsole"
+                "src/app.ts"
+            ],
+            "skipFiles": ["<node_internals>/**"],
+            "console": "internalConsole",
+            "sourceMaps": true
+        },
+        {
+            "name": "Preview Module (Watch)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/@agotCardPreview",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run", "watch"],
+            "console": "internalConsole"
         }
     ]
 }

@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "eslint",
+            "problemMatcher": ["$eslint-stylish"],
+            "label": "eslint: lint whole folder"
+        },
+        {
+            "label": "npm: client dev",
+            "type": "npm",
+            "script": "dev",
+            // "isBackground": true,
+            "options": {
+                "cwd": "${workspaceFolder}/client"
+            },
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^npm ERR! (.*)$",
+                    "message": 1
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": ".*",
+                    "endsPattern": "ready in [0-9]+ ms"
+                }
+            }
+        }
+    ]
+}

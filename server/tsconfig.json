@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "target": "es2024",
+        "module": "esnext",
+        "moduleResolution": "node",
+        "sourceMap": true,
+        "allowJs": false,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": ["src/*"],
+            "common/*": ["../common/*"],
+            "gas/*": ["../googleAppScript/src/*"]
+        },
+        "outDir": "dist",
+        "strict": false,
+        "experimentalDecorators": true
+    },
+    "include": ["src", "../common", "env.d.ts"],
+    "exclude": ["node_modules", "dist"]
+}

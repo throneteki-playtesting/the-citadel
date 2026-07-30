@@ -1,11 +1,16 @@
 {
-    "appService.zipIgnorePattern": [
-        "node_modules{,/**}",
-        ".vscode{,/**}"
-    ],
+    "appService.zipIgnorePattern": ["node_modules{,/**}", ".vscode{,/**}"],
     "appService.defaultWebAppToDeploy": "/subscriptions/e769807a-d7b7-43d2-8612-2e96d4f9b17d/resourceGroups/gotautomation/providers/Microsoft.Web/sites/got-app",
     "appService.deploySubpath": ".",
     "html.validate.scripts": false,
     "html.validate.styles": false,
-    "typescript.tsserver.experimental.enableProjectDiagnostics": true
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+    "eslint.useFlatConfig": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "js/ts.tsdk.path": "node_modules\\typescript\\lib",
+    "js/ts.tsserver.experimental.enableProjectDiagnostics": true
 }

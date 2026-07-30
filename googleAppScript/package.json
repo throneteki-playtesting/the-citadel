@@ -1,0 +1,27 @@
+{
+    "name": "got-playtesting-gas-integration",
+    "private": true,
+    "version": "1.0.0",
+    "description": "Google App Script integration to connect data to read/write from the GOT Playtesting Spreadsheet",
+    "main": "dist/code.js",
+    "scripts": {
+        "build": "webpack",
+        "push": "npm run build && clasp push"
+    },
+    "author": "Stephen Patane",
+    "license": "MIT",
+    "type": "module",
+    "devDependencies": {
+        "@eslint/js": "^9.27.0",
+        "@google/clasp": "^2.4.2",
+        "@types/google-apps-script": "^1.0.78",
+        "copy-webpack-plugin": "^13.0.0",
+        "gas-webpack-plugin": "^2.6.0",
+        "globals": "^16.2.0",
+        "prettier": "^3.1.1",
+        "ts-loader": "^9",
+        "typescript": "^5.8.3",
+        "webpack": "^5",
+        "webpack-cli": "^5"
+    }
+}
