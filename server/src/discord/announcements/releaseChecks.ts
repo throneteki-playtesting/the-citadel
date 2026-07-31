@@ -18,8 +18,7 @@ import { plural } from "../utils";
 import { dataService, discordService, logger } from "@/services";
 import { computeReleaseCheckCards } from "@/services/progressService";
 
-const DESIGN_ANNOUNCEMENTS_CHANNEL_ID = "1532493292816830504";
-// const DESIGN_ANNOUNCEMENTS_CHANNEL_ID = "1061861090297913405";
+const DESIGN_ANNOUNCEMENTS_CHANNEL_NAME = "release-reviews";
 const DESIGN_TEAM_ROLE_NAME = "Design Team";
 
 const syncReleaseChecksMutex = new Mutex();
@@ -143,9 +142,12 @@ async function getAnnouncementContext(): Promise<AnnouncementContext> {
     const guild = await discordService.getGuild();
     const errors: string[] = [];
 
-    const channel = await guild.channels.fetch(DESIGN_ANNOUNCEMENTS_CHANNEL_ID).catch(() => null);
-    if (!channel?.isTextBased() || channel.isThread()) {
-        errors.push(`"${DESIGN_ANNOUNCEMENTS_CHANNEL_ID}" is not a text channel in this guild`);
+    // Channel names carry a leading emoji, so they're matched on the readable portion only
+    const channel = guild.channels.cache.find(
+        (c) => c.isTextBased() && !c.isThread() && c.name.includes(DESIGN_ANNOUNCEMENTS_CHANNEL_NAME)
+    ) as TextChannel;
+    if (!channel) {
+        errors.push(`"${DESIGN_ANNOUNCEMENTS_CHANNEL_NAME}" channel does not exist or is not a text channel`);
     }
 
     const taggedRole = await discordService.findRoleByName(guild, DESIGN_TEAM_ROLE_NAME);
@@ -157,7 +159,7 @@ async function getAnnouncementContext(): Promise<AnnouncementContext> {
         throw new Error(`Failed to build context: ${errors.join(", ")}`);
     }
 
-    return { guild, channel: channel as TextChannel, taggedRole };
+    return { guild, channel, taggedRole };
 }
 
 function releaseUrl(project: IProject, release: IProjectRelease) {
