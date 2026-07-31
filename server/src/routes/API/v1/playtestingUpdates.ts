@@ -17,6 +17,7 @@ import { hasPermission, renderPlaytestingCard } from "common/utils";
 import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { notifyStaleChecks } from "@/discord/announcements/staleChecks";
 
 const router = express.Router();
 
@@ -142,6 +143,8 @@ router.post(
             `<principal> created playtesting update v${playtestingUpdate.version} for <project>`,
             { context: { project: projectSnapshot(project) } }
         );
+
+        await notifyStaleChecks(project, newCards);
 
         res.status(StatusCodes.OK).json({ playtestingUpdate, project, cards: newCards });
     })

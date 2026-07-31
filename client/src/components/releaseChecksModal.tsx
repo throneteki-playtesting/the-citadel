@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import {
     addToast,
+    Alert,
     Avatar,
     AvatarGroup,
     Button,
@@ -35,7 +36,13 @@ import {
 import { Slot } from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { parseCardCode, SemanticVersion } from "common/utils";
-import { useGetCardQuery, useGetSlotQuery, useGetUserQuery, useSubmitReleaseCheckMutation } from "../api";
+import {
+    useGetCardQuery,
+    useGetCardsQuery,
+    useGetSlotQuery,
+    useGetUserQuery,
+    useSubmitReleaseCheckMutation
+} from "../api";
 import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useContainerWidth } from "../hooks/useContainerWidth";
@@ -69,6 +76,7 @@ export default function ReleaseChecksModal({
 }: ReleaseChecksModalProps) {
     const { data: slot, isLoading } = useGetSlotQuery({ project, number });
     const { data: card } = useGetCardQuery({ project, number, version: "latest" });
+    const { data: draftData } = useGetCardsQuery({ filter: { project, number, draft: true } });
     const { user } = useAuth();
     const navigate = useNavigate();
 
@@ -103,6 +111,7 @@ export default function ReleaseChecksModal({
     const { ref: rowRef, width: rowWidth } = useContainerWidth<HTMLDivElement>();
 
     const latestVersion = card?.version;
+    const hasDraft = !!draftData && draftData.total > 0;
     const checks = slot?.statuses.design.checks ?? [];
     const mine = user && checks.find((entry) => entry.createdBy === user.discordId);
     const hasYouSlot = !!mine || (canSubmitCheck && !!user);
@@ -157,6 +166,15 @@ export default function ReleaseChecksModal({
                         <Skeleton className="h-24 w-full rounded-md" />
                     ) : (
                         <div>
+                            {hasDraft && (
+                                <Alert
+                                    color="warning"
+                                    variant="faded"
+                                    className="mb-2"
+                                    title="A draft is in the works"
+                                    description={`These checks are for v${latestVersion}, not the draft. Once the draft is released, they'll all need re-checking.`}
+                                />
+                            )}
                             <div className="text-xs sm:text-sm text-foreground/60 pb-2">
                                 Share a quick verdict on whether this card is ready for release. When flagging a card as
                                 not ready, keep the reasoning clear and concise, and use categories to guide what to

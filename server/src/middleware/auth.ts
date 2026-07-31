@@ -7,7 +7,7 @@ import { AccessTokenPayload } from "@/types";
 import { createHmac, timingSafeEqual } from "crypto";
 import { createContext, requestContext } from "./context";
 import DiscordService from "@/discord";
-import { APIGuildMember, GuildMember } from "discord.js";
+import { APIGuildMember, APIUser, GuildMember, User as DiscordUser } from "discord.js";
 import { User } from "common/models/auth";
 import Permission from "common/models/permissions";
 import { hasPermission } from "common/utils";
@@ -126,7 +126,10 @@ export const githubWebhookMiddleware = asyncHandler(async (req, res, next) => {
     requestContext.run(context, next);
 });
 
-export const discordCommandMiddleware = async (member: APIGuildMember | GuildMember, callback: () => void) => {
+export const discordCommandMiddleware = async (
+    member: APIGuildMember | GuildMember | APIUser | DiscordUser,
+    callback: () => void
+) => {
     const result = await DiscordService.syncUser(member);
     const context = createContext("api", result?.user);
     requestContext.run(context, callback);

@@ -2,6 +2,7 @@ import {
     AutocompleteInteraction,
     ChatInputCommandInteraction,
     Guild,
+    InteractionContextType,
     REST,
     Routes,
     SlashCommandBuilder,
@@ -36,10 +37,21 @@ export async function deployCommands(
 ) {
     try {
         const rest = new REST({ version: "10" }).setToken(token);
-        await rest.put(Routes.applicationGuildCommands(clientId, guild.id), { body: cmds });
 
-        logger.info(`Reloaded ${cmds.length} (/) commands for "${guild.name}"`);
+        // Commands usable in a DM have to be registered globally - guild commands only ever appear
+        // within their guild, no matter which contexts they declare
+        const global = cmds.filter(isDirectMessageCapable);
+        const guildOnly = cmds.filter((cmd) => !isDirectMessageCapable(cmd));
+
+        await rest.put(Routes.applicationGuildCommands(clientId, guild.id), { body: guildOnly });
+        await rest.put(Routes.applicationCommands(clientId), { body: global });
+
+        logger.info(`Reloaded ${guildOnly.length} (/) commands for "${guild.name}", and ${global.length} globally`);
     } catch (err) {
         logger.error(err);
     }
+}
+
+function isDirectMessageCapable(cmd: SlashCommandOptionsOnlyBuilder) {
+    return !!cmd.toJSON().contexts?.includes(InteractionContextType.BotDM);
 }

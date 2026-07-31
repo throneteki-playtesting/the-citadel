@@ -219,7 +219,9 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
             ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
     }, [selectedIndex]);
 
-    const swipeHandlers = useSwipe((direction) => selectRelative(direction === "right" ? -1 : 1, true));
+    const swipeHandlers = useSwipe((direction) => selectRelative(direction === "right" ? -1 : 1, true), {
+        directions: ["left", "right"]
+    });
 
     if (isLoading) {
         return (

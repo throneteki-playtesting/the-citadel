@@ -22,7 +22,7 @@ const sync = {
                 option.setName("card").setDescription("Card to push").setRequired(false).setAutocomplete(true)
             )
             .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-            .setContexts([InteractionContextType.Guild, InteractionContextType.BotDM]);
+            .setContexts([InteractionContextType.Guild]);
     },
     async execute(interaction: ChatInputCommandInteraction) {
         await interaction.deferReply({ flags: ["Ephemeral"] });
