@@ -6,7 +6,7 @@
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true,
         "allowSyntheticDefaultImports": true,
-        "outDir": "dist",
+        "noEmit": true,
         "baseUrl": ".",
         "paths": {
             "common/*": ["../common/*"]

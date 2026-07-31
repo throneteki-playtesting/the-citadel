@@ -8,11 +8,10 @@
         "esModuleInterop": true,
         "allowJs": true,
         "skipLibCheck": true,
-        "declaration": true,
         "paths": {
             "common/*": ["../common/*"]
         },
-        "outDir": "dist",
+        "noEmit": true,
         "strict": true
     },
     "include": ["src", "../common", "../server/src/permissions.ts"],

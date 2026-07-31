@@ -6,7 +6,7 @@ import CapsuleVisual from "./capsuleVisual";
 import { noReorderPreview, slotNumberFromItemId } from "./releaseDnd";
 
 // Stays mounted at all times so an in-progress drag never loses its sortable source
-export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive }: DevelopmentPanelProps) {
+export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive, isVisible }: DevelopmentPanelProps) {
     // Grouped by faction, canonical order - stable sort keeps each faction's existing relative order
     const sortedIds = useMemo(() => {
         const factionOf = (id: string) => cardsByNumber.get(slotNumberFromItemId(id)!)?.faction;
@@ -29,7 +29,7 @@ export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive
                     return (
                         <Fragment key={id}>
                             {isNewFactionGroup && <div className="col-span-full border-t border-content3" />}
-                            <PoolCapsule id={id} card={card} isInteractive={isInteractive} />
+                            <PoolCapsule id={id} card={card} isInteractive={isInteractive} isVisible={isVisible} />
                         </Fragment>
                     );
                 })}
@@ -41,19 +41,27 @@ type DevelopmentPanelProps = {
     itemIds: string[];
     cardsByNumber: Map<number, IPlaytestCard>;
     isInteractive: boolean;
+    isVisible: boolean;
 };
 
-function PoolCapsule({ id, card, isInteractive }: PoolCapsuleProps) {
+function PoolCapsule({ id, card, isInteractive, isVisible }: PoolCapsuleProps) {
     // Object form disabled is required to pull chips out of collision detection - boolean only disables dragging, not droppable
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id,
         data: { faction: card.faction },
         disabled: { draggable: !isInteractive, droppable: !isInteractive }
     });
-    const style = { transform: CSS.Transform.toString(transform), transition };
+    // Both values are strings, so this settles between renders and the memoised capsule bails out
+    const transformValue = CSS.Transform.toString(transform);
+    const style = useMemo(() => ({ transform: transformValue, transition }), [transformValue, transition]);
 
     if (isDragging) {
         return <div ref={setNodeRef} style={style} className="h-9 rounded-md border-2 border-dashed border-content3" />;
+    }
+
+    // Holds the sortable's node without drawing a capsule the closed panel wouldn't show
+    if (!isVisible) {
+        return <div ref={setNodeRef} className="h-9" />;
     }
 
     return (
@@ -65,6 +73,7 @@ function PoolCapsule({ id, card, isInteractive }: PoolCapsuleProps) {
             attributes={attributes}
             className="h-9"
             flipSlot={card.number}
+            showProgress
         />
     );
 }
@@ -72,4 +81,5 @@ type PoolCapsuleProps = {
     id: string;
     card: IPlaytestCard;
     isInteractive: boolean;
+    isVisible: boolean;
 };

@@ -2,7 +2,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { Code, ILabeledCard } from "common/models/cards";
 import { buildUrl } from "common/utils";
 import { IDecklist } from "common/models/decks";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 
 const thronesdbApi = createApi({
     reducerPath: "thronesdbApi",

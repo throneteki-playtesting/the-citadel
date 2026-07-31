@@ -1,6 +1,7 @@
 import {
     AutocompleteInteraction,
     ChatInputCommandInteraction,
+    InteractionContextType,
     PermissionFlagsBits,
     SlashCommandBuilder
 } from "discord.js";
@@ -21,7 +22,7 @@ const sync = {
                 option.setName("card").setDescription("Card to push").setRequired(false).setAutocomplete(true)
             )
             .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-            .setDMPermission(false);
+            .setContexts([InteractionContextType.Guild]);
     },
     async execute(interaction: ChatInputCommandInteraction) {
         await interaction.deferReply({ flags: ["Ephemeral"] });

@@ -2,7 +2,7 @@
     "compilerOptions": {
         "target": "es2024",
         "module": "esnext",
-        "moduleResolution": "node",
+        "moduleResolution": "bundler",
         "sourceMap": true,
         "allowJs": false,
         "esModuleInterop": true,
@@ -10,13 +10,12 @@
         "resolveJsonModule": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"],
+            "@/*": ["./src/*"],
             "common/*": ["../common/*"],
             "gas/*": ["../googleAppScript/src/*"]
         },
-        "outDir": "dist",
+        "noEmit": true,
         "strict": false,
         "experimentalDecorators": true
     },

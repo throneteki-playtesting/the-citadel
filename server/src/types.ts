@@ -1,6 +1,6 @@
 import { DeepPartial, Filter, SingleOrArray, Sort } from "common/types";
 import { StatusCodes } from "http-status-codes";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 import { IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { IPlaytestReview } from "common/models/reviews";

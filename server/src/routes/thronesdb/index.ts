@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import { Code, ILabeledCard } from "common/models/cards";
 import { IDecklist } from "common/models/decks";
 import { Regex } from "common/utils";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 import express from "express";
 import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";

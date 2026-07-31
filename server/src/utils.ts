@@ -10,7 +10,7 @@ import { ApiErrorResponse } from "./errors";
 import { dataService } from "./services";
 import asyncHandler from "express-async-handler";
 import { SingleOrArray } from "common/types";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 
 export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefined> = {
     replaced: "major",

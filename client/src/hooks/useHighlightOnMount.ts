@@ -17,7 +17,9 @@ export default function useHighlightOnMount<T extends HTMLElement>(targetId: str
         setIsHighlighted(true);
 
         timerRef.current = setTimeout(() => setIsHighlighted(false), 2000);
-        navigate({ pathname, search, hash }, { replace: true, state: null });
+        const remaining = { ...state };
+        delete remaining.highlight;
+        navigate({ pathname, search, hash }, { replace: true, state: remaining });
     }, [state, targetId, navigate, pathname, search, hash]);
 
     useEffect(() => {

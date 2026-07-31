@@ -34,6 +34,7 @@ import EditReleaseModal from "./editReleaseModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
 import { ReleasePositionSlot } from "./releaseBlock";
+import ReleaseProgressMeter from "./releaseProgressMeter";
 import {
     buildContainers,
     collisionDetection,
@@ -210,6 +211,11 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                         Article
                                     </a>
                                 )}
+                                <ReleaseProgressMeter
+                                    project={project.number}
+                                    code={release.code}
+                                    status={displayStatus}
+                                />
                             </div>
                         </div>
                         {!isLocked && canEditReleases && (
@@ -281,6 +287,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                         faction={getPositionFaction(release.slots, index + 1)}
                                         card={card}
                                         disabled={disabled}
+                                        showReleaseCheck={release.status === "confirming"}
                                     />
                                 );
                             })}
@@ -289,7 +296,15 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                 </div>
             </div>
             <DragOverlay dropAnimation={dropAnimation}>
-                {activeCard && <CapsuleVisual card={activeCard} className="h-full shadow-lg" />}
+                {activeCard && (
+                    <CapsuleVisual
+                        card={activeCard}
+                        showProgress
+                        showReleaseCheck={release.status === "confirming"}
+                        hideExtras
+                        className="h-full shadow-lg"
+                    />
+                )}
             </DragOverlay>
             <EditReleaseModal
                 isOpen={!!editing}
