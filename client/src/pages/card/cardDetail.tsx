@@ -231,24 +231,36 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
     }
     return (
         <div className={classNames("flex flex-col min-w-0", columnClass, className)} style={style}>
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center">
                 <DraftActions project={project} number={number} className="shrink-0" />
-                <VersionArrow direction="left" isAvailable={canStep(1)} onPress={() => selectRelative(1)} />
-                <div ref={tabsRef} className="flex-1 min-w-0">
-                    <Tabs
-                        className="flex-row-reverse justify-end"
-                        classNames={{ base: "w-full" }}
-                        selectedKey={String(selectedIndex)}
-                        onSelectionChange={(index) => setSelectedIndex(Number(index))}
-                        aria-label="Card Versions"
-                        variant="underlined"
-                        color="primary"
-                        destroyInactiveTabPanel={false}
-                    >
-                        {tabs}
-                    </Tabs>
+                <div className="relative flex-1 min-w-0 px-4">
+                    <div ref={tabsRef}>
+                        <Tabs
+                            className="flex-row-reverse justify-end select-none"
+                            classNames={{ base: "w-full", tabList: "px-0", tab: "px-2" }}
+                            selectedKey={String(selectedIndex)}
+                            onSelectionChange={(index) => setSelectedIndex(Number(index))}
+                            aria-label="Card Versions"
+                            variant="underlined"
+                            color="primary"
+                            destroyInactiveTabPanel={false}
+                        >
+                            {tabs}
+                        </Tabs>
+                    </div>
+                    <VersionArrow
+                        direction="left"
+                        isAvailable={canStep(1)}
+                        onPress={() => selectRelative(1)}
+                        className="absolute left-0 top-1/2 -translate-y-1/2"
+                    />
+                    <VersionArrow
+                        direction="right"
+                        isAvailable={canStep(-1)}
+                        onPress={() => selectRelative(-1)}
+                        className="absolute right-0 top-1/2 -translate-y-1/2"
+                    />
                 </div>
-                <VersionArrow direction="right" isAvailable={canStep(-1)} onPress={() => selectRelative(-1)} />
             </div>
             <div className="flex justify-center py-4" {...swipeHandlers}>
                 <CardStack
@@ -294,7 +306,7 @@ type StackedVersionProps = {
 
 // Steps the selection one version along. Bookends the tab list rather than overlaying it, holding its
 // slim column whether or not there's a version that way, so the tabs never shift under the arrows.
-function VersionArrow({ direction, isAvailable, onPress }: VersionArrowProps) {
+function VersionArrow({ direction, isAvailable, onPress, className }: VersionArrowProps) {
     const isLeft = direction === "left";
 
     return (
@@ -306,7 +318,8 @@ function VersionArrow({ direction, isAvailable, onPress }: VersionArrowProps) {
             aria-label={isLeft ? "Previous version" : "Next version"}
             className={classNames(
                 "shrink-0 w-4 min-w-4 px-0 transition-opacity",
-                !isAvailable && "opacity-0 pointer-events-none"
+                !isAvailable && "opacity-0 pointer-events-none",
+                className
             )}
             onPress={onPress}
         >
@@ -319,6 +332,7 @@ type VersionArrowProps = {
     direction: "left" | "right";
     isAvailable: boolean;
     onPress: () => void;
+    className?: string;
 };
 
 // Marks a version that arrived with a change note, and leads back to the Playtesting Update carrying it
@@ -556,7 +570,6 @@ function DraftActions({ className, style, project: projectNumber, number }: Draf
                     </Button>
                 </TouchTooltip>
             ))}
-            {/* Sits inside, so it only appears alongside actions the user actually has */}
             <Divider orientation="vertical" className="h-5 mx-1" />
             <EditCardModal
                 isOpen={!!editing}
