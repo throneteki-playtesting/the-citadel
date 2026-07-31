@@ -1,4 +1,4 @@
-import puppeteer, { Page, Viewport } from "puppeteer";
+import puppeteer, { ConsoleMessage, Page, Viewport } from "puppeteer";
 import { dataService, logger } from "@/services";
 import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
@@ -79,7 +79,9 @@ export async function asPDF(data: SingleOrArray<IRenderCard>, options?: BatchRen
 function attachDiagnostics(page: Page, jobId: UUID) {
     page.on("console", (msg) => {
         if (msg.type() === "error" || msg.type() === "warn") {
-            logger.warn(`[render ${jobId}] console.${msg.type()}: ${msg.text()}`);
+            void serialiseConsoleMessage(msg).then((text) =>
+                logger.warn(`[render ${jobId}] console.${msg.type()}: ${text}`)
+            );
         }
     });
     page.on("pageerror", (err) => {
@@ -98,7 +100,25 @@ function attachDiagnostics(page: Page, jobId: UUID) {
         if (isFont && !response.ok()) {
             logger.warn(`[render ${jobId}] font request returned ${response.status()}: ${url}`);
         }
+        const isApi = url.startsWith(process.env.CLIENT_HOST) && /\/(api|auth)\//.test(url);
+        if (isApi && !response.ok()) {
+            logger.warn(`[render ${jobId}] api request returned ${response.status()}: ${url}`);
+        }
     });
+}
+
+async function serialiseConsoleMessage(msg: ConsoleMessage) {
+    const args = await Promise.all(
+        msg.args().map(async (arg) => {
+            try {
+                const value = await arg.jsonValue();
+                return typeof value === "string" ? value : JSON.stringify(value);
+            } catch {
+                return arg.toString();
+            }
+        })
+    );
+    return args.length > 0 ? args.join(" ") : msg.text();
 }
 
 async function logFontStatus(page: Page, jobId: UUID) {
