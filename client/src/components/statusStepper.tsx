@@ -2,10 +2,11 @@ import { Fragment, useEffect, useRef } from "react";
 import { Card, CardBody } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
-import { StatusStep, stepperColorClasses } from "../constants";
+import { StatusStep, statusNodeClass, stepperColorClasses, StepperSize, stepperSizeClasses } from "../constants";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { BaseElementProps, UIColor } from "../types";
 import { TouchTooltip } from "./touchTooltip";
+import TooltipDetail from "./tooltipDetail";
 
 // How long one segment takes to fill, and equally how long the node after it waits to light up
 const STEP_DURATION = 450;
@@ -13,19 +14,6 @@ const STEP_DURATION = 450;
 const NODE_DURATION = 200;
 // An index before the first step - an empty track, which is what an unloaded stepper draws
 const EMPTY_INDEX = -1;
-
-const sizeClasses = {
-    sm: {
-        node: "size-6 sm:size-7",
-        icon: "text-[.7rem] sm:text-sm",
-        connector: "h-1 sm:h-1.5"
-    },
-    md: {
-        node: "size-8 sm:size-9",
-        icon: "text-sm sm:text-base",
-        connector: "h-1.5 sm:h-2"
-    }
-};
 
 // Staggers the track so a multi-status jump sweeps through the steps in between rather than moving
 // at once - each segment waits out the ones before it, and emptying runs the same way in reverse
@@ -59,7 +47,7 @@ export default function StatusStepper({
     isLoading = false,
     onStepPress
 }: StatusStepperProps) {
-    const sizes = sizeClasses[size];
+    const sizes = stepperSizeClasses[size];
     const colors = stepperColorClasses[color];
     const prefersReducedMotion = useReducedMotion();
 
@@ -92,9 +80,8 @@ export default function StatusStepper({
                 const isPressable = !!onStepPress && !isStepDisabled;
                 const nodeClass = classNames(
                     // transition-all so the ring (a box-shadow) fades with the rest; the opaque fill hides the bar behind it
-                    "relative z-10 shrink-0 flex items-center justify-center rounded-full border-2 bg-content1 transition-all",
-                    sizes.node,
-                    isReached ? colors.node : "border-default-200 text-foreground/40",
+                    "relative z-10 transition-all",
+                    statusNodeClass(isReached, color, size),
                     index === displayIndex && classNames("ring-4", colors.ring),
                     index === committedIndex && index !== displayIndex && classNames("ring-2", colors.ringFaint),
                     isPressable && "cursor-pointer hover:scale-110",
@@ -157,13 +144,10 @@ export default function StatusStepper({
 
 function StepTooltip({ step }: { step: StepperStep }) {
     return (
-        <div className="max-w-60 px-1 py-1 space-y-1">
-            <div className="font-cinzel uppercase tracking-wide text-xs">{step.label}</div>
-            <div className="font-sans normal-case text-xs text-foreground/70 leading-snug">{step.description}</div>
-            {step.disabledReason && (
-                <div className="font-sans normal-case text-xs text-warning leading-snug">{step.disabledReason}</div>
-            )}
-        </div>
+        <TooltipDetail heading={step.label}>
+            {step.description}
+            {step.disabledReason && <div className="text-warning">{step.disabledReason}</div>}
+        </TooltipDetail>
     );
 }
 
@@ -210,7 +194,7 @@ type StatusStepperProps = Omit<BaseElementProps, "children"> & {
     /** A second, faintly ringed marker - the saved status, while a different one is being previewed */
     committedIndex?: number;
     color?: UIColor;
-    size?: keyof typeof sizeClasses;
+    size?: StepperSize;
     /** Greys the whole track out and makes every step unpickable, regardless of `onStepPress` */
     isDisabled?: boolean;
     /** Holds the track where it is - empty on first load - until the status is available again */

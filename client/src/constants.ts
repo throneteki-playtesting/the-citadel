@@ -1,3 +1,4 @@
+import classNames from "classnames";
 import { Faction } from "common/models/cards";
 import { ChangeType } from "common/types";
 import * as discordEmojis from "discord-emoji";
@@ -32,6 +33,34 @@ export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
 // Round bubble standing in for an avatar - the "add your check" button and the +N overflow
 export const avatarBubbleClasses =
     "shrink-0 size-10 rounded-full bg-content2 border border-content3 text-foreground/60 flex items-center justify-center cursor-pointer transition-all hover:scale-105";
+
+export const stepperSizeClasses = {
+    sm: {
+        node: "size-6 sm:size-7",
+        icon: "text-[.7rem] sm:text-sm",
+        connector: "h-1 sm:h-1.5"
+    },
+    md: {
+        node: "size-8 sm:size-9",
+        icon: "text-sm sm:text-base",
+        connector: "h-1.5 sm:h-2"
+    },
+    lg: {
+        node: "size-9",
+        icon: "text-sm",
+        connector: "h-2"
+    }
+};
+
+export type StepperSize = keyof typeof stepperSizeClasses;
+
+export function statusNodeClass(isReached: boolean, color: UIColor, size: StepperSize) {
+    return classNames(
+        "shrink-0 flex items-center justify-center rounded-full border-2 bg-content1",
+        stepperSizeClasses[size].node,
+        isReached ? stepperColorClasses[color].node : "border-default-200 text-foreground/40"
+    );
+}
 
 // Tailwind needs literal class names, so each colour's shades are enumerated rather than interpolated
 export const stepperColorClasses: Record<UIColor, { node: string; fill: string; ring: string; ringFaint: string }> = {
@@ -299,7 +328,8 @@ export const highlightTarget = {
     review: (review: IPlaytestReview) =>
         `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
-    release: (project: number, code: string) => `release-${project}|${code}`
+    release: (project: number, code: string) => `release-${project}|${code}`,
+    playtestingUpdateCard: (project: number, number: number) => `update-card-${project}|${number}`
 } as const;
 
 export const statementOptions: {

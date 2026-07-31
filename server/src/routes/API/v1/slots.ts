@@ -409,32 +409,31 @@ router.patch(
         const { principal } = getContext();
         const now = new Date();
         const existingIndex = slot.statuses.design.checks.findIndex((entry) => entry.createdBy === principal.id);
-        const entry: IReleaseCheck =
-            existingIndex === -1
-                ? {
-                      ready,
-                      categories,
-                      note,
-                      version: latestCard.version,
-                      created: now,
-                      createdBy: principal.id,
-                      updated: now,
-                      updatedBy: principal.id
-                  }
-                : {
-                      ...slot.statuses.design.checks[existingIndex],
-                      ready,
-                      categories,
-                      note,
-                      version: latestCard.version,
-                      updated: now,
-                      updatedBy: principal.id
-                  };
+        const exists = existingIndex >= 0;
+        const entry: IReleaseCheck = !exists
+            ? {
+                  ready,
+                  categories,
+                  note,
+                  version: latestCard.version,
+                  created: now,
+                  createdBy: principal.id,
+                  updated: now,
+                  updatedBy: principal.id
+              }
+            : {
+                  ...slot.statuses.design.checks[existingIndex],
+                  ready,
+                  categories,
+                  note,
+                  version: latestCard.version,
+                  updated: now,
+                  updatedBy: principal.id
+              };
 
-        const checks =
-            existingIndex === -1
-                ? [...slot.statuses.design.checks, entry]
-                : slot.statuses.design.checks.map((existing, index) => (index === existingIndex ? entry : existing));
+        const checks = !exists
+            ? [...slot.statuses.design.checks, entry]
+            : slot.statuses.design.checks.map((existing, index) => (index === existingIndex ? entry : existing));
 
         const updated = await dataService.slots.update({
             ...slot,
@@ -445,6 +444,19 @@ router.patch(
         if (slot.release) {
             await dataService.projects.sync(project, true);
         }
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.release_check",
+            `<principal> has ${exists ? "updated" : "provided"} their release check for <card>, marking it as ${entry.ready ? "ready" : "not ready"}`,
+            {
+                context: {
+                    check: entry,
+                    card: cardSnapshot(`${latestCard.project}|${latestCard.number}|${latestCard.version}`, latestCard)
+                },
+                severity: "info"
+            }
+        );
 
         res.status(StatusCodes.OK).json(updated);
     })

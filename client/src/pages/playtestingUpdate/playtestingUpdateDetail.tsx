@@ -16,7 +16,7 @@ import { renderPlaytestingCard } from "common/utils";
 import { convertToNode, downloadBlob, noteTypeIcon } from "../../utils";
 import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
-import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
+import { changeTypeClasses, dismoji, factionBorderClasses, highlightTarget, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import {
     faAngleLeft,
@@ -38,12 +38,16 @@ import LoadingCard from "../../components/loadingCard";
 import Error from "../../components/error";
 import SectionTitle from "../../components/sectionTitle";
 import usePageTitle from "../../hooks/usePageTitle";
+import useConsumableParams from "../../hooks/useConsumableParams";
+import { HighlightTarget } from "../../components/highlightTarget";
 import useTimezone from "../../hooks/useTimezone";
 import { useNavigate } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import Watermark from "../../components/watermark";
 import { showApiErrorToast } from "../../api/errors";
+
+const UPDATE_PARAMS = ["card"] as const;
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({
@@ -53,6 +57,10 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(project ? `${project.code} #${version}` : undefined);
     const navigate = useNavigate();
+    // Arriving from a card's change badge, which points at the one card it wants shown
+    useConsumableParams(UPDATE_PARAMS, ({ card }) =>
+        card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
+    );
 
     if (isPlaytestingUpdateLoading || isProjectLoading) {
         return (
@@ -302,7 +310,13 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
             ) : filteredCards && filteredCards.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {filteredCards.map((card) => (
-                        <PlaytestingUpdateChangeNote key={card.code} card={card} />
+                        <HighlightTarget
+                            key={card.code}
+                            className="h-full rounded-large"
+                            targetId={highlightTarget.playtestingUpdateCard(card.project, card.number)}
+                        >
+                            <PlaytestingUpdateChangeNote card={card} />
+                        </HighlightTarget>
                     ))}
                 </div>
             ) : (
@@ -361,7 +375,8 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
     }, [card._metadata?.github?.status, card.implemented]);
 
     return (
-        <Card className={classNames("border-1", factionBorderClasses[card.faction])}>
+        // Stated rather than left to the default, since the highlight ring around it matches this radius
+        <Card radius="lg" className={classNames("h-full border-1", factionBorderClasses[card.faction])}>
             <div className="grow flex flex-col max-sm:items-center sm:flex-row sm:items-start transition-all duration-300 overflow-hidden">
                 <div className="relative size-full">
                     <Watermark
