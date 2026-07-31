@@ -318,6 +318,9 @@ export const Release = {
             url: Joi.string().uri(),
             status: Joi.string().valid(...Projects.articleStatuses)
         }),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
+        }),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
         updated: Joi.date().required(),
@@ -335,6 +338,9 @@ export const Release = {
         article: Joi.object({
             url: Joi.string().uri(),
             status: Joi.string().valid(...Projects.articleStatuses)
+        }),
+        _metadata: Joi.object({
+            discord: DiscordMetadata
         }),
         created: Joi.date(),
         createdBy: Joi.string(),
@@ -355,6 +361,7 @@ export const Release = {
             url: Joi.string().uri(),
             status: Joi.string().valid(...Projects.articleStatuses)
         }),
+        _metadata: Joi.forbidden(),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

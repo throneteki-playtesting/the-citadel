@@ -59,6 +59,14 @@ export interface IReleaseCheckSummary {
     total: number;
 }
 
+/** One card's release check state within a release - see the Discord announcement */
+export interface IReleaseCheckCard {
+    number: number;
+    name: string;
+    /** Checks against the card's current version; stale ones don't count towards it */
+    fresh: number;
+}
+
 export interface IArtworkProgress {
     status: ArtworkStatus;
     /** Chosen once work actually starts; unset while pending */

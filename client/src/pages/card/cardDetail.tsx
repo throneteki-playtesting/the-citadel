@@ -45,8 +45,11 @@ import CardProgress from "./cardProgress";
 import ReleaseChecksModal from "../../components/releaseChecksModal";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
+import useConsumableParams from "../../hooks/useConsumableParams";
 import PermissionedLink from "../../components/permissionedLink";
 import Error from "../../components/error";
+
+const CARD_PARAMS = ["releaseCheck"] as const;
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading: isLoadingProject } = useGetProjectQuery({ number: projectNumber });
@@ -408,19 +411,9 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
     const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
-    const [searchParams, setSearchParams] = useSearchParams();
-    // Allows deep-linking straight into the modal (eg. the capsule buttons on the releases page)
-    const [feedbackOpen, setFeedbackOpen] = useState(searchParams.get("releaseCheck") === "1");
-
-    const closeFeedback = () => {
-        setFeedbackOpen(false);
-        if (searchParams.has("releaseCheck")) {
-            const remaining = new URLSearchParams(searchParams);
-            remaining.delete("releaseCheck");
-            // Replaced, so closing isn't a history entry the back button reopens
-            setSearchParams(remaining, { replace: true });
-        }
-    };
+    // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
+    const { releaseCheck } = useConsumableParams(CARD_PARAMS);
+    const [feedbackOpen, setFeedbackOpen] = useState(releaseCheck === "1");
 
     const latest = useMemo(
         () => [...(cardsData?.items ?? [])].reverse().find((card) => card.latest),
@@ -470,7 +463,12 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                         }
                 ]}
             />
-            <ReleaseChecksModal isOpen={feedbackOpen} onClose={closeFeedback} project={projectNumber} number={number} />
+            <ReleaseChecksModal
+                isOpen={feedbackOpen}
+                onClose={() => setFeedbackOpen(false)}
+                project={projectNumber}
+                number={number}
+            />
         </div>
     );
 }

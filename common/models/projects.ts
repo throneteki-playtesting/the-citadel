@@ -46,6 +46,13 @@ export interface IProjectRelease extends IAuditable {
         url?: string;
         status: (typeof articleStatuses)[number];
     };
+    _metadata?: {
+        /** Release check announcement; messageUrl's presence means it has already been announced */
+        discord?: {
+            messageUrl?: string;
+            lastSynced?: Date;
+        };
+    };
 }
 
 /** Computed completeness for a whole project. Never stored */

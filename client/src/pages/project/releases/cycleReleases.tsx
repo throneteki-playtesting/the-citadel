@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import classNames from "classnames";
 import { addToast, Button, Skeleton, Tooltip } from "@heroui/react";
 import {
@@ -51,7 +51,7 @@ import { getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
 import { highlightTarget } from "../../../constants";
 
-export default function CycleReleases({ project }: CycleReleasesProps) {
+export default function CycleReleases({ project, isActive }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
         filter: { project: project.number, latest: true }
@@ -89,10 +89,6 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     );
     const captureFlip = useCapsuleFlip();
     const { state: locationState } = useLocation();
-    // Tabs don't unmount when inactive, but portalled content (the floating pool overlay) escapes
-    // the inactive panel's hidden styling - gate it explicitly so it doesn't float over Development
-    const [searchParams] = useSearchParams();
-    const isReleasesTabActive = searchParams.get("tab") === "releases";
 
     // TouchSensor (unlike PointerSensor) preventDefaults touchmove during a drag, so chips can use touch-manipulation without blocking page scroll otherwise
     const sensors = useSensors(
@@ -168,6 +164,11 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;
     const activeCard = activeSlotNumber !== undefined ? cardsByNumber.get(activeSlotNumber) : undefined;
+    // The overlay reserves space for the check button only where the resting capsule has one
+    const activeReleaseCode = slots.find((slot) => slot.number === activeSlotNumber)?.release?.code;
+    const isActiveConfirming = releases.some(
+        (release) => release.code === activeReleaseCode && release.status === "confirming"
+    );
     const activeReorderCode = activeId ? codeFromReorderItemId(activeId) : undefined;
     const activeReorderRelease = activeReorderCode
         ? releases.find((release) => release.code === activeReorderCode)
@@ -424,7 +425,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                         ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
                         : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
                 </div>
-                {canMoveCapsules && isReleasesTabActive && (
+                {canMoveCapsules && isActive && (
                     <DevelopmentOverlay
                         itemIds={containers[POOL_ID] ?? []}
                         count={poolCount}
@@ -523,6 +524,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             <SizeMatchedDragOverlay
                 dropAnimation={poolDropAnimation}
                 activeCard={activeCard}
+                showReleaseCheck={isActiveConfirming}
                 isPoolOpen={isPoolOpen}
                 poolChipId={containers[POOL_ID]?.[0]}
                 releaseSlotId={releases[0] ? containers[releases[0].code]?.[0] : undefined}
@@ -552,6 +554,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 // Sizes the dragged card to a pool chip (pool open) or a release slot (pool closed), never to whatever it's hovering (eg. a release header is much bigger)
 function SizeMatchedDragOverlay({
     activeCard,
+    showReleaseCheck,
     isPoolOpen,
     poolChipId,
     releaseSlotId,
@@ -576,7 +579,7 @@ function SizeMatchedDragOverlay({
                     <CapsuleVisual
                         card={activeCard}
                         showProgress
-                        showReleaseCheck
+                        showReleaseCheck={showReleaseCheck}
                         hideExtras
                         className={classNames("shadow-lg", isPoolOpen ? "h-full" : "absolute inset-1")}
                     />
@@ -588,6 +591,7 @@ function SizeMatchedDragOverlay({
 }
 type SizeMatchedDragOverlayProps = {
     activeCard?: IPlaytestCard;
+    showReleaseCheck?: boolean;
     isPoolOpen: boolean;
     poolChipId?: string;
     releaseSlotId?: string;
@@ -595,4 +599,7 @@ type SizeMatchedDragOverlayProps = {
     children?: ReactNode;
 };
 
-type CycleReleasesProps = { project: IProject };
+type CycleReleasesProps = {
+    project: IProject;
+    isActive: boolean;
+};

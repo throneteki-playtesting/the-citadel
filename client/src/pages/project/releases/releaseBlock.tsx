@@ -438,6 +438,7 @@ export function ReleaseBlock({
                                                 card={card}
                                                 disabled={disabled}
                                                 isNextSlotTarget={showNextSlotHighlight && index === nextAvailableIndex}
+                                                showReleaseCheck={release.status === "confirming"}
                                             />
                                         );
                                     })}
@@ -496,7 +497,8 @@ export function ReleasePositionSlot({
     faction,
     card,
     disabled,
-    isNextSlotTarget
+    isNextSlotTarget,
+    showReleaseCheck = false
 }: ReleasePositionSlotProps) {
     const { attributes, listeners, setNodeRef, isDragging, isOver } = useSortable({
         id,
@@ -546,7 +548,7 @@ export function ReleasePositionSlot({
                     onClick={onCapsuleClick}
                     flipSlot={card.number}
                     showProgress
-                    showReleaseCheck
+                    showReleaseCheck={showReleaseCheck}
                     className={classNames("absolute inset-1 z-10 transition-[transform,filter] duration-150", {
                         "scale-90 brightness-75": isPendingReplacement
                     })}
@@ -562,4 +564,5 @@ type ReleasePositionSlotProps = {
     card?: IPlaytestCard;
     disabled: boolean;
     isNextSlotTarget?: boolean;
+    showReleaseCheck?: boolean;
 };

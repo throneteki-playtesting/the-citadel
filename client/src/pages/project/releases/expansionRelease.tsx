@@ -287,6 +287,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                         faction={getPositionFaction(release.slots, index + 1)}
                                         card={card}
                                         disabled={disabled}
+                                        showReleaseCheck={release.status === "confirming"}
                                     />
                                 );
                             })}
@@ -299,7 +300,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                     <CapsuleVisual
                         card={activeCard}
                         showProgress
-                        showReleaseCheck
+                        showReleaseCheck={release.status === "confirming"}
                         hideExtras
                         className="h-full shadow-lg"
                     />

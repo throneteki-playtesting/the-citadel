@@ -7,8 +7,8 @@ import {
     ICardProgress
 } from "common/progress/calc";
 import { IProject, IProjectProgress, IProjectRelease, IReleaseProgress } from "common/models/projects";
-import { ISlot } from "common/models/slots";
-import { mean } from "lodash-es";
+import { IReleaseCheckCard, ISlot, isCheckStale } from "common/models/slots";
+import { mean, sortBy } from "lodash-es";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 
@@ -47,6 +47,29 @@ function releaseProgress(release: IProjectRelease, allSlots: ISlot[]): IReleaseP
 export async function computeReleasesProgress(project: IProject): Promise<IReleaseProgress[]> {
     const allSlots = await dataService.slots.read({ project: project.number });
     return project.releases.map((release) => releaseProgress(release, allSlots));
+}
+
+// Release check state for every card in a release, for the Discord announcement. Checks are counted
+// against each card's latest confirmed version, so a card whose checks all went stale reads as unchecked
+export async function computeReleaseCheckCards(project: number, code: string): Promise<IReleaseCheckCard[]> {
+    const allSlots = await dataService.slots.read({ project });
+    const slots = sortBy(
+        allSlots.filter((slot) => slot.release?.code === code),
+        "number"
+    );
+
+    return await Promise.all(
+        slots.map(async (slot) => {
+            const [latest] = await dataService.cards.read({ project, number: slot.number, latest: true });
+            const checks = slot.statuses.design.checks;
+
+            return {
+                number: slot.number,
+                name: latest?.name ?? `#${slot.number}`,
+                fresh: checks.filter((entry) => !isCheckStale(entry, latest?.version)).length
+            };
+        })
+    );
 }
 
 export async function computeProjectProgress(project: IProject): Promise<IProjectProgress> {

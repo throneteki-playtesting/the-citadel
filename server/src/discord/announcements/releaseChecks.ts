@@ -1,0 +1,246 @@
+import {
+    ButtonBuilder,
+    ButtonStyle,
+    ContainerBuilder,
+    Guild,
+    MessageFlags,
+    Role,
+    SectionBuilder,
+    SeparatorBuilder,
+    TextChannel,
+    TextDisplayBuilder
+} from "discord.js";
+import { Mutex } from "async-mutex";
+import { merge } from "lodash-es";
+import { IProject, IProjectRelease } from "common/models/projects";
+import { IReleaseCheckCard } from "common/models/slots";
+import { plural } from "../utils";
+import { dataService, discordService, logger } from "@/services";
+import { computeReleaseCheckCards } from "@/services/progressService";
+
+const DESIGN_ANNOUNCEMENTS_CHANNEL_ID = "1532493292816830504";
+// const DESIGN_ANNOUNCEMENTS_CHANNEL_ID = "1061861090297913405";
+const DESIGN_TEAM_ROLE_NAME = "Design Team";
+
+const syncReleaseChecksMutex = new Mutex();
+
+/**
+ * Posts (then keeps editing) the release check announcement for any release which is confirming,
+ * and closes it off once the release moves on. Only the first post mentions the design team.
+ * @param projects Projects whose releases should be synced
+ * @param forced Sync even when the release looks up to date - used when a check changes
+ */
+export async function syncReleaseChecks(projects: IProject[], forced?: boolean): Promise<IProject[]> {
+    const release = await syncReleaseChecksMutex.acquire();
+    try {
+        const targets = projects.filter((project) => project.releases.some((r) => needsSync(r, forced)));
+        if (targets.length === 0) {
+            return projects;
+        }
+
+        const context = await getAnnouncementContext();
+        const results: IProject[] = [];
+        for (const project of projects) {
+            results.push(targets.includes(project) ? await syncProjectReleases(project, context, forced) : project);
+        }
+        return results;
+    } catch (err) {
+        logger.warn(new Error("[Discord] Failed to sync release checks", { cause: err }));
+        return projects;
+    } finally {
+        release();
+    }
+}
+
+// A release is worth syncing while it's confirming, or once more after it stops (to close the message off)
+function needsSync(release: IProjectRelease, forced?: boolean) {
+    const isConfirming = release.status === "confirming";
+    const announced = !!release._metadata?.discord?.messageUrl;
+    if (!isConfirming && !announced) {
+        return false;
+    }
+    if (forced) {
+        return isConfirming;
+    }
+    const lastSynced = release._metadata?.discord?.lastSynced;
+    return !lastSynced || release.updated > lastSynced;
+}
+
+async function syncProjectReleases(
+    project: IProject,
+    context: AnnouncementContext,
+    forced?: boolean
+): Promise<IProject> {
+    let changed = false;
+
+    for (const release of project.releases.filter((r) => needsSync(r, forced))) {
+        try {
+            if (release.status === "confirming") {
+                const cards = await computeReleaseCheckCards(project.number, release.code);
+                await postOrEdit(project, release, cards, context);
+            } else {
+                await close(project, release, context);
+            }
+            merge(release, { _metadata: { discord: { lastSynced: new Date() } } });
+            changed = true;
+        } catch (err) {
+            logger.warn(new Error(`[Discord] Failed to sync release checks for ${release.code}`, { cause: err }));
+        }
+    }
+
+    if (!changed) {
+        return project;
+    }
+    // Sync off, or persisting the message url would immediately re-enter this function
+    const [updated] = await dataService.projects.update([project], true, false, false);
+    return updated;
+}
+
+async function postOrEdit(
+    project: IProject,
+    release: IProjectRelease,
+    cards: IReleaseCheckCard[],
+    context: AnnouncementContext
+) {
+    const existing = release._metadata?.discord?.messageUrl;
+    const announcement = messages.announcement(project, release, cards, context.taggedRole);
+    if (existing) {
+        const message = await fetchMessage(context, existing);
+        // Edits never re-notify, but suppressing mentions keeps that true regardless of Discord's mood
+        await message.edit({ ...announcement, allowedMentions: { parse: [] } });
+        logger.verbose(`[Discord] Updated release check announcement for ${release.code}`);
+        return;
+    }
+
+    logger.info(`[Discord] Announcing release checks for ${release.code}`);
+    const posted = await context.channel.send({ ...announcement, allowedMentions: { parse: ["roles"] } });
+    merge(release, { _metadata: { discord: { messageUrl: posted.url } } });
+}
+
+async function close(project: IProject, release: IProjectRelease, context: AnnouncementContext) {
+    const existing = release._metadata?.discord?.messageUrl;
+    if (!existing) {
+        return;
+    }
+    logger.info(`[Discord] Closing release check announcement for ${release.code}`);
+    const message = await fetchMessage(context, existing);
+    await message.edit(messages.closed(project, release));
+}
+
+async function fetchMessage(context: AnnouncementContext, messageUrl: string) {
+    const [, messageId] = messageUrl.match(/(\d+)$/) || [];
+    return await context.channel.messages.fetch(messageId);
+}
+
+interface AnnouncementContext {
+    guild: Guild;
+    channel: TextChannel;
+    taggedRole: Role;
+}
+
+// Fetches all Discord data once, and ensures the channel & role are valid before any writes begin
+async function getAnnouncementContext(): Promise<AnnouncementContext> {
+    const guild = await discordService.getGuild();
+    const errors: string[] = [];
+
+    const channel = await guild.channels.fetch(DESIGN_ANNOUNCEMENTS_CHANNEL_ID).catch(() => null);
+    if (!channel?.isTextBased() || channel.isThread()) {
+        errors.push(`"${DESIGN_ANNOUNCEMENTS_CHANNEL_ID}" is not a text channel in this guild`);
+    }
+
+    const taggedRole = await discordService.findRoleByName(guild, DESIGN_TEAM_ROLE_NAME);
+    if (!taggedRole) {
+        errors.push(`"${DESIGN_TEAM_ROLE_NAME}" role does not exist`);
+    }
+
+    if (errors.length > 0) {
+        throw new Error(`Failed to build context: ${errors.join(", ")}`);
+    }
+
+    return { guild, channel: channel as TextChannel, taggedRole };
+}
+
+function releaseUrl(project: IProject, release: IProjectRelease) {
+    return `${process.env.CLIENT_HOST}/project/${project.number}?release=${release.code}`;
+}
+
+const CARD_LINE_BUDGET = 90;
+
+// The one distinction worth chasing - a card nobody has looked at, versus one that has any opinion
+// at all. Names are truncated to a single line, since the list is a prompt rather than a manifest
+function uncheckedSummary(cards: IReleaseCheckCard[]) {
+    const unchecked = cards.filter((card) => card.fresh === 0);
+    if (unchecked.length === 0) {
+        return ":white_check_mark: Every card has at least one check.";
+    }
+
+    const shown: string[] = [];
+    let length = 0;
+    for (const card of unchecked) {
+        if (length + card.name.length > CARD_LINE_BUDGET) {
+            break;
+        }
+        shown.push(card.name);
+        length += card.name.length + 2;
+    }
+
+    const hidden = unchecked.length - shown.length;
+    const names = shown.join(", ") + (hidden > 0 ? `, +${hidden} more` : "");
+    return (
+        `:warning: **${unchecked.length} of ${cards.length}** ${plural(cards.length, "card")}` +
+        ` ${unchecked.length === 1 ? "has" : "have"} no checks yet\n-# ${names}`
+    );
+}
+
+const messages = {
+    announcement(project: IProject, release: IProjectRelease, cards: IReleaseCheckCard[], taggedRole: Role) {
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(
+                // Components V2 forbids message content, so the role mention lives in the body itself
+                new TextDisplayBuilder().setContent(
+                    `## ${release.code} - Release Checks Required` +
+                        `\n<@&${taggedRole.id}> **${release.name}** has been marked as ${release.status}, and requires` +
+                        " members to provide input on whether it's cards are ready to release as-is." +
+                        "\n\nJudge mechanics & thematics only - wording and refinement come later, with a full" +
+                        " release review over the PDF print sheet. Checks are tied to a card's version, so if a" +
+                        " card gets updated its checks go stale and need answering again."
+                )
+            )
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(uncheckedSummary(cards)))
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addSectionComponents(
+                new SectionBuilder()
+                    .addTextDisplayComponents(
+                        new TextDisplayBuilder().setContent("Use `/checks` to see which cards are waiting on you.")
+                    )
+                    .setButtonAccessory(
+                        new ButtonBuilder()
+                            .setLabel("View Release")
+                            .setURL(releaseUrl(project, release))
+                            .setStyle(ButtonStyle.Link)
+                    )
+            );
+
+        return { components: [container], flags: MessageFlags.IsComponentsV2 as const };
+    },
+    closed(project: IProject, release: IProjectRelease) {
+        const container = new ContainerBuilder().addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder().setContent(
+                        `## ~~Release Checks Required for ${release.code}~~` +
+                            `\n**${release.name}** is now ${release.status}, and its release checks are closed.`
+                    )
+                )
+                .setButtonAccessory(
+                    new ButtonBuilder()
+                        .setLabel("View Release")
+                        .setURL(releaseUrl(project, release))
+                        .setStyle(ButtonStyle.Link)
+                )
+        );
+
+        return { components: [container], flags: MessageFlags.IsComponentsV2 as const };
+    }
+};

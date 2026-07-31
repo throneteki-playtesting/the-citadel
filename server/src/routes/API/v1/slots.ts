@@ -441,6 +441,11 @@ router.patch(
             statuses: { ...slot.statuses, design: { ...slot.statuses.design, checks } }
         });
 
+        // Checks don't touch the release itself, so the announcement has to be told to recount
+        if (slot.release) {
+            await dataService.projects.sync(project, true);
+        }
+
         res.status(StatusCodes.OK).json(updated);
     })
 );
