@@ -2,7 +2,10 @@ import { useRef } from "react";
 
 type SwipeDirection = "up" | "down" | "left" | "right";
 
-export default function useSwipe(onSwipe: (direction: SwipeDirection) => void, tolerance = 50) {
+export default function useSwipe(
+    onSwipe: (direction: SwipeDirection) => void,
+    { tolerance = 50, directions }: { tolerance?: number; directions?: SwipeDirection[] } = {}
+) {
     const startX = useRef<number>(0);
     const startY = useRef<number>(0);
 
@@ -15,15 +18,25 @@ export default function useSwipe(onSwipe: (direction: SwipeDirection) => void, t
             const diffX = e.changedTouches[0].clientX - startX.current;
             const diffY = e.changedTouches[0].clientY - startY.current;
 
+            let direction: SwipeDirection;
             if (Math.abs(diffX) > Math.abs(diffY)) {
-                if (Math.abs(diffX) > tolerance) {
-                    e.preventDefault();
-                    onSwipe(diffX < 0 ? "left" : "right");
+                if (Math.abs(diffX) <= tolerance) {
+                    return;
                 }
-            } else if (Math.abs(diffY) > tolerance) {
-                e.preventDefault();
-                onSwipe(diffY < 0 ? "up" : "down");
+                direction = diffX < 0 ? "left" : "right";
+            } else {
+                if (Math.abs(diffY) <= tolerance) {
+                    return;
+                }
+                direction = diffY < 0 ? "up" : "down";
             }
+
+            if (directions && !directions.includes(direction)) {
+                return;
+            }
+
+            e.preventDefault();
+            onSwipe(direction);
         }
     };
 }

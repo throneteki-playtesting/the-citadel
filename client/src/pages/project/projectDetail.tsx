@@ -3,27 +3,39 @@ import { BaseElementProps } from "../../types";
 import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
 import { useState } from "react";
 import EditProjectModal from "./editProjectModal";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import ProjectReleases from "./releases/projectReleases";
 import classNames from "classnames";
-import { dismoji } from "../../constants";
+import { dismoji, highlightTarget } from "../../constants";
 import Error from "../../components/error";
 import usePageTitle from "../../hooks/usePageTitle";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
+import useConsumableParams from "../../hooks/useConsumableParams";
+import useHistoryState from "../../hooks/useHistoryState";
 import Watermark from "../../components/watermark";
+
+const PROJECT_PARAMS = ["tab", "release"] as const;
+type ProjectTab = "development" | "releases";
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number });
     usePageTitle(project ? project.code : undefined);
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const [searchParams, setSearchParams] = useSearchParams();
-    const tab = searchParams.get("tab") === "releases" ? "releases" : "development";
+    // A release code implies the releases tab, so a deep link needs the one param
+    const { tab: entryTab, release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release }) =>
+        release ? { highlight: highlightTarget.release(number, release) } : null
+    );
+
+    const [tab, setTab] = useHistoryState<ProjectTab>(
+        "tab",
+        entryTab === "releases" || entryRelease ? "releases" : "development"
+    );
     const navigate = useNavigate();
     const canViewReleases = usePermission(Permission.READ_RELEASES);
 
@@ -73,20 +85,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                 ) : canViewReleases ? (
                     <Tabs
                         selectedKey={tab}
-                        onSelectionChange={(key) =>
-                            setSearchParams(
-                                (prev) => {
-                                    const next = new URLSearchParams(prev);
-                                    if (key === "releases") {
-                                        next.set("tab", "releases");
-                                    } else {
-                                        next.delete("tab");
-                                    }
-                                    return next;
-                                },
-                                { replace: true }
-                            )
-                        }
+                        onSelectionChange={(key) => setTab(key as ProjectTab)}
                         aria-label="Project Sections"
                         variant="underlined"
                         color="primary"
@@ -97,7 +96,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                             <ProjectDevelopment project={project} />
                         </Tab>
                         <Tab key="releases" title="Releases">
-                            <ProjectReleases project={project} />
+                            <ProjectReleases project={project} isActive={tab === "releases"} />
                         </Tab>
                     </Tabs>
                 ) : (

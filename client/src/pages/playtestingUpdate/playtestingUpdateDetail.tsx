@@ -16,7 +16,7 @@ import { renderPlaytestingCard } from "common/utils";
 import { convertToNode, downloadBlob, noteTypeIcon } from "../../utils";
 import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
-import { changeTypeClasses, dismoji, factionBorderClasses, watermarkClasses } from "../../constants";
+import { changeTypeClasses, dismoji, factionBorderClasses, highlightTarget, watermarkClasses } from "../../constants";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 import {
     faAngleLeft,
@@ -32,18 +32,24 @@ import {
 import { useCodeUpdateStatus } from "../../components/status/useCodeUpdateStatus";
 import { useDataUpdateStatus } from "../../components/status/useDataUpdateStatus";
 import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import { BaseStatus } from "../../components/status/baseStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
 import Error from "../../components/error";
 import SectionTitle from "../../components/sectionTitle";
 import usePageTitle from "../../hooks/usePageTitle";
+import useConsumableParams from "../../hooks/useConsumableParams";
+import { HighlightTarget } from "../../components/highlightTarget";
 import useTimezone from "../../hooks/useTimezone";
 import { useNavigate } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import Watermark from "../../components/watermark";
 import { showApiErrorToast } from "../../api/errors";
+
+const UPDATE_PARAMS = ["card"] as const;
 
 export default function PlaytestingUpdateDetail({ project: projectNumber, version }: PlaytestingUpdateDetailProps) {
     const { data: playtestingUpdate, isLoading: isPlaytestingUpdateLoading } = useGetPlaytestingUpdateQuery({
@@ -53,6 +59,10 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(project ? `${project.code} #${version}` : undefined);
     const navigate = useNavigate();
+    // Arriving from a card's change badge, which points at the one card it wants shown
+    useConsumableParams(UPDATE_PARAMS, ({ card }) =>
+        card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
+    );
 
     if (isPlaytestingUpdateLoading || isProjectLoading) {
         return (
@@ -163,42 +173,42 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
             showApiErrorToast(err, { title: "Failed to Download" });
         }
     };
+    const created = format(new Date(playtestingUpdate.created));
+
     return (
         <div className="relative space-y-1">
-            <div className="px-4 md:px-0 flex flex-col gap-2">
-                <div className="flex flex-row items-start justify-between gap-2">
-                    <div className="flex flex-col">
-                        <PermissionedLink
-                            to={`/project/${project.number}`}
-                            className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150"
-                            requires={Permission.READ_PROJECTS}
-                        >
-                            <FontAwesomeIcon icon={faAngleLeft} /> {project.name}
-                        </PermissionedLink>
+            <div className="px-4 md:px-0 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 flex flex-wrap items-baseline gap-x-2">
+                    <PermissionedLink
+                        to={`/project/${project.number}`}
+                        className="order-1 text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
+                        requires={Permission.READ_PROJECTS}
+                    >
+                        <FontAwesomeIcon icon={faAngleLeft} /> {project.name}
+                    </PermissionedLink>
+                    <div className="order-2 sm:order-3 sm:basis-full text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
+                        <span className="hidden sm:inline">Playtesting </span>Update #{playtestingUpdate.version}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="order-3 basis-full sm:hidden text-xxs tracking-wider text-foreground font-sans">
+                        {created}
+                    </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1.5">
+                        <div className="hidden sm:flex items-center gap-1.5">
+                            <BaseStatus isIconOnly data={codeStatus} isLoading={isCodeStatusLoading} />
+                            <BaseStatus isIconOnly data={dataStatus} isLoading={isDataStatusLoading} />
+                        </div>
                         <HeaderActions
                             items={[
-                                codeStatus && {
-                                    key: "code-status",
-                                    title: codeStatus.title,
-                                    description: codeStatus.description,
-                                    icon: codeStatus.icon ?? null,
-                                    color: codeStatus.color,
-                                    href: codeStatus.href,
-                                    onPress: codeStatus.onPress,
+                                statusActionItem("code-status", codeStatus, {
+                                    isDropdownOnly: true,
                                     isLoading: isCodeStatusLoading
-                                },
-                                dataStatus && {
-                                    key: "data-status",
-                                    title: dataStatus.title,
-                                    description: dataStatus.description,
-                                    icon: dataStatus.icon ?? null,
-                                    color: dataStatus.color,
-                                    href: dataStatus.href,
-                                    onPress: dataStatus.onPress,
+                                }),
+                                statusActionItem("data-status", dataStatus, {
+                                    isDropdownOnly: true,
                                     isLoading: isDataStatusLoading
-                                },
+                                }),
                                 {
                                     key: "print",
                                     title: "Download Print PDF Sheet",
@@ -215,13 +225,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                                 }
                             ]}
                         />
-                        <div className="w-fit text-xxs sm:text-sm tracking-wider text-foreground font-sans">
-                            {format(new Date(playtestingUpdate.created))}
-                        </div>
                     </div>
-                </div>
-                <div className="text-3xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary w-full">
-                    Playesting Update #{playtestingUpdate.version}
+                    <div className="hidden sm:block w-fit text-sm tracking-wider text-foreground font-sans">
+                        {created}
+                    </div>
                 </div>
             </div>
             {playtestingUpdate.description && (
@@ -302,7 +309,13 @@ function PlaytestingUpdateChangeNotes({ playtestingUpdate }: PlaytestingUpdateCh
             ) : filteredCards && filteredCards.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {filteredCards.map((card) => (
-                        <PlaytestingUpdateChangeNote key={card.code} card={card} />
+                        <HighlightTarget
+                            key={card.code}
+                            className="h-full rounded-large"
+                            targetId={highlightTarget.playtestingUpdateCard(card.project, card.number)}
+                        >
+                            <PlaytestingUpdateChangeNote card={card} />
+                        </HighlightTarget>
                     ))}
                 </div>
             ) : (
@@ -361,7 +374,8 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
     }, [card._metadata?.github?.status, card.implemented]);
 
     return (
-        <Card className={classNames("border-1", factionBorderClasses[card.faction])}>
+        // Stated rather than left to the default, since the highlight ring around it matches this radius
+        <Card radius="lg" className={classNames("h-full border-1", factionBorderClasses[card.faction])}>
             <div className="grow flex flex-col max-sm:items-center sm:flex-row sm:items-start transition-all duration-300 overflow-hidden">
                 <div className="relative size-full">
                     <Watermark
@@ -424,13 +438,20 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                     }
                 </CardStack>
             </div>
-            <a
-                href={card._metadata?.github?.issueUrl}
-                target="_blank"
-                className="opacity-75 hover:opacity-100 p-2 font-sans"
-            >
-                {implementChip}
-            </a>
+            <div className="flex flex-wrap justify-between items-center gap-2 p-2 font-sans">
+                <a href={card._metadata?.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100">
+                    {implementChip}
+                </a>
+                <PermissionedLink
+                    to={`/project/${card.project}/${card.number}`}
+                    requires={Permission.READ_CARDS}
+                    className="opacity-75 hover:opacity-100"
+                >
+                    <Chip color="secondary" variant="bordered">
+                        View Card Page
+                    </Chip>
+                </PermissionedLink>
+            </div>
         </Card>
     );
 }
@@ -460,8 +481,9 @@ function PlaytestingUpdateChangeNoteSkeleton() {
                     {() => <LoadingCard />}
                 </CardStack>
             </div>
-            <div className="p-2">
+            <div className="flex items-center gap-2 p-2">
                 <Skeleton className="h-6 w-40 rounded-md" />
+                <Skeleton className="h-6 w-28 rounded-md" />
             </div>
         </Card>
     );

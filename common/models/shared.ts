@@ -1,5 +1,7 @@
 export type ReleaseDate = `${number}-${number}-${number}`;
 
+export type UUID = `${string}-${string}-${string}-${string}-${string}`;
+
 export interface IAuditable {
     created: Date;
     updated: Date;

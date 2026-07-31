@@ -7,8 +7,10 @@ import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
+import ProjectProgressMeter from "./projectProgressMeter";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 
 const ProjectHeader = ({
@@ -73,16 +75,10 @@ const ProjectHeader = ({
                     <HeaderActions
                         items={[
                             canSyncImages &&
-                                imageStatus && {
-                                    key: "sync-images",
-                                    title: imageStatus.title,
-                                    description: imageStatus.description,
-                                    icon: imageStatus.icon,
-                                    color: imageStatus.color,
-                                    onPress: imageStatus.onPress,
+                                statusActionItem("sync-images", imageStatus, {
                                     isLoading: isImageStatusLoading,
                                     keepOpen: true
-                                },
+                                }),
                             canEdit && {
                                 key: "edit",
                                 title: "Edit Project",
@@ -106,11 +102,19 @@ const ProjectHeader = ({
                         ]}
                     />
                 </div>
-                <div className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl w-full">
-                    {project.name}
+                <div className="flex flex-row items-end justify-between gap-6">
+                    <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
+                        {project.name}
+                    </div>
+                    <div className="hidden md:block w-64 shrink-0 pb-1">
+                        <ProjectProgressMeter project={project.number} />
+                    </div>
                 </div>
             </div>
             {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
+            <div className="md:hidden">
+                <ProjectProgressMeter project={project.number} />
+            </div>
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
         </div>
     );

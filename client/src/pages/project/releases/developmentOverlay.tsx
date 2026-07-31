@@ -160,6 +160,7 @@ export default function DevelopmentOverlay({
                         itemIds={itemIds}
                         cardsByNumber={cardsByNumber}
                         isInteractive={isOpen && isSettled}
+                        isVisible={isOpen}
                     />
                 </div>
             </motion.div>

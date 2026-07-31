@@ -2,8 +2,6 @@
 import { Migration } from "../lib/types";
 import { log, createProgress } from "../lib/logger";
 
-const userId = "120834530801221634";
-
 const BATCH_SIZE = 100;
 
 const DECK_LINK_REGEX = /^https:\/\/thronesdb\.com\/deck\/view\/([0-9a-fA-F-]{36})$/;
@@ -91,53 +89,111 @@ async function fetchTDBDeck(identifier: number | string): Promise<any | undefine
     return response.json();
 }
 
+// A deck is owned by the earliest review that shared it, and last touched by the most recently
+// updated one - the migration itself is never the author.
+interface Attribution {
+    created: Date;
+    createdBy: string;
+    updated: Date;
+    updatedBy: string;
+}
+
+function buildAttribution(reviews: any[], now: Date): Map<string, Attribution> {
+    const attribution = new Map<string, Attribution>();
+
+    const ordered = [...reviews].sort(
+        (a, b) => new Date(a.created ?? a.updated ?? now).getTime() - new Date(b.created ?? b.updated ?? now).getTime()
+    );
+
+    for (const review of ordered) {
+        const reviewer = review.reviewer as string;
+        if (!reviewer) {
+            continue;
+        }
+        const created = new Date(review.created ?? review.updated ?? now);
+        const updated = new Date(review.updated ?? review.created ?? now);
+
+        for (const deck of review.decks ?? []) {
+            if (!deck?.link || deck.shared === false) {
+                continue;
+            }
+            const current = attribution.get(deck.link);
+            if (!current) {
+                attribution.set(deck.link, { created, createdBy: reviewer, updated, updatedBy: reviewer });
+            } else if (updated.getTime() >= current.updated.getTime()) {
+                current.updated = updated;
+                current.updatedBy = reviewer;
+            }
+        }
+    }
+
+    return attribution;
+}
+
 export const migration: Migration = {
     name: "008_decks",
-    description: "Extract decks referenced by reviews' shared deck links into a standalone decks collection",
+    description:
+        "Extract decks referenced by reviews' shared deck links into a standalone decks collection, attributed to the reviewers who shared them - decks already present are left as-is apart from that attribution",
 
     async run({ destDb, dryRun }) {
         const reviewsCol = destDb.collection("reviews");
         const cardsCol = destDb.collection("cards");
         const decksCol = destDb.collection("decks");
 
+        const now = new Date();
         const reviews = await reviewsCol.find({}).toArray();
+        const attribution = buildAttribution(reviews, now);
+        log.info(`Found ${attribution.size} unique shared deck link(s) across ${reviews.length} review(s)`);
 
-        const links = new Set<string>();
-        for (const review of reviews) {
-            for (const deck of review.decks ?? []) {
-                if (deck?.link && deck.shared !== false) {
-                    links.add(deck.link);
-                }
-            }
-        }
-        log.info(`Found ${links.size} unique shared deck link(s) across ${reviews.length} review(s)`);
-
-        if (links.size === 0) {
+        if (attribution.size === 0) {
             log.info("Nothing to migrate");
             return;
         }
 
-        const cards = await cardsCol.find({}).toArray();
+        // Decks already in the collection are maintained by the app - only their attribution is
+        // corrected here, so they need neither a ThronesDB fetch nor card version resolution.
+        const existing = await decksCol.find({}, { projection: { identifier: 1 } }).toArray();
+        const existingIdentifiers = new Set(existing.map((deck) => String(deck.identifier)));
 
-        if (dryRun) {
-            log.info(`[dry-run] Would fetch & upsert up to ${links.size} deck(s) from ThronesDB`);
-            return;
-        }
-
-        const now = new Date();
-        const ops: object[] = [];
+        const planned: { link: string; identifier: number | string; audit: Attribution; isNew: boolean }[] = [];
         let skipped = 0;
-
-        const progress = createProgress("decks");
-        let done = 0;
-        for (const link of links) {
-            done++;
-            progress.counter(done, links.size);
-
+        for (const [link, audit] of attribution) {
             const identifier = extractDeckIdentifier(link);
             if (!identifier) {
                 skipped++;
                 log.verbose(`Skipping "${link}" — could not extract identifier`);
+                continue;
+            }
+            planned.push({ link, identifier, audit, isNew: !existingIdentifiers.has(String(identifier)) });
+        }
+        const toFetch = planned.filter((entry) => entry.isNew).length;
+
+        if (dryRun) {
+            log.info(`[dry-run] Would fetch & insert up to ${toFetch} new deck(s) from ThronesDB`);
+            log.info(`[dry-run] Would re-attribute ${planned.length - toFetch} existing deck(s)`);
+            log.info(`[dry-run] ${skipped} link(s) skipped (no extractable identifier)`);
+            return;
+        }
+
+        const cards = toFetch > 0 ? await cardsCol.find({}).toArray() : [];
+
+        const ops: object[] = [];
+        let reattributed = 0;
+
+        const progress = createProgress("decks");
+        let done = 0;
+        for (const { link, identifier, audit, isNew } of planned) {
+            done++;
+            progress.counter(done, planned.length);
+
+            if (!isNew) {
+                reattributed++;
+                ops.push({
+                    updateOne: {
+                        filter: { identifier },
+                        update: { $set: { ...audit } }
+                    }
+                });
                 continue;
             }
 
@@ -191,19 +247,17 @@ export const migration: Migration = {
                             tdbUpdated: decklist.date_update,
                             cards: cardVersions,
                             source: "review",
-                            updated: now,
-                            updatedBy: userId
-                        },
-                        $setOnInsert: { created: now, createdBy: userId }
+                            ...audit
+                        }
                     },
                     upsert: true
                 }
             });
         }
-        progress.done(`${ops.length} fetched, ${skipped} skipped`);
+        progress.done(`${ops.length - reattributed} fetched, ${reattributed} re-attributed, ${skipped} skipped`);
 
         if (ops.length === 0) {
-            log.warn("No decks to write after fetching — nothing committed");
+            log.warn("No decks to write — nothing committed");
             return;
         }
 

@@ -6,14 +6,20 @@ import {
     FetchBaseQueryError,
     FetchBaseQueryMeta
 } from "@reduxjs/toolkit/query/react";
-import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
-import { ReleaseDate } from "common/models/shared";
+import {
+    IPlaytestingUpdate,
+    IProject,
+    IProjectProgress,
+    IProjectRelease,
+    IReleaseProgress
+} from "common/models/projects";
+import { ReleaseDate, UUID } from "common/models/shared";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
-import { UUID } from "crypto";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
-import { ISlot } from "common/models/slots";
+import { DesignStatus, IReleaseCheckSummary, ISlot, ReleaseCheckCategory, SlotStatuses } from "common/models/slots";
+import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
 import { IDeck } from "common/models/decks";
 import { DeckLink, DecklistLink, DeepPartial, SingleOrArray } from "common/types";
@@ -162,6 +168,16 @@ const api = createApi({
                 { type: "card", id: `LIST|${project}` },
                 { type: "review", id: "LIST" },
                 { type: "deck", id: "LIST" }
+            ]
+        }),
+        getProjectProgress: builder.query<IProjectProgress, { project: number }>({
+            query: ({ project }) => {
+                const url = buildUrl(`projects/${project}/progress`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project }) => [
+                { type: "project", id: project },
+                { type: "slot", id: `LIST|${project}` }
             ]
         }),
         updateUser: builder.mutation<User, User>({
@@ -450,7 +466,9 @@ const api = createApi({
         }),
         updateSlot: builder.mutation<
             ISlot,
-            { project: number; number: number } & Partial<Pick<ISlot, "type" | "notes" | "statuses">>
+            { project: number; number: number; statuses?: DeepPartial<SlotStatuses> } & Partial<
+                Pick<ISlot, "type" | "notes">
+            >
         >({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
@@ -471,7 +489,48 @@ const api = createApi({
                 ...generateFor(result?.evictedSlot, "slot")
             ]
         }),
+        getCardProgress: builder.query<ICardProgress, { project: number; number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/progress`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        setSlotDesignStatus: builder.mutation<ISlot, { project: number; number: number; status: DesignStatus }>({
+            query: ({ project, number, status }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/design/status`);
+                return { url, method: "PATCH", body: { status } };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        getReleaseCheckSummary: builder.query<IReleaseCheckSummary, { project: number; number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/design/checks/summary`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        submitReleaseCheck: builder.mutation<
+            ISlot,
+            { project: number; number: number; ready: boolean; categories?: ReleaseCheckCategory[]; note?: string }
+        >({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/design/checks`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
         // Releases API
+        getReleasesProgress: builder.query<IReleaseProgress[], { project: number }>({
+            query: ({ project }) => {
+                const url = buildUrl(`projects/${project}/releases/progress`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project }) => [
+                { type: "project", id: project },
+                { type: "slot", id: `LIST|${project}` }
+            ]
+        }),
         createRelease: builder.mutation<
             IProject,
             { project: number } & Omit<
@@ -759,6 +818,7 @@ export const {
 
     useGetGlobalStatsQuery,
     useGetProjectStatsQuery,
+    useGetProjectProgressQuery,
 
     useGetUsersQuery,
     useGetUserQuery,
@@ -813,7 +873,12 @@ export const {
     useDeleteSlotMutation,
     useUpdateSlotMutation,
     useAssignSlotReleaseMutation,
+    useGetCardProgressQuery,
+    useSetSlotDesignStatusMutation,
+    useGetReleaseCheckSummaryQuery,
+    useSubmitReleaseCheckMutation,
 
+    useGetReleasesProgressQuery,
     useCreateReleaseMutation,
     useUpdateReleaseMutation,
     useReorderReleasesMutation,

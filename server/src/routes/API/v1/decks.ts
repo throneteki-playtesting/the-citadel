@@ -11,7 +11,7 @@ import Permission from "common/models/permissions";
 import { generateGetResponse } from "@/utils";
 import { getRequestSchema } from "@/schemas";
 import { ApiErrorResponse } from "@/errors";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 
 const router = express.Router();
 

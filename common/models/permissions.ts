@@ -23,6 +23,12 @@ enum Permission {
     DELETE_SLOTS = "DELETE_SLOTS",
     /** Can edit slot statuses, type & notes */
     EDIT_SLOTS = "EDIT_SLOTS",
+    /** Can move (or emergency-reverse) a card's design into the finalising phase */
+    APPROVE_CARD_DESIGN = "APPROVE_CARD_DESIGN",
+    /** Can see everyone's release checks on a card */
+    READ_RELEASE_CHECKS = "READ_RELEASE_CHECKS",
+    /** Can submit a release check on a card */
+    SUBMIT_RELEASE_CHECK = "SUBMIT_RELEASE_CHECK",
     /** Can view releases (packs) for a project */
     READ_RELEASES = "READ_RELEASES",
     /** Can create new releases */
@@ -65,6 +71,10 @@ enum Permission {
     READ_STATS_GLOBAL = "READ_STATS_GLOBAL",
     /** Can view aggregate statistics for a project (eg. card changes, review counts) */
     READ_STATS_PROJECT = "READ_STATS_PROJECT",
+    /** Can view computed completeness progress for a single slot/card */
+    READ_STATS_SLOT = "READ_STATS_SLOT",
+    /** Can view computed completeness progress for a release */
+    READ_STATS_RELEASE = "READ_STATS_RELEASE",
     /** Can edit all users */
     EDIT_USERS = "EDIT_USERS",
     /** Can view all roles */
@@ -149,6 +159,21 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
+    [Permission.APPROVE_CARD_DESIGN]: {
+        label: "Approve Card Design",
+        group: "Projects",
+        dependencies: Permission.READ_SLOTS
+    },
+    [Permission.READ_RELEASE_CHECKS]: {
+        label: "Read Release Checks",
+        group: "Projects",
+        dependencies: Permission.READ_SLOTS
+    },
+    [Permission.SUBMIT_RELEASE_CHECK]: {
+        label: "Submit Release Check",
+        group: "Projects",
+        dependencies: Permission.READ_RELEASE_CHECKS
+    },
     [Permission.READ_RELEASES]: {
         label: "Read Releases",
         group: "Projects",
@@ -232,6 +257,8 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.EDIT_USERS]: { label: "Edit", group: "Users", dependencies: Permission.READ_USERS },
     [Permission.READ_STATS_GLOBAL]: { label: "Global", group: "Statistics" },
     [Permission.READ_STATS_PROJECT]: { label: "Project", group: "Statistics", dependencies: Permission.READ_PROJECTS },
+    [Permission.READ_STATS_SLOT]: { label: "Slot", group: "Statistics", dependencies: Permission.READ_SLOTS },
+    [Permission.READ_STATS_RELEASE]: { label: "Release", group: "Statistics", dependencies: Permission.READ_RELEASES },
     [Permission.READ_ROLES]: { label: "Read", group: "Roles" },
     [Permission.READ_INTEGRATIONS]: { label: "Read", group: "Integrations" },
     [Permission.READ_LOGS]: { label: "Read", group: "Logs" },

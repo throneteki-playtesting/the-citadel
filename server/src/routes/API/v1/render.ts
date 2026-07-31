@@ -8,7 +8,7 @@ import { asArray } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
-import { UUID } from "crypto";
+import { UUID } from "common/models/shared";
 import archiver from "archiver";
 import { BatchRenderJobOptions, SingleRenderJobOptions } from "@/types";
 import { validateRequest } from "@/middleware/permissions";

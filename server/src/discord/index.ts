@@ -14,7 +14,9 @@ import {
     APIUser,
     User,
     Role,
-    Partials
+    Partials,
+    MessagePayload,
+    MessageCreateOptions
 } from "discord.js";
 import { PLAYTESTING_TEAM_ROLE_NAME, Role as AppRole } from "common/models/auth";
 import { discordCommandMiddleware } from "@/middleware/auth";
@@ -69,11 +71,12 @@ class DiscordService {
         // Routes slash commands and autocomplete interactions to the appropriate command handler.
         this.client.on(Events.InteractionCreate, async (interaction) => {
             try {
-                if (!this.isGuild(interaction.guild)) {
+                if (interaction.inGuild() && !this.isGuild(interaction.guild)) {
                     return;
                 }
                 if (interaction.isCommand() || interaction.isAutocomplete()) {
-                    await discordCommandMiddleware(interaction.member, async () => {
+                    // DM commands carry no guild or member, so the user themselves is the principal
+                    await discordCommandMiddleware(interaction.member ?? interaction.user, async () => {
                         const command = commands[interaction.commandName as keyof typeof commands];
                         if (interaction.isChatInputCommand()) {
                             await command.execute(interaction);
@@ -172,6 +175,26 @@ class DiscordService {
             return await guild.client.users.fetch(id);
         } catch {
             return null;
+        }
+    }
+
+    /**
+     * Sends a direct message to a user
+     * @param discordId Discord user ID to message
+     * @param payload Message payload to send, in the same shape a channel send accepts
+     * @returns True if the message was delivered, false if the user is unreachable or has DMs closed
+     */
+    public async sendDirectMessage(discordId: string, payload: MessagePayload | MessageCreateOptions) {
+        try {
+            const guild = await this.getGuild();
+            const member = await this.findMemberOrUserById(guild, discordId);
+            if (!member) {
+                return false;
+            }
+            await member.send(payload);
+            return true;
+        } catch {
+            return false;
         }
     }
 

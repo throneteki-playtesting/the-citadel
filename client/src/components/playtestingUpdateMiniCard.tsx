@@ -51,13 +51,13 @@ export default function PlaytestingUpdateMiniCard({
     if (isProjectLoading || isCardsLoading) {
         return (
             <div className="p-4 space-y-1 transition-colors">
-                <div className="flex gap-3">
+                <div className="flex">
                     <div className="min-w-0 space-y-1">
                         <Skeleton className="w-32 h-6 rounded-sm" />
                         <Skeleton className="w-64 h-4 rounded-sm" />
                     </div>
                 </div>
-                <Skeleton className="w-full h-32 rounded-sm" />
+                <Skeleton className="w-full h-22 rounded-sm" />
             </div>
         );
     }

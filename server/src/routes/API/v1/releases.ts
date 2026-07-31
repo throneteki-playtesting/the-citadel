@@ -17,6 +17,7 @@ import { ISlot } from "common/models/slots";
 import { getContext } from "@/middleware/context";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { computeReleasesProgress } from "@/services/progressService";
 
 const router = express.Router({ mergeParams: true });
 
@@ -282,6 +283,18 @@ router.put(
         );
 
         res.status(StatusCodes.OK).json({ project: updated, evictedSlots });
+    })
+);
+
+// Computed cards/status progress for every release in the project
+router.get(
+    "/progress",
+    validateRequest(Permission.READ_STATS_RELEASE),
+    celebrate({ [Segments.PARAMS]: { number: Joi.number().required() } }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (_req, res) => {
+        const progress = await computeReleasesProgress(res.locals.project as IProject);
+        res.status(StatusCodes.OK).json(progress);
     })
 );
 

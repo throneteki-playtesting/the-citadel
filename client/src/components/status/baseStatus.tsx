@@ -1,6 +1,6 @@
-import { Alert, Button, Listbox, ListboxItem, Spinner } from "@heroui/react";
+import { Alert, Button, Listbox, ListboxItem, Popover, PopoverContent, Spinner } from "@heroui/react";
 import classNames from "classnames";
-import { ReactNode, useRef, useState } from "react";
+import { ReactNode, RefObject, useRef, useState } from "react";
 import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 import { ActionItem } from "../actions/types";
@@ -27,6 +27,19 @@ function buildTracePath(w: number, h: number, sw: number, br: number): string {
         `A ${r} ${r} 0 0 1 ${x + W - r} ${y + H}`,
         `H ${x + W / 2}`
     ].join(" ");
+}
+
+// The rounding lives on whichever element paints it, which isn't always the wrapper's direct child
+function resolveBorderRadius(from: Element | null): number {
+    let el = from;
+    while (el) {
+        const radius = parseFloat(window.getComputedStyle(el).borderRadius) || 0;
+        if (radius > 0) {
+            return radius;
+        }
+        el = el.firstElementChild;
+    }
+    return 0;
 }
 
 export function BaseStatus({
@@ -58,8 +71,9 @@ export function BaseStatus({
 
         const width = wrapper.offsetWidth;
         const height = wrapper.offsetHeight;
-        const child = wrapper.firstElementChild as HTMLElement | null;
-        const br = child ? parseFloat(window.getComputedStyle(child).borderRadius) || 0 : 0;
+        // Fully-rounded buttons compute a 9999px radius, which corrupts the arc unless clamped
+        const rawBr = resolveBorderRadius(wrapper.firstElementChild);
+        const br = Math.min(rawBr, (Math.min(width, height) - TRACE_STROKE) / 2);
         const sw = TRACE_STROKE;
 
         svg.setAttribute("width", String(width));
@@ -129,20 +143,40 @@ export function BaseStatus({
         }
     };
 
-    const overlayMenu = dropdownOpen ? (
-        <>
-            <div
-                className="fixed inset-0 z-40"
-                onMouseDown={(e) => {
-                    e.stopPropagation();
+    // The caller's classes belong on the outer-most element, so the traced box matches what is rendered
+    const elementClass = hasLongPress ? undefined : className;
+
+    const wrapWithDropdown = (inner: ReactNode, wrapperClass?: string) => (
+        <Popover
+            isOpen={dropdownOpen}
+            onOpenChange={(open) => {
+                if (!open) {
                     closeDropdown();
-                }}
-                onTouchStart={(e) => {
-                    e.preventDefault();
-                    closeDropdown();
-                }}
-            />
-            <div className="absolute z-50 top-full mt-1 left-0 min-w-max shadow-medium bg-content2 rounded-medium border border-divider overflow-hidden">
+                }
+            }}
+            triggerRef={wrapperRef as RefObject<HTMLElement>}
+            placement="bottom-start"
+            classNames={{ content: "p-0" }}
+        >
+            <div ref={wrapperRef} className={classNames("relative", wrapperClass, className)}>
+                {inner}
+                <svg
+                    ref={svgRef}
+                    className={classNames("absolute inset-0 pointer-events-none", traceClassName)}
+                    style={{ overflow: "visible" }}
+                >
+                    <path
+                        ref={svgPathRef}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={TRACE_STROKE}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        filter="drop-shadow(0 0 3px rgba(0,0,0,0.6))"
+                    />
+                </svg>
+            </div>
+            <PopoverContent>
                 <Listbox
                     onAction={(key) => {
                         data.longPressOptions?.[Number(key)]?.fn?.();
@@ -153,30 +187,8 @@ export function BaseStatus({
                         <ListboxItem key={String(i)}>{opt.label}</ListboxItem>
                     ))}
                 </Listbox>
-            </div>
-        </>
-    ) : null;
-
-    const wrapWithDropdown = (inner: ReactNode, wrapperClass?: string) => (
-        <div ref={wrapperRef} className={classNames("relative", wrapperClass)}>
-            {inner}
-            {overlayMenu}
-            <svg
-                ref={svgRef}
-                className={classNames("absolute inset-0 pointer-events-none", traceClassName)}
-                style={{ overflow: "visible" }}
-            >
-                <path
-                    ref={svgPathRef}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth={TRACE_STROKE}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    filter="drop-shadow(0 0 3px rgba(0,0,0,0.6))"
-                />
-            </svg>
-        </div>
+            </PopoverContent>
+        </Popover>
     );
 
     if (isIconOnly) {
@@ -211,7 +223,7 @@ export function BaseStatus({
                 target={!hasLongPress && data.href ? "_blank" : undefined}
                 rel={!hasLongPress && data.href ? "noreferrer" : undefined}
                 disableAnimation={!data.onPress && !data.href}
-                className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, className)}
+                className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, elementClass)}
             >
                 {data.icon}
             </Button>
@@ -248,7 +260,7 @@ export function BaseStatus({
 
         const el = (
             <a
-                className={classNames("cursor-pointer", interactiveClass, className)}
+                className={classNames("cursor-pointer", interactiveClass, elementClass)}
                 style={style}
                 onClick={handleClick}
                 {...(hasLongPress ? lpDomHandlers : {})}
@@ -263,7 +275,7 @@ export function BaseStatus({
     if (data.href) {
         const el = (
             <a
-                className={classNames(interactiveClass, className)}
+                className={classNames(interactiveClass, elementClass)}
                 style={style}
                 href={data.href}
                 target="_blank"
@@ -288,7 +300,7 @@ export function BaseStatus({
     }
 
     const el = (
-        <div className={className} style={style} {...(hasLongPress ? lpDomHandlers : {})}>
+        <div className={elementClass} style={style} {...(hasLongPress ? lpDomHandlers : {})}>
             {alert}
         </div>
     );

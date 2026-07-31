@@ -1,5 +1,5 @@
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import classNames from "classnames";
 import { addToast, Button, Skeleton, Tooltip } from "@heroui/react";
 import {
@@ -50,8 +50,11 @@ import { DeepPartial } from "common/types";
 import { getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
 import { highlightTarget } from "../../../constants";
+import useHistoryState from "../../../hooks/useHistoryState";
 
-export default function CycleReleases({ project }: CycleReleasesProps) {
+const isSameCodes = (a: string[], b: string[]) => a.length === b.length && a.every((code) => b.includes(code));
+
+export default function CycleReleases({ project, isActive }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
         filter: { project: project.number, latest: true }
@@ -72,6 +75,11 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     // Captured from the trigger's DOM rect on open, so the modal can morph in/out from wherever it was clicked
     const [poolOriginRect, setPoolOriginRect] = useState<DOMRect>();
     const [collapsedReleases, setCollapsedReleases] = useState<Set<string>>(new Set());
+    // Local state stays the source of truth for the drag interplay below; the history entry mirrors it
+    const [persistedCollapse, setPersistedCollapse] = useHistoryState<string[] | undefined>(
+        "collapsedReleases",
+        undefined
+    );
     const hasInitializedCollapse = useRef(false);
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const lastHoverContainerRef = useRef<string>(undefined);
@@ -89,10 +97,6 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     );
     const captureFlip = useCapsuleFlip();
     const { state: locationState } = useLocation();
-    // Tabs don't unmount when inactive, but portalled content (the floating pool overlay) escapes
-    // the inactive panel's hidden styling - gate it explicitly so it doesn't float over Development
-    const [searchParams] = useSearchParams();
-    const isReleasesTabActive = searchParams.get("tab") === "releases";
 
     // TouchSensor (unlike PointerSensor) preventDefaults touchmove during a drag, so chips can use touch-manipulation without blocking page scroll otherwise
     const sensors = useSensors(
@@ -146,6 +150,11 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             return;
         }
         hasInitializedCollapse.current = true;
+        // Coming back to this entry (eg. from a card) restores what was left open, over the defaults
+        if (persistedCollapse) {
+            setCollapsedReleases(new Set(persistedCollapse));
+            return;
+        }
         // A release deep-linked via ?tab=releases + highlight state should start expanded, even if released
         const highlightedCode = releases.find(
             (release) => locationState?.highlight === highlightTarget.release(project.number, release.code)
@@ -157,7 +166,20 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             }
         }
         setCollapsedReleases(defaults);
-    }, [isLoadingSlots, isLoadingCards, releases, locationState, project.number]);
+    }, [isLoadingSlots, isLoadingCards, releases, locationState, project.number, persistedCollapse]);
+
+    // Mirrors the collapse onto the history entry. Held back mid-drag, where the replace navigation
+    // would re-render dnd-kit's tree out from under the pointer - drag end syncs whatever it settled on
+    useEffect(() => {
+        if (!hasInitializedCollapse.current || activeId) {
+            return;
+        }
+        const codes = [...collapsedReleases];
+        if (persistedCollapse && isSameCodes(persistedCollapse, codes)) {
+            return;
+        }
+        setPersistedCollapse(codes);
+    }, [collapsedReleases, activeId, persistedCollapse, setPersistedCollapse]);
 
     const baseContainers = useMemo(() => buildContainers(pool, releases, slots), [pool, releases, slots]);
     const containers = useMemo(
@@ -168,6 +190,11 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;
     const activeCard = activeSlotNumber !== undefined ? cardsByNumber.get(activeSlotNumber) : undefined;
+    // The overlay reserves space for the check button only where the resting capsule has one
+    const activeReleaseCode = slots.find((slot) => slot.number === activeSlotNumber)?.release?.code;
+    const isActiveConfirming = releases.some(
+        (release) => release.code === activeReleaseCode && release.status === "confirming"
+    );
     const activeReorderCode = activeId ? codeFromReorderItemId(activeId) : undefined;
     const activeReorderRelease = activeReorderCode
         ? releases.find((release) => release.code === activeReorderCode)
@@ -194,16 +221,19 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
     };
     const closePool = () => setIsPoolOpen(false);
 
-    const toggleReleaseCollapse = (code: string) =>
-        setCollapsedReleases((prev) => {
-            const next = new Set(prev);
-            if (next.has(code)) {
-                next.delete(code);
-            } else {
-                next.add(code);
-            }
-            return next;
-        });
+    const toggleReleaseCollapse = useCallback(
+        (code: string) =>
+            setCollapsedReleases((prev) => {
+                const next = new Set(prev);
+                if (next.has(code)) {
+                    next.delete(code);
+                } else {
+                    next.add(code);
+                }
+                return next;
+            }),
+        []
+    );
 
     const commitMove = useCommitMove(project.number, captureFlip);
 
@@ -231,7 +261,8 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 
         const overIdStr = over ? normalizeDroppableId(String(over.id)) : undefined;
         const overContainer = overIdStr ? findContainer(containers, overIdStr) : undefined;
-        setOverId(overIdStr);
+        // withHover only previews pool arrivals; tracking other hovers re-renders the page for an identical result
+        setOverId(overContainer === POOL_ID ? overIdStr : undefined);
 
         if (overContainer !== lastHoverContainerRef.current) {
             lastHoverContainerRef.current = overContainer;
@@ -386,8 +417,8 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
         canDeleteReleases,
         canMoveCapsules,
         isCollapsed: collapsedReleases.has(release.code),
-        onToggleCollapse: () => toggleReleaseCollapse(release.code),
-        onEdit: () => setEditing(release),
+        onToggleCollapse: toggleReleaseCollapse,
+        onEdit: setEditing,
         publishBlockedBy:
             !release.releasedDate && release.code !== nextPublishableCode ? nextPublishableCode : undefined,
         isReorderDragging
@@ -420,7 +451,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
                         ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
                         : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
                 </div>
-                {canMoveCapsules && isReleasesTabActive && (
+                {canMoveCapsules && isActive && (
                     <DevelopmentOverlay
                         itemIds={containers[POOL_ID] ?? []}
                         count={poolCount}
@@ -519,6 +550,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
             <SizeMatchedDragOverlay
                 dropAnimation={poolDropAnimation}
                 activeCard={activeCard}
+                showReleaseCheck={isActiveConfirming}
                 isPoolOpen={isPoolOpen}
                 poolChipId={containers[POOL_ID]?.[0]}
                 releaseSlotId={releases[0] ? containers[releases[0].code]?.[0] : undefined}
@@ -548,6 +580,7 @@ export default function CycleReleases({ project }: CycleReleasesProps) {
 // Sizes the dragged card to a pool chip (pool open) or a release slot (pool closed), never to whatever it's hovering (eg. a release header is much bigger)
 function SizeMatchedDragOverlay({
     activeCard,
+    showReleaseCheck,
     isPoolOpen,
     poolChipId,
     releaseSlotId,
@@ -571,6 +604,9 @@ function SizeMatchedDragOverlay({
                 <div className="relative h-full">
                     <CapsuleVisual
                         card={activeCard}
+                        showProgress
+                        showReleaseCheck={showReleaseCheck}
+                        hideExtras
                         className={classNames("shadow-lg", isPoolOpen ? "h-full" : "absolute inset-1")}
                     />
                 </div>
@@ -581,6 +617,7 @@ function SizeMatchedDragOverlay({
 }
 type SizeMatchedDragOverlayProps = {
     activeCard?: IPlaytestCard;
+    showReleaseCheck?: boolean;
     isPoolOpen: boolean;
     poolChipId?: string;
     releaseSlotId?: string;
@@ -588,4 +625,7 @@ type SizeMatchedDragOverlayProps = {
     children?: ReactNode;
 };
 
-type CycleReleasesProps = { project: IProject };
+type CycleReleasesProps = {
+    project: IProject;
+    isActive: boolean;
+};

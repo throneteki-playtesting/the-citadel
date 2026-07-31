@@ -1,38 +1,61 @@
-import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
+import { addToast, Button, Divider, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery } from "../../api";
+import {
+    useGetCardQuery,
+    useGetCardsQuery,
+    useGetPlaytestingUpdatesQuery,
+    useGetProjectQuery,
+    useGetSlotQuery
+} from "../../api";
 import { IPlaytestCard } from "common/models/cards";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faAngleLeft, faFeather, faPencil, faScroll, faTrash } from "@fortawesome/free-solid-svg-icons";
+import {
+    faChevronLeft,
+    faChevronRight,
+    faPencil,
+    faPlus,
+    faScroll,
+    faThumbsUp,
+    faTrash
+} from "@fortawesome/free-solid-svg-icons";
 import { rcompare } from "semver";
 import classNames from "classnames";
 import CardImage from "../../components/cardImage";
 import EditCardModal from "./editCardModal";
 import DeleteCardModal from "./deleteCardModal";
 import LoadingCard from "../../components/loadingCard";
-import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import DevelopmentStatus from "../../components/status/developmentStatus";
 import ImageStatus from "../../components/status/imageStatus";
 import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
+import { TouchTooltip } from "../../components/touchTooltip";
 import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
 import { changeTypeClasses } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
+import { ActionItem } from "../../components/actions/types";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import { useDiscordCardStatus } from "../../components/status/useDiscordCardStatus";
+import { useGithubCardStatus } from "../../components/status/useGithubCardStatus";
+import { useCardImageStatus } from "../../components/status/useCardImageStatus";
 import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
+import CardProgress from "./cardProgress";
+import ReleaseChecksModal from "../../components/releaseChecksModal";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
-import PermissionedLink from "../../components/permissionedLink";
+import useConsumableParams from "../../hooks/useConsumableParams";
+import CardHeader from "./cardHeader";
 import Error from "../../components/error";
+
+const CARD_PARAMS = ["releaseCheck"] as const;
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading: isLoadingProject } = useGetProjectQuery({ number: projectNumber });
@@ -63,25 +86,16 @@ export default function CardDetail({ className, style, project: projectNumber, n
     return (
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
-                <div className="flex-1 flex flex-col">
-                    <PermissionedLink
-                        to={`/project/${projectNumber}`}
-                        className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
-                        requires={Permission.READ_PROJECTS}
-                    >
-                        <FontAwesomeIcon icon={faAngleLeft} /> {project?.name}
-                    </PermissionedLink>
-                    <div className="text-2xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
-                        Playtesting Card #{parseCardCode(false, projectNumber, number)}
-                    </div>
-                </div>
+                <CardHeader project={projectNumber} number={number} className="flex-1" />
                 <ButtonSection project={projectNumber} number={number} className="self-end sm:self-start" />
             </div>
+            <PermissionGate requires={Permission.READ_STATS_SLOT}>
+                <CardProgress project={projectNumber} number={number} />
+            </PermissionGate>
             <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-2 w-full overflow-x-hidden">
+                <div className="flex flex-col md:flex-row gap-2 w-full overflow-hidden">
                     <CardVersions project={projectNumber} number={number} className="z-10" />
                     <div className="flex flex-col gap-2 flex-1">
-                        <StatusBoard project={projectNumber} number={number} />
                         <PermissionGate requires={Permission.READ_DECKS}>
                             <DeckSummaries project={projectNumber} number={number} className="flex-1" />
                         </PermissionGate>
@@ -150,15 +164,8 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
         }
     }, [hasDraft, preselectedVersion, sortedCards, cardsData]);
 
-    const selectedCard = useMemo(
-        () => (selectedIndex ? sortedCards[selectedIndex] : undefined),
-        [selectedIndex, sortedCards]
-    );
-
-    const widthClass = useMemo(
-        () => (!cardsData?.items.some((card) => card.type === "plot") ? "w-64" : "w-98"),
-        [cardsData?.items]
-    );
+    const isPlot = useMemo(() => !!cardsData?.items.some((card) => card.type === "plot"), [cardsData?.items]);
+    const columnClass = isPlot ? "md:w-98" : "md:w-72";
 
     const tabs = useMemo(
         () =>
@@ -178,140 +185,226 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
         [sortedCards]
     );
 
-    const swipeHandlers = useSwipe((direction) => {
-        setSelectedIndex((prev) => {
-            if (prev !== undefined && direction === "right") {
-                return prev > 0 ? prev - 1 : sortedCards.length - 1;
-            } else if (prev !== undefined && direction === "left") {
-                return prev < sortedCards.length - 1 ? prev + 1 : 0;
-            }
-            return prev;
-        });
+    // Tabs render right-to-left over a reversed list, so stepping left moves up the list. The arrows
+    // stop at the ends where a swipe carries on round, which is the only difference between them.
+    const canStep = useCallback(
+        (offset: -1 | 1) => {
+            const next = (selectedIndex ?? 0) + offset;
+            return selectedIndex !== undefined && next >= 0 && next < sortedCards.length;
+        },
+        [selectedIndex, sortedCards.length]
+    );
+    const selectRelative = useCallback(
+        (offset: -1 | 1, wrap = false) =>
+            setSelectedIndex((prev) => {
+                if (prev === undefined) {
+                    return prev;
+                }
+                const next = prev + offset;
+                if (next >= 0 && next < sortedCards.length) {
+                    return next;
+                }
+                return wrap ? (next + sortedCards.length) % sortedCards.length : prev;
+            }),
+        [sortedCards.length]
+    );
+
+    // HeroUI only scrolls a tab into view when that tab itself is clicked, so a selection moved by the
+    // arrows (or a swipe) has to be brought into view by hand
+    const tabsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        tabsRef.current
+            ?.querySelector('[role="tab"][aria-selected="true"]')
+            ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }, [selectedIndex]);
+
+    const swipeHandlers = useSwipe((direction) => selectRelative(direction === "right" ? -1 : 1, true), {
+        directions: ["left", "right"]
     });
 
     if (isLoading) {
         return (
-            <div className={classNames("flex flex-col md:w-72", className)} style={style}>
+            <div className={classNames("flex flex-col", columnClass, className)} style={style}>
                 <Skeleton className="h-8 rounded-lg" />
                 <LoadingCard className="m-2" />
             </div>
         );
     }
     return (
-        <div className={classNames("flex flex-col md:w-72", className)} style={style}>
-            <Tabs
-                className="flex-row-reverse justify-end"
-                selectedKey={String(selectedIndex)}
-                onSelectionChange={(index) => setSelectedIndex(Number(index))}
-                aria-label="Card Versions"
-                variant="underlined"
-                color="primary"
-                destroyInactiveTabPanel={false}
-            >
-                {tabs}
-            </Tabs>
-            <div
-                className="flex flex-col-reverse items-center justify-center sm:flex-row-reverse md:flex-col-reverse py-4"
-                {...swipeHandlers}
-            >
-                <div
-                    className={classNames(
-                        "grid md:max-w-full -sm:ml-2 sm:mt-2 sm:self-start md:self-auto transition-all duration-600",
-                        selectedCard?.note
-                            ? "opacity-100 sm:max-w-1/2"
-                            : "opacity-0 max-h-0 sm:max-w-0 sm:max-h-full md:max-h-0"
-                    )}
-                >
-                    {sortedCards.map(
-                        (card) =>
-                            card.note && (
-                                <div
-                                    key={card.version}
-                                    className={classNames(
-                                        "grid col-start-1 row-start-1 overflow-hidden",
-                                        selectedCard === card ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-                                    )}
-                                >
-                                    <div
-                                        className={classNames(
-                                            "overflow-hidden flex flex-col bg-content2 transition-all duration-500 ease-in-out drop-shadow-2xl rounded-sm",
-                                            selectedCard === card ? "opacity-100" : "opacity-0 -translate-y-2"
-                                        )}
-                                    >
-                                        <div className="">
-                                            <div
-                                                className={classNames(
-                                                    "pl-6 pr-3 py-2 text-lg tracking-wider font-cinzel uppercase w-full",
-                                                    changeTypeClasses[card.note.type]
-                                                )}
-                                            >
-                                                <FontAwesomeIcon icon={noteTypeIcon[card.note.type]} /> {card.note.type}
-                                            </div>
-                                            <NoteText text={card.note.text} />
-                                        </div>
-                                    </div>
-                                </div>
-                            )
-                    )}
+        <div className={classNames("flex flex-col min-w-0", columnClass, className)} style={style}>
+            <div className="flex items-center">
+                <DraftActions project={project} number={number} className="shrink-0" />
+                <div className="relative flex-1 min-w-0 px-4">
+                    <div ref={tabsRef}>
+                        <Tabs
+                            className="flex-row-reverse justify-end select-none"
+                            classNames={{ base: "w-full", tabList: "px-0", tab: "px-2" }}
+                            selectedKey={String(selectedIndex)}
+                            onSelectionChange={(index) => setSelectedIndex(Number(index))}
+                            aria-label="Card Versions"
+                            variant="underlined"
+                            color="primary"
+                            destroyInactiveTabPanel={false}
+                        >
+                            {tabs}
+                        </Tabs>
+                    </div>
+                    <VersionArrow
+                        direction="left"
+                        isAvailable={canStep(1)}
+                        onPress={() => selectRelative(1)}
+                        className="absolute left-0 top-1/2 -translate-y-1/2"
+                    />
+                    <VersionArrow
+                        direction="right"
+                        isAvailable={canStep(-1)}
+                        onPress={() => selectRelative(-1)}
+                        className="absolute right-0 top-1/2 -translate-y-1/2"
+                    />
                 </div>
+            </div>
+            <div className="flex justify-center py-4" {...swipeHandlers}>
                 <CardStack
                     cards={sortedCards}
                     selectedIndex={selectedIndex}
                     tilt={-1}
-                    className={classNames(
-                        sortedCards.some((card) => card.type === "plot") ? "w-full" : "h-full",
-                        widthClass
-                    )}
+                    className={classNames("max-w-full", isPlot ? "w-98" : "w-64")}
                 >
-                    {(card) => {
-                        if (card.latest && card.released) {
-                            return <CardImage card={card} />;
-                        }
-                        return <CardPreview card={renderPlaytestingCard(card)} />;
-                    }}
+                    {(card, index) => <StackedVersion card={card} isSelected={index === selectedIndex} />}
                 </CardStack>
             </div>
         </div>
     );
 }
 
-function NoteText({ text }: { text: string }) {
-    const textRef = useRef<HTMLDivElement>(null);
-    const [isOverflowing, setIsOverflowing] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false);
-
-    useEffect(() => {
-        if (textRef.current) {
-            setIsOverflowing(textRef.current.scrollHeight > textRef.current.clientHeight);
-        }
-    }, [text]);
+// One card of the stack. Its change badge is a sibling of the preview rather than a child, since the
+// preview clips its own overflow - so it rides along with every tilt, slide and fade the stack applies.
+function StackedVersion({ card, isSelected }: StackedVersionProps) {
+    // A fresh object each render would defeat CardPreview's memo, re-laying out every card in the stack
+    const renderCard = useMemo(() => renderPlaytestingCard(card), [card]);
 
     return (
-        <div className="pl-6 pr-3 py-4">
-            <div className="relative">
-                <div
-                    ref={textRef}
-                    className="text-sm tracking-wide text-foreground font-sans overflow-hidden transition-all duration-300"
-                    // Collapsed height cap; tweak "8rem" to change how much note text shows before truncating.
-                    style={{ maxHeight: isExpanded ? textRef.current?.scrollHeight : "8rem" }}
-                >
-                    {convertToNode(text)}
-                </div>
-                {!isExpanded && isOverflowing && (
-                    <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-content2 to-transparent pointer-events-none" />
-                )}
-            </div>
-            {isOverflowing && (
-                <button
-                    className="text-xs text-foreground/50 hover:text-default-600 mt-1"
-                    onClick={() => setIsExpanded((prev) => !prev)}
-                >
-                    {isExpanded ? "Show less" : "Read more..."}
-                </button>
+        <div className="relative size-full">
+            {card.latest && card.released ? <CardImage card={card} /> : <CardPreview card={renderCard} />}
+            {card.note && (
+                <ChangeBadge
+                    card={card}
+                    className={classNames(
+                        "absolute top-0 right-0 m-2 z-10",
+                        // Cards behind the front one still peek out, so only the front badge answers
+                        !isSelected && "pointer-events-none"
+                    )}
+                />
             )}
         </div>
     );
 }
+
+type StackedVersionProps = {
+    card: IPlaytestCard;
+    isSelected: boolean;
+};
+
+// Steps the selection one version along. Bookends the tab list rather than overlaying it, holding its
+// slim column whether or not there's a version that way, so the tabs never shift under the arrows.
+function VersionArrow({ direction, isAvailable, onPress, className }: VersionArrowProps) {
+    const isLeft = direction === "left";
+
+    return (
+        <Button
+            isIconOnly
+            size="sm"
+            radius="sm"
+            variant="light"
+            aria-label={isLeft ? "Previous version" : "Next version"}
+            className={classNames(
+                "shrink-0 w-4 min-w-4 px-0 transition-opacity",
+                !isAvailable && "opacity-0 pointer-events-none",
+                className
+            )}
+            onPress={onPress}
+        >
+            <FontAwesomeIcon icon={isLeft ? faChevronLeft : faChevronRight} />
+        </Button>
+    );
+}
+
+type VersionArrowProps = {
+    direction: "left" | "right";
+    isAvailable: boolean;
+    onPress: () => void;
+    className?: string;
+};
+
+// Marks a version that arrived with a change note, and leads back to the Playtesting Update carrying it
+function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
+    const navigate = useNavigate();
+    const canReadUpdates = usePermission(Permission.READ_PLAYTESTING_UPDATES);
+    const { data: updatesData } = useGetPlaytestingUpdatesQuery(
+        { filter: { project: card.project } },
+        { skip: !canReadUpdates }
+    );
+
+    const update = useMemo(
+        () => updatesData?.items.find((entry) => entry.cardChanges[card.number] === card.version),
+        [updatesData?.items, card.number, card.version]
+    );
+
+    const note = card.note;
+    if (!note) {
+        return null;
+    }
+
+    return (
+        <TouchTooltip
+            classNames={{ content: "p-0 overflow-hidden" }}
+            content={
+                <div className="max-w-64">
+                    <div
+                        className={classNames(
+                            "px-4 py-2 text-sm tracking-wider font-cinzel uppercase",
+                            changeTypeClasses[note.type]
+                        )}
+                    >
+                        <FontAwesomeIcon icon={noteTypeIcon[note.type]} /> {note.type}
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                        <div className="text-xs font-sans normal-case leading-snug">{convertToNode(note.text)}</div>
+                        {update && (
+                            <div className="text-[.65rem] font-sans normal-case text-foreground/60 leading-snug">
+                                Click the badge to view the Playtesting Update this was part of.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            }
+            placement="right-start"
+        >
+            <div
+                className={classNames(
+                    "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70",
+                    update ? "cursor-pointer" : "cursor-help",
+                    className
+                )}
+                style={style}
+                onClick={
+                    update
+                        ? () => navigate(`/project/${card.project}/update/${update.version}?card=${card.number}`)
+                        : undefined
+                }
+            >
+                <FontAwesomeIcon
+                    icon={noteTypeIcon[note.type]}
+                    className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
+                />
+            </div>
+        </TouchTooltip>
+    );
+}
+
+type ChangeBadgeProps = Omit<BaseElementProps, "children"> & {
+    card: IPlaytestCard;
+};
 
 type CardVersionsProps = Omit<BaseElementProps, "children"> & {
     selected?: SemanticVersion;
@@ -319,14 +412,91 @@ type CardVersionsProps = Omit<BaseElementProps, "children"> & {
     number: number;
 };
 
+// Header row: the card-state icons plus Release Checks and Submit Review. On mobile the state icons
+// fold into the actions dropdown, above its divider. Draft actions live over the card stack instead.
 function ButtonSection({ className, style, project: projectNumber, number }: ButtonSectionProps) {
+    const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
+    const navigate = useNavigate();
+    const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
+    const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
+    const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
+    const { data: project } = useGetProjectQuery({ number: projectNumber }, { skip: !canReadFeedback });
+    // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
+    const { releaseCheck } = useConsumableParams(CARD_PARAMS);
+    const [feedbackOpen, setFeedbackOpen] = useState(releaseCheck === "1");
+
+    // Feeds the modal's read-only mode - checks close with the card's design, or with its release
+    const release = project?.releases.find((entry) => entry.code === slot?.release?.code);
+
+    const latest = useMemo(
+        () => [...(cardsData?.items ?? [])].reverse().find((card) => card.latest),
+        [cardsData?.items]
+    );
+    const isReleased = !!(latest && latest.released);
+    const feedbackCount = slot?.statuses.design.checks.length ?? 0;
+
+    // The same statuses the desktop icon row renders, as dropdown entries for mobile
+    const canReadDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);
+    const { data: discordStatus } = useDiscordCardStatus(projectNumber, number);
+    const { data: githubStatus } = useGithubCardStatus(projectNumber, number);
+    const { data: imageStatus } = useCardImageStatus(projectNumber, number);
+    const statusItems = [
+        canReadDiscord && statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
+        statusActionItem("github-status", githubStatus, { isDropdownOnly: true }),
+        statusActionItem("image-status", imageStatus, { isDropdownOnly: true })
+    ];
+
+    return (
+        <div className={classNames("flex items-center gap-1.5", className)} style={style}>
+            <div className="hidden sm:flex items-center gap-1.5">
+                <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                    <DiscordCardStatus project={projectNumber} number={number} isIconOnly />
+                </PermissionGate>
+                <GithubCardStatus project={projectNumber} number={number} isIconOnly />
+                <ImageStatus project={projectNumber} number={number} isIconOnly />
+            </div>
+            <HeaderActions
+                items={[
+                    ...statusItems,
+                    canReadFeedback && {
+                        key: "release-checks",
+                        title: "Release Checks",
+                        icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
+                        badge: feedbackCount,
+                        onPress: () => setFeedbackOpen(true)
+                    },
+                    !isLoading &&
+                        !isReleased &&
+                        canSubmitReview && {
+                            key: "submit-review",
+                            title: "Submit Review",
+                            icon: <FontAwesomeIcon icon={faScroll} size="xl" />,
+                            color: "primary",
+                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
+                        }
+                ]}
+            />
+            <ReleaseChecksModal
+                isOpen={feedbackOpen}
+                onClose={() => setFeedbackOpen(false)}
+                project={projectNumber}
+                number={number}
+                releaseStatus={release?.status}
+            />
+        </div>
+    );
+}
+type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
+    project: number;
+    number: number;
+};
+
+// New/Edit/Delete Draft, sat to the left of the version tabs behind their own divider
+function DraftActions({ className, style, project: projectNumber, number }: DraftActionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const [editing, setEditing] = useState<IPlaytestCard>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
-    const navigate = useNavigate();
 
-    const canViewDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);
-    const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canCreateDraft = usePermission(Permission.CREATE_CARDS);
     const canEditDraft = usePermission(Permission.EDIT_CARDS);
     const canDeleteDraft = usePermission(Permission.DELETE_CARDS);
@@ -360,57 +530,48 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     }
 
     const isReleased = !!(latest && latest.released);
+    const items: (Pick<ActionItem, "key" | "title" | "icon" | "color"> & { onPress: () => void })[] = [];
+    if (!isReleased && canCreateDraft && !draft && latest) {
+        items.push({
+            key: "new-draft",
+            title: "New Draft",
+            icon: <FontAwesomeIcon icon={faPlus} size="lg" />,
+            color: "primary",
+            onPress: () => onNewDraft(latest)
+        });
+    }
+    if (!isReleased && canEditDraft && draft) {
+        items.push({
+            key: "edit-draft",
+            title: "Edit Draft",
+            icon: <FontAwesomeIcon icon={faPencil} size="lg" />,
+            onPress: () => setEditing(draft)
+        });
+    }
+    if (!isReleased && canDeleteDraft && draft) {
+        items.push({
+            key: "delete-draft",
+            title: "Delete Draft",
+            icon: <FontAwesomeIcon icon={faTrash} size="lg" />,
+            color: "danger",
+            onPress: () => setDeleting(draft)
+        });
+    }
+
+    if (items.length === 0) {
+        return null;
+    }
 
     return (
-        <div className={classNames(className)} style={style}>
-            <HeaderActions
-                items={[
-                    canViewDiscord &&
-                        !!latest?._metadata?.discord?.messageUrl && {
-                            key: "discord",
-                            title: "Join Discussion",
-                            icon: <FontAwesomeIcon icon={faDiscord} />,
-                            href: latest._metadata.discord.messageUrl.replace("https://", "discord://"),
-                            openInNewTab: false
-                        },
-                    !isReleased &&
-                        canSubmitReview && {
-                            key: "submit-review",
-                            title: "Submit Review",
-                            icon: <FontAwesomeIcon icon={faScroll} />,
-                            color: "primary",
-                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
-                        },
-                    !isReleased &&
-                        canCreateDraft &&
-                        !draft &&
-                        latest && {
-                            key: "new-draft",
-                            title: "New Draft",
-                            icon: <FontAwesomeIcon icon={faFeather} />,
-                            color: "primary",
-                            onPress: () => onNewDraft(latest)
-                        },
-                    !isReleased &&
-                        canEditDraft &&
-                        draft && {
-                            key: "edit-draft",
-                            title: "Edit Draft",
-                            icon: <FontAwesomeIcon icon={faPencil} />,
-                            color: "secondary",
-                            onPress: () => setEditing(draft)
-                        },
-                    !isReleased &&
-                        canDeleteDraft &&
-                        draft && {
-                            key: "delete-draft",
-                            title: "Delete Draft",
-                            icon: <FontAwesomeIcon icon={faTrash} />,
-                            color: "danger",
-                            onPress: () => setDeleting(draft)
-                        }
-                ]}
-            />
+        <div className={classNames("flex items-center gap-0.5", className)} style={style}>
+            {items.map((item) => (
+                <TouchTooltip key={item.key} content={item.title}>
+                    <Button isIconOnly size="sm" variant="light" color={item.color} onPress={item.onPress}>
+                        {item.icon}
+                    </Button>
+                </TouchTooltip>
+            ))}
+            <Divider orientation="vertical" className="h-5 mx-1" />
             <EditCardModal
                 isOpen={!!editing}
                 card={editing}
@@ -438,30 +599,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
         </div>
     );
 }
-type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
-    project: number;
-    number: number;
-};
-
-function StatusBoard({ className, style, project, number }: StatusBoardProps) {
-    return (
-        <div
-            className={classNames("py-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1", className)}
-            style={style}
-        >
-            <DevelopmentStatus project={project} number={number} />
-            <GithubCardStatus project={project} number={number} />
-            <PermissionGate requires={Permission.SYNC_CARD_IMAGES}>
-                <ImageStatus project={project} number={number} />
-            </PermissionGate>
-            <PermissionGate requires={Permission.SYNC_CARD_DISCORD}>
-                <DiscordCardStatus project={project} number={number} />
-            </PermissionGate>
-        </div>
-    );
-}
-
-type StatusBoardProps = Omit<BaseElementProps, "children"> & {
+type DraftActionsProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
 };

@@ -106,7 +106,14 @@ export default function CreatePlaytestingUpdateModal({
             const isSelected = selectedCards.some(
                 (selected) => selected.number === card.number && selected.version === card.version
             );
-            return <SelectableDraftCard card={card} isSelected={isSelected} onToggle={toggleCard} />;
+            return (
+                <SelectableDraftCard
+                    key={`${card.project}|${card.number}|${card.version}`}
+                    card={card}
+                    isSelected={isSelected}
+                    onToggle={toggleCard}
+                />
+            );
         });
     }, [draftsData?.items, isDraftsLoading, selectedCards, toggleCard]);
 
@@ -221,7 +228,7 @@ function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCard
                         </div>
                     </AccordionItem>
                 </Accordion>
-                <div>
+                <div className="flex-1">
                     {card.note ? (
                         <>
                             <div
@@ -242,12 +249,9 @@ function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCard
                         </Alert>
                     )}
                 </div>
-                <GithubCardStatus
-                    project={card.project}
-                    number={card.number}
-                    version={card.version}
-                    className="mt-auto m-2"
-                />
+                <div>
+                    <GithubCardStatus project={card.project} number={card.number} version={card.version} />
+                </div>
             </div>
         </Card>
     );
