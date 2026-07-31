@@ -1,11 +1,13 @@
 import { IProject } from "common/models/projects";
 import { ReactNode, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Chip, Progress, Skeleton } from "@heroui/react";
+import { Chip, Skeleton } from "@heroui/react";
 import classNames from "classnames";
-import { useGetProjectsQuery, useGetProjectStatsQuery } from "../../api";
+import { useGetProjectProgressQuery, useGetProjectsQuery, useGetProjectStatsQuery } from "../../api";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
+import ProjectProgressMeter from "../../components/projectProgressMeter";
+import { usePermission } from "../../hooks/usePermission";
 import StatsGrid from "../../components/statsGrid";
 import { dismoji, highlightTarget, releaseStatusColors } from "../../constants";
 import Watermark from "../../components/watermark";
@@ -65,18 +67,10 @@ export const ProjectsSummary = () => {
 
 function ProjectCard({ project }: ProjectCardProps) {
     const navigate = useNavigate();
-    const progress = useMemo(() => {
-        if (!project) {
-            return 0;
-        }
-        // TODO: Improve this once we have better tracking metrics (eg. wording, art, etc.)
-        const total = Object.values(project.cardCount).reduce((total, faction) => total + faction);
-        const released = project.releases
-            .filter((release) => release.releasedDate)
-            .reduce((sum, release) => sum + release.capacity, 0);
-
-        return total > 0 ? (released / total) * 100 : 0;
-    }, [project]);
+    const canReadStats = usePermission(Permission.READ_STATS_PROJECT);
+    // The same figure the project page's meter shows, so the two always agree
+    const { data: progressData } = useGetProjectProgressQuery({ project: project.number }, { skip: !canReadStats });
+    const progress = progressData?.overall;
 
     const statusChip = useMemo(() => {
         if (!project.active) {
@@ -130,15 +124,7 @@ function ProjectCard({ project }: ProjectCardProps) {
                     </div>
                     <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
                         {statusChip}
-                        <Progress
-                            color="primary"
-                            label="Progress"
-                            value={progress}
-                            maxValue={100}
-                            size="sm"
-                            formatOptions={{ style: "percent" }}
-                            showValueLabel
-                        />
+                        <ProjectProgressMeter project={project.number} size="sm" />
                     </div>
                 </div>
             </Watermark>

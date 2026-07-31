@@ -7,7 +7,7 @@ import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
-import ProjectProgressMeter from "./projectProgressMeter";
+import ProjectProgressMeter from "../../components/projectProgressMeter";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
