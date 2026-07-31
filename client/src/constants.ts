@@ -16,7 +16,7 @@ import {
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { UIColor } from "./types";
 import {
-    faCircleCheck,
+    faCheck,
     faEye,
     faFeather,
     faHammer,
@@ -212,7 +212,7 @@ export const designLane: CardLane<DesignStatus> = {
         complete: {
             label: "Complete",
             description: "The card's design has been confirmed and is done",
-            icon: faCircleCheck
+            icon: faCheck
         }
     }
 };
@@ -240,7 +240,7 @@ export const artworkLane: CardLane<ArtworkStatus> = {
         complete: {
             label: "Complete",
             description: "The card's artwork has been finalised",
-            icon: faCircleCheck
+            icon: faCheck
         }
     }
 };
@@ -263,7 +263,7 @@ export const productionLane: CardLane<ProductionStatus> = {
         complete: {
             label: "Complete",
             description: "The card file exists and is finished",
-            icon: faCircleCheck
+            icon: faCheck
         }
     }
 };
