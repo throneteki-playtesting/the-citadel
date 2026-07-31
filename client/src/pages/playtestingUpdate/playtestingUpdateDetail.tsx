@@ -32,6 +32,8 @@ import {
 import { useCodeUpdateStatus } from "../../components/status/useCodeUpdateStatus";
 import { useDataUpdateStatus } from "../../components/status/useDataUpdateStatus";
 import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import { BaseStatus } from "../../components/status/baseStatus";
 import { TouchTooltip } from "../../components/touchTooltip";
 import CardStack from "../../components/cardStack";
 import LoadingCard from "../../components/loadingCard";
@@ -171,42 +173,42 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
             showApiErrorToast(err, { title: "Failed to Download" });
         }
     };
+    const created = format(new Date(playtestingUpdate.created));
+
     return (
         <div className="relative space-y-1">
-            <div className="px-4 md:px-0 flex flex-col gap-2">
-                <div className="flex flex-row items-start justify-between gap-2">
-                    <div className="flex flex-col">
-                        <PermissionedLink
-                            to={`/project/${project.number}`}
-                            className="text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150"
-                            requires={Permission.READ_PROJECTS}
-                        >
-                            <FontAwesomeIcon icon={faAngleLeft} /> {project.name}
-                        </PermissionedLink>
+            <div className="px-4 md:px-0 flex flex-col sm:flex-row gap-2">
+                <div className="flex-1 flex flex-wrap items-baseline gap-x-2">
+                    <PermissionedLink
+                        to={`/project/${project.number}`}
+                        className="order-1 text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
+                        requires={Permission.READ_PROJECTS}
+                    >
+                        <FontAwesomeIcon icon={faAngleLeft} /> {project.name}
+                    </PermissionedLink>
+                    <div className="order-2 sm:order-3 sm:basis-full text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
+                        <span className="hidden sm:inline">Playtesting </span>Update #{playtestingUpdate.version}
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="order-3 basis-full sm:hidden text-xxs tracking-wider text-foreground font-sans">
+                        {created}
+                    </div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-1.5">
+                        <div className="hidden sm:flex items-center gap-1.5">
+                            <BaseStatus isIconOnly data={codeStatus} isLoading={isCodeStatusLoading} />
+                            <BaseStatus isIconOnly data={dataStatus} isLoading={isDataStatusLoading} />
+                        </div>
                         <HeaderActions
                             items={[
-                                codeStatus && {
-                                    key: "code-status",
-                                    title: codeStatus.title,
-                                    description: codeStatus.description,
-                                    icon: codeStatus.icon ?? null,
-                                    color: codeStatus.color,
-                                    href: codeStatus.href,
-                                    onPress: codeStatus.onPress,
+                                statusActionItem("code-status", codeStatus, {
+                                    isDropdownOnly: true,
                                     isLoading: isCodeStatusLoading
-                                },
-                                dataStatus && {
-                                    key: "data-status",
-                                    title: dataStatus.title,
-                                    description: dataStatus.description,
-                                    icon: dataStatus.icon ?? null,
-                                    color: dataStatus.color,
-                                    href: dataStatus.href,
-                                    onPress: dataStatus.onPress,
+                                }),
+                                statusActionItem("data-status", dataStatus, {
+                                    isDropdownOnly: true,
                                     isLoading: isDataStatusLoading
-                                },
+                                }),
                                 {
                                     key: "print",
                                     title: "Download Print PDF Sheet",
@@ -223,13 +225,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                                 }
                             ]}
                         />
-                        <div className="w-fit text-xxs sm:text-sm tracking-wider text-foreground font-sans">
-                            {format(new Date(playtestingUpdate.created))}
-                        </div>
                     </div>
-                </div>
-                <div className="text-3xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary w-full">
-                    Playesting Update #{playtestingUpdate.version}
+                    <div className="hidden sm:block w-fit text-sm tracking-wider text-foreground font-sans">
+                        {created}
+                    </div>
                 </div>
             </div>
             {playtestingUpdate.description && (
