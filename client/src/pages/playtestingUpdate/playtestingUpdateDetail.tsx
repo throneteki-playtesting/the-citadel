@@ -438,13 +438,20 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                     }
                 </CardStack>
             </div>
-            <a
-                href={card._metadata?.github?.issueUrl}
-                target="_blank"
-                className="opacity-75 hover:opacity-100 p-2 font-sans"
-            >
-                {implementChip}
-            </a>
+            <div className="flex flex-wrap justify-between items-center gap-2 p-2 font-sans">
+                <a href={card._metadata?.github?.issueUrl} target="_blank" className="opacity-75 hover:opacity-100">
+                    {implementChip}
+                </a>
+                <PermissionedLink
+                    to={`/project/${card.project}/${card.number}`}
+                    requires={Permission.READ_CARDS}
+                    className="opacity-75 hover:opacity-100"
+                >
+                    <Chip color="secondary" variant="bordered">
+                        View Card Page
+                    </Chip>
+                </PermissionedLink>
+            </div>
         </Card>
     );
 }
@@ -474,8 +481,9 @@ function PlaytestingUpdateChangeNoteSkeleton() {
                     {() => <LoadingCard />}
                 </CardStack>
             </div>
-            <div className="p-2">
+            <div className="flex items-center gap-2 p-2">
                 <Skeleton className="h-6 w-40 rounded-md" />
+                <Skeleton className="h-6 w-28 rounded-md" />
             </div>
         </Card>
     );

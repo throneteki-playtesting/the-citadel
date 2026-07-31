@@ -379,6 +379,7 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
                     </div>
                 </div>
             }
+            placement="right-start"
         >
             <div
                 className={classNames(
