@@ -1,4 +1,4 @@
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import asyncHandler from "express-async-handler";
 import jwt from "jsonwebtoken";
 import { ApiErrorResponse } from "@/errors";
@@ -63,6 +63,7 @@ export const authMiddleware = asyncHandler(async (req, res, next) => {
 
         const integration = await dataService.integrations.findByToken(rawToken);
         if (!integration) {
+            logger.warn(`Rejected ${req.method} ${req.originalUrl}: integration token invalid`);
             throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Integration token invalid");
         }
 

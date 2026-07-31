@@ -17,7 +17,7 @@ export default class LoggerService {
 
     public static initialise() {
         const baseFormat = [
-            winston.format.timestamp({ format: "YYYY-MM-DD hh:mm:ss" }),
+            winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
             this.formatError(),
             winston.format.printf(({ timestamp, level, message }) => `${timestamp} ${level}: ${message}`)
         ];

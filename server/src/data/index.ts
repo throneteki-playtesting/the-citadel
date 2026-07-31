@@ -46,7 +46,15 @@ class DataService {
     private repos = new Map<string, Database<any>>();
 
     constructor() {
-        this.ready = Promise.all([this.connectDb(), this.connectRedis()]);
+        this.ready = this.connect();
+    }
+
+    private async connect(): Promise<[boolean, boolean]> {
+        const [database, redis] = await Promise.all([this.connectDb(), this.connectRedis()]);
+        if (database && redis) {
+            await this.integrations.initialise();
+        }
+        return [database, redis];
     }
 
     private async connectDb(): Promise<boolean> {
@@ -94,7 +102,9 @@ class DataService {
     }
 
     async reconnect(): Promise<void> {
-        await this.connectDb();
+        if (await this.connectDb()) {
+            await this.integrations.initialise();
+        }
     }
 
     get projects() {

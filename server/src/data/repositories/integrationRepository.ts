@@ -15,19 +15,15 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
     private internalKey = "INTERNAL_INTEGRATION_TOKEN";
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<Integration>(mongoClient, "integrations", { id: 1 }));
-        this.initialise();
     }
 
     /**
      * Initialises an internal intergration which is used by certain processes, such as rendering.
      * Should only be accessible by the internal application (ie. via redis), has all permissions, and created itself.
      */
-    private async initialise() {
+    async initialise() {
         const name = "Internal Integration";
-        let integration = await this.database.readOne({ name });
-        if (integration) {
-            await this.database.destroy(integration);
-        }
+        const previous = await this.database.readOne({ name });
         const { id, rawToken, tokenHash } = this.generateKeys();
         const now = new Date();
         const data = {
@@ -43,13 +39,20 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
             createdBy: id,
             updatedBy: id
         };
-        [integration] = await this.database.create(data);
-
+        await this.database.create(data);
+        // Only retire the previous integration once its replacement is both stored and reachable, so
+        // there is never a point where the token in redis refers to an integration which no longer exists
         await dataService.redis.set(this.internalKey, rawToken);
+        if (previous) {
+            await this.database.destroy(previous);
+        }
     }
 
     async fetchInternalToken() {
         const rawToken = (await dataService.redis.get(this.internalKey)) as string;
+        if (!rawToken) {
+            throw new Error(`No internal integration token is stored against "${this.internalKey}" in redis`);
+        }
         return rawToken;
     }
 
