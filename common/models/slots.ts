@@ -23,6 +23,9 @@ export const designPhase: Record<DesignStatus, DesignPhase> = {
     complete: "finalising"
 };
 
+/** Notes are a prompt for discussion, not the discussion itself - kept short so a tally stays scannable */
+export const RELEASE_CHECK_NOTE_MAX = 140;
+
 /** One team member's sign-off on whether a card is safe to release */
 export interface IReleaseCheck extends IAuditable {
     ready: boolean;

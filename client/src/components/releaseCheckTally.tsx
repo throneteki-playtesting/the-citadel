@@ -6,6 +6,11 @@ import { useGetReleaseCheckSummaryQuery } from "../api";
 import { TouchTooltip } from "./touchTooltip";
 import { BaseElementProps } from "../types";
 
+// Shared so the loading skeleton keeps the same shape, and doesn't shift the layout when it resolves
+const TALLY_CLASSES = "flex flex-col gap-1.5";
+const HEADER_ROW_CLASSES = "flex items-center justify-between gap-2 text-xs sm:text-sm";
+const STATUS_ROW_CLASSES = "flex items-center gap-3 text-xs";
+
 // Sign-off tally for a slot - how many said yes/no, and how many eligible submitters are yet to answer
 export default function ReleaseCheckTally({
     className,
@@ -17,7 +22,21 @@ export default function ReleaseCheckTally({
     const { data, isLoading } = useGetReleaseCheckSummaryQuery({ project, number });
 
     if (isLoading) {
-        return <Skeleton className={classNames("h-10 w-full rounded-md", className)} style={style} />;
+        return (
+            <div className={classNames(TALLY_CLASSES, className)} style={style}>
+                <div className={HEADER_ROW_CLASSES}>
+                    <Skeleton className="h-4 sm:h-5 w-48 rounded-md" />
+                    <Skeleton className="h-4 sm:h-5 w-16 rounded-md" />
+                </div>
+                {/* Empty rather than skeletal - a bar is already its own progress indicator */}
+                {showBar && <Progress aria-label="Ready responses" value={0} color="success" size="sm" />}
+                <div className={STATUS_ROW_CLASSES}>
+                    <Skeleton className="h-4 w-16 rounded-md" />
+                    <Skeleton className="h-4 w-24 rounded-md" />
+                    <Skeleton className="h-4 w-24 rounded-md" />
+                </div>
+            </div>
+        );
     }
     if (!data) {
         return null;
@@ -29,8 +48,8 @@ export default function ReleaseCheckTally({
     const readyPct = answered === 0 ? 0 : (data.ready / answered) * 100;
 
     return (
-        <div className={classNames("flex flex-col gap-1.5", className)} style={style}>
-            <div className="flex items-center justify-between gap-2 text-xs sm:text-sm">
+        <div className={classNames(TALLY_CLASSES, className)} style={style}>
+            <div className={HEADER_ROW_CLASSES}>
                 {answered === 0 ? (
                     <span className="font-medium">
                         {data.stale > 0
@@ -47,7 +66,7 @@ export default function ReleaseCheckTally({
             {showBar && answered > 0 && (
                 <Progress aria-label="Ready responses" value={readyPct} color="success" size="sm" />
             )}
-            <div className="flex items-center gap-3 text-xs">
+            <div className={STATUS_ROW_CLASSES}>
                 <span className="flex items-center gap-1 text-success">
                     <FontAwesomeIcon icon={faCheck} /> {data.ready} ready
                 </span>

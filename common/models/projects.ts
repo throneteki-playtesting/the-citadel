@@ -10,6 +10,11 @@ export type Type = (typeof types)[number];
 export type Code = `${number}`;
 export type ReleaseStatus = (typeof releaseStatuses)[number];
 
+// Approval locks the design in, so there's nothing left for a release check to influence
+export function areReleaseChecksClosed(status: ReleaseStatus) {
+    return releaseStatuses.indexOf(status) >= releaseStatuses.indexOf("approved");
+}
+
 export interface IProject extends IAuditable {
     number: number;
     name: string;

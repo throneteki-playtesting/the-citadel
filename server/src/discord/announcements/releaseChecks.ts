@@ -203,7 +203,8 @@ const messages = {
                         " members to provide input on whether it's cards are ready to release as-is." +
                         "\n\nJudge mechanics & thematics only - wording and refinement come later, with a full" +
                         " release review over the PDF print sheet. Checks are tied to a card's version, so if a" +
-                        " card gets updated its checks go stale and need answering again."
+                        " card gets updated its checks go stale and need answering again." +
+                        "\n\nChecks close once the release is approved, so get yours in sooner rather than later."
                 )
             )
             .addSeparatorComponents(new SeparatorBuilder())

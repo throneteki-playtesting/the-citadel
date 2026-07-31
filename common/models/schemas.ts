@@ -389,7 +389,7 @@ export const Slot = {
                         Joi.object({
                             ready: Joi.boolean().required(),
                             categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
-                            note: Joi.string().max(140).allow(""),
+                            note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
                             version: Joi.string().required().regex(Regex.SemanticVersion),
                             created: Joi.date().required(),
                             createdBy: Joi.string().required(),
@@ -435,7 +435,7 @@ export const Slot = {
                     Joi.object({
                         ready: Joi.boolean().required(),
                         categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
-                        note: Joi.string().max(140).allow(""),
+                        note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
                         version: Joi.string().regex(Regex.SemanticVersion),
                         created: Joi.date(),
                         createdBy: Joi.string(),
@@ -481,7 +481,7 @@ export const Slot = {
         }),
         note: Joi.when("ready", {
             is: false,
-            then: Joi.string().trim().max(140).required().messages({
+            then: Joi.string().trim().max(Slots.RELEASE_CHECK_NOTE_MAX).required().messages({
                 "any.required": "Provide your reasoning",
                 "string.empty": "Provide your reasoning"
             }),

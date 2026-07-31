@@ -110,7 +110,7 @@ function CapsuleVisual({
                     typeIcon
                 )}
                 <span className="flex-1 min-w-0 truncate whitespace-nowrap text-xs font-sans leading-tight">
-                    {card.name}
+                    <span className={classNames({ "cursor-pointer": isClickable })}>{card.name}</span>
                 </span>
                 {wantsReleaseCheck && (
                     <ReleaseCheckButton

@@ -44,8 +44,9 @@ const checks = {
 
             const groups = releases.map((cards) => {
                 const lines = cards.map(
+                    // Angle brackets keep Discord from unfurling a preview embed per card
                     (card) =>
-                        `- [#${card.number} ${card.name}](${card.url})` +
+                        `- [#${card.number} ${card.name}](<${card.url}>)` +
                         (card.staleVersion ? ` - re-check, you answered v${card.staleVersion}` : "")
                 );
                 return `### ${cards[0].releaseName} (${cards[0].code})\n${lines.join("\n")}`;

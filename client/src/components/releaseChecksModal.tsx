@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import {
@@ -25,7 +25,13 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faClockRotateLeft, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useNavigate } from "react-router-dom";
 import { isEqual } from "lodash-es";
-import { IReleaseCheck, isCheckStale, ReleaseCheckCategory, releaseCheckCategories } from "common/models/slots";
+import {
+    IReleaseCheck,
+    isCheckStale,
+    RELEASE_CHECK_NOTE_MAX,
+    ReleaseCheckCategory,
+    releaseCheckCategories
+} from "common/models/slots";
 import { Slot } from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { parseCardCode, SemanticVersion } from "common/utils";
@@ -41,6 +47,9 @@ import FormValidationSummary from "./formValidationSummary";
 import FeedbackAvatar, { FeedbackAvatarView } from "./feedbackAvatar";
 import ReleaseCheckTally from "./releaseCheckTally";
 import { releaseCheckVerdict } from "./releaseCheckVerdict";
+
+// Only shows total counter at 80%
+const NOTE_COUNTER_FROM = Math.floor(RELEASE_CHECK_NOTE_MAX * 0.8);
 
 // Row width budget, in the units the row is laid out in: a size-10 avatar plus the row's gap-2.5
 const AVATAR_PX = 40;
@@ -386,6 +395,9 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
     const [ready, setReady] = useState(entry?.ready ?? true);
     const [categories, setCategories] = useState<ReleaseCheckCategory[]>(entry?.categories ?? []);
     const [note, setNote] = useState(entry?.note ?? "");
+    const [isAtCapacity, setIsAtCapacity] = useState(false);
+    const capacityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+    const expandedRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setReady(entry?.ready ?? true);
@@ -393,6 +405,23 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
         setNote(entry?.note ?? "");
         clearErrors();
     }, [entry, clearErrors]);
+
+    useEffect(() => () => clearTimeout(capacityTimer.current), []);
+
+    // maxLength swallows the keypress silently, so the ring is the only sign it went nowhere. A
+    // selection being replaced still fits, so that isn't a rejection
+    const onNoteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        const isReplacingSelection = e.currentTarget.selectionStart !== e.currentTarget.selectionEnd;
+        if (note.length < RELEASE_CHECK_NOTE_MAX || isReplacingSelection) {
+            return;
+        }
+        if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) {
+            return;
+        }
+        setIsAtCapacity(true);
+        clearTimeout(capacityTimer.current);
+        capacityTimer.current = setTimeout(() => setIsAtCapacity(false), 400);
+    };
 
     const isStale = !!entry && isCheckStale(entry, latestVersion);
     // Reaffirming resubmits the prior verdict verbatim, so it's only offered while the form still holds it
@@ -466,10 +495,18 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
             <AnimatePresence initial={false}>
                 {!ready && (
                     <motion.div
+                        ref={expandedRef}
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.18 }}
+                        // Waits for the expand, or it would scroll to where the form used to end. Keyed
+                        // off the target rather than `ready`, since the exit animation reuses this closure
+                        onAnimationComplete={(definition) => {
+                            if ((definition as { height?: number | string }).height === "auto") {
+                                expandedRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+                            }
+                        }}
                         className="overflow-hidden flex flex-col gap-2"
                     >
                         <div className="text-xs text-foreground/60">
@@ -500,10 +537,19 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
                             name="note"
                             size="sm"
                             minRows={2}
-                            maxLength={140}
+                            maxLength={RELEASE_CHECK_NOTE_MAX}
                             placeholder="Why shouldn't this card be released yet?"
                             value={note}
                             isDisabled={!canSubmit}
+                            classNames={{
+                                // Inset, or the expand animation's overflow-hidden clips it. Carries no
+                                // transition while on, so it snaps in and only the fade out is animated
+                                inputWrapper: classNames(
+                                    "ring-2 ring-inset",
+                                    isAtCapacity ? "ring-danger" : "ring-transparent transition-colors duration-700"
+                                )
+                            }}
+                            onKeyDown={onNoteKeyDown}
                             onValueChange={(value) => {
                                 setNote(value);
                                 clearError("note");
@@ -514,15 +560,27 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
             </AnimatePresence>
             <FormValidationSummary errors={errors} mappedPaths={ready ? [] : ["note", "categories"]} />
             {canSubmit && (
-                <Button type="submit" size="sm" color="primary" className="self-end" isDisabled={isLoading}>
-                    {isStale
-                        ? isUntouched
-                            ? "Confirm This Still Stands"
-                            : "Re-check"
-                        : entry
-                          ? "Update Response"
-                          : "Submit Response"}
-                </Button>
+                <div className="flex items-center justify-end gap-2">
+                    {!ready && note.length >= NOTE_COUNTER_FROM && (
+                        <span
+                            className={classNames(
+                                "text-tiny",
+                                note.length >= RELEASE_CHECK_NOTE_MAX ? "text-danger" : "text-foreground/50"
+                            )}
+                        >
+                            {note.length}/{RELEASE_CHECK_NOTE_MAX}
+                        </span>
+                    )}
+                    <Button type="submit" size="sm" color="primary" isDisabled={isLoading}>
+                        {isStale
+                            ? isUntouched
+                                ? "Confirm This Still Stands"
+                                : "Re-check"
+                            : entry
+                              ? "Update Response"
+                              : "Submit Response"}
+                    </Button>
+                </div>
             )}
         </Form>
     );

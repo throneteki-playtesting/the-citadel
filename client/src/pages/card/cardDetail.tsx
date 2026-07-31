@@ -3,6 +3,7 @@ import { BaseElementProps } from "../../types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useGetCardQuery, useGetCardsQuery, useGetProjectQuery, useGetSlotQuery } from "../../api";
 import { IPlaytestCard } from "common/models/cards";
+import { areReleaseChecksClosed } from "common/models/projects";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getFinalCardNumber, getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
@@ -411,9 +412,14 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
     const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
+    const { data: project } = useGetProjectQuery({ number: projectNumber }, { skip: !canReadFeedback });
     // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
     const { releaseCheck } = useConsumableParams(CARD_PARAMS);
     const [feedbackOpen, setFeedbackOpen] = useState(releaseCheck === "1");
+
+    // Once its release is approved the card is on its way out the door, so there's nothing left to check
+    const release = project?.releases.find((entry) => entry.code === slot?.release?.code);
+    const checksClosed = !!release && areReleaseChecksClosed(release.status);
 
     const latest = useMemo(
         () => [...(cardsData?.items ?? [])].reverse().find((card) => card.latest),
@@ -445,13 +451,14 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
             <HeaderActions
                 items={[
                     ...statusItems,
-                    canReadFeedback && {
-                        key: "release-checks",
-                        title: "Release Checks",
-                        icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
-                        badge: feedbackCount,
-                        onPress: () => setFeedbackOpen(true)
-                    },
+                    canReadFeedback &&
+                        !checksClosed && {
+                            key: "release-checks",
+                            title: "Release Checks",
+                            icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
+                            badge: feedbackCount,
+                            onPress: () => setFeedbackOpen(true)
+                        },
                     !isLoading &&
                         !isReleased &&
                         canSubmitReview && {
