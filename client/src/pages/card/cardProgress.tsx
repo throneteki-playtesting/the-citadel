@@ -172,7 +172,10 @@ function ProgressSummary({ overall, statuses, isExpanded, onToggle }: ProgressSu
             className="sm:hidden w-full flex items-center gap-2 py-1"
             onClick={onToggle}
         >
-            <PercentValue value={overall} className="flex-1 text-center text-3xl" />
+            <div className="flex-1 flex items-center justify-center gap-1">
+                <PercentValue value={overall} className="text-3xl" />
+                <OverallInfoTooltip />
+            </div>
             <Divider orientation="vertical" className="h-8" />
             <div className="relative flex-3 min-w-0">
                 <div
@@ -253,6 +256,20 @@ type LaneBadgeProps = {
     statuses?: ICardProgress["statuses"];
 };
 
+function OverallInfoTooltip() {
+    return (
+        <TouchTooltip
+            content={
+                <div className="max-w-56 text-xs">
+                    The overall percentage is calculated from this card's Design, Artwork and Production completeness.
+                </div>
+            }
+        >
+            <FontAwesomeIcon icon={faCircleInfo} className="text-foreground/40 text-sm cursor-help" />
+        </TouchTooltip>
+    );
+}
+
 const overallValueClass = "text-5xl sm:text-6xl";
 
 function OverallValue({ value }: { value?: number }) {
@@ -274,16 +291,7 @@ function OverallValue({ value }: { value?: number }) {
                         className={classNames("col-start-1 row-start-1 text-end", overallValueClass)}
                     />
                 </div>
-                <TouchTooltip
-                    content={
-                        <div className="max-w-56 text-xs">
-                            The overall percentage is calculated from this card's Design, Artwork and Production
-                            completeness.
-                        </div>
-                    }
-                >
-                    <FontAwesomeIcon icon={faCircleInfo} className="text-foreground/40 text-sm cursor-help" />
-                </TouchTooltip>
+                <OverallInfoTooltip />
             </div>
             <div className="text-base sm:text-xs font-cinzel uppercase tracking-wide text-foreground/50">
                 Overall Progress
