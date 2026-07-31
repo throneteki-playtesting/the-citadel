@@ -94,7 +94,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
                 <CardProgress project={projectNumber} number={number} />
             </PermissionGate>
             <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-2 w-full">
+                <div className="flex flex-col md:flex-row gap-2 w-full overflow-hidden">
                     <CardVersions project={projectNumber} number={number} className="z-10" />
                     <div className="flex flex-col gap-2 flex-1">
                         <PermissionGate requires={Permission.READ_DECKS}>
