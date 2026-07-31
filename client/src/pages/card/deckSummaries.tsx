@@ -190,24 +190,35 @@ function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
                                 heading="Card version"
                             >
                                 {card?.latest
-                                    ? "The Citadel's records confirm this card is current — take this deck to the table with confidence."
-                                    : "Consult the Citadel's records before taking this deck to the table — the card may have changed since these scrolls were last updated."}
+                                    ? `Crafted for v${deck.cards[code]}, still the current version in the Citadel's records — take this deck to the table with confidence.`
+                                    : `Crafted for v${deck.cards[code]}, but this card has been revised since. Consult the Citadel's records before taking this deck to the table.`}
                             </SummaryChip>
                             {otherDeckCards.length > 0 && (
                                 <SummaryChip
                                     icon={faLayerGroup}
                                     label={`+${otherDeckCards.length} other card${otherDeckCards.length === 1 ? "" : "s"}`}
-                                    heading="Also tests"
+                                    heading="Other playtesting cards"
                                 >
-                                    {otherDeckCards.map((otherCard) => otherCard.name).join(", ")}
+                                    This deck also carries {otherDeckCards.length} other playtesting{" "}
+                                    {otherDeckCards.length === 1 ? "card" : "cards"}, so its results may not rest on
+                                    this card alone:
+                                    <ul className="list-disc list-inside">
+                                        {otherDeckCards.map((otherCard) => (
+                                            <li key={parseCardCode(false, otherCard.project, otherCard.number)}>
+                                                {otherCard.name} v{otherCard.version}
+                                            </li>
+                                        ))}
+                                    </ul>
                                 </SummaryChip>
                             )}
                             <SummaryChip
                                 icon={deck.source === "review" ? faScroll : faUserPen}
                                 label={deck.source === "review" ? "From review" : "Added manually"}
-                                heading="Source"
+                                heading="How this deck arrived"
                             >
-                                {deck.source === "review" ? "Submitted via a review" : "Submitted manually"}
+                                {deck.source === "review"
+                                    ? "Submitted alongside a review of this card, so the deck and that feedback were recorded together."
+                                    : "Added directly to the Citadel's archives, without an accompanying review of this card."}
                             </SummaryChip>
                         </div>
                         <div className="pl-16 flex flex-row items-center gap-2 text-xs text-foreground/50 min-w-0">

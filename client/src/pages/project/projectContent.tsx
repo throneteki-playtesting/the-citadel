@@ -6,8 +6,8 @@ import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { memo, useLayoutEffect, useMemo, useRef, useTransition } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
 import { HighlightTarget } from "../../components/highlightTarget";
@@ -24,6 +24,7 @@ import ProgressRing from "../../components/progressRing";
 import CardProgressBreakdown from "../../components/cardProgressBreakdown";
 import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
+import useHistoryState from "../../hooks/useHistoryState";
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
@@ -51,9 +52,9 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         filter: { project: project.number }
     });
     const { data: slotsData } = useGetSlotsQuery({ project: project.number });
-    const [sortBy, setSortBy] = useState<SortOption>("number");
+
+    const [storedSort, setStoredSort] = useHistoryState<SortOption>("sortBy", "number");
     const [isSorting, startSorting] = useTransition();
-    const { state } = useLocation();
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -63,12 +64,9 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         [canReadProgress]
     );
 
-    useEffect(() => {
-        const sort = state?.sortBy as SortOption;
-        if (sort && availableSortOptions.some(([key]) => key === sort)) {
-            startSorting(() => setSortBy(sort));
-        }
-    }, [state, availableSortOptions]);
+    // An entry can outlive the permission which allowed its sort, so what it holds is only a request
+    const sortBy = availableSortOptions.some(([key]) => key === storedSort) ? storedSort : "number";
+    const setSortBy = (sort: SortOption) => startSorting(() => setStoredSort(sort));
 
     const cardStats = useMemo(() => {
         const cardsByNumber = new Map(data?.items.map((card) => [card.number, card]) ?? []);
@@ -174,7 +172,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                 <Select
                     label="Sort by..."
                     selectedKeys={[sortBy]}
-                    onSelectionChange={(keys) => startSorting(() => setSortBy([...keys][0] as SortOption))}
+                    onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
                     className="w-full max-w-64"
                     classNames={{ value: "font-cinzel" }}
                     size="sm"
@@ -390,7 +388,7 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     <CardImage card={card} />
                 ) : (
                     <div className="relative w-full">
-                        <CardPreview card={renderCard} rounded className="transition-all" />
+                        <CardPreview card={renderCard} rounded />
                     </div>
                 )}
             </div>

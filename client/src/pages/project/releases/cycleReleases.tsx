@@ -50,6 +50,9 @@ import { DeepPartial } from "common/types";
 import { getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
 import { highlightTarget } from "../../../constants";
+import useHistoryState from "../../../hooks/useHistoryState";
+
+const isSameCodes = (a: string[], b: string[]) => a.length === b.length && a.every((code) => b.includes(code));
 
 export default function CycleReleases({ project, isActive }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
@@ -72,6 +75,11 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
     // Captured from the trigger's DOM rect on open, so the modal can morph in/out from wherever it was clicked
     const [poolOriginRect, setPoolOriginRect] = useState<DOMRect>();
     const [collapsedReleases, setCollapsedReleases] = useState<Set<string>>(new Set());
+    // Local state stays the source of truth for the drag interplay below; the history entry mirrors it
+    const [persistedCollapse, setPersistedCollapse] = useHistoryState<string[] | undefined>(
+        "collapsedReleases",
+        undefined
+    );
     const hasInitializedCollapse = useRef(false);
     const hoverTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
     const lastHoverContainerRef = useRef<string>(undefined);
@@ -142,6 +150,11 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
             return;
         }
         hasInitializedCollapse.current = true;
+        // Coming back to this entry (eg. from a card) restores what was left open, over the defaults
+        if (persistedCollapse) {
+            setCollapsedReleases(new Set(persistedCollapse));
+            return;
+        }
         // A release deep-linked via ?tab=releases + highlight state should start expanded, even if released
         const highlightedCode = releases.find(
             (release) => locationState?.highlight === highlightTarget.release(project.number, release.code)
@@ -153,7 +166,20 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
             }
         }
         setCollapsedReleases(defaults);
-    }, [isLoadingSlots, isLoadingCards, releases, locationState, project.number]);
+    }, [isLoadingSlots, isLoadingCards, releases, locationState, project.number, persistedCollapse]);
+
+    // Mirrors the collapse onto the history entry. Held back mid-drag, where the replace navigation
+    // would re-render dnd-kit's tree out from under the pointer - drag end syncs whatever it settled on
+    useEffect(() => {
+        if (!hasInitializedCollapse.current || activeId) {
+            return;
+        }
+        const codes = [...collapsedReleases];
+        if (persistedCollapse && isSameCodes(persistedCollapse, codes)) {
+            return;
+        }
+        setPersistedCollapse(codes);
+    }, [collapsedReleases, activeId, persistedCollapse, setPersistedCollapse]);
 
     const baseContainers = useMemo(() => buildContainers(pool, releases, slots), [pool, releases, slots]);
     const containers = useMemo(

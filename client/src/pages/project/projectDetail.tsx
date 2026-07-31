@@ -16,6 +16,7 @@ import usePageTitle from "../../hooks/usePageTitle";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import useConsumableParams from "../../hooks/useConsumableParams";
+import useHistoryState from "../../hooks/useHistoryState";
 import Watermark from "../../components/watermark";
 
 const PROJECT_PARAMS = ["tab", "release"] as const;
@@ -30,7 +31,11 @@ export default function ProjectDetail({ className, style, project: number }: Pro
     const { tab: entryTab, release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release }) =>
         release ? { highlight: highlightTarget.release(number, release) } : null
     );
-    const [tab, setTab] = useState<ProjectTab>(entryTab === "releases" || entryRelease ? "releases" : "development");
+
+    const [tab, setTab] = useHistoryState<ProjectTab>(
+        "tab",
+        entryTab === "releases" || entryRelease ? "releases" : "development"
+    );
     const navigate = useNavigate();
     const canViewReleases = usePermission(Permission.READ_RELEASES);
 
