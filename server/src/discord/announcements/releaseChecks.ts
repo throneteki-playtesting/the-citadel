@@ -169,6 +169,11 @@ const CARD_LINE_BUDGET = 90;
 // The one distinction worth chasing - a card nobody has looked at, versus one that has any opinion
 // at all. Names are truncated to a single line, since the list is a prompt rather than a manifest
 function uncheckedSummary(cards: IReleaseCheckCard[]) {
+    // Cards drop out of the list as their designs lock in, so the release can run out of them entirely
+    if (cards.length === 0) {
+        return ":white_check_mark: Every card's design is locked in - nothing left to check.";
+    }
+
     const unchecked = cards.filter((card) => card.fresh === 0);
     if (unchecked.length === 0) {
         return ":white_check_mark: Every card has at least one check.";
@@ -200,11 +205,10 @@ const messages = {
                 new TextDisplayBuilder().setContent(
                     `## ${release.code} - Release Checks Required` +
                         `\n<@&${taggedRole.id}> **${release.name}** has been marked as ${release.status}, and requires` +
-                        " members to provide input on whether it's cards are ready to release as-is." +
-                        "\n\nJudge mechanics & thematics only - wording and refinement come later, with a full" +
-                        " release review over the PDF print sheet. Checks are tied to a card's version, so if a" +
-                        " card gets updated its checks go stale and need answering again." +
-                        "\n\nChecks close once the release is approved, so get yours in sooner rather than later."
+                        " members to provide input on whether it's cards are ready to release as-is (excluding wording" +
+                        " refinements)." +
+                        "\n\nChecks close once a card's design is locked in, or the release is approved, so get" +
+                        " yours in sooner rather than later."
                 )
             )
             .addSeparatorComponents(new SeparatorBuilder())

@@ -3,6 +3,7 @@ import classNames from "classnames";
 import { useSortable } from "@dnd-kit/sortable";
 import { IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
+import { checksClosedBy } from "common/models/slots";
 import { cardLaneBreakdown } from "common/progress/calc";
 import ThronesIcon from "../../../components/thronesIcon";
 import { TouchTooltip } from "../../../components/touchTooltip";
@@ -43,12 +44,16 @@ function CapsuleVisual({
     const canReadProgress = usePermission(Permission.READ_STATS_SLOT);
     const canSubmitCheck = usePermission(Permission.SUBMIT_RELEASE_CHECK);
     const wantsProgress = showProgress && canReadProgress;
-    const wantsReleaseCheck = showReleaseCheck && canSubmitCheck;
+    const canCheck = showReleaseCheck && canSubmitCheck;
 
-    const slot = useCapsuleSlot(card.project, card.number, !wantsProgress && !wantsReleaseCheck);
+    const slot = useCapsuleSlot(card.project, card.number, !wantsProgress && !canCheck);
     // The same calculation the card's own progress endpoint runs, so the two always agree
     const progress = slot && wantsProgress ? cardLaneBreakdown(slot.statuses) : undefined;
     const myCheck = slot?.statuses.design.checks.find((entry) => entry.createdBy === user?.discordId);
+    // Capsules only show while a release is confirming, so only the card's own design can have closed
+    // its checks - once it has, the button is worth keeping solely to read a verdict already given
+    const checksClosed = !!slot && !!checksClosedBy(slot.statuses.design.status);
+    const wantsReleaseCheck = canCheck && (!checksClosed || !!myCheck);
 
     const typeIcon = <ThronesIcon name={card.type} className="shrink-0 text-xs opacity-60" />;
     // Hidden rather than dropped, so the type icon and name keep the position they'll hold at rest

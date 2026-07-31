@@ -1,4 +1,5 @@
 import { Faction, Type } from "./cards";
+import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
 import { IAuditable } from "./shared";
 import { SemanticVersion } from "../utils";
 
@@ -33,6 +34,22 @@ export interface IReleaseCheck extends IAuditable {
     note?: string;
     /** Card version this verdict was made against - stamped server side */
     version: SemanticVersion;
+}
+
+export type ChecksClosedReason = "design" | "release";
+
+/**
+ * Why a card's release checks are closed, if they are - a locked in design leaves nothing for a check to
+ * influence, and an approved release says the same of everything in it. Undefined while checks are open.
+ */
+export function checksClosedBy(design: DesignStatus, release?: ReleaseStatus): ChecksClosedReason | undefined {
+    if (designPhase[design] === "finalising") {
+        return "design";
+    }
+    if (release && areReleaseChecksClosed(release)) {
+        return "release";
+    }
+    return undefined;
 }
 
 /** A verdict only counts while it matches the slot's latest confirmed card; any version change stales it */

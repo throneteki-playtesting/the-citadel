@@ -9,7 +9,6 @@ import {
     useGetSlotQuery
 } from "../../api";
 import { IPlaytestCard } from "common/models/cards";
-import { areReleaseChecksClosed } from "common/models/projects";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
@@ -426,9 +425,8 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
     const { releaseCheck } = useConsumableParams(CARD_PARAMS);
     const [feedbackOpen, setFeedbackOpen] = useState(releaseCheck === "1");
 
-    // Once its release is approved the card is on its way out the door, so there's nothing left to check
+    // Feeds the modal's read-only mode - checks close with the card's design, or with its release
     const release = project?.releases.find((entry) => entry.code === slot?.release?.code);
-    const checksClosed = !!release && areReleaseChecksClosed(release.status);
 
     const latest = useMemo(
         () => [...(cardsData?.items ?? [])].reverse().find((card) => card.latest),
@@ -460,14 +458,13 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
             <HeaderActions
                 items={[
                     ...statusItems,
-                    canReadFeedback &&
-                        !checksClosed && {
-                            key: "release-checks",
-                            title: "Release Checks",
-                            icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
-                            badge: feedbackCount,
-                            onPress: () => setFeedbackOpen(true)
-                        },
+                    canReadFeedback && {
+                        key: "release-checks",
+                        title: "Release Checks",
+                        icon: <FontAwesomeIcon icon={faThumbsUp} size="xl" />,
+                        badge: feedbackCount,
+                        onPress: () => setFeedbackOpen(true)
+                    },
                     !isLoading &&
                         !isReleased &&
                         canSubmitReview && {
@@ -484,6 +481,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                 onClose={() => setFeedbackOpen(false)}
                 project={projectNumber}
                 number={number}
+                releaseStatus={release?.status}
             />
         </div>
     );

@@ -7,7 +7,7 @@ import {
     ICardProgress
 } from "common/progress/calc";
 import { IProject, IProjectProgress, IProjectRelease, IReleaseProgress } from "common/models/projects";
-import { IReleaseCheckCard, ISlot, isCheckStale } from "common/models/slots";
+import { checksClosedBy, IReleaseCheckCard, ISlot, isCheckStale } from "common/models/slots";
 import { mean, sortBy } from "lodash-es";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
@@ -49,12 +49,13 @@ export async function computeReleasesProgress(project: IProject): Promise<IRelea
     return project.releases.map((release) => releaseProgress(release, allSlots));
 }
 
-// Release check state for every card in a release, for the Discord announcement. Checks are counted
-// against each card's latest confirmed version, so a card whose checks all went stale reads as unchecked
+// Release check state for every card in a release still taking checks, for the Discord announcement. Checks
+// are counted against each card's latest confirmed version, so a card whose checks all went stale reads as
+// unchecked. Cards whose design is locked in drop out entirely - nobody can answer for them any more
 export async function computeReleaseCheckCards(project: number, code: string): Promise<IReleaseCheckCard[]> {
     const allSlots = await dataService.slots.read({ project });
     const slots = sortBy(
-        allSlots.filter((slot) => slot.release?.code === code),
+        allSlots.filter((slot) => slot.release?.code === code && !checksClosedBy(slot.statuses.design.status)),
         "number"
     );
 

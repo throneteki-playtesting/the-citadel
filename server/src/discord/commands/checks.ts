@@ -7,7 +7,7 @@ import { getContext } from "@/middleware/context";
 import { hasPermission } from "common/utils";
 import { groupBy } from "lodash-es";
 import Permission from "common/models/permissions";
-import { isCheckStale } from "common/models/slots";
+import { checksClosedBy, isCheckStale } from "common/models/slots";
 
 const checks = {
     async data() {
@@ -72,8 +72,9 @@ async function findOutstanding(discordId: string) {
         }
 
         const byCode = new Map(confirming.map((release) => [release.code, release]));
+        // A card whose design has since locked in takes no more checks, so it isn't waiting on anyone
         const slots = (await dataService.slots.read({ project: project.number })).filter(
-            (slot) => slot.release && byCode.has(slot.release.code)
+            (slot) => slot.release && byCode.has(slot.release.code) && !checksClosedBy(slot.statuses.design.status)
         );
 
         for (const slot of slots) {

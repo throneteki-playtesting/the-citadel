@@ -27,12 +27,14 @@ import { faCheck, faClockRotateLeft, faXmark } from "@fortawesome/free-solid-svg
 import { useNavigate } from "react-router-dom";
 import { isEqual } from "lodash-es";
 import {
+    checksClosedBy,
     IReleaseCheck,
     isCheckStale,
     RELEASE_CHECK_NOTE_MAX,
     ReleaseCheckCategory,
     releaseCheckCategories
 } from "common/models/slots";
+import { ReleaseStatus } from "common/models/projects";
 import { Slot } from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { parseCardCode, SemanticVersion } from "common/utils";
@@ -46,6 +48,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { usePermission } from "../hooks/usePermission";
 import { useContainerWidth } from "../hooks/useContainerWidth";
+import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useFormValidation } from "../hooks/useFormValidation";
 import { showApiErrorToast } from "../api/errors";
 import { avatarBubbleClasses, avatarRingClasses, highlightTarget } from "../constants";
@@ -72,7 +75,8 @@ export default function ReleaseChecksModal({
     onClose,
     project,
     number,
-    viewTarget = "release"
+    viewTarget = "release",
+    releaseStatus
 }: ReleaseChecksModalProps) {
     const { data: slot, isLoading } = useGetSlotQuery({ project, number });
     const { data: card } = useGetCardQuery({ project, number, version: "latest" });
@@ -109,12 +113,16 @@ export default function ReleaseChecksModal({
     }, [isOpen]);
 
     const { ref: rowRef, width: rowWidth } = useContainerWidth<HTMLDivElement>();
+    const stickyRef = useStickToBottom<HTMLDivElement>();
+
+    // Closed checks stay readable as the record of how the card got signed off, but take no new answers
+    const closedBy = slot && checksClosedBy(slot.statuses.design.status, releaseStatus);
 
     const latestVersion = card?.version;
     const hasDraft = !!draftData && draftData.total > 0;
     const checks = slot?.statuses.design.checks ?? [];
     const mine = user && checks.find((entry) => entry.createdBy === user.discordId);
-    const hasYouSlot = !!mine || (canSubmitCheck && !!user);
+    const hasYouSlot = !!mine || (canSubmitCheck && !!user && !closedBy);
 
     const others = checks.filter((entry) => entry.createdBy !== user?.discordId);
     const ready = others.filter((entry) => entry.ready);
@@ -165,22 +173,43 @@ export default function ReleaseChecksModal({
                     {isLoading || !slot ? (
                         <Skeleton className="h-24 w-full rounded-md" />
                     ) : (
-                        <div>
-                            {hasDraft && (
+                        <div ref={stickyRef}>
+                            {closedBy ? (
                                 <Alert
-                                    color="warning"
+                                    color="default"
                                     variant="faded"
                                     className="mb-2"
-                                    title="A draft is in the works"
-                                    description={`These checks are for v${latestVersion}, not the draft. Once the draft is released, they'll all need re-checking.`}
+                                    title="Release checks are closed"
+                                    description={
+                                        closedBy === "design"
+                                            ? "This card's design has been locked in, so its checks are now a record of how it got there."
+                                            : "This card's release has been approved, so its checks are now a record of how it got there."
+                                    }
                                 />
+                            ) : (
+                                hasDraft && (
+                                    <Alert
+                                        color="warning"
+                                        variant="faded"
+                                        className="mb-2"
+                                        title="A draft is in the works"
+                                        description={`These checks are for v${latestVersion}, not the draft. Once the draft is released, they'll all need re-checking.`}
+                                    />
+                                )
                             )}
-                            <div className="text-xs sm:text-sm text-foreground/60 pb-2">
-                                Share a quick verdict on whether this card is ready for release. When flagging a card as
-                                not ready, keep the reasoning clear and concise, and use categories to guide what to
-                                focus on.
-                            </div>
-                            <ReleaseCheckTally project={project} number={number} className="py-2" />
+                            {!closedBy && (
+                                <div className="text-xs sm:text-sm text-foreground/60 pb-2">
+                                    Share a quick verdict on whether this card is ready for release. When flagging a
+                                    card as not ready, keep the reasoning clear and concise, and use categories to guide
+                                    what to focus on.
+                                </div>
+                            )}
+                            <ReleaseCheckTally
+                                project={project}
+                                number={number}
+                                className="py-2"
+                                showPending={!closedBy}
+                            />
                             <div ref={rowRef} className="flex items-center gap-2.5 py-2">
                                 {hasYouSlot && (
                                     <FeedbackAvatarView
@@ -233,7 +262,7 @@ export default function ReleaseChecksModal({
                                                 transition={{ duration: 0.12 }}
                                                 className="pt-2"
                                             >
-                                                {isYouSelected ? (
+                                                {isYouSelected && !closedBy ? (
                                                     <YourReleaseCheckForm
                                                         project={project}
                                                         number={number}
@@ -244,7 +273,7 @@ export default function ReleaseChecksModal({
                                                     />
                                                 ) : (
                                                     <ReadOnlyReleaseCheck
-                                                        entry={selectedEntry}
+                                                        entry={isYouSelected ? (mine ?? undefined) : selectedEntry}
                                                         latestVersion={latestVersion}
                                                     />
                                                 )}
@@ -415,7 +444,6 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
     const [note, setNote] = useState(entry?.note ?? "");
     const [isAtCapacity, setIsAtCapacity] = useState(false);
     const capacityTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-    const expandedRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         setReady(entry?.ready ?? true);
@@ -513,18 +541,10 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
             <AnimatePresence initial={false}>
                 {!ready && (
                     <motion.div
-                        ref={expandedRef}
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.18 }}
-                        // Waits for the expand, or it would scroll to where the form used to end. Keyed
-                        // off the target rather than `ready`, since the exit animation reuses this closure
-                        onAnimationComplete={(definition) => {
-                            if ((definition as { height?: number | string }).height === "auto") {
-                                expandedRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-                            }
-                        }}
                         className="overflow-hidden flex flex-col gap-2"
                     >
                         <div className="text-xs text-foreground/60">
@@ -666,4 +686,6 @@ type ReleaseChecksModalProps = {
     number: number;
     /** Where the footer's navigation button goes - link to whichever page the modal wasn't opened from */
     viewTarget?: "release" | "card";
+    /** Status of the release this card sits in, where the caller knows it - approval closes its checks */
+    releaseStatus?: ReleaseStatus;
 };

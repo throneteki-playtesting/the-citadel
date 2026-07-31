@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Chip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faAngleLeft, faLayerGroup } from "@fortawesome/free-solid-svg-icons";
+import { faAngleLeft, faFlag } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { useNavigate } from "react-router-dom";
 import { getFinalCardNumber, parseCardCode } from "common/utils";
@@ -88,7 +88,7 @@ function ReleaseChip({ className, style, project, number }: ReleaseChipProps) {
                 color={releaseStatusColors[displayStatus]}
                 className={classNames("cursor-pointer", className)}
                 style={style}
-                startContent={<FontAwesomeIcon icon={faLayerGroup} className="ml-1" />}
+                startContent={<FontAwesomeIcon icon={faFlag} className="ml-1" />}
                 onClick={() =>
                     navigate(`/project/${project.number}?tab=releases`, {
                         state: { highlight: highlightTarget.release(project.number, release.code) }

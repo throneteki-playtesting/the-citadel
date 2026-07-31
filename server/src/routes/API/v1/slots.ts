@@ -4,6 +4,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import {
+    checksClosedBy,
     DefaultSlotStatuses,
     DesignStatus,
     designPhase,
@@ -345,6 +346,11 @@ router.patch(
             }
         });
 
+        // Locking a design in (or reopening it) adds or removes the card from the announcement's list
+        if (slot.release) {
+            await dataService.projects.sync(project, true);
+        }
+
         const [card] = await dataService.cards.read({ project: project.number, number: slotNumber, latest: true });
         await logActivity(
             LogCategory.SLOT,
@@ -390,6 +396,18 @@ router.patch(
                 StatusCodes.NOT_FOUND,
                 "Invalid Data",
                 `Slot #${slotNumber} does not exist for project #${project.number}`
+            );
+        }
+
+        const release = project.releases.find((entry) => entry.code === slot.release?.code);
+        const closedBy = checksClosedBy(slot.statuses.design.status, release?.status);
+        if (closedBy) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                closedBy === "design"
+                    ? "This card's design has been locked in, so its release checks are closed"
+                    : "This card's release has been approved, so its release checks are closed"
             );
         }
 

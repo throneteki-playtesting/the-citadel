@@ -4,7 +4,7 @@ import {
     faScroll,
     faCheckCircle,
     faUserPen,
-    faLayerGroup
+    faTags
 } from "@fortawesome/free-solid-svg-icons";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -195,7 +195,7 @@ function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
                             </SummaryChip>
                             {otherDeckCards.length > 0 && (
                                 <SummaryChip
-                                    icon={faLayerGroup}
+                                    icon={faTags}
                                     label={`+${otherDeckCards.length} other card${otherDeckCards.length === 1 ? "" : "s"}`}
                                     heading="Other playtesting cards"
                                 >

@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import { IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
+import { checksClosedBy } from "common/models/slots";
 import { isPreview } from "common/utils";
 import { plural } from "../utils";
 import { dataService, discordService, logger } from "@/services";
@@ -38,6 +39,11 @@ export async function notifyStaleChecks(project: IProject, cards: IPlaytestCard[
 
             const [slot] = await dataService.slots.read({ project: project.number, number: card.number });
             if (!slot?.release || !confirming.has(slot.release.code)) {
+                continue;
+            }
+
+            // Nothing to chase once the design is locked in - the check can no longer be answered again
+            if (checksClosedBy(slot.statuses.design.status)) {
                 continue;
             }
 

@@ -8,8 +8,10 @@ import { BaseElementProps } from "../types";
 
 // Shared so the loading skeleton keeps the same shape, and doesn't shift the layout when it resolves
 const TALLY_CLASSES = "flex flex-col gap-1.5";
-const HEADER_ROW_CLASSES = "flex items-center justify-between gap-2 text-xs sm:text-sm";
-const STATUS_ROW_CLASSES = "flex items-center gap-3 text-xs";
+// Both rows stack on mobile, where side-by-side entries get squeezed into awkward wraps
+const HEADER_ROW_CLASSES =
+    "flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2 text-xs sm:text-sm";
+const STATUS_ROW_CLASSES = "flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3 text-xs";
 
 // Sign-off tally for a slot - how many said yes/no, and how many eligible submitters are yet to answer
 export default function ReleaseCheckTally({
@@ -17,7 +19,8 @@ export default function ReleaseCheckTally({
     style,
     project,
     number,
-    showBar = true
+    showBar = true,
+    showPending = true
 }: ReleaseCheckTallyProps) {
     const { data, isLoading } = useGetReleaseCheckSummaryQuery({ project, number });
 
@@ -73,7 +76,7 @@ export default function ReleaseCheckTally({
                 <span className="flex items-center gap-1 text-warning">
                     <FontAwesomeIcon icon={faXmark} /> {data.notReady} not ready
                 </span>
-                {data.total > 0 && (
+                {showPending && data.total > 0 && (
                     <span className="flex items-center gap-1 text-foreground/40">
                         <FontAwesomeIcon icon={faHourglassHalf} /> {data.pending} awaiting
                         {data.stale > 0 && ` (${data.stale} stale)`}
@@ -106,4 +109,5 @@ type ReleaseCheckTallyProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
     showBar?: boolean;
+    showPending?: boolean;
 };
