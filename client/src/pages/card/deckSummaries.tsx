@@ -6,9 +6,8 @@ import {
     faUserPen,
     faTags
 } from "@fortawesome/free-solid-svg-icons";
-import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { ScrollShadow, Card, Link, Avatar, Chip, ChipProps } from "@heroui/react";
+import { ScrollShadow, Card, Link, Avatar } from "@heroui/react";
 import { IDeck } from "common/models/decks";
 import { Code, IPlaytestCard } from "common/models/cards";
 import { sortBy } from "lodash-es";
@@ -22,8 +21,7 @@ import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
 import Timestamp from "../../components/timestamp";
 import SectionTitle from "../../components/sectionTitle";
-import { TouchTooltip } from "../../components/touchTooltip";
-import TooltipDetail from "../../components/tooltipDetail";
+import SummaryChip from "../../components/summaryChip";
 import { parseCardCode, parsePlaytestCode } from "common/utils";
 
 export default function DeckSummaries({ className, style, project, number }: DeckSummariesProps) {
@@ -240,30 +238,6 @@ function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
         </Card>
     );
 }
-
-function SummaryChip({ icon, color = "default", label, heading, children }: SummaryChipProps) {
-    return (
-        <TouchTooltip content={<TooltipDetail heading={heading}>{children}</TooltipDetail>} size="sm" delay={0}>
-            <Chip
-                size="sm"
-                variant="flat"
-                color={color}
-                className="pointer-events-auto cursor-pointer h-7 px-1"
-                startContent={<FontAwesomeIcon icon={icon} className="ml-1.5" />}
-            >
-                {label}
-            </Chip>
-        </TouchTooltip>
-    );
-}
-
-type SummaryChipProps = {
-    icon: IconDefinition;
-    color?: ChipProps["color"];
-    label: string;
-    heading: React.ReactNode;
-    children: React.ReactNode;
-};
 
 type DeckSummaryProps = {
     deck: IDeck;

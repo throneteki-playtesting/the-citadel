@@ -5,7 +5,6 @@ import {
     Avatar,
     Button,
     Card,
-    Chip,
     Link,
     Modal,
     ModalBody,
@@ -24,6 +23,8 @@ import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/ut
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCircleCheck,
+    faCircleExclamation,
+    faClockRotateLeft,
     faExternalLink,
     faFlask,
     faLightbulb,
@@ -31,6 +32,7 @@ import {
     faPencil,
     faScaleBalanced,
     faScroll,
+    faShieldHalved,
     faTrophy
 } from "@fortawesome/free-solid-svg-icons";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
@@ -52,7 +54,10 @@ import Timestamp from "../../components/timestamp";
 import { highlightTarget } from "../../constants";
 import { HighlightTarget } from "../../components/highlightTarget";
 import SectionTitle from "../../components/sectionTitle";
+import SummaryChip from "../../components/summaryChip";
 import DiscordReviewStatus from "../../components/status/discordReviewStatus";
+
+const battleTestedGames = 5;
 
 const iconMap: Record<keyof Statements, IconDefinition> = {
     boring: faMeh,
@@ -420,22 +425,57 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
         );
     }
 
+    const isAmended = new Date(review.updated).getTime() > new Date(review.created).getTime();
+    const chips = (
+        <div className="flex flex-wrap gap-1">
+            <SummaryChip
+                icon={card.latest ? faCircleCheck : faCircleExclamation}
+                color={card.latest ? "success" : "warning"}
+                label={card.latest ? "Up to date" : "Out of date"}
+                heading="Card version"
+            >
+                {card.latest
+                    ? `Rendered on v${review.version}, still the current version in the Citadel's records — this verdict speaks to the card as it stands.`
+                    : `Rendered on v${review.version}, but this card has been revised since. This verdict may no longer reflect the card as it stands.`}
+            </SummaryChip>
+            {review.played === 0 && (
+                <SummaryChip icon={faFlask} color="secondary" label="Untested" heading="No games played">
+                    This feedback should be treated as an early impression rather than a battle-tested verdict.
+                </SummaryChip>
+            )}
+            {review.played >= battleTestedGames && (
+                <SummaryChip icon={faShieldHalved} color="primary" label="Battle-tested" heading="Well played">
+                    Rendered after {review.played} games at the table — this verdict rests on sustained play rather than
+                    a handful of hands.
+                </SummaryChip>
+            )}
+            {isAmended && (
+                <SummaryChip icon={faClockRotateLeft} label="Amended" heading="Amended verdict">
+                    This verdict was revised after it was first recorded — the date shown is when it was last amended.
+                </SummaryChip>
+            )}
+        </div>
+    );
+
     return (
         <HighlightTarget
             targetId={highlightTarget.review(review)}
             className={classNames("bg-content1 p-4 flex flex-col ", className)}
             style={style}
         >
-            <div className="flex gap-2 items-center">
-                <div className="flex-1 text-lg font-cinzel text-foreground truncate">
-                    {card.name} <span className="text-foreground/50">{card.version}</span>
+            <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+                <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <div className="text-lg font-cinzel text-foreground truncate">
+                        {card.name} <span className="text-foreground/50">{card.version}</span>
+                    </div>
+                    <div className="max-md:hidden shrink-0">{chips}</div>
                 </div>
                 <div className="flex flex-col-reverse md:flex-row">
                     <Timestamp
                         className="self-end px-2 md:mb-auto text-xs italic text-foreground/40"
                         date={new Date(review.updated)}
                     />
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap items-center gap-1">
                         <PermissionGate
                             requires={(user) =>
                                 hasPermission(user, Permission.EDIT_REVIEWS) ||
@@ -475,6 +515,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                                 />
                             </TouchTooltip>
                         </PermissionGate>
+                        <div className="md:hidden">{chips}</div>
                     </div>
                 </div>
             </div>
@@ -490,30 +531,11 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                         <div className="text-lg font-crimson italic">
                             Review by {user?.displayname ?? "Unknown Playtester"}
                         </div>
-                        {review.played > 0 ? (
-                            <div className="text-base font-crimson italic truncate text-foreground/40">
-                                {review.played} {review.played !== 1 ? "games" : "game"} played
-                            </div>
-                        ) : (
-                            <TouchTooltip
-                                content={
-                                    <div className="max-w-64 text-xs">
-                                        This feedback should be treated as an early impression rather than a
-                                        battle-tested verdict.
-                                    </div>
-                                }
-                            >
-                                <Chip
-                                    size="sm"
-                                    color="secondary"
-                                    variant="flat"
-                                    className="w-fit"
-                                    startContent={<FontAwesomeIcon icon={faFlask} className="ml-1" />}
-                                >
-                                    Untested Review
-                                </Chip>
-                            </TouchTooltip>
-                        )}
+                        <div className="text-base font-crimson italic truncate text-foreground/40">
+                            {review.played > 0
+                                ? `${review.played} ${review.played !== 1 ? "games" : "game"} played`
+                                : "No games played"}
+                        </div>
                     </div>
                 </div>
             </div>
