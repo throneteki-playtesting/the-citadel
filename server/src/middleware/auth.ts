@@ -116,7 +116,7 @@ export const githubWebhookMiddleware = asyncHandler(async (req, res, next) => {
     }
 
     // TODO: Separate Github into its own integration, rather than using internal
-    const rawToken = await dataService.integrations.fetchInternalToken();
+    const rawToken = dataService.integrations.fetchInternalToken();
     const integration = await dataService.integrations.findByToken(rawToken);
     if (!integration) {
         throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
@@ -140,7 +140,7 @@ export const discordEventMiddleware = async (
     callback: () => void
 ) => {
     // TODO: Separate Discord into its own integration, rather than using internal
-    const rawToken = await dataService.integrations.fetchInternalToken();
+    const rawToken = dataService.integrations.fetchInternalToken();
     const integration = await dataService.integrations.findByToken(rawToken);
     if (!integration) {
         throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");

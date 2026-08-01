@@ -5,21 +5,20 @@ import bcrypt from "bcryptjs";
 import { IAuditableDatabase } from "./shared";
 import Permission from "common/models/permissions";
 import { randomBytes } from "crypto";
-import { dataService } from "@/services";
 import { Filter, SingleOrArray, Sort } from "common/types";
 import { asArray } from "common/utils";
 import { flatten } from "flat";
 
 export default class IntegrationRepository extends IAuditableDatabase<Integration> {
     private prefix = "int_";
-    private internalKey = "INTERNAL_INTEGRATION_TOKEN";
+    private internalToken?: string;
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<Integration>(mongoClient, "integrations", { id: 1 }));
     }
 
     /**
      * Initialises an internal intergration which is used by certain processes, such as rendering.
-     * Should only be accessible by the internal application (ie. via redis), has all permissions, and created itself.
+     * Its token is only ever held in memory by this process, has all permissions, and created itself.
      */
     async initialise() {
         const name = "Internal Integration";
@@ -41,19 +40,18 @@ export default class IntegrationRepository extends IAuditableDatabase<Integratio
         };
         await this.database.create(data);
         // Only retire the previous integration once its replacement is both stored and reachable, so
-        // there is never a point where the token in redis refers to an integration which no longer exists
-        await dataService.redis.set(this.internalKey, rawToken);
+        // there is never a point where the held token refers to an integration which no longer exists
+        this.internalToken = rawToken;
         if (previous) {
             await this.database.destroy(previous);
         }
     }
 
-    async fetchInternalToken() {
-        const rawToken = (await dataService.redis.get(this.internalKey)) as string;
-        if (!rawToken) {
-            throw new Error(`No internal integration token is stored against "${this.internalKey}" in redis`);
+    fetchInternalToken() {
+        if (!this.internalToken) {
+            throw new Error("No internal integration token has been initialised for this process");
         }
-        return rawToken;
+        return this.internalToken;
     }
 
     private generateSecret() {

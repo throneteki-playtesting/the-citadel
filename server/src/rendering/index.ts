@@ -137,7 +137,7 @@ async function logFontStatus(page: Page, jobId: UUID) {
 }
 
 async function applyInternalAuthHeaders(page: Page) {
-    const token = await dataService.integrations.fetchInternalToken();
+    const token = dataService.integrations.fetchInternalToken();
     await page.setRequestInterception(true);
     page.on("request", (request) => {
         const url = new URL(request.url());

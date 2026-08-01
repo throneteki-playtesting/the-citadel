@@ -133,6 +133,15 @@ npm run format:check    # Prettier, verify only
 already exist on an external Docker network named `shared_net`, and reads its variables from the shell
 environment rather than a file.
 
+Environments run side by side against those shared datastores, so each must be isolated on both. MongoDB is
+split by `DATABASE_NAME`. Redis has no namespacing of its own, so the server applies two layers:
+
+- **Between environments** — a logical database index derived from `NODE_ENV` (development `0`, staging `1`,
+  production `2`), applied to `REDIS_HOST` at connection time and overriding any index that variable already
+  carries. The index in use is printed in the `Redis connected at ...` line on boot.
+- **Between applications** — every key is prefixed with `thecitadel:`, so the instance can be shared with
+  unrelated applications. Go through `dataService.redis` rather than a raw client so the prefix is applied.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

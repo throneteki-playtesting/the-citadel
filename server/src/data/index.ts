@@ -15,8 +15,16 @@ import SlotsRepository from "./repositories/slotsRepository";
 import SuggestionsRepository from "./repositories/suggestionsRepository";
 import UsersRepository from "./repositories/usersRepository";
 import { Database } from "./repositories/shared";
+import RedisDataSource from "./repositories/dataSources/redisDataSource";
+import { currentEnvironment, Environment } from "@/env";
 
 type RepositoryConstructor = new (client: MongoClient) => Database<any>;
+
+const REDIS_DATABASES: Record<Environment, number> = {
+    development: 0,
+    staging: 1,
+    production: 2
+};
 
 interface RepositoryConfig {
     key: string;
@@ -40,7 +48,7 @@ const REPOSITORIES: RepositoryConfig[] = [
 
 class DataService {
     private database: MongoClient | null = null;
-    public redis: RedisClientType;
+    public redis: RedisDataSource;
     public ready: Promise<[boolean, boolean]>;
 
     private repos = new Map<string, Database<any>>();
@@ -51,7 +59,7 @@ class DataService {
 
     private async connect(): Promise<[boolean, boolean]> {
         const [database, redis] = await Promise.all([this.connectDb(), this.connectRedis()]);
-        if (database && redis) {
+        if (database) {
             await this.integrations.initialise();
         }
         return [database, redis];
@@ -80,11 +88,22 @@ class DataService {
         }
     }
 
+    /**
+     * Redis has a single flat keyspace per logical database and no per-application namespacing, so every
+     * environment sharing an instance is pinned to its own index rather than relying on REDIS_HOST to carry one.
+     */
+    private redisUrl(): string {
+        const url = new URL(process.env.REDIS_HOST || "redis://redis:6379");
+        url.pathname = `/${REDIS_DATABASES[currentEnvironment()]}`;
+        return url.toString();
+    }
+
     private async connectRedis(): Promise<boolean> {
-        const url = process.env.REDIS_HOST || "redis://redis:6379";
+        const url = this.redisUrl();
         try {
-            this.redis = createClient({ url }) as RedisClientType;
-            await this.redis.connect();
+            const client = createClient({ url }) as RedisClientType;
+            await client.connect();
+            this.redis = new RedisDataSource(client);
             logger.info(`Redis connected at ${url}`);
             return true;
         } catch (err) {
