@@ -43,6 +43,17 @@ export function registerEvents(client: Client, guildId: string, syncUser: SyncUs
         await syncUser(newMember);
     });
 
+    // Strips a departing member's roles, keeping the record so anything they authored still resolves
+    on(Events.GuildMemberRemove, async (member) => {
+        if (member.guild.id !== guildId) return;
+
+        const [user] = await dataService.users.read({ discordId: member.id });
+        if (!user || user.roles.length === 0) return;
+
+        logger.info(`[Discord] Member left: ${member.user.username}`);
+        await dataService.users.update({ ...user, roles: [] });
+    });
+
     // Syncs a user's username and avatar when their global profile changes.
     on(Events.UserUpdate, async (oldUser, newUser) => {
         const usernameChanged = oldUser.username !== newUser.username;

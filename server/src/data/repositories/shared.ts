@@ -19,7 +19,39 @@ export class Database<T> {
     constructor(database: MongoDataSource<T>) {
         this.database = database;
     }
+
+    protected async internalSync(tasks: SyncTask[]) {
+        if (tasks.length === 0) return;
+        const { source } = getContext();
+
+        const syncs = tasks.map((task) =>
+            typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task
+        );
+        if (source === "client") {
+            const priorityGroups = groupBy(syncs, "priority");
+            const sortedPriorities = Object.keys(priorityGroups)
+                .map(Number)
+                .sort((a, b) => a - b);
+            void sortedPriorities.reduce(
+                (chain, priority) =>
+                    chain.then(() =>
+                        Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))))
+                    ),
+                Promise.resolve() as Promise<unknown>
+            );
+        } else {
+            for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
+                try {
+                    await func();
+                } catch (err) {
+                    logger.warn(err);
+                }
+            }
+        }
+    }
 }
+
+type SyncTask = (() => Promise<unknown>) | { priority: number; func: () => Promise<unknown> };
 
 const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
 const stripAudit = (obj: object) => Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
@@ -179,38 +211,7 @@ export class BasicAuditableRepository<
         }
         return result;
     }
-
-    protected async internalSync(tasks: SyncTask[]) {
-        if (tasks.length === 0) return;
-        const { source } = getContext();
-
-        const syncs = tasks.map((task) =>
-            typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task
-        );
-        if (source === "client") {
-            const priorityGroups = groupBy(syncs, "priority");
-            const sortedPriorities = Object.keys(priorityGroups)
-                .map(Number)
-                .sort((a, b) => a - b);
-            void sortedPriorities.reduce(
-                (chain, priority) =>
-                    chain.then(() =>
-                        Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))))
-                    ),
-                Promise.resolve() as Promise<unknown>
-            );
-        } else {
-            for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
-                try {
-                    await func();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
-        }
-    }
 }
-type SyncTask = (() => Promise<unknown>) | { priority: number; func: () => Promise<unknown> };
 
 export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K] = ResourceDataMap[K]>
     extends BroadcastDatabase<K, T>

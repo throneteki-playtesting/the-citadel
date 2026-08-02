@@ -13,10 +13,10 @@ import {
 import { Mutex } from "async-mutex";
 import { merge } from "lodash-es";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { IReleaseCheckCard } from "common/models/slots";
+import { IReleaseCheckCard, IReleaseCheckParticipation } from "common/models/slots";
 import { plural } from "../utils";
 import { dataService, discordService, logger } from "@/services";
-import { computeReleaseCheckCards } from "@/services/progressService";
+import { computeReleaseCheckCards, computeReleaseCheckParticipation } from "@/services/progressService";
 
 const DESIGN_ANNOUNCEMENTS_CHANNEL_NAME = "release-reviews";
 const DESIGN_TEAM_ROLE_NAME = "Design Team";
@@ -51,6 +51,24 @@ export async function syncReleaseChecks(projects: IProject[], forced?: boolean):
     }
 }
 
+let refreshInFlight: Promise<void> | undefined;
+
+// Re-syncs open announcements after a permission change; bursty, so mid-pass callers join the same one
+export async function refreshReleaseChecks(): Promise<void> {
+    if (refreshInFlight) {
+        return refreshInFlight;
+    }
+
+    refreshInFlight = (async () => {
+        const projects = await dataService.projects.read({ active: true });
+        await syncReleaseChecks(projects, true);
+    })().finally(() => {
+        refreshInFlight = undefined;
+    });
+
+    return refreshInFlight;
+}
+
 // A release is worth syncing while it's confirming, or once more after it stops (to close the message off)
 function needsSync(release: IProjectRelease, forced?: boolean) {
     const isConfirming = release.status === "confirming";
@@ -76,7 +94,8 @@ async function syncProjectReleases(
         try {
             if (release.status === "confirming") {
                 const cards = await computeReleaseCheckCards(project.number, release.code);
-                await postOrEdit(project, release, cards, context);
+                const participation = await computeReleaseCheckParticipation(cards);
+                await postOrEdit(project, release, cards, participation, context);
             } else {
                 await close(project, release, context);
             }
@@ -99,10 +118,11 @@ async function postOrEdit(
     project: IProject,
     release: IProjectRelease,
     cards: IReleaseCheckCard[],
+    participation: IReleaseCheckParticipation,
     context: AnnouncementContext
 ) {
     const existing = release._metadata?.discord?.messageUrl;
-    const announcement = messages.announcement(project, release, cards, context.taggedRole);
+    const announcement = messages.announcement(project, release, cards, participation, context.taggedRole);
     if (existing) {
         const message = await fetchMessage(context, existing);
         // Edits never re-notify, but suppressing mentions keeps that true regardless of Discord's mood
@@ -166,41 +186,44 @@ function releaseUrl(project: IProject, release: IProjectRelease) {
     return `${process.env.CLIENT_HOST}/project/${project.number}?release=${release.code}`;
 }
 
-const CARD_LINE_BUDGET = 90;
-
-// The one distinction worth chasing - a card nobody has looked at, versus one that has any opinion
-// at all. Names are truncated to a single line, since the list is a prompt rather than a manifest
-function uncheckedSummary(cards: IReleaseCheckCard[]) {
+function turnoutSummary(cards: IReleaseCheckCard[], participation: IReleaseCheckParticipation) {
     // Cards drop out of the list as their designs lock in, so the release can run out of them entirely
     if (cards.length === 0) {
         return ":white_check_mark: Every card's design is locked in - nothing left to check.";
     }
 
-    const unchecked = cards.filter((card) => card.fresh === 0);
-    if (unchecked.length === 0) {
-        return ":white_check_mark: Every card has at least one check.";
+    const { eligible, started } = participation;
+    // Both sides count only current permission holders, so this can't go negative
+    const awaiting = eligible - started;
+    const open = `**${cards.length}** ${plural(cards.length, "card")} still open for checks`;
+
+    if (awaiting === 0) {
+        return `:white_check_mark: All **${eligible}** members have checked in on the ${open}.`;
     }
 
-    const shown: string[] = [];
-    let length = 0;
-    for (const card of unchecked) {
-        if (length + card.name.length > CARD_LINE_BUDGET) {
-            break;
-        }
-        shown.push(card.name);
-        length += card.name.length + 2;
-    }
-
-    const hidden = unchecked.length - shown.length;
-    const names = shown.join(", ") + (hidden > 0 ? `, +${hidden} more` : "");
     return (
-        `:warning: **${unchecked.length} of ${cards.length}** ${plural(cards.length, "card")}` +
-        ` ${unchecked.length === 1 ? "has" : "have"} no checks yet\n-# ${names}`
+        `:warning: **${awaiting} of ${eligible}** ${plural(eligible, "member")}` +
+        ` ${awaiting === 1 ? "is" : "are"} yet to submit a single check, across the ${open}.`
     );
 }
 
+// Mentions render as profile chips whatever the nickname length, and never notify - pings stay suppressed
+function completedSummary(completed: string[]) {
+    if (completed.length === 0) {
+        return undefined;
+    }
+
+    return ":white_check_mark: **Checked every card** - thanks!\n" + completed.map((id) => `<@${id}>`).join(", ");
+}
+
 const messages = {
-    announcement(project: IProject, release: IProjectRelease, cards: IReleaseCheckCard[], taggedRole: Role) {
+    announcement(
+        project: IProject,
+        release: IProjectRelease,
+        cards: IReleaseCheckCard[],
+        participation: IReleaseCheckParticipation,
+        taggedRole: Role
+    ) {
         const container = new ContainerBuilder()
             .addTextDisplayComponents(
                 // Components V2 forbids message content, so the role mention lives in the body itself
@@ -214,7 +237,17 @@ const messages = {
                 )
             )
             .addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(uncheckedSummary(cards)))
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(turnoutSummary(cards, participation)));
+
+        // Only appears once somebody has earned it, so an untouched release doesn't carry an empty section
+        const completed = completedSummary(participation.completed);
+        if (completed) {
+            container
+                .addSeparatorComponents(new SeparatorBuilder())
+                .addTextDisplayComponents(new TextDisplayBuilder().setContent(completed));
+        }
+
+        container
             .addSeparatorComponents(new SeparatorBuilder())
             .addSectionComponents(
                 new SectionBuilder()

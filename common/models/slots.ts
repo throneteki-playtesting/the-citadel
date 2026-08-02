@@ -83,8 +83,18 @@ export interface IReleaseCheckSummary {
 export interface IReleaseCheckCard {
     number: number;
     name: string;
-    /** Checks against the card's current version; stale ones don't count towards it */
-    fresh: number;
+    /** Submitters who checked the card's current version; stale ones don't count towards it */
+    checkedBy: string[];
+}
+
+/** Who has taken part in a release's checks - drives the Discord announcement's live summary */
+export interface IReleaseCheckParticipation {
+    /** How many people hold SUBMIT_RELEASE_CHECK */
+    eligible: number;
+    /** How many of them have checked at least one open card against its current version */
+    started: number;
+    /** Submitters who have checked every open card - the announcement showcases them by name */
+    completed: string[];
 }
 
 export interface IArtworkProgress {

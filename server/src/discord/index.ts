@@ -264,18 +264,28 @@ class DiscordService {
         const previousRoleNames = new Set((existing?.roles ?? []).map((role) => role.name));
         const rolesGained = roles.filter((role) => !previousRoleNames.has(role.name)).map((role) => role.name);
 
-        const user = await dataService.users.update({
-            id: discordUser.id,
-            discordId: discordUser.id,
-            username: discordUser.username,
-            displayname: nickname ?? displayname ?? discordUser.username,
-            avatarUrl: discordUser.avatar
-                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
-                : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) >> 22n) % 6}.png`,
-            permissions: existing?.permissions ?? [],
-            roles,
-            lastLogin: loggingIn ? new Date() : existing?.lastLogin
-        });
+        // Roles are the only field here which moves who may submit a check; without this every login syncs
+        const currentRoleIds = new Set(roles.map((role) => role.discordId));
+        const previousRoleIds = new Set((existing?.roles ?? []).map((role) => role.discordId));
+        const rolesChanged =
+            currentRoleIds.size !== previousRoleIds.size || [...currentRoleIds].some((id) => !previousRoleIds.has(id));
+
+        const user = await dataService.users.update(
+            {
+                id: discordUser.id,
+                discordId: discordUser.id,
+                username: discordUser.username,
+                displayname: nickname ?? displayname ?? discordUser.username,
+                avatarUrl: discordUser.avatar
+                    ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png`
+                    : `https://cdn.discordapp.com/embed/avatars/${Number(BigInt(discordUser.id) >> 22n) % 6}.png`,
+                permissions: existing?.permissions ?? [],
+                roles,
+                lastLogin: loggingIn ? new Date() : existing?.lastLogin
+            },
+            true,
+            rolesChanged
+        );
 
         return {
             user,

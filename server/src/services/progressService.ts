@@ -7,10 +7,17 @@ import {
     ICardProgress
 } from "common/progress/calc";
 import { IProject, IProjectProgress, IProjectRelease, IReleaseProgress } from "common/models/projects";
-import { checksClosedBy, IReleaseCheckCard, ISlot, isCheckStale } from "common/models/slots";
+import {
+    checksClosedBy,
+    IReleaseCheckCard,
+    IReleaseCheckParticipation,
+    ISlot,
+    isCheckStale
+} from "common/models/slots";
 import { mean, sortBy } from "lodash-es";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
+import Permission from "common/models/permissions";
 
 export async function computeCardProgress(project: number, number: number): Promise<ICardProgress> {
     const [slot] = await dataService.slots.read({ project, number });
@@ -67,10 +74,24 @@ export async function computeReleaseCheckCards(project: number, code: string): P
             return {
                 number: slot.number,
                 name: latest?.name ?? `#${slot.number}`,
-                fresh: checks.filter((entry) => !isCheckStale(entry, latest?.version)).length
+                checkedBy: checks
+                    .filter((entry) => !isCheckStale(entry, latest?.version))
+                    .map((entry) => entry.createdBy)
             };
         })
     );
+}
+
+// Turnout by person, not by card - one member sweeping every card leaves everyone else's checks outstanding
+export async function computeReleaseCheckParticipation(
+    cards: IReleaseCheckCard[]
+): Promise<IReleaseCheckParticipation> {
+    const eligibleIds = await dataService.users.findIdsByPermission(Permission.SUBMIT_RELEASE_CHECK);
+    // Checks outlive the permission which allowed them, so anyone who has since lost it drops out of both counts
+    const submitters = [...new Set(cards.flatMap((card) => card.checkedBy))].filter((id) => eligibleIds.has(id));
+    const completed = submitters.filter((id) => cards.every((card) => card.checkedBy.includes(id)));
+
+    return { eligible: eligibleIds.size, started: submitters.length, completed };
 }
 
 export async function computeProjectProgress(project: IProject): Promise<IProjectProgress> {
