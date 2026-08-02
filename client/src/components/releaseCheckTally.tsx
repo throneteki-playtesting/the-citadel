@@ -157,7 +157,7 @@ function ReleasableSummary({ answers, average, version }: ReleasableSummaryProps
         <TouchTooltip
             placement="bottom"
             content={
-                <div className="flex flex-col gap-1.5 py-1 max-w-64">
+                <div className="flex flex-col gap-1.5 py-1 w-64 max-w-full">
                     <span className="text-xs text-foreground/50">Playtester reviews of v{version}</span>
                     {answers.map((entry) => (
                         <ReviewerAnswer key={entry.reviewer} entry={entry} />
@@ -192,7 +192,7 @@ function ReviewerAnswer({ entry }: { entry: IReleasableAnswer }) {
     return (
         <UserRow
             discordId={entry.reviewer}
-            trailing={<span className={classNames("ml-auto text-xs whitespace-nowrap", color)}>{label}</span>}
+            trailing={<span className={classNames("ml-auto shrink-0 text-xs whitespace-nowrap", color)}>{label}</span>}
         />
     );
 }

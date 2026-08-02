@@ -373,7 +373,9 @@ function UserNameRow({ entry, showVersion = false }: { entry: IReleaseCheck; sho
     return (
         <UserRow
             discordId={entry.createdBy}
-            trailing={showVersion && <span className="ml-auto text-xs text-foreground/40">v{entry.version}</span>}
+            trailing={
+                showVersion && <span className="ml-auto shrink-0 text-xs text-foreground/40">v{entry.version}</span>
+            }
         />
     );
 }

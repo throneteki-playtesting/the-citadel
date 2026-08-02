@@ -15,7 +15,7 @@ export default function UserAvatar({ className, style, discordId, title }: UserA
             name={user?.displayname?.charAt(0) ?? "?"}
             isDisabled={isLoading}
             title={title ?? user?.displayname}
-            className={className}
+            className={classNames("shrink-0", className)}
             style={style}
         />
     );
@@ -25,9 +25,11 @@ export default function UserAvatar({ className, style, discordId, title }: UserA
 export function UserRow({ className, style, discordId, trailing }: UserRowProps) {
     const { data: user } = useGetUserQuery({ discordId });
     return (
-        <div className={classNames("flex items-center gap-2", className)} style={style}>
+        <div className={classNames("flex items-center gap-2 min-w-0", className)} style={style}>
             <UserAvatar discordId={discordId} />
-            <span className="text-sm">{user?.displayname ?? "…"}</span>
+            <span className="text-sm min-w-0 truncate" title={user?.displayname}>
+                {user?.displayname ?? "…"}
+            </span>
             {trailing}
         </div>
     );
