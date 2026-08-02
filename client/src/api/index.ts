@@ -508,7 +508,10 @@ const api = createApi({
                 const url = buildUrl(`projects/${project}/slots/${number}/design/checks/summary`);
                 return { url, method: "GET" };
             },
-            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+            providesTags: (_result, _error, { project, number }) => [
+                { type: "slot", id: `${project}|${number}` },
+                { type: "review", id: `LIST|${project}|${number}` }
+            ]
         }),
         submitReleaseCheck: builder.mutation<
             ISlot,
@@ -757,7 +760,7 @@ const api = createApi({
                 const body = review;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: [{ type: "review", id: "LIST" }]
+            invalidatesTags: (result) => generateFor(result, "review")
         }),
         updateReview: builder.mutation<IPlaytestReview, IPlaytestReview>({
             query: (review) => {
