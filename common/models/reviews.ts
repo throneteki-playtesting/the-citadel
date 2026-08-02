@@ -10,6 +10,29 @@ export const statementAnswers = [
     "strongly agree"
 ];
 export type StatementAnswer = (typeof statementAnswers)[number];
+
+const NEUTRAL_ANSWER_INDEX = statementAnswers.indexOf("neither agree nor disagree");
+
+function roundToNearestAnswer(average: number) {
+    if (Math.abs(average % 1) !== 0.5) {
+        return Math.round(average);
+    }
+    // An even split shouldn't read as agreement either way, so ties fall toward neutral
+    return average < NEUTRAL_ANSWER_INDEX ? Math.ceil(average) : Math.floor(average);
+}
+
+/** The answer closest to the mean of those given, or undefined if there are none to average */
+export function averageStatementAnswer(answers: StatementAnswer[]): StatementAnswer | undefined {
+    const indexes = answers
+        .map((answer) => statementAnswers.indexOf(answer.toLowerCase()))
+        .filter((index) => index >= 0);
+    if (indexes.length === 0) {
+        return undefined;
+    }
+
+    const average = indexes.reduce((total, index) => total + index, 0) / indexes.length;
+    return statementAnswers[roundToNearestAnswer(average)];
+}
 export type Statements = {
     boring: StatementAnswer;
     competitive: StatementAnswer;

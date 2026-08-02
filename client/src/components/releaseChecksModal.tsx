@@ -51,11 +51,12 @@ import { useContainerWidth } from "../hooks/useContainerWidth";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useFormValidation } from "../hooks/useFormValidation";
 import { showApiErrorToast } from "../api/errors";
-import { avatarBubbleClasses, avatarRingClasses, highlightTarget } from "../constants";
+import { avatarBubbleClasses, avatarRingClasses, highlightTarget, stackedAvatarClasses } from "../constants";
 import Timestamp from "./timestamp";
 import FormValidationSummary from "./formValidationSummary";
 import FeedbackAvatar, { FeedbackAvatarView } from "./feedbackAvatar";
 import ReleaseCheckTally from "./releaseCheckTally";
+import UserAvatar, { UserRow } from "./userAvatar";
 import { releaseCheckVerdict } from "./releaseCheckVerdict";
 
 // Only shows total counter at 80%
@@ -319,7 +320,7 @@ function ReadyStack({ entries, latestVersion }: { entries: IReleaseCheck[]; late
                     <AvatarGroup
                         max={MAX_STACK}
                         className="-space-x-2"
-                        renderCount={(count) => <Avatar name={`+${count}`} className={STACK_AVATAR_CLASSES} />}
+                        renderCount={(count) => <Avatar name={`+${count}`} className={stackedAvatarClasses} />}
                     >
                         {[...current, ...stale].map((entry) => (
                             <StackedUserAvatar key={entry.createdBy} entry={entry} latestVersion={latestVersion} />
@@ -356,35 +357,24 @@ function ReadyStack({ entries, latestVersion }: { entries: IReleaseCheck[]; late
     );
 }
 
-// Overrides the shift the Avatar theme's inGroup variant applies, which uses data-[hover]/data-[focus-visible]
-const STACK_AVATAR_CLASSES = classNames(
-    "transition-none",
-    "data-[hover=true]:translate-x-0 rtl:data-[hover=true]:translate-x-0",
-    "data-[focus-visible=true]:translate-x-0 rtl:data-[focus-visible=true]:translate-x-0"
-);
-
 function StackedUserAvatar({ entry, latestVersion }: { entry: IReleaseCheck; latestVersion?: SemanticVersion }) {
-    const { data: user, isLoading } = useGetUserQuery({ discordId: entry.createdBy });
+    const { data: user } = useGetUserQuery({ discordId: entry.createdBy });
     const verdict = releaseCheckVerdict(entry, latestVersion);
     return (
-        <Avatar
-            src={user?.avatarUrl}
-            name={user?.displayname?.charAt(0) ?? "?"}
-            isDisabled={isLoading}
-            title={verdict?.stale ? `${user?.displayname} marked this ready on v${entry.version}` : user?.displayname}
-            className={classNames(avatarRingClasses, verdict?.ring, STACK_AVATAR_CLASSES)}
+        <UserAvatar
+            discordId={entry.createdBy}
+            title={verdict?.stale ? `${user?.displayname} marked this ready on v${entry.version}` : undefined}
+            className={classNames(avatarRingClasses, verdict?.ring, stackedAvatarClasses)}
         />
     );
 }
 
 function UserNameRow({ entry, showVersion = false }: { entry: IReleaseCheck; showVersion?: boolean }) {
-    const { data: user, isLoading } = useGetUserQuery({ discordId: entry.createdBy });
     return (
-        <div className="flex items-center gap-2">
-            <Avatar size="sm" src={user?.avatarUrl} name={user?.displayname?.charAt(0) ?? "?"} isDisabled={isLoading} />
-            <span className="text-sm">{user?.displayname ?? "…"}</span>
-            {showVersion && <span className="ml-auto text-xs text-foreground/40">v{entry.version}</span>}
-        </div>
+        <UserRow
+            discordId={entry.createdBy}
+            trailing={showVersion && <span className="ml-auto text-xs text-foreground/40">v{entry.version}</span>}
+        />
     );
 }
 

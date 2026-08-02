@@ -1,5 +1,6 @@
 import { Faction, Type } from "./cards";
 import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
+import { StatementAnswer } from "./reviews";
 import { IAuditable } from "./shared";
 import { SemanticVersion } from "../utils";
 
@@ -77,6 +78,17 @@ export interface IReleaseCheckSummary {
     stale: number;
     /** How many people could submit a check at all */
     total: number;
+    /**
+     * How each playtester answered "it could be released as is", for reviews of `version` only - reviews
+     * of earlier versions are discounted entirely. Empty without permission to read reviews.
+     */
+    releasable: IReleasableAnswer[];
+}
+
+/** One playtester's verdict on whether a card could be released as is */
+export interface IReleasableAnswer {
+    reviewer: string;
+    answer: StatementAnswer;
 }
 
 /** One card's release check state within a release - see the Discord announcement */

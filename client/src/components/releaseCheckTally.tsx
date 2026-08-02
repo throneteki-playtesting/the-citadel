@@ -1,10 +1,18 @@
-import { Progress, Skeleton } from "@heroui/react";
+import { ReactNode } from "react";
+import { Avatar, AvatarGroup, Progress, Skeleton } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faCircleInfo, faHourglassHalf, faXmark } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { useGetReleaseCheckSummaryQuery } from "../api";
 import { TouchTooltip } from "./touchTooltip";
 import { BaseElementProps } from "../types";
+import { averageStatementAnswer, StatementAnswer, statementAnswers } from "common/models/reviews";
+import { IReleasableAnswer } from "common/models/slots";
+import { SemanticVersion } from "common/utils";
+import { stackedAvatarClasses } from "../constants";
+import { statementAnswerDetails } from "./statementAnswerDetails";
+import StatementAnswerIcon from "./statementAnswerIcon";
+import UserAvatar, { UserRow } from "./userAvatar";
 
 // Shared so the loading skeleton keeps the same shape, and doesn't shift the layout when it resolves
 const TALLY_CLASSES = "flex flex-col gap-1.5";
@@ -12,6 +20,37 @@ const TALLY_CLASSES = "flex flex-col gap-1.5";
 const HEADER_ROW_CLASSES =
     "flex flex-col items-start gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2 text-xs sm:text-sm";
 const STATUS_ROW_CLASSES = "flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3 text-xs";
+
+// Playtester sentiment reads as a verdict rather than a tally, so the average gets a sentence, not a count
+const RELEASABLE_SUMMARIES: Record<StatementAnswer, ReactNode> = {
+    "strongly disagree": (
+        <>
+            Playtesters <b>strongly disagree</b> it's releasable
+        </>
+    ),
+    "somewhat disagree": (
+        <>
+            Playtesters <b>somewhat disagree</b> it's releasable
+        </>
+    ),
+    "neither agree nor disagree": (
+        <>
+            Playtesters are <b>undecided</b> on releasing it
+        </>
+    ),
+    "somewhat agree": (
+        <>
+            Playtesters <b>somewhat agree</b> it's releasable
+        </>
+    ),
+    "strongly agree": (
+        <>
+            Playtesters <b>strongly agree</b> it's releasable
+        </>
+    )
+};
+
+const MAX_REVIEWER_AVATARS = 5;
 
 // Sign-off tally for a slot - how many said yes/no, and how many eligible submitters are yet to answer
 export default function ReleaseCheckTally({
@@ -45,6 +84,12 @@ export default function ReleaseCheckTally({
         return null;
     }
 
+    // Empty unless the latest version has been reviewed at all - nothing is shown in its place. Most
+    // negative answers lead, so the strongest objection always survives the avatar group's cutoff
+    const answers = [...data.releasable].sort(
+        (a, b) => statementAnswers.indexOf(a.answer) - statementAnswers.indexOf(b.answer)
+    );
+    const average = averageStatementAnswer(answers.map((entry) => entry.answer));
     // Stale checks answered a version that no longer exists, so they're excluded from the total too
     const answered = data.ready + data.notReady;
     // Measured against responses received, not the eligible roster - silence isn't a vote against
@@ -101,9 +146,63 @@ export default function ReleaseCheckTally({
                     </span>
                 )}
             </div>
+            {average && <ReleasableSummary answers={answers} average={average} version={data.version} />}
         </div>
     );
 }
+
+// The average answer, with the reviewers behind it - each named with their own answer in the tooltip
+function ReleasableSummary({ answers, average, version }: ReleasableSummaryProps) {
+    return (
+        <TouchTooltip
+            placement="bottom"
+            content={
+                <div className="flex flex-col gap-1.5 py-1 max-w-64">
+                    <span className="text-xs text-foreground/50">Playtester reviews of v{version}</span>
+                    {answers.map((entry) => (
+                        <ReviewerAnswer key={entry.reviewer} entry={entry} />
+                    ))}
+                </div>
+            }
+        >
+            <div className="flex items-center gap-2 w-fit cursor-help">
+                <AvatarGroup
+                    size="sm"
+                    max={MAX_REVIEWER_AVATARS}
+                    className="-space-x-2"
+                    renderCount={(count: number) => (
+                        <Avatar size="sm" name={`+${count}`} className={stackedAvatarClasses} />
+                    )}
+                >
+                    {answers.map((entry) => (
+                        <UserAvatar key={entry.reviewer} discordId={entry.reviewer} className={stackedAvatarClasses} />
+                    ))}
+                </AvatarGroup>
+                <span className={classNames("text-xs", statementAnswerDetails[average].color)}>
+                    {RELEASABLE_SUMMARIES[average]}
+                </span>
+                <StatementAnswerIcon answer={average} tooltip={false} />
+            </div>
+        </TouchTooltip>
+    );
+}
+
+function ReviewerAnswer({ entry }: { entry: IReleasableAnswer }) {
+    const { label, color } = statementAnswerDetails[entry.answer];
+    return (
+        <UserRow
+            discordId={entry.reviewer}
+            trailing={<span className={classNames("ml-auto text-xs whitespace-nowrap", color)}>{label}</span>}
+        />
+    );
+}
+
+type ReleasableSummaryProps = {
+    answers: IReleasableAnswer[];
+    average: StatementAnswer;
+    /** Card version the answers were given against - all of them, since older reviews never reach here */
+    version?: SemanticVersion;
+};
 
 type ReleaseCheckTallyProps = Omit<BaseElementProps, "children"> & {
     project: number;

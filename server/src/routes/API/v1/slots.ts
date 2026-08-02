@@ -17,7 +17,7 @@ import {
     SlotStatuses
 } from "common/models/slots";
 import { factions } from "common/models/cards";
-import { factionNames, getPositionFaction } from "common/utils";
+import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
@@ -509,6 +509,14 @@ router.get(
         const ready = current.filter((entry) => entry.ready).length;
         const notReady = current.length - ready;
 
+        // Deliberately scoped to the latest version - a review of an earlier card says nothing about this one.
+        // Named answers are review data, so they're only read for someone allowed to read reviews at all
+        const canReadReviews = hasPermission(getContext().principal, Permission.READ_REVIEWS);
+        const reviews =
+            latestCard && canReadReviews
+                ? await dataService.reviews.read({ project, number: slotNumber, version: latestCard.version })
+                : [];
+
         const summary: IReleaseCheckSummary = {
             version: latestCard?.version,
             ready,
@@ -516,7 +524,8 @@ router.get(
             // Clamped, since a submitter can lose the permission after answering
             pending: Math.max(0, total - current.length),
             stale: checks.length - current.length,
-            total
+            total,
+            releasable: reviews.map((review) => ({ reviewer: review.reviewer, answer: review.statements.releasable }))
         };
 
         res.status(StatusCodes.OK).json(summary);

@@ -30,6 +30,10 @@ import {
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
 
+// Overrides the shift the Avatar theme's inGroup variant applies, which uses data-[hover]/data-[focus-visible]
+export const stackedAvatarClasses =
+    "transition-none data-[hover=true]:translate-x-0 rtl:data-[hover=true]:translate-x-0 data-[focus-visible=true]:translate-x-0 rtl:data-[focus-visible=true]:translate-x-0";
+
 // Round bubble standing in for an avatar - the "add your check" button and the +N overflow
 export const avatarBubbleClasses =
     "shrink-0 size-10 rounded-full bg-content2 border border-content3 text-foreground/60 flex items-center justify-center cursor-pointer transition-all hover:scale-105";
