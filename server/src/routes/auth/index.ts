@@ -1,5 +1,5 @@
 import { celebrate, Joi, Segments } from "@/celebrate";
-import express, { Response } from "express";
+import express, { CookieOptions, Response } from "express";
 import asyncHandler from "express-async-handler";
 import { dataService, discordService, logger } from "@/services";
 import { APIGuildMember, APIUser, RESTPostOAuth2AccessTokenResult } from "discord.js";
@@ -23,6 +23,7 @@ const router = express.Router();
 const SCOPES = ["identify", "guilds", "guilds.members.read"];
 const REDIRECT_URL = `${process.env.CLIENT_HOST}/authRedirect`;
 const OAUTH_STATE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_REFRESH_GRACE_MS = 30 * 1000;
 
 type DiscordAuthQuery = { returnUrl?: string };
 
@@ -171,20 +172,50 @@ router.get(
         }
 
         const tokenHash = generateHash(refreshToken);
-        const stored = await dataService.auth.popRefreshToken(tokenHash);
+        const nextToken = randomUUID();
+        const expiresAt = new Date(Date.now() + ttlMs(process.env.REFRESH_TOKEN_TTL));
+        const stored = await dataService.auth.rotateRefreshToken(tokenHash, generateHash(nextToken), expiresAt);
 
-        if (!stored || stored.expiresAt < new Date()) {
-            throw new ApiErrorResponse(
-                StatusCodes.FORBIDDEN,
-                "Expired or Invalid Refresh Token",
-                "Refresh token is either missing or expired"
-            );
+        logger.info(
+            `Refresh presented: session=${sessionId?.slice(0, 8) ?? "none"} token=${tokenHash.slice(0, 8)} rotated=${!!stored}`
+        );
+
+        if (stored) {
+            applyAccessToken(res, stored.discordId);
+            applySessionCookies(res, nextToken, sessionId ?? randomUUID());
+
+            const response: RefreshAuthResponse = { status: "success" };
+            res.json(response);
+            return;
         }
 
-        await applyTokensToResponse(res, stored.discordId, sessionId ?? randomUUID());
+        // Presenting the just-rotated hash means a concurrent request from the same browser won the race
+        const superseded = await dataService.auth.findByPreviousHash(tokenHash);
+        const graceMs = Number.parseInt(process.env.REFRESH_GRACE_MS) || DEFAULT_REFRESH_GRACE_MS;
+        const withinGrace = superseded?.consumedAt && Date.now() - superseded.consumedAt.getTime() <= graceMs;
 
-        const response: RefreshAuthResponse = { status: "success" };
-        res.json(response);
+        if (withinGrace) {
+            logger.info(`Refresh within grace: session=${superseded.sessionId.slice(0, 8)}`);
+
+            applyAccessToken(res, superseded.discordId);
+
+            const response: RefreshAuthResponse = { status: "success" };
+            res.json(response);
+            return;
+        }
+
+        if (superseded) {
+            logger.warn(
+                `Refresh token reused outside grace window, dropping session=${superseded.sessionId.slice(0, 8)}`
+            );
+            await dataService.auth.deleteSession(superseded.discordId, superseded.sessionId);
+        }
+
+        throw new ApiErrorResponse(
+            StatusCodes.FORBIDDEN,
+            "Expired or Invalid Refresh Token",
+            "Refresh token is either missing or expired"
+        );
     })
 );
 
@@ -220,7 +251,7 @@ async function get<T>(url: string, authToken: string) {
 }
 
 function createAccessToken(discordId: string) {
-    const expiresAt = new Date(Date.now() + Number.parseInt(process.env.ACCESS_TOKEN_TTL) * 1000);
+    const expiresAt = new Date(Date.now() + ttlMs(process.env.ACCESS_TOKEN_TTL));
     const payload: AccessTokenPayload = { discordId, expiresAt };
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
         expiresIn: Number.parseInt(process.env.ACCESS_TOKEN_TTL)
@@ -231,7 +262,7 @@ function createAccessToken(discordId: string) {
 async function createRefreshToken(discordId: string, sessionId: string) {
     const rawToken = randomUUID();
     const tokenHash = generateHash(rawToken);
-    const expiresAt = new Date(Date.now() + Number.parseInt(process.env.REFRESH_TOKEN_TTL) * 1000);
+    const expiresAt = new Date(Date.now() + ttlMs(process.env.REFRESH_TOKEN_TTL));
     const createdAt = new Date();
     const refreshToken: RefreshToken = {
         discordId,
@@ -242,6 +273,8 @@ async function createRefreshToken(discordId: string, sessionId: string) {
     };
     await dataService.auth.addRefreshToken(refreshToken);
 
+    logger.info(`Refresh issued: session=${sessionId.slice(0, 8)} token=${tokenHash.slice(0, 8)}`);
+
     return { token: rawToken, expiresAt };
 }
 
@@ -249,31 +282,37 @@ function generateHash(raw: string) {
     return createHash("sha256").update(raw).digest("hex");
 }
 
+function ttlMs(ttlSeconds: string) {
+    return Number.parseInt(ttlSeconds) * 1000;
+}
+
+function sessionCookieOptions(maxAge: number): CookieOptions {
+    return {
+        httpOnly: true,
+        secure: isEnvironment("staging", "production"),
+        sameSite: "lax",
+        maxAge
+    };
+}
+
+function applyAccessToken(res: Response, discordId: string) {
+    const { token } = createAccessToken(discordId);
+
+    res.cookie(ACCESS_TOKEN_COOKIE, token, sessionCookieOptions(ttlMs(process.env.ACCESS_TOKEN_TTL)));
+}
+
+function applySessionCookies(res: Response, refreshToken: string, sessionId: string) {
+    const maxAge = ttlMs(process.env.REFRESH_TOKEN_TTL);
+
+    res.cookie(SESSION_ID_COOKIE, sessionId, sessionCookieOptions(maxAge));
+    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, sessionCookieOptions(maxAge));
+}
+
 async function applyTokensToResponse(res: Response, discordId: string, sessionId: string) {
-    const { token: accessToken } = createAccessToken(discordId);
     const { token: refreshToken } = await createRefreshToken(discordId, sessionId);
 
-    const accessTokenAge = Number.parseInt(process.env.ACCESS_TOKEN_TTL) * 1000;
-    const refreshTokenAge = Number.parseInt(process.env.REFRESH_TOKEN_TTL) * 1000;
-
-    res.cookie(SESSION_ID_COOKIE, sessionId, {
-        httpOnly: true,
-        secure: isEnvironment("staging", "production"),
-        sameSite: "lax",
-        maxAge: refreshTokenAge
-    });
-    res.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
-        httpOnly: true,
-        secure: isEnvironment("staging", "production"),
-        sameSite: "lax",
-        maxAge: accessTokenAge
-    });
-    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-        httpOnly: true,
-        secure: isEnvironment("staging", "production"),
-        sameSite: "lax",
-        maxAge: refreshTokenAge
-    });
+    applyAccessToken(res, discordId);
+    applySessionCookies(res, refreshToken, sessionId);
 }
 
 export default router;

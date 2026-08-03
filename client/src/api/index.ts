@@ -29,7 +29,7 @@ import { GlobalStats, ProjectStats } from "common/models/stats";
 import { getConnectionId } from "./connectionId";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
-import { redirectToLogin, refreshSession } from "./refresh";
+import { refreshSession } from "./refresh";
 
 const baseQuery = fetchBaseQuery({
     baseUrl: "/api/v1",
@@ -53,11 +53,8 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
 
         if (outcome === "refreshed" || outcome === "concurrent") {
             result = await baseQuery(args, queryApi, extraOptions);
-        } else {
+        } else if (outcome === "expired" && queryApi.endpoint !== "getMe") {
             queryApi.dispatch(api.util.invalidateTags([{ type: "me" }]));
-            if (outcome === "expired") {
-                redirectToLogin();
-            }
         }
     }
 

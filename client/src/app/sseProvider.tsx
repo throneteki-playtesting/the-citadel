@@ -8,6 +8,7 @@ import { store } from "../api/store";
 import { setConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
+import { useProactiveRefresh } from "../hooks/useProactiveRefresh";
 import { mergeWith, isPlainObject } from "lodash-es";
 import { refreshSession } from "../api/refresh";
 import { emitLogCreate, emitResync, hasLogListeners } from "../pages/admin/logs/logStream";
@@ -79,6 +80,7 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
     const isFirstRender = useRef(true);
 
     useRefreshToast();
+    useProactiveRefresh();
 
     useEffect(() => {
         if (isFirstRender.current) {
@@ -110,7 +112,6 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (outcome === "expired") {
-                // Leave the redirect to the query layer so a background reconnect never navigates the user away.
                 store.dispatch(api.util.invalidateTags([{ type: "me" }]));
                 return;
             }

@@ -39,6 +39,7 @@ declare namespace NodeJS {
         ACCESS_TOKEN_TTL: string;
         REFRESH_TOKEN_TTL: string;
         IMPERSONATION_TOKEN_TTL: string;
+        REFRESH_GRACE_MS?: string;
 
         S3_BASE_URL: string;
         S3_BUCKET: string;

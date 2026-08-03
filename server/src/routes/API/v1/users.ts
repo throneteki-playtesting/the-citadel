@@ -41,8 +41,8 @@ router.get("/me", (_req, res) => {
         return;
     }
 
-    const { principal, realPrincipal, impersonating } = context;
-    const response: MeResponse = { ...principal };
+    const { principal, realPrincipal, impersonating, accessTokenExpiresAt } = context;
+    const response: MeResponse = { ...principal, accessTokenExpiresAt };
     if (impersonating) {
         const target =
             impersonating === "role"

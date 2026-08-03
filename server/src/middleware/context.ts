@@ -11,6 +11,7 @@ type RequestContext =
           principal: User;
           realPrincipal: User;
           impersonating?: ImpersonationType;
+          accessTokenExpiresAt?: Date;
           timestamp: Date;
           traceId: string;
           clientId?: string;
@@ -30,7 +31,8 @@ export function createContext(
     principal: User,
     realPrincipal: User,
     impersonating?: ImpersonationType,
-    clientId?: string
+    clientId?: string,
+    accessTokenExpiresAt?: Date
 ): RequestContext;
 export function createContext(source: "anonymous", principal: Anonymous): RequestContext;
 export function createContext(
@@ -42,14 +44,17 @@ export function createContext(
     principal: User | Integration | Anonymous,
     realPrincipalOrClientId?: User | string,
     impersonating?: ImpersonationType,
-    clientId?: string
+    clientId?: string,
+    accessTokenExpiresAt?: Date
 ): RequestContext {
     return {
         source,
         principal,
         timestamp: new Date(),
         traceId: crypto.randomUUID(),
-        ...(source === "client" ? { realPrincipal: realPrincipalOrClientId, impersonating, clientId } : {})
+        ...(source === "client"
+            ? { realPrincipal: realPrincipalOrClientId, impersonating, clientId, accessTokenExpiresAt }
+            : {})
     } as RequestContext;
 }
 

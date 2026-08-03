@@ -1,11 +1,30 @@
 import { Mutex } from "async-mutex";
 import { StatusCodes } from "http-status-codes";
-import { isSafeRelativePath } from "common/utils";
 import type { RefreshAuthResponse } from "server/types";
 
 export type RefreshOutcome = "refreshed" | "concurrent" | "expired" | "failed";
 
 const mutex = new Mutex();
+
+const RETRY_DELAYS_MS = [300, 900];
+
+// Only a server-stated dead session is final; anything else says nothing about it, so it retries
+async function attemptRefresh(): Promise<RefreshOutcome> {
+    try {
+        const response = await fetch("/auth/refresh", { credentials: "include" });
+        if (response.status === StatusCodes.FORBIDDEN || response.status === StatusCodes.UNAUTHORIZED) {
+            return "expired";
+        }
+        if (!response.ok) {
+            return "failed";
+        }
+
+        const result = (await response.json()) as RefreshAuthResponse;
+        return result.status === "success" ? "refreshed" : "failed";
+    } catch {
+        return "failed";
+    }
+}
 
 export async function refreshSession(): Promise<RefreshOutcome> {
     if (mutex.isLocked()) {
@@ -14,27 +33,16 @@ export async function refreshSession(): Promise<RefreshOutcome> {
     }
 
     return await mutex.runExclusive(async (): Promise<RefreshOutcome> => {
-        try {
-            const response = await fetch("/auth/refresh", { credentials: "include" });
-            if (response.status === StatusCodes.FORBIDDEN) {
-                return "expired";
-            }
-            if (!response.ok) {
-                return "failed";
-            }
+        let outcome = await attemptRefresh();
 
-            const result = (await response.json()) as RefreshAuthResponse;
-            return result.status === "success" ? "refreshed" : "failed";
-        } catch {
-            return "failed";
+        for (const delay of RETRY_DELAYS_MS) {
+            if (outcome !== "failed") {
+                break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            outcome = await attemptRefresh();
         }
-    });
-}
 
-export function redirectToLogin() {
-    const returnUrl = window.location.pathname + window.location.search;
-    window.location.href =
-        returnUrl !== "/" && isSafeRelativePath(returnUrl)
-            ? `/auth/discord?returnUrl=${encodeURIComponent(returnUrl)}`
-            : "/auth/discord";
+        return outcome;
+    });
 }

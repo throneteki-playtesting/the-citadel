@@ -8,6 +8,8 @@ export default class AuthRepository extends Database<RefreshToken> {
         super(new MongoDataSource<RefreshToken>(mongoClient, "refreshTokens", { discordId: 1, sessionId: 1 }));
         // Ensures that refresh tokens are automatically deleted once they expire
         this.database.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+        this.database.collection.createIndex({ tokenHash: 1 });
+        this.database.collection.createIndex({ previousHash: 1 });
     }
 
     public async addRefreshToken(refreshToken: RefreshToken) {
@@ -16,10 +18,17 @@ export default class AuthRepository extends Database<RefreshToken> {
         return await this.database.create(refreshToken);
     }
 
-    public async popRefreshToken(tokenHash: string) {
-        const result = await this.database.readOne({ tokenHash });
-        await this.database.destroy({ tokenHash });
-        return result;
+    // Atomically swaps the session onto its next token, retaining the consumed hash for the grace window
+    public async rotateRefreshToken(currentHash: string, nextHash: string, expiresAt: Date) {
+        return await this.database.collection.findOneAndUpdate(
+            { tokenHash: currentHash, expiresAt: { $gt: new Date() } },
+            { $set: { tokenHash: nextHash, previousHash: currentHash, consumedAt: new Date(), expiresAt } },
+            { returnDocument: "before" }
+        );
+    }
+
+    public async findByPreviousHash(previousHash: string) {
+        return await this.database.readOne({ previousHash });
     }
 
     public async deleteSession(discordId: string, sessionId: string) {

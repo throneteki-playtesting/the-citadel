@@ -5,6 +5,8 @@ export interface RefreshToken {
     discordId: string;
     sessionId: string;
     tokenHash: string;
+    previousHash?: string;
+    consumedAt?: Date;
     expiresAt: Date;
     createdAt: Date;
 }
@@ -79,4 +81,6 @@ export interface ImpersonationInfo {
 // Response shape for GET /users/me — a User, plus impersonation details when the session is viewing-as a role/user
 export interface MeResponse extends User {
     impersonation?: ImpersonationInfo;
+    // Lets the client refresh ahead of expiry rather than discovering it as a burst of 401s
+    accessTokenExpiresAt?: Date;
 }
