@@ -32,7 +32,7 @@ export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
 
 // Overrides the shift the Avatar theme's inGroup variant applies, which uses data-[hover]/data-[focus-visible]
 export const stackedAvatarClasses =
-    "transition-none data-[hover=true]:translate-x-0 rtl:data-[hover=true]:translate-x-0 data-[focus-visible=true]:translate-x-0 rtl:data-[focus-visible=true]:translate-x-0";
+    "transition-none data-[hover=true]:!translate-x-0 rtl:data-[hover=true]:!translate-x-0 data-[focus-visible=true]:!translate-x-0 rtl:data-[focus-visible=true]:!translate-x-0";
 
 // Round bubble standing in for an avatar - the "add your check" button and the +N overflow
 export const avatarBubbleClasses =

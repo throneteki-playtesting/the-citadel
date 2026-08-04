@@ -442,8 +442,10 @@ router.patch(
             : {
                   ...slot.statuses.design.checks[existingIndex],
                   ready,
-                  categories,
-                  note,
+                  // Only sent alongside a "not ready" verdict, so withdrawing one keeps the reasoning it
+                  // was given rather than erasing the record of why it was ever raised
+                  ...(categories !== undefined && { categories }),
+                  ...(note !== undefined && { note }),
                   version: latestCard.version,
                   updated: now,
                   updatedBy: principal.id

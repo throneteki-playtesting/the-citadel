@@ -9,7 +9,7 @@ import {
     GuildForumTag,
     Role
 } from "discord.js";
-import { emojis, colors, discordify } from "../utils";
+import { emojis, colors, discordify, extractFromURL } from "../utils";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
@@ -421,17 +421,12 @@ function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
     return [imageEmbed];
 }
 
-function extractFromURL(url: string) {
-    const [, guildId, channelId, messageId] = url.match(/(\d+)\/(\d+)\/(\d+)$/) || [];
-    return { guildId, channelId, messageId };
-}
-
 // Thread helper functions
 function threadNameFor(card: IPlaytestCard) {
     const cardLabel = `${card.name} (${isPreview(card) ? "Preview" : card.version})`;
     return `${card.number}. ${cardLabel}`;
 }
-async function getThreadFor(card: IPlaytestCard) {
+export async function getThreadFor(card: IPlaytestCard) {
     let target = card;
     if (card.draft) {
         let previous = await dataService.cards.previous(card);

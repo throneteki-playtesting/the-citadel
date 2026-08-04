@@ -57,6 +57,13 @@ export function plural(count: number, singular: string, plural = `${singular}s`)
     return count === 1 ? singular : plural;
 }
 
+// Splits the trailing guild/channel/message ids out of a message url. A thread's starter message carries
+// the thread's own id in both the channel and message positions
+export function extractFromURL(url: string) {
+    const [, guildId, channelId, messageId] = url.match(/(\d+)\/(\d+)\/(\d+)$/) || [];
+    return { guildId, channelId, messageId };
+}
+
 export function discordify(text: string) {
     // Html Converting
     let result = text

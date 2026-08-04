@@ -11,7 +11,7 @@ import {
     ActionRowBuilder,
     ButtonBuilder
 } from "discord.js";
-import { colors, emojis } from "../utils";
+import { colors, emojis, extractFromURL } from "../utils";
 import { capitalize, merge } from "lodash-es";
 import { dataService, discordService, logger } from "@/services";
 import { factionNames, isPreview, parseCardCode } from "common/utils";
@@ -385,10 +385,6 @@ function createReviewEmbeds(review: IPlaytestReview, user: User) {
     return embeds;
 }
 
-function extractFromURL(url: string) {
-    const [, guildId, channelId, messageId] = url.match(/(\d+)\/(\d+)\/(\d+)$/) || [];
-    return { guildId, channelId, messageId };
-}
 const messages = {
     initial(review: IPlaytestReview, user: User, card: IPlaytestCard): BaseMessageOptions {
         const content = `<@${user.discordId}> has submitted a new review for **${card.name} (${card.version})**`;

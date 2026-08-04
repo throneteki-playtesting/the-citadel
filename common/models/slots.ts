@@ -35,6 +35,13 @@ export interface IReleaseCheck extends IAuditable {
     note?: string;
     /** Card version this verdict was made against - stamped server side */
     version: SemanticVersion;
+    _metadata?: {
+        /** The objection mirrored into the card's forum thread; only ever set for a "not ready" verdict */
+        discord?: {
+            messageUrl?: string;
+            lastSynced?: Date;
+        };
+    };
 }
 
 export type ChecksClosedReason = "design" | "release";

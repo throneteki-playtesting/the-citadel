@@ -155,7 +155,7 @@ export default function ReleaseCheckTally({
 function ReleasableSummary({ answers, average, version }: ReleasableSummaryProps) {
     return (
         <TouchTooltip
-            placement="bottom"
+            placement="top"
             content={
                 <div className="flex flex-col gap-1.5 py-1 w-64 max-w-full">
                     <span className="text-xs text-foreground/50">Playtester reviews of v{version}</span>
@@ -175,7 +175,7 @@ function ReleasableSummary({ answers, average, version }: ReleasableSummaryProps
                     )}
                 >
                     {answers.map((entry) => (
-                        <UserAvatar key={entry.reviewer} discordId={entry.reviewer} className={stackedAvatarClasses} />
+                        <StackedReviewerAvatar key={entry.reviewer} discordId={entry.reviewer} />
                     ))}
                 </AvatarGroup>
                 <span className={classNames("text-xs", statementAnswerDetails[average].color)}>
@@ -185,6 +185,12 @@ function ReleasableSummary({ answers, average, version }: ReleasableSummaryProps
             </div>
         </TouchTooltip>
     );
+}
+
+// AvatarGroup overwrites the className of its direct children when it clones them, taking the stacked
+// styling with it. Going through a wrapper keeps it out of reach, as the checks modal's ready stack does
+function StackedReviewerAvatar({ discordId }: { discordId: string }) {
+    return <UserAvatar discordId={discordId} className={stackedAvatarClasses} />;
 }
 
 function ReviewerAnswer({ entry }: { entry: IReleasableAnswer }) {

@@ -67,8 +67,8 @@ const AVATAR_PX = 40;
 const ROW_GAP_PX = 10;
 const AVATAR_SLOT_PX = AVATAR_PX + ROW_GAP_PX;
 const DIVIDER_PX = 15;
-// Each avatar past the first in the ready stack only adds its unoverlapped sliver
-const STACKED_AVATAR_PX = 24;
+// Each avatar past the first in the ready stack only adds its unoverlapped sliver, the -space-x-2 overlap
+const STACKED_AVATAR_PX = AVATAR_PX - 8;
 const MAX_STACK = 3;
 
 export default function ReleaseChecksModal({
@@ -363,6 +363,7 @@ function StackedUserAvatar({ entry, latestVersion }: { entry: IReleaseCheck; lat
     return (
         <UserAvatar
             discordId={entry.createdBy}
+            size="md"
             title={verdict?.stale ? `${user?.displayname} marked this ready on v${entry.version}` : undefined}
             className={classNames(avatarRingClasses, verdict?.ring, stackedAvatarClasses)}
         />
@@ -648,16 +649,20 @@ function ReadOnlyReleaseCheck({ entry, latestVersion }: { entry?: IReleaseCheck;
                     date={new Date(entry.updated)}
                 />
             </div>
-            {entry.categories && entry.categories.length > 0 && (
-                <div className="flex gap-1.5 flex-wrap">
-                    {entry.categories.map((category) => (
-                        <Chip key={category} size="sm" variant="flat" className="capitalize">
-                            {category}
-                        </Chip>
-                    ))}
-                </div>
+            {!entry.ready && (
+                <>
+                    {entry.categories && entry.categories.length > 0 && (
+                        <div className="flex gap-1.5 flex-wrap">
+                            {entry.categories.map((category) => (
+                                <Chip key={category} size="sm" variant="flat" className="capitalize">
+                                    {category}
+                                </Chip>
+                            ))}
+                        </div>
+                    )}
+                    {entry.note && <div className="text-sm font-serif italic">{entry.note}</div>}
+                </>
             )}
-            {entry.note && <div className="text-sm font-serif italic">{entry.note}</div>}
         </div>
     );
 }

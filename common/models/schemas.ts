@@ -391,6 +391,9 @@ export const Slot = {
                             categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
                             note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
                             version: Joi.string().required().regex(Regex.SemanticVersion),
+                            _metadata: Joi.object({
+                                discord: DiscordMetadata
+                            }),
                             created: Joi.date().required(),
                             createdBy: Joi.string().required(),
                             updated: Joi.date().required(),
@@ -437,6 +440,9 @@ export const Slot = {
                         categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
                         note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
                         version: Joi.string().regex(Regex.SemanticVersion),
+                        _metadata: Joi.object({
+                            discord: DiscordMetadata
+                        }),
                         created: Joi.date(),
                         createdBy: Joi.string(),
                         updated: Joi.date(),

@@ -13,6 +13,7 @@ import { dataService, logger } from "@/services";
 import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
+import { onReleaseCheckObjectionDeleted } from "./forums/releaseCheckObjections";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
@@ -114,6 +115,7 @@ async function onForumMessageDeleted(forumName: string, messageUrl: string) {
     switch (forumName) {
         case "card-forum":
             await onCardForumMessageDeleted(messageUrl);
+            await onReleaseCheckObjectionDeleted(messageUrl);
             break;
         case "playtesting-reviews":
             await onReviewForumMessageDeleted(messageUrl);

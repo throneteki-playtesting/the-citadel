@@ -1,16 +1,16 @@
 import { ReactNode } from "react";
-import { Avatar } from "@heroui/react";
+import { Avatar, AvatarProps } from "@heroui/react";
 import classNames from "classnames";
 import { useGetUserQuery } from "../api";
 import { BaseElementProps } from "../types";
 
 // A user's avatar looked up by id, falling back to their initial while the lookup is in flight or the
 // user is unknown. Shared so every avatar in the app agrees on that fallback
-export default function UserAvatar({ className, style, discordId, title }: UserAvatarProps) {
+export default function UserAvatar({ className, style, discordId, title, size = "sm" }: UserAvatarProps) {
     const { data: user, isLoading } = useGetUserQuery({ discordId });
     return (
         <Avatar
-            size="sm"
+            size={size}
             src={user?.avatarUrl}
             name={user?.displayname?.charAt(0) ?? "?"}
             isDisabled={isLoading}
@@ -39,6 +39,8 @@ type UserAvatarProps = Omit<BaseElementProps, "children"> & {
     discordId: string;
     /** Overrides the hover title, which is otherwise just the display name */
     title?: string;
+    /** HeroUI Avatar size; defaults to the small avatar used in rows and tallies */
+    size?: AvatarProps["size"];
 };
 
 type UserRowProps = Omit<BaseElementProps, "children"> & {
