@@ -47,10 +47,13 @@ export function FeedbackAvatarView({
     entry,
     latestVersion,
     isYou = false,
+    isEditable = true,
     isSelected,
     onSelect
 }: FeedbackAvatarViewProps) {
     const verdict = releaseCheckVerdict(entry, latestVersion);
+    // The pencil is an edit affordance, so a check that can't be answered shows its verdict instead
+    const isEditAffordance = isYou && isEditable;
 
     if (isYou && !entry) {
         return (
@@ -93,18 +96,17 @@ export function FeedbackAvatarView({
             <Badge
                 isOneChar
                 content={
-                    isYou ? (
+                    isEditAffordance ? (
                         <FontAwesomeIcon icon={faPencil} className="text-[.6rem]" />
                     ) : verdict ? (
                         <FontAwesomeIcon icon={verdict.icon} className="text-[.6rem]" />
                     ) : undefined
                 }
-                color={isYou ? "primary" : (verdict?.color ?? "default")}
+                color={isEditAffordance ? "primary" : (verdict?.color ?? "default")}
                 placement="bottom-right"
-                isInvisible={!isYou && !entry}
+                isInvisible={!isEditAffordance && !entry}
                 showOutline={false}
-                // Only the verdict badge fades - the "you" pencil is an edit affordance, not a verdict
-                className={classNames(!isYou && verdict?.stale && "opacity-50")}
+                className={classNames(!isEditAffordance && verdict?.stale && verdict.staleBadge)}
             >
                 <Avatar
                     src={user?.avatarUrl}
@@ -140,6 +142,8 @@ type FeedbackAvatarViewProps = Omit<BaseElementProps, "children"> & {
     entry?: IReleaseCheck;
     latestVersion?: SemanticVersion;
     isYou?: boolean;
+    /** Your own check shows its verdict rather than a pencil once it can no longer be answered */
+    isEditable?: boolean;
     isSelected: boolean;
     onSelect: () => void;
 };

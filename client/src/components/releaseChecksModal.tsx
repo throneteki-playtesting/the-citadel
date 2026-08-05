@@ -118,12 +118,13 @@ export default function ReleaseChecksModal({
 
     // Closed checks stay readable as the record of how the card got signed off, but take no new answers
     const closedBy = slot && checksClosedBy(slot.statuses.design.status, releaseStatus);
+    const canEditCheck = canSubmitCheck && !closedBy;
 
     const latestVersion = card?.version;
     const hasDraft = !!draftData && draftData.total > 0;
     const checks = slot?.statuses.design.checks ?? [];
     const mine = user && checks.find((entry) => entry.createdBy === user.discordId);
-    const hasYouSlot = !!mine || (canSubmitCheck && !!user && !closedBy);
+    const hasYouSlot = !!mine || (canEditCheck && !!user);
 
     const others = checks.filter((entry) => entry.createdBy !== user?.discordId);
     const ready = others.filter((entry) => entry.ready);
@@ -183,8 +184,8 @@ export default function ReleaseChecksModal({
                                     title="Release checks are closed"
                                     description={
                                         closedBy === "design"
-                                            ? "This card's design has been locked in, so its checks are now a record of how it got there."
-                                            : "This card's release has been approved, so its checks are now a record of how it got there."
+                                            ? "This card's design has been locked in."
+                                            : "This card's release has been approved."
                                     }
                                 />
                             ) : (
@@ -218,6 +219,7 @@ export default function ReleaseChecksModal({
                                         entry={mine ?? undefined}
                                         latestVersion={latestVersion}
                                         isYou
+                                        isEditable={canEditCheck}
                                         isSelected={isYouSelected}
                                         onSelect={() => user && toggleSelect(user.discordId)}
                                     />
@@ -263,13 +265,12 @@ export default function ReleaseChecksModal({
                                                 transition={{ duration: 0.12 }}
                                                 className="pt-2"
                                             >
-                                                {isYouSelected && !closedBy ? (
+                                                {isYouSelected && canEditCheck ? (
                                                     <YourReleaseCheckForm
                                                         project={project}
                                                         number={number}
                                                         entry={mine ?? undefined}
                                                         latestVersion={latestVersion}
-                                                        canSubmit={canSubmitCheck}
                                                         onDone={() => setSelectedId(null)}
                                                     />
                                                 ) : (
@@ -429,7 +430,7 @@ function OverflowBubble({
     );
 }
 
-function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit, onDone }: YourReleaseCheckFormProps) {
+function YourReleaseCheckForm({ project, number, entry, latestVersion, onDone }: YourReleaseCheckFormProps) {
     const [submitFeedback, { isLoading }] = useSubmitReleaseCheckMutation();
     const { errors, validate, isValidationError, clearError, clearErrors } = useFormValidation(Slot.ReleaseCheck);
     const [ready, setReady] = useState(entry?.ready ?? true);
@@ -515,7 +516,7 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
             <div className="flex flex-col gap-1">
                 <div className="text-sm">Do you believe this card is ready for release?</div>
                 <div className="text-xs text-foreground/60">Focus on mechanics & thematics, not wording.</div>
-                <ButtonGroup size="sm" className="self-start" isDisabled={!canSubmit}>
+                <ButtonGroup size="sm" className="self-start">
                     {[true, false].map((value) => (
                         <Button
                             key={String(value)}
@@ -548,7 +549,6 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
                                 <button
                                     key={category}
                                     type="button"
-                                    disabled={!canSubmit}
                                     className="cursor-pointer"
                                     onClick={() => toggleCategory(category)}
                                 >
@@ -571,7 +571,6 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
                             maxLength={RELEASE_CHECK_NOTE_MAX}
                             placeholder="Why shouldn't this card be released yet?"
                             value={note}
-                            isDisabled={!canSubmit}
                             classNames={{
                                 // Inset, or the expand animation's overflow-hidden clips it. Carries no
                                 // transition while on, so it snaps in and only the fade out is animated
@@ -590,29 +589,27 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, canSubmit
                 )}
             </AnimatePresence>
             <FormValidationSummary errors={errors} mappedPaths={ready ? [] : ["note", "categories"]} />
-            {canSubmit && (
-                <div className="flex items-center justify-end gap-2">
-                    {!ready && note.length >= NOTE_COUNTER_FROM && (
-                        <span
-                            className={classNames(
-                                "text-tiny",
-                                note.length >= RELEASE_CHECK_NOTE_MAX ? "text-danger" : "text-foreground/50"
-                            )}
-                        >
-                            {note.length}/{RELEASE_CHECK_NOTE_MAX}
-                        </span>
-                    )}
-                    <Button type="submit" size="sm" color="primary" isDisabled={isLoading}>
-                        {isStale
-                            ? isUntouched
-                                ? "Confirm This Still Stands"
-                                : "Re-check"
-                            : entry
-                              ? "Update Response"
-                              : "Submit Response"}
-                    </Button>
-                </div>
-            )}
+            <div className="flex items-center justify-end gap-2">
+                {!ready && note.length >= NOTE_COUNTER_FROM && (
+                    <span
+                        className={classNames(
+                            "text-tiny",
+                            note.length >= RELEASE_CHECK_NOTE_MAX ? "text-danger" : "text-foreground/50"
+                        )}
+                    >
+                        {note.length}/{RELEASE_CHECK_NOTE_MAX}
+                    </span>
+                )}
+                <Button type="submit" size="sm" color="primary" isDisabled={isLoading}>
+                    {isStale
+                        ? isUntouched
+                            ? "Confirm This Still Stands"
+                            : "Re-check"
+                        : entry
+                          ? "Update Response"
+                          : "Submit Response"}
+                </Button>
+            </div>
         </Form>
     );
 }
@@ -672,7 +669,6 @@ type YourReleaseCheckFormProps = {
     number: number;
     entry?: IReleaseCheck;
     latestVersion?: SemanticVersion;
-    canSubmit: boolean;
     onDone: () => void;
 };
 

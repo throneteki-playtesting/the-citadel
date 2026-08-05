@@ -1,11 +1,11 @@
 import { Badge } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faThumbsUp } from "@fortawesome/free-solid-svg-icons";
+import { faQuestion, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { IReleaseCheck } from "common/models/slots";
 import { SemanticVersion } from "common/utils";
 import { TouchTooltip } from "../../../components/touchTooltip";
-import { releaseCheckVerdict } from "../../../components/releaseCheckVerdict";
+import { releaseCheckVerdict, staleForegroundClasses } from "../../../components/releaseCheckVerdict";
 
 // Your own release-check verdict, shown inside a card capsule
 export default function ReleaseCheckButton({ entry, latestVersion, className, onPress }: ReleaseCheckButtonProps) {
@@ -37,19 +37,27 @@ export default function ReleaseCheckButton({ entry, latestVersion, className, on
                 <Badge
                     isOneChar
                     size="sm"
-                    content={verdict && <FontAwesomeIcon icon={verdict.icon} className="text-[.5rem]" />}
+                    content={
+                        verdict && (
+                            <FontAwesomeIcon
+                                icon={verdict.stale ? faQuestion : verdict.icon}
+                                className="text-[.5rem]"
+                            />
+                        )
+                    }
                     color={verdict?.color ?? "default"}
                     placement="bottom-right"
                     isInvisible={!verdict}
                     showOutline={false}
-                    className="z-0"
+                    className={classNames("z-0", verdict?.stale && verdict.staleBadge)}
                 >
                     <button
                         type="button"
                         aria-label={verdict?.label ?? "Add your release check"}
                         className={classNames(
-                            "size-6 rounded-full bg-content1/70 text-foreground/70 text-xs flex items-center justify-center",
+                            "size-6 rounded-full bg-content1/70 text-xs flex items-center justify-center",
                             "cursor-pointer transition-all hover:bg-content1 hover:text-primary hover:scale-105",
+                            verdict?.stale ? staleForegroundClasses : "text-foreground/70",
                             verdict && classNames("ring-2", verdict.ring)
                         )}
                         onClick={onPress}

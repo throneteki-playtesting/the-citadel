@@ -141,15 +141,15 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
                     endContent={
                         <Button
                             onPress={onAddDeck}
-                            className="mt-auto"
-                            isIconOnly
+                            className="mt-auto shrink-0"
                             radius="full"
                             color="primary"
                             size="sm"
+                            startContent={!isValidatingDeckUrl && <FontAwesomeIcon icon={faPlus} />}
                             isDisabled={!deckUrlInput}
                             isLoading={isValidatingDeckUrl}
                         >
-                            <FontAwesomeIcon icon={faPlus} className="text-xl" />
+                            Add Deck
                         </Button>
                     }
                 />
