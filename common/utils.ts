@@ -141,6 +141,13 @@ export const thronesColors = {
     reserve: "#f0623f"
 };
 
+export const plotStatClipPaths: Record<Cards.PlotStat, string> = {
+    income: "circle(50%)",
+    initiative: "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)",
+    claim: "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)",
+    reserve: "polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%)"
+};
+
 export const thronesFontColors = {
     baratheon: "#000000",
     greyjoy: "#ffffff",

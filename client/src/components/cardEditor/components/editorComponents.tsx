@@ -252,7 +252,7 @@ export const TraitsInput = ({
             placeholder="Type and press enter"
             onChange={setValue}
             isDisabled={isDisabled}
-            chip={{ color: "default", variant: "flat", className: "rounded-sm p-0 pr-0.5" }}
+            chip={{ color: "default", variant: "flat", className: "rounded-sm p-0 pr-0.5 border-1 border-content2" }}
             addKeys={["Enter", "."]}
         />
     );

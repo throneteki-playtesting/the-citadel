@@ -127,7 +127,7 @@ export function BaseStatus({
         lpRef.current.triggered = false;
     };
 
-    const interactiveClass = "font-sans hover:brightness-125 transition duration-300 ease-in-out";
+    const interactiveClass = "hover:brightness-125 transition duration-300 ease-in-out";
 
     if (!data) return null;
 
@@ -158,7 +158,7 @@ export function BaseStatus({
             placement="bottom-start"
             classNames={{ content: "p-0" }}
         >
-            <div ref={wrapperRef} className={classNames("relative", wrapperClass, className)}>
+            <div ref={wrapperRef} className={classNames("font-sans relative", wrapperClass, className)}>
                 {inner}
                 <svg
                     ref={svgRef}
@@ -178,6 +178,7 @@ export function BaseStatus({
             </div>
             <PopoverContent>
                 <Listbox
+                    className="font-sans"
                     onAction={(key) => {
                         data.longPressOptions?.[Number(key)]?.fn?.();
                         closeDropdown();
@@ -193,7 +194,7 @@ export function BaseStatus({
 
     if (isIconOnly) {
         const tooltipContent = (
-            <div className="flex flex-col">
+            <div className="font-sans flex flex-col">
                 <div className="font-bold">{data.title}</div>
                 <div>{data.description}</div>
             </div>
@@ -223,7 +224,11 @@ export function BaseStatus({
                 target={!hasLongPress && data.href ? "_blank" : undefined}
                 rel={!hasLongPress && data.href ? "noreferrer" : undefined}
                 disableAnimation={!data.onPress && !data.href}
-                className={classNames({ [interactiveClass]: !!(data.onPress || data.href) }, elementClass)}
+                className={classNames(
+                    "font-sans",
+                    { [interactiveClass]: !!(data.onPress || data.href) },
+                    elementClass
+                )}
             >
                 {data.icon}
             </Button>
@@ -243,7 +248,7 @@ export function BaseStatus({
             icon={isLoading ? <Spinner /> : data.icon}
             color={data.color}
             title={data.title}
-            className="h-full opacity-75"
+            className="font-sans h-full opacity-75"
             hideIconWrapper
             description={isLoading ? "Loading..." : data.description}
         />
@@ -260,7 +265,7 @@ export function BaseStatus({
 
         const el = (
             <a
-                className={classNames("cursor-pointer", interactiveClass, elementClass)}
+                className={classNames("font-sans cursor-pointer", interactiveClass, elementClass)}
                 style={style}
                 onClick={handleClick}
                 {...(hasLongPress ? lpDomHandlers : {})}
@@ -275,7 +280,7 @@ export function BaseStatus({
     if (data.href) {
         const el = (
             <a
-                className={classNames(interactiveClass, elementClass)}
+                className={classNames("font-sans", interactiveClass, elementClass)}
                 style={style}
                 href={data.href}
                 target="_blank"
@@ -300,7 +305,11 @@ export function BaseStatus({
     }
 
     const el = (
-        <div className={elementClass} style={style} {...(hasLongPress ? lpDomHandlers : {})}>
+        <div
+            className={classNames("font-sans", elementClass)}
+            style={style}
+            {...(hasLongPress ? lpDomHandlers : {})}
+        >
             {alert}
         </div>
     );

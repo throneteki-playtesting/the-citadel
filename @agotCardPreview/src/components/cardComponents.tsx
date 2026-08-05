@@ -17,7 +17,7 @@ import { ASPECT_RATIO, BASE_HEIGHT, BASE_WIDTH, em, px } from "../utils";
 import { DeepPartial } from "common/types";
 import { CSSProperties, memo, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BaseElementProps } from "../types";
-import { thronesColors } from "common/utils";
+import { plotStatClipPaths, thronesColors } from "common/utils";
 import ThronesIcon, { Icon } from "./thronesIcon";
 
 export const CardWrapper = memo(
@@ -538,19 +538,7 @@ type PlotModifierProps = Omit<BaseElementProps, "children"> & {
 };
 
 export const PlotStat = memo(({ className, style, type, children: value }: PlotStatProps) => {
-    const getClipPath = (): string => {
-        switch (type) {
-            case "income":
-                return "circle(50%)";
-            case "initiative":
-                return "polygon(50% 0, 100% 50%, 50% 100%, 0 50%)";
-            case "claim":
-                return "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
-            case "reserve":
-                return "polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%)";
-        }
-    };
-    const clipPath = getClipPath();
+    const clipPath = plotStatClipPaths[type];
 
     return (
         <AutoSize

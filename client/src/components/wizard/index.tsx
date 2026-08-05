@@ -370,7 +370,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
                 [...formData.entries()].map(([k, v]) => [k, v === "" ? undefined : v])
             );
 
-            if (process.env.NODE_ENV === "development") {
+            if (import.meta.env.DEV) {
                 // Warn if nothing was collected by either path — likely a misconfigured page
                 const formDataEmpty = Object.keys(pageData).length === 0;
                 if (formDataEmpty) {
