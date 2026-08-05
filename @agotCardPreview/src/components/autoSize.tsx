@@ -60,16 +60,34 @@ const AutoSize = ({ children, className, style, height, rate = 0.01, minimum = 0
                 // Explicitly set the top-level content so it can scale all inner text that isn't explicitly set
                 content.style.fontSize = content.style.fontSize || window.getComputedStyle(content).fontSize;
 
-                // Text reflows as it shrinks, so the measured ratio is only a first approximation - step down from there
-                let multiplier = Math.max(
+                const fits = (multiplier: number) => {
+                    shrink(content, multiplier);
+                    return !isOverflowing();
+                };
+
+                // Reflow shrinks height faster than font size, so the measured ratio is only a lower bound
+                let low = Math.max(
                     minimum,
                     Math.min(content.clientWidth / content.scrollWidth, content.clientHeight / content.scrollHeight)
                 );
-                shrink(content, multiplier);
-                while (multiplier > minimum && isOverflowing()) {
-                    multiplier -= rate;
-                    shrink(content, multiplier);
+                let high = 1;
+
+                if (!fits(low)) {
+                    high = low;
+                    low = minimum;
                 }
+
+                // low fits, high does not - narrow until they are within a single step of each other
+                while (high - low > rate) {
+                    const middle = (low + high) / 2;
+                    if (fits(middle)) {
+                        low = middle;
+                    } else {
+                        high = middle;
+                    }
+                }
+
+                shrink(content, low);
             }
 
             lastFit.current = {
