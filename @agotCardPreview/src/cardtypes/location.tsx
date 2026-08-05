@@ -45,7 +45,7 @@ const Location = memo(({ card, scale, orientation, rounded, className, style, ..
                         rotate: "180deg",
                         paddingTop: px(5),
                         paddingBottom: px(5),
-                        writingMode: "vertical-lr"
+                        writingMode: "vertical-rl"
                     }}
                 >
                     {card.name}
