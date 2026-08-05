@@ -48,8 +48,20 @@ export function useCodeUpdateStatus(project: number, version: number) {
             };
         }
 
-        const onPress = hasSyncPermission
-            ? () => syncPlaytestingUpdateGithub({ project, version, type: "code" })
+        const syncFn = (forced?: boolean) =>
+            syncPlaytestingUpdateGithub({ project, version, type: "code", forced });
+        const onPress = hasSyncPermission ? () => syncFn() : undefined;
+        const longPressOptions = hasSyncPermission
+            ? [
+                  {
+                      label: (
+                          <span>
+                              <FontAwesomeIcon icon={faRotate} /> Force Sync
+                          </span>
+                      ),
+                      fn: () => syncFn(true)
+                  }
+              ]
             : undefined;
 
         if (status === "error") {
@@ -88,6 +100,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
                     title,
                     icon: <ThronesIcon name="power" />,
                     description: "Partially Implemented",
+                    longPressOptions,
                     color: "success",
                     href: "https://playtesting.theironthrone.net"
                 };
@@ -96,6 +109,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
                 title,
                 icon: <ThronesIcon name="power" />,
                 description: "Implemented",
+                longPressOptions,
                 color: "success",
                 href: "https://playtesting.theironthrone.net"
             };
@@ -108,6 +122,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
                     title,
                     icon,
                     description: "Github PR Open",
+                    longPressOptions,
                     color: "warning",
                     href
                 };
@@ -117,6 +132,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
                     title,
                     icon,
                     description: "Github PR Closed",
+                    longPressOptions,
                     color: "success",
                     href
                 };
