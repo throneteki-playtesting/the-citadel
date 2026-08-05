@@ -75,7 +75,7 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: bool
                         return;
                     }
                 } else {
-                    const fileKey = `${card.project}/${createImgFilenameFor(card)}`;
+                    const fileKey = createImgKeyFor(card);
                     const buffer = buffers[key];
                     if (buffer) {
                         emitter.progress("Uploading");
@@ -113,14 +113,27 @@ export async function syncImage(data: SingleOrArray<IPlaytestCard>, forced: bool
     }
 }
 
+/**
+ * Returns a card imageUrl which is locked to the time its image was last uploaded, falling back to
+ * when its values were last updated (eg. for released cards, whose image is hosted externally).
+ * This helps bypassing cache logic for other services like discord or github, which retains an
+ * image based on the url rather than its last modified date.
+ */
+export async function getTimeLockedImageUrl(card: IPlaytestCard) {
+    if (!card._metadata?.imageUrl) {
+        throw new Error("Attempted to create time locked image url for card with no image");
+    }
+    const lockedTo = (await getS3FileLastModified(createImgKeyFor(card))) ?? card.updated;
+    return `${card._metadata.imageUrl}?t=${lockedTo.getTime()}`;
+}
+
 async function isImageOutdated(card: IPlaytestCard) {
     // Cheapest check is if there is no imageUrl
     if (!card._metadata?.imageUrl) {
         return true;
     }
     // Then we check modified date of uploaded image
-    const key = `${card.project}/${createImgFilenameFor(card)}`;
-    const lastModified = await getS3FileLastModified(key);
+    const lastModified = await getS3FileLastModified(createImgKeyFor(card));
     if (!lastModified) {
         return true;
     }
@@ -137,8 +150,7 @@ export async function deleteImage(data: SingleOrArray<{ project: number; number:
     const keys: string[] = [];
 
     for (const card of cards) {
-        const key = `${card.project}/${createImgFilenameFor(card)}`;
-        keys.push(key);
+        keys.push(createImgKeyFor(card));
     }
 
     const deletedUrls = await deleteS3Files(keys);
@@ -221,4 +233,7 @@ async function deleteS3Files(keys: string[]) {
 }
 function createImgFilenameFor(card: { project: number; number: number; version: SemanticVersion }) {
     return `${parseCardCode(false, card.project, card.number)}@${card.version.replaceAll(".", "_")}.png`;
+}
+function createImgKeyFor(card: { project: number; number: number; version: SemanticVersion }) {
+    return `${card.project}/${createImgFilenameFor(card)}`;
 }

@@ -4,12 +4,13 @@ import { IPlaytestCard } from "common/models/cards";
 import { dataService, githubService, logger } from "@/services";
 import { isInitial, parseCardCode } from "common/utils";
 import { GithubContext } from ".";
-import { syncImage } from "@/rendering/hosting";
+import { getTimeLockedImageUrl, syncImage } from "@/rendering/hosting";
 import { emojis } from "./utils";
-import { getTimeLockedImageUrl, pascalCase } from "@/utils";
+import { pascalCase } from "@/utils";
 import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
 import { Mutex } from "async-mutex";
+import { RequestError } from "octokit";
 
 const syncIssuesMutex = new Mutex();
 
@@ -66,19 +67,19 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
         if (forced || isMissing || isIssueOutdated(card)) {
             emitter.progress("Syncing");
             if (isInitial(card)) {
-                card = await syncInitial(card, project);
+                card = await syncInitial(card, project, forced);
             } else {
                 switch (card.note?.type) {
                     case "updated": {
-                        card = await syncUpdate(card, project);
+                        card = await syncUpdate(card, project, forced);
                         break;
                     }
                     case "reworked": {
-                        card = await syncRework(card, project);
+                        card = await syncRework(card, project, forced);
                         break;
                     }
                     case "replaced": {
-                        card = await syncReplace(card, project);
+                        card = await syncReplace(card, project, forced);
                         break;
                     }
                     default: {
@@ -101,29 +102,13 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
 export async function clearIssues(cards: IPlaytestCard[]) {
     const context = githubService.getContext();
     for (const card of cards) {
+        if (isIssueMissing(card)) {
+            continue;
+        }
+        const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
         try {
-            if (!isIssueMissing(card)) {
-                const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
-                const { data: issue } = await context.client.rest.issues.get({
-                    issue_number: issueNumber,
-                    owner: context.owner,
-                    repo: context.repo
-                });
-                await context.client.graphql(
-                    `mutation DeleteIssue($issueId: ID!) {
-                        deleteIssue(input: { issueId: $issueId }) {
-                            repository {
-                                id
-                            }
-                        }
-                    }`,
-                    { issueId: issue.node_id }
-                );
-
-                if (card._metadata) {
-                    delete card._metadata.github;
-                }
-            }
+            await deleteIssue(issueNumber, context);
+            delete card._metadata.github;
         } catch (err) {
             logger.warn(new Error(`[Github] Failed to clear issue for ${card.name} (${card.version})`, { cause: err }));
         }
@@ -133,16 +118,44 @@ export async function clearIssues(cards: IPlaytestCard[]) {
 }
 
 /**
+ * Deletes an issue from Github, treating an already deleted issue as a success.
+ */
+async function deleteIssue(issueNumber: number, context: GithubContext) {
+    try {
+        const { data: issue } = await context.client.rest.issues.get({
+            issue_number: issueNumber,
+            owner: context.owner,
+            repo: context.repo
+        });
+        await context.client.graphql(
+            `mutation DeleteIssue($issueId: ID!) {
+                deleteIssue(input: { issueId: $issueId }) {
+                    repository {
+                        id
+                    }
+                }
+            }`,
+            { issueId: issue.node_id }
+        );
+    } catch (err) {
+        if (!isDeletedOnGithub(err)) {
+            throw err;
+        }
+        logger.info(`[Github] Issue #${issueNumber} no longer exists, so does not need deleting`);
+    }
+}
+
+/**
  * Syncs initial cards (eg. to implement)
  */
-async function syncInitial(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+async function syncInitial(card: IPlaytestCard, project: IProject, forced?: boolean, context?: GithubContext) {
     logger.info(`[Github] Syncing "initial" issue for ${card.name} (${card.version})`);
     try {
         context = context ?? githubService.getContext();
         if (!isInitial(card)) {
             new Error("Card must be initial version");
         }
-        card = await syncImage(card);
+        card = await syncImage(card, forced);
 
         const details = await issues.initial(card, project, context);
         card = await internalSync(card, details, context);
@@ -154,7 +167,7 @@ async function syncInitial(card: IPlaytestCard, project: IProject, context?: Git
 /**
  * Syncs cards with a "updated" note type
  */
-async function syncUpdate(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+async function syncUpdate(card: IPlaytestCard, project: IProject, forced?: boolean, context?: GithubContext) {
     logger.info(`[Github] Syncing "update" issue for ${card.name} (${card.version})`);
     try {
         context = context ?? githubService.getContext();
@@ -162,7 +175,7 @@ async function syncUpdate(card: IPlaytestCard, project: IProject, context?: Gith
             new Error('Card must have a note type of "updated"');
         }
         let previous = await dataService.cards.previous(card);
-        [card, previous] = await syncImage([card, previous]);
+        [card, previous] = await syncImage([card, previous], forced);
 
         const details = await issues.updated(card, previous, project, context);
         card = await internalSync(card, details, context);
@@ -175,7 +188,7 @@ async function syncUpdate(card: IPlaytestCard, project: IProject, context?: Gith
 /**
  * Syncs cards with a "reworked" note type
  */
-async function syncRework(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+async function syncRework(card: IPlaytestCard, project: IProject, forced?: boolean, context?: GithubContext) {
     logger.info(`[Github] Syncing "rework" issue for ${card.name} (${card.version})`);
     try {
         context = context ?? githubService.getContext();
@@ -183,7 +196,7 @@ async function syncRework(card: IPlaytestCard, project: IProject, context?: Gith
             new Error('Card must have a note type of "reworked"');
         }
         let previous = await dataService.cards.previous(card);
-        [card, previous] = await syncImage([card, previous]);
+        [card, previous] = await syncImage([card, previous], forced);
 
         const details = await issues.reworked(card, previous, project, context);
         card = await internalSync(card, details, context);
@@ -196,7 +209,7 @@ async function syncRework(card: IPlaytestCard, project: IProject, context?: Gith
 /**
  * Syncs cards with a "replaced" note type
  */
-async function syncReplace(card: IPlaytestCard, project: IProject, context?: GithubContext) {
+async function syncReplace(card: IPlaytestCard, project: IProject, forced?: boolean, context?: GithubContext) {
     logger.info(`[Github] Syncing "replace" issue for ${card.name} (${card.version})`);
     try {
         context = context ?? githubService.getContext();
@@ -204,7 +217,7 @@ async function syncReplace(card: IPlaytestCard, project: IProject, context?: Git
             new Error('Card must have a note type of "replaced"');
         }
         let previous = await dataService.cards.previous(card);
-        [card, previous] = await syncImage([card, previous]);
+        [card, previous] = await syncImage([card, previous], forced);
 
         const details = await issues.replaced(card, previous, project, context);
         card = await internalSync(card, details, context);
@@ -223,32 +236,44 @@ async function internalSync(
     details: { title: string; body: string; labels: string[]; milestone: number; owner: string; repo: string },
     context: GithubContext
 ) {
-    if (isIssueMissing(card)) {
-        const { data: issue } = await context.client.rest.issues.create(details);
-        logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
-        merge(card, {
-            _metadata: {
-                github: {
-                    issueUrl: issue.html_url,
-                    status: issue.state as "open" | "closed",
-                    lastSynced: new Date()
-                }
-            }
-        });
-    } else {
+    if (!isIssueMissing(card)) {
         const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
-        const { data: issue } = await context.client.rest.issues.update({ issue_number: issueNumber, ...details });
-        logger.info(`[Github] Updated issue #${issue.number} for ${card.name} (${card.version})`);
-        merge(card, {
-            _metadata: {
-                github: {
-                    status: issue.state as "open" | "closed",
-                    ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }),
-                    lastSynced: new Date()
+        try {
+            const { data: issue } = await context.client.rest.issues.update({ issue_number: issueNumber, ...details });
+            logger.info(`[Github] Updated issue #${issue.number} for ${card.name} (${card.version})`);
+            merge(card, {
+                _metadata: {
+                    github: {
+                        status: issue.state as "open" | "closed",
+                        ...(issue.closed_at && { closedAt: new Date(issue.closed_at) }),
+                        lastSynced: new Date()
+                    }
                 }
+            });
+            return card;
+        } catch (err) {
+            if (!isDeletedOnGithub(err)) {
+                throw err;
             }
-        });
+            logger.warn(
+                `[Github] Issue #${issueNumber} for ${card.name} (${card.version}) no longer exists - recreating`
+            );
+            // Cleared entirely so stale details (eg. closedAt) do not carry over to the new issue
+            delete card._metadata.github;
+        }
     }
+
+    const { data: issue } = await context.client.rest.issues.create(details);
+    logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
+    merge(card, {
+        _metadata: {
+            github: {
+                issueUrl: issue.html_url,
+                status: issue.state as "open" | "closed",
+                lastSynced: new Date()
+            }
+        }
+    });
     return card;
 }
 
@@ -257,6 +282,12 @@ function isIssueMissing(card: IPlaytestCard) {
 }
 function isIssueOutdated(card: IPlaytestCard) {
     return !card._metadata?.github?.lastSynced || card.updated > card._metadata.github.lastSynced;
+}
+/**
+ * Whether Github reported the issue as no longer existing (eg. it was deleted or transferred away)
+ */
+function isDeletedOnGithub(err: unknown) {
+    return err instanceof RequestError && (err.status === 404 || err.status === 410);
 }
 
 function extractFromURL(url: string) {
@@ -267,7 +298,7 @@ function extractFromURL(url: string) {
 
 const issues = {
     async initial(card: IPlaytestCard, project: IProject, context: GithubContext) {
-        const imageUrl = getTimeLockedImageUrl(card);
+        const imageUrl = await getTimeLockedImageUrl(card);
         const title = `${card.code} | ${project.code} - Implement ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
         const body =
@@ -289,8 +320,10 @@ const issues = {
         return { title, body, labels, milestone, owner: context.owner, repo: context.repo };
     },
     async updated(card: IPlaytestCard, previous: IPlaytestCard, project: IProject, context: GithubContext) {
-        const imageUrl = getTimeLockedImageUrl(card);
-        const previousImageUrl = getTimeLockedImageUrl(previous);
+        const [imageUrl, previousImageUrl] = await Promise.all([
+            getTimeLockedImageUrl(card),
+            getTimeLockedImageUrl(previous)
+        ]);
         const title = `${card.code} | ${project.code} - Update ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
         const body =
@@ -324,8 +357,10 @@ const issues = {
         return { title, body, labels, milestone, owner, repo };
     },
     async replaced(card: IPlaytestCard, previous: IPlaytestCard, project: IProject, context: GithubContext) {
-        const imageUrl = getTimeLockedImageUrl(card);
-        const previousImageUrl = getTimeLockedImageUrl(previous);
+        const [imageUrl, previousImageUrl] = await Promise.all([
+            getTimeLockedImageUrl(card),
+            getTimeLockedImageUrl(previous)
+        ]);
         const title = `${card.code} | ${project.code} - Replace with ${card.name} (${card.version})`;
         const milestone = await getMilestone(project);
         const body =

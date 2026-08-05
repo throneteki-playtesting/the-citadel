@@ -1,4 +1,4 @@
-import { ILabeledCard, IPlaytestCard, NoteType, factions } from "common/models/cards";
+import { ILabeledCard, NoteType, factions } from "common/models/cards";
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { getReleaseCapacity } from "common/utils";
@@ -194,18 +194,6 @@ export async function fetchTDBDeck(identifier: number | UUID): Promise<IDecklist
 
     const json = await response.json();
     return convertTDBDeck(json);
-}
-
-/**
- * Returns a card imageUrl which is locked to the time its values were last updated.
- * This helps bypassing cache logic for other researches like discord or github, which retains an
- * image based on the url rather than its last modified date.
- */
-export function getTimeLockedImageUrl(card: IPlaytestCard) {
-    if (!card._metadata?.imageUrl) {
-        throw new Error("Attempted to create time locked image url for card with no image");
-    }
-    return `${card._metadata.imageUrl}?t=${card.updated.getTime()}`;
 }
 
 export function pascalCase(value: string) {

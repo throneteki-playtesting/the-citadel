@@ -14,9 +14,8 @@ import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { factionNames, isInitial, isPreview } from "common/utils";
-import { syncImage } from "@/rendering/hosting";
+import { getTimeLockedImageUrl, syncImage } from "@/rendering/hosting";
 import { capitalize, merge } from "lodash-es";
-import { getTimeLockedImageUrl } from "@/utils";
 import { User } from "common/models/auth";
 import { createSyncEmitter } from "@/services/sseService";
 import { Mutex } from "async-mutex";
@@ -125,7 +124,7 @@ export async function createPreview(card: IPlaytestCard, context?: CardForumCont
 
         const [project] = await dataService.projects.read({ number: card.project });
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const previewMessage = messages.preview(card, project, user, context);
+        const previewMessage = await messages.preview(card, project, user, context);
         const thread = await createThreadFor(card, previewMessage, context);
 
         // Pin the first message of the newly-created thread
@@ -149,7 +148,7 @@ export async function createInitial(card: IPlaytestCard, context?: CardForumCont
 
         const [project] = await dataService.projects.read({ number: card.project });
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const initialMessage = messages.initial(card, project, user, context);
+        const initialMessage = await messages.initial(card, project, user, context);
         const thread = await createThreadFor(card, initialMessage, context);
 
         // Pin the first message of the newly-created thread
@@ -184,7 +183,7 @@ export async function createNewLatest(card: IPlaytestCard, context?: CardForumCo
         // Create new thread
         const [project] = await dataService.projects.read({ number: card.project });
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const latestMessage = messages.newLatest(card, project, playtestingUpdate, user, context);
+        const latestMessage = await messages.newLatest(card, project, playtestingUpdate, user, context);
         const thread = await createThreadFor(card, latestMessage, context);
 
         // Pin the first message of the newly-created thread
@@ -214,7 +213,7 @@ export async function newDraft(card: IPlaytestCard, context?: CardForumContext) 
 
         const { thread, threadCard: previous } = await getThreadFor(card);
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const draftMessage = messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
+        const draftMessage = await messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
         let message = await thread.send(draftMessage);
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
@@ -249,7 +248,7 @@ export async function updateDraft(card: IPlaytestCard, context?: CardForumContex
         // Send update message to thread
         const { thread, threadCard: previous } = await getThreadFor(card);
         const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const draftMessage = messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
+        const draftMessage = await messages.newDraft(card, user, previous._metadata.discord.messageUrl, context);
         let message = await thread.send(draftMessage);
         // Bug: Found an issue where embed image sometimes does not show
         // Suspected to be Discord caching service failing when url is similar to existing
@@ -403,9 +402,9 @@ function createMessageButtons(card: IPlaytestCard, previousUrl?: string) {
     buttons.push(cardPage);
     return buttons;
 }
-function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
+async function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
     // Add a time component to force discord to see it as a new url/image (as it caches based on url)
-    const imageUrl = getTimeLockedImageUrl(card);
+    const imageUrl = await getTimeLockedImageUrl(card);
     let imageEmbed = new EmbedBuilder().setColor(colors[card.faction]).setImage(imageUrl).setTimestamp(card.updated);
     if (user) {
         imageEmbed = imageEmbed.setFooter({
@@ -504,18 +503,18 @@ async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
 }
 
 const messages = {
-    preview(
+    async preview(
         card: IPlaytestCard,
         project: IProject,
         user: User | undefined,
         context: CardForumContext
-    ): BaseMessageOptions {
+    ): Promise<BaseMessageOptions> {
         const content =
             "## Card Reveal" +
             `\n<@&${context.taggedRole.id}> See the early preview of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} below. Feel free to give your quick feedback for us to consider prior to public reveal.` +
             "\n\n*Please keep in mind that this card preview is subject to major change or replacement prior to the initial playtesting release, and should be treated more as an indication of direction rather than balance - opinions on balance are fine, but are not a focus at this point.*";
 
-        const embeds = createCardEmbeds(card, user);
+        const embeds = await createCardEmbeds(card, user);
 
         return {
             content,
@@ -523,17 +522,17 @@ const messages = {
             embeds
         };
     },
-    initial(
+    async initial(
         card: IPlaytestCard,
         project: IProject,
         user: User | undefined,
         context: CardForumContext
-    ): BaseMessageOptions {
+    ): Promise<BaseMessageOptions> {
         const content =
             "## Initial Card" +
             `\n<@&${context.taggedRole.id}> Initial version of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been confirmed.`;
 
-        const embeds = createCardEmbeds(card, user);
+        const embeds = await createCardEmbeds(card, user);
 
         const buttons = createMessageButtons(card);
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
@@ -544,18 +543,18 @@ const messages = {
             components: [buttonRow]
         };
     },
-    newLatest(
+    async newLatest(
         card: IPlaytestCard,
         project: IProject,
         playtestingUpdate: IPlaytestingUpdate,
         user: User | undefined,
         context: CardForumContext
-    ): BaseMessageOptions {
+    ): Promise<BaseMessageOptions> {
         const content =
             `## Card ${capitalize(card.note?.type ?? "adjusted")}` +
             `\n<@&${context.taggedRole.id}> ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has been adjusted & pushed to playtesting.`;
 
-        const embeds = createCardEmbeds(card, user);
+        const embeds = await createCardEmbeds(card, user);
 
         const buttons = createMessageButtons(card);
         const playtestingButton = new ButtonBuilder()
@@ -571,17 +570,17 @@ const messages = {
             components: [buttonRow]
         };
     },
-    newDraft(
+    async newDraft(
         card: IPlaytestCard,
         user: User | undefined,
         previousUrl: string,
         context: CardForumContext
-    ): BaseMessageOptions {
+    ): Promise<BaseMessageOptions> {
         const content =
             "## Draft Card Pending" +
             `\n<@&${context.taggedRole.id}> New draft version of this card has been proposed, and will be confirmed in the next playtesting update.`;
 
-        const embeds = createCardEmbeds(card, user);
+        const embeds = await createCardEmbeds(card, user);
 
         const buttons = createMessageButtons(card, previousUrl);
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
