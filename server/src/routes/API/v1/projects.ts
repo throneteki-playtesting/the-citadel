@@ -22,6 +22,7 @@ import slots from "./slots";
 import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
+import { clearDiscordMetadata, closeThreads } from "@/discord/forums/cardForum";
 
 const router = express.Router();
 
@@ -216,6 +217,13 @@ router.post(
             }
         }
 
+        // Must be persisted as active before closing threads, as the forum context requires its tag
+        project = await dataService.projects.update(project);
+
+        // Preview threads are closed rather than deleted, retaining their discussion for the initial cards
+        await closeThreads(cards);
+        clearDiscordMetadata(cards);
+
         for (const card of cards) {
             const newCard: IPlaytestCard = { ...cloneDeep(card), version: "1.0.0", draft: false };
             if (newCard.suggestionId) {
@@ -224,7 +232,6 @@ router.post(
             newCards.push(newCard);
         }
 
-        project = await dataService.projects.update(project);
         // Need to destroy old versions (0.0.0) and create new (1.0.0)
         // Destroy + Create required, as version is a primary key
         await dataService.cards.destroy(cards);

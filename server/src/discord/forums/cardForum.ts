@@ -288,13 +288,45 @@ export async function onCardForumMessageDeleted(messageUrl: string) {
     logger.info(`[Discord] Removed discord metadata for ${cards.length} card(s)`);
 }
 
+/**
+ * Drops the discord metadata of the provided cards, releasing their claim on an existing thread or message.
+ */
+export function clearDiscordMetadata(cards: IPlaytestCard[]) {
+    for (const card of cards) {
+        if (card._metadata?.discord) {
+            delete card._metadata.discord;
+        }
+    }
+}
+
+/**
+ * Closes the forum threads of any provided cards which have one, retaining their discussion.
+ * Note: Failures are logged rather than thrown, as a thread is never critical enough to fail its caller
+ */
+export async function closeThreads(cards: IPlaytestCard[]) {
+    const release = await syncCardForumMutex.acquire();
+    try {
+        const context = await getCardForumContext();
+        for (const card of cards) {
+            if (card._metadata?.discord?.messageUrl) {
+                await closeThreadFor(card, context);
+            }
+        }
+    } catch (err) {
+        logger.warn(new Error("[Discord] Failed to close card threads", { cause: err }));
+    } finally {
+        release();
+    }
+}
+
 export async function deleteDraft(card: IPlaytestCard) {
     try {
         if (!card.draft) {
             throw new Error("Card is not in draft");
         }
         if (!card._metadata?.discord?.messageUrl) {
-            throw new Error("Original message does not exist to delete");
+            // Nothing to delete if the draft was never synced to discord
+            return card;
         }
         // Delete the draft priumary message
         const { channelId, messageId } = extractFromURL(card._metadata.discord.messageUrl);

@@ -18,6 +18,7 @@ import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequest
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { notifyStaleChecks } from "@/discord/announcements/staleChecks";
+import { clearDiscordMetadata } from "@/discord/forums/cardForum";
 
 const router = express.Router();
 
@@ -132,6 +133,8 @@ router.post(
         for (const newCard of newCards) {
             newCard.draft = false;
         }
+        // Clearing the draft message so the new thread can be created & linked
+        clearDiscordMetadata(newCards);
         newCards = await dataService.cards.update(newCards);
 
         project.version = playtestingUpdate.version;
