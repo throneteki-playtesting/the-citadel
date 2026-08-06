@@ -13,7 +13,8 @@ import { dataService, githubService, logger } from "@/services";
 import { githubWebhookMiddleware } from "@/middleware/auth";
 import { createSyncEmitter } from "@/services/sseService";
 import { merge } from "lodash-es";
-import { syncCodePullRequests } from "@/github/pullRequests";
+import { applyPullRequestState, markCardsImplemented, syncCodePullRequests } from "@/github/pullRequests";
+import { DEVELOPMENT_BRANCH, PLAYTESTING_BRANCH } from "@/github/utils";
 
 const router = express.Router();
 
@@ -21,6 +22,15 @@ const CODE_REPO = process.env.GITHUB_REPOSITORY;
 const DATA_REPO = process.env.GITHUB_REPOSITORY_DATA;
 
 router.use(githubWebhookMiddleware);
+
+// Webhooks registered by a previous deployment can outlive it, so events are ignored whilst integration is disabled
+router.use((_req, res, next) => {
+    if (!githubService.enabled) {
+        res.sendStatus(StatusCodes.OK);
+        return;
+    }
+    next();
+});
 
 router.post(
     "/issue",
@@ -118,7 +128,7 @@ router.post(
     asyncHandler(async (req, res) => {
         const event = req.body;
 
-        if (isPushEvent(event) && event.ref === "refs/heads/development") {
+        if (isPushEvent(event) && event.ref === `refs/heads/${DEVELOPMENT_BRANCH}`) {
             await onDevelopmentPush(event);
         }
 
@@ -140,7 +150,7 @@ router.post(
         const event = req.body;
 
         if (isPullRequestClosedEvent(event)) {
-            onPullRequestClosed(event);
+            await onPullRequestClosed(event);
         }
 
         res.sendStatus(StatusCodes.OK);
@@ -167,7 +177,7 @@ async function onPullRequestClosed({ pull_request: pullRequest, repository }: Pu
         const lastSynced = new Date();
         await syncPlaytestingUpdatePR(pullRequest, type, isMerged, lastSynced);
         await syncClosedCards(pullRequest, type, isMerged);
-    } else if (isMerged && pullRequest.base.ref === "development") {
+    } else if (isMerged && pullRequest.base.ref === DEVELOPMENT_BRANCH) {
         // For regular Pull Requests into development, check any "closing" issues mentioned and manually close them
         const issueNumbers = extractClosedIssueNumbers(pullRequest.body ?? "");
         if (issueNumbers.length > 0) {
@@ -198,23 +208,22 @@ async function syncPlaytestingUpdatePR(
     let updates = await dataService.playtestingUpdates.read({
         _metadata: { github: { [key]: { pullRequestUrl: pullRequest.html_url } } }
     });
-    if (updates.length === 0) return;
+    if (updates.length === 0) {
+        return;
+    }
 
     const operation = `github.${key}` as const;
     for (const playtestingUpdate of updates) {
         const emitter = createSyncEmitter("playtestingUpdate", operation, playtestingUpdate);
         emitter.start();
-        if (isMerged) {
-            merge(playtestingUpdate, {
-                _metadata: {
-                    github: {
-                        [key]: { status: pullRequest.state, mergedAt: new Date(pullRequest.merged_at), lastSynced }
-                    }
-                }
-            });
-        } else {
-            playtestingUpdate._metadata.github[key] = { lastSynced };
-        }
+        const state = isMerged
+            ? {
+                  pullRequestUrl: pullRequest.html_url,
+                  status: "closed" as const,
+                  mergedAt: new Date(pullRequest.merged_at)
+              }
+            : null;
+        applyPullRequestState(playtestingUpdate, key, lastSynced, state);
         emitter.complete(playtestingUpdate);
     }
     updates = await dataService.playtestingUpdates.update(updates, false, false, false);
@@ -228,17 +237,12 @@ async function syncClosedCards(
     key: "code" | "data",
     isMerged: boolean
 ) {
-    if (key !== "code" || !isMerged || pullRequest.base.ref !== "playtesting") return;
-
-    let cards = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
-    if (cards.length === 0) return;
-
-    for (const card of cards) {
-        card.implemented = true;
+    if (key !== "code" || !isMerged || pullRequest.base.ref !== PLAYTESTING_BRANCH) {
+        return;
     }
 
-    cards = await dataService.cards.update(cards, false);
-    logger.info(`[Github] Updated ${cards.length} cards as implemented`);
+    const cards = await dataService.cards.read({ _metadata: { github: { status: "closed" } }, implemented: false });
+    await markCardsImplemented(cards);
 }
 
 function isAutomated(data: { labels?: Label[] }) {

@@ -8,6 +8,15 @@ import { paginateGraphQLInterface } from "@octokit/plugin-paginate-graphql";
 type GithubClient = Octokit & { paginate: PaginateInterface } & paginateGraphQLInterface &
     Api & { retry: { retryRequest: (error: RequestError, retries: number, retryAfter: number) => RequestError } };
 
+const REQUIRED_VARIABLES = [
+    "GITHUB_OWNER",
+    "GITHUB_REPOSITORY",
+    "GITHUB_REPOSITORY_DATA",
+    "GITHUB_APP_ID",
+    "GITHUB_PRIVATE_KEY",
+    "GITHUB_WEBHOOK_SECRET"
+] as const;
+
 class GithubService {
     private client: GithubClient;
 
@@ -15,7 +24,17 @@ class GithubService {
     private codeRepo = process.env.GITHUB_REPOSITORY;
     private dataRepo = process.env.GITHUB_REPOSITORY_DATA;
 
+    private missingVariables = REQUIRED_VARIABLES.filter((variable) => !process.env[variable]);
+
+    // Only one environment may write to a given repository, else instances create duplicates & overwrite each other
+    public readonly enabled = this.missingVariables.length === 0;
+
     constructor() {
+        if (!this.enabled) {
+            logger.warn(`Github integration disabled; missing ${this.missingVariables.join(", ")}`);
+            return;
+        }
+
         const appId = process.env.GITHUB_APP_ID;
         const privateKey = process.env.GITHUB_PRIVATE_KEY;
 
@@ -34,6 +53,9 @@ class GithubService {
     }
 
     public getContext(repo: "code" | "data" = "code"): GithubContext {
+        if (!this.enabled) {
+            throw new Error(`Github integration is disabled; missing ${this.missingVariables.join(", ")}`);
+        }
         if (!this.client) {
             throw new Error("Github Client not initialised");
         }

@@ -1,14 +1,16 @@
 import { dataService, githubService, logger } from "@/services";
-import { IPlaytestingUpdate, IProject } from "common/models/projects";
+import { GithubPRMeta, IPlaytestingUpdate, IProject } from "common/models/projects";
 import { GithubContext } from ".";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { syncImage } from "@/rendering/hosting";
-import { emojis } from "./utils";
+import { DEVELOPMENT_BRANCH, emojis, PLAYTESTING_BRANCH, STAGING_BRANCH } from "./utils";
 import { parseCardCode, toJSONExportCard } from "common/utils";
-import { merge, sortBy } from "lodash-es";
+import { sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter } from "@/services/sseService";
 import { Mutex } from "async-mutex";
+import { RequestError } from "octokit";
+import { StatusCodes } from "http-status-codes";
 
 type PullRequest = Endpoints["GET /repos/{owner}/{repo}/pulls"]["response"]["data"][number];
 type BranchRef = Endpoints["GET /repos/{owner}/{repo}/git/ref/{ref}"]["response"]["data"];
@@ -16,18 +18,11 @@ type BranchRef = Endpoints["GET /repos/{owner}/{repo}/git/ref/{ref}"]["response"
 const syncCodePullRequestMutex = new Mutex();
 const syncDataPullRequestMutex = new Mutex();
 
-const DEVELOPMENT_BRANCH = "development";
-const PLAYTESTING_BRANCH = "playtesting";
-const STAGING_BRANCH = "development-updating";
-
 export async function syncCodePullRequests(forced?: boolean) {
     const release = await syncCodePullRequestMutex.acquire();
     let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
-        playtestingUpdates = await dataService.playtestingUpdates.read([
-            { _metadata: { github: { code: { status: { $exists: false } } } } },
-            { _metadata: { github: { code: { status: "open" } } } }
-        ]);
+        playtestingUpdates = await readSyncingUpdates();
         const newlyImplemented = await dataService.cards.read({
             _metadata: { github: { status: "closed" } },
             implemented: false
@@ -39,44 +34,35 @@ export async function syncCodePullRequests(forced?: boolean) {
         );
         emitters.forEach((e) => e.start());
 
+        const branches = { head: `${context.owner}:${DEVELOPMENT_BRANCH}`, base: PLAYTESTING_BRANCH };
+
         try {
+            const lastSynced = new Date();
             const canCreatePullRequest = await isPlaytestingBranchBehind(context);
-            const toUpdate: IPlaytestingUpdate[] = [];
             if (!canCreatePullRequest) {
+                // Playtesting matches development, so any pull request for these updates has already been merged
+                const mergedPR = await findMergedPullRequest(context, branches);
                 for (const playtestingUpdate of playtestingUpdates) {
-                    merge(playtestingUpdate, { _metadata: { github: {} } });
-                    playtestingUpdate._metadata.github.code = { lastSynced: new Date() };
-                    toUpdate.push(playtestingUpdate);
+                    applyPullRequestState(
+                        playtestingUpdate,
+                        "code",
+                        lastSynced,
+                        toMergedState(mergedPR, playtestingUpdate)
+                    );
                 }
+
+                // Closed cards are live once development reaches playtesting; syncing would deadlock on this mutex
+                await markCardsImplemented(newlyImplemented, false);
             } else {
                 emitters.forEach((e) => e.progress("Searching"));
-                const {
-                    data: [existingPR]
-                } = await context.client.rest.pulls.list({
-                    owner: context.owner,
-                    repo: context.repo,
-                    head: `${context.owner}:${DEVELOPMENT_BRANCH}`,
-                    base: PLAYTESTING_BRANCH,
-                    state: "open"
-                });
+                const existingPR = await findOpenPullRequest(context, branches);
 
+                let state: PullRequestState | undefined;
                 const needsPullRequest = playtestingUpdates.length > 0 || newlyImplemented.length > 0;
                 if (needsPullRequest) {
                     if (forced || isPROutdated(existingPR, playtestingUpdates, newlyImplemented)) {
                         emitters.forEach((e) => e.progress("Syncing"));
-                        const { syncedAt, url, status, mergedAt } = await internalSync(
-                            existingPR,
-                            playtestingUpdates,
-                            newlyImplemented,
-                            context
-                        );
-                        for (const playtestingUpdate of playtestingUpdates) {
-                            merge(playtestingUpdate, {
-                                _metadata: {
-                                    github: { code: { pullRequestUrl: url, mergedAt, status, lastSynced: syncedAt } }
-                                }
-                            });
-                        }
+                        state = await internalSync(existingPR, playtestingUpdates, newlyImplemented, context);
                     }
                 } else if (existingPR) {
                     logger.info(
@@ -89,11 +75,15 @@ export async function syncCodePullRequests(forced?: boolean) {
                         state: "closed"
                     });
                 }
+
+                for (const playtestingUpdate of playtestingUpdates) {
+                    applyPullRequestState(playtestingUpdate, "code", lastSynced, state);
+                }
             }
 
             emitters.forEach((e, pt) => e.complete(pt));
 
-            if (toUpdate.length > 0) {
+            if (playtestingUpdates.length > 0) {
                 playtestingUpdates = await dataService.playtestingUpdates.update(
                     playtestingUpdates,
                     false,
@@ -116,10 +106,7 @@ export async function syncDataPullRequests(forced?: boolean) {
     const release = await syncDataPullRequestMutex.acquire();
     let playtestingUpdates: IPlaytestingUpdate[] = [];
     try {
-        playtestingUpdates = await dataService.playtestingUpdates.read([
-            { _metadata: { github: { code: { status: { $exists: false } } } } },
-            { _metadata: { github: { code: { status: "open" } } } }
-        ]);
+        playtestingUpdates = await readSyncingUpdates();
         const context = githubService.getContext("data");
 
         const emitters = new Map(
@@ -131,17 +118,17 @@ export async function syncDataPullRequests(forced?: boolean) {
             .getRef({ owner: context.owner, repo: context.repo, ref: `heads/${STAGING_BRANCH}` })
             .then((result) => result.data)
             .catch(() => null as BranchRef);
-        const {
-            data: [existingPR]
-        } = await context.client.rest.pulls.list({
-            owner: context.owner,
-            repo: context.repo,
-            head: `${context.owner}:${STAGING_BRANCH}`,
-            base: DEVELOPMENT_BRANCH,
-            state: "open"
-        });
+        const branches = { head: `${context.owner}:${STAGING_BRANCH}`, base: DEVELOPMENT_BRANCH };
+        const existingPR = await findOpenPullRequest(context, branches);
 
         const hasSyncedFile: IPlaytestingUpdate[] = [];
+        const lastSynced = new Date();
+
+        let mergedPR: PullRequest | null = null;
+        const getMergedPullRequest = async () => {
+            mergedPR ??= await findMergedPullRequest(context, branches);
+            return mergedPR;
+        };
 
         for (const playtestingUpdate of playtestingUpdates) {
             try {
@@ -160,7 +147,7 @@ export async function syncDataPullRequests(forced?: boolean) {
 
                 // Prevents data from being reverted to an older version
                 if (!isLatest) {
-                    playtestingUpdate._metadata.github.data = { lastSynced: new Date() };
+                    applyPullRequestState(playtestingUpdate, "data", lastSynced);
                     continue;
                 }
 
@@ -178,7 +165,9 @@ export async function syncDataPullRequests(forced?: boolean) {
                 const devContent = await getDataFileContent(context, `packs/${project.code}.json`, DEVELOPMENT_BRANCH);
 
                 if (!forced && devContent?.trim() === content.trim()) {
-                    playtestingUpdate._metadata.github.data = { lastSynced: new Date() };
+                    // Data already exists in development, so any pull request for it has already been merged
+                    const merged = toMergedState(await getMergedPullRequest(), playtestingUpdate);
+                    applyPullRequestState(playtestingUpdate, "data", lastSynced, merged);
                     continue;
                 }
 
@@ -228,11 +217,9 @@ export async function syncDataPullRequests(forced?: boolean) {
         emitters.forEach((e) => e.progress("Syncing"));
         // Only creates Pull Request if one or more files have synced
         if (hasSyncedFile.length > 0) {
-            const { url, status, syncedAt } = await internalDataSync(existingPR, playtestingUpdates, context);
+            const state = await internalDataSync(existingPR, playtestingUpdates, context);
             for (const playtestingUpdate of hasSyncedFile) {
-                merge(playtestingUpdate, {
-                    _metadata: { github: { data: { pullRequestUrl: url, status, lastSynced: syncedAt } } }
-                });
+                applyPullRequestState(playtestingUpdate, "data", lastSynced, state);
             }
         }
         emitters.forEach((e, pu) => e.complete(pu));
@@ -244,6 +231,16 @@ export async function syncDataPullRequests(forced?: boolean) {
     }
 
     return playtestingUpdates;
+}
+
+// Updates sync until their code changes merge, whilst each project's latest update always keeps syncing
+async function readSyncingUpdates() {
+    const projects = await dataService.projects.read();
+    return await dataService.playtestingUpdates.read([
+        { _metadata: { github: { code: { status: { $exists: false } } } } },
+        { _metadata: { github: { code: { status: "open" } } } },
+        ...projects.map((project) => ({ project: project.number, version: project.version }))
+    ]);
 }
 
 async function getDataFileContent(context: GithubContext, path: string, branch: string): Promise<string | null> {
@@ -322,15 +319,9 @@ async function internalDataSync(
     context: GithubContext
 ) {
     const details = await pullRequests.data(playtestingUpdates, context);
-    if (!existingPR) {
-        const { data } = await context.client.rest.pulls.create(details);
-        logger.info(`[Github] Created data pull request #${data.number}`);
-        return { url: data.html_url, status: data.state as "open" | "closed", syncedAt: new Date() };
-    } else {
-        const { data } = await context.client.rest.pulls.update({ pull_number: existingPR.number, ...details });
-        logger.info(`[Github] Updated data pull request #${data.number}`);
-        return { url: data.html_url, status: data.state as "open" | "closed", syncedAt: new Date() };
-    }
+    const data = await createOrUpdatePullRequest(existingPR, details, context);
+    logger.info(`[Github] ${existingPR ? "Updated" : "Created"} data pull request #${data.number}`);
+    return toPullRequestState(data);
 }
 
 async function internalSync(
@@ -340,26 +331,163 @@ async function internalSync(
     context: GithubContext
 ) {
     const details = await pullRequests.playtesting(playtestingUpdates, newlyImplemented, context);
-    if (!existingPR) {
-        const { data } = await context.client.rest.pulls.create(details);
-        logger.info(`[Github] Created pull request #${data.number} for latest playtesting changes`);
-        return {
-            syncedAt: new Date(),
-            url: data.html_url,
-            status: data.state as "open" | "closed",
-            mergedAt: data.merged_at ? new Date(data.merged_at) : undefined
-        };
+    const data = await createOrUpdatePullRequest(existingPR, details, context);
+    logger.info(
+        `[Github] ${existingPR ? "Updated" : "Created"} pull request #${data.number} for latest playtesting changes`
+    );
+    return toPullRequestState(data);
+}
+
+async function createOrUpdatePullRequest(
+    existingPR: PullRequest | undefined,
+    details: PullRequestDetails,
+    context: GithubContext
+) {
+    const { labels, ...pullRequest } = details;
+    const update = (pullNumber: number) =>
+        context.client.rest.pulls.update({ pull_number: pullNumber, ...pullRequest });
+
+    let data: Awaited<ReturnType<typeof update>>["data"];
+    if (existingPR) {
+        ({ data } = await update(existingPR.number));
     } else {
-        const { data } = await context.client.rest.pulls.update({ pull_number: existingPR.number, ...details });
-        logger.info(`[Github] Updated pull request #${data.number} for latest playtesting changes`);
-        return {
-            syncedAt: new Date(),
-            url: data.html_url,
-            status: data.state as "open" | "closed",
-            mergedAt: data.merged_at ? new Date(data.merged_at) : undefined
-        };
+        try {
+            ({ data } = await context.client.rest.pulls.create(pullRequest));
+        } catch (err) {
+            // Another instance may have created it first, in which case theirs is adopted rather than duplicated
+            const duplicate =
+                err instanceof RequestError && err.status === StatusCodes.UNPROCESSABLE_ENTITY
+                    ? await findOpenPullRequest(context, details)
+                    : undefined;
+            if (!duplicate) {
+                throw err;
+            }
+            logger.info(`[Github] Adopted pull request #${duplicate.number}, which already existed`);
+            ({ data } = await update(duplicate.number));
+        }
+    }
+
+    // Labels are not supported by the pulls api, so must be applied seperately via the issues api
+    await context.client.rest.issues.addLabels({
+        owner: context.owner,
+        repo: context.repo,
+        issue_number: data.number,
+        labels
+    });
+
+    return data;
+}
+
+async function findOpenPullRequest(context: GithubContext, { head, base }: PullRequestBranches) {
+    const pullRequests = await context.client.paginate(context.client.rest.pulls.list, {
+        owner: context.owner,
+        repo: context.repo,
+        base,
+        state: "open",
+        per_page: 100
+    });
+    const [existingPR, ...duplicates] = pullRequests
+        .filter((pullRequest) => hasHead(pullRequest, head))
+        .sort((a, b) => a.number - b.number);
+
+    // Concurrent instances can slip past githubs duplicate checking, leaving more than one pull request open
+    for (const duplicate of duplicates) {
+        logger.warn(`[Github] Closing duplicate pull request #${duplicate.number} of #${existingPR.number}`);
+        await context.client.rest.pulls.update({
+            owner: context.owner,
+            repo: context.repo,
+            pull_number: duplicate.number,
+            state: "closed"
+        });
+    }
+
+    return existingPR;
+}
+
+async function findMergedPullRequest(context: GithubContext, { head, base }: PullRequestBranches) {
+    const { data } = await context.client.rest.pulls.list({
+        owner: context.owner,
+        repo: context.repo,
+        base,
+        state: "closed",
+        sort: "updated",
+        direction: "desc",
+        per_page: 100
+    });
+
+    return data.find((pullRequest) => pullRequest.merged_at && hasHead(pullRequest, head)) ?? null;
+}
+
+// Githubs own head filter is case sensitive, so matching is done here to avoid silently finding nothing
+function hasHead(pullRequest: PullRequest, head: string) {
+    return pullRequest.head.label?.toLowerCase() === head.toLowerCase();
+}
+
+function toPullRequestState(pullRequest: { html_url: string; state: string; merged_at?: string | null }) {
+    return {
+        pullRequestUrl: pullRequest.html_url,
+        status: pullRequest.state as GithubPRMeta["status"],
+        mergedAt: pullRequest.merged_at ? new Date(pullRequest.merged_at) : undefined
+    };
+}
+
+// Only adopts a merged pull request created after the update itself, as earlier ones cannot contain its changes
+function toMergedState(pullRequest: PullRequest | null, playtestingUpdate: IPlaytestingUpdate) {
+    if (!pullRequest?.merged_at || new Date(pullRequest.merged_at) < new Date(playtestingUpdate.created)) {
+        return undefined;
+    }
+    return toPullRequestState(pullRequest);
+}
+
+export async function markCardsImplemented(cards: IPlaytestCard[], sync = true) {
+    if (cards.length === 0) {
+        return;
+    }
+
+    for (const card of cards) {
+        card.implemented = true;
+    }
+    cards = await dataService.cards.update(cards, false, sync);
+
+    logger.info(`[Github] Updated ${cards.length} cards as implemented`);
+}
+
+// Refreshes lastSynced; an undefined state leaves existing pull request details untouched, whilst null clears them
+export function applyPullRequestState(
+    playtestingUpdate: IPlaytestingUpdate,
+    key: "code" | "data",
+    lastSynced: Date,
+    state?: PullRequestState | null
+) {
+    playtestingUpdate._metadata ??= {};
+    playtestingUpdate._metadata.github ??= {};
+    const meta = (playtestingUpdate._metadata.github[key] ??= {});
+
+    meta.lastSynced = lastSynced;
+
+    if (state === undefined) {
+        return;
+    }
+
+    if (state === null) {
+        delete meta.pullRequestUrl;
+        delete meta.status;
+        delete meta.mergedAt;
+        return;
+    }
+
+    meta.pullRequestUrl = state.pullRequestUrl;
+    meta.status = state.status;
+    if (state.mergedAt) {
+        meta.mergedAt = state.mergedAt;
+    } else {
+        delete meta.mergedAt;
     }
 }
+
+type PullRequestBranches = { head: string; base: string };
+type PullRequestState = ReturnType<typeof toPullRequestState>;
+type PullRequestDetails = Awaited<ReturnType<(typeof pullRequests)["data" | "playtesting"]>>;
 
 function extractImplementedCodes(pullRequest: PullRequest) {
     const implementedSection = pullRequest.body?.split(/## .* Implemented Cards/)[1] ?? "";
