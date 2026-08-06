@@ -19,7 +19,7 @@ import {
     MessageCreateOptions
 } from "discord.js";
 import { PLAYTESTING_TEAM_ROLE_NAME, Role as AppRole } from "common/models/auth";
-import { discordCommandMiddleware } from "@/middleware/auth";
+import { discordCommandMiddleware, internalContextMiddleware } from "@/middleware/auth";
 import cron from "node-cron";
 import { isEnvironment } from "@/env";
 
@@ -348,11 +348,13 @@ class DiscordService {
 
     private async syncAll() {
         try {
-            const guild = await this.getGuild();
+            await internalContextMiddleware(async () => {
+                const guild = await this.getGuild();
 
-            const [members, roles] = await Promise.all([guild.members.fetch(), guild.roles.fetch()]);
-            await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
-            await Promise.all(members.map((m) => DiscordService.syncUser(m)));
+                const [members, roles] = await Promise.all([guild.members.fetch(), guild.roles.fetch()]);
+                await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
+                await Promise.all(members.map((m) => DiscordService.syncUser(m)));
+            });
 
             logger.info("[Discord] Daily sync complete");
         } catch (err) {

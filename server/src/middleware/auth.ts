@@ -57,6 +57,17 @@ async function resolveImpersonatedPrincipal(
     };
 }
 
+// TODO: Separate Github & Discord into their own integrations, rather than using internal
+async function fetchInternalIntegration() {
+    const rawToken = dataService.integrations.fetchInternalToken();
+    const integration = await dataService.integrations.findByToken(rawToken);
+    if (!integration) {
+        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Internal integration not found");
+    }
+
+    return integration;
+}
+
 export const authMiddleware = asyncHandler(async (req, res, next) => {
     if (req.header("Authorization")?.startsWith("Bearer ")) {
         const rawToken = req.header("Authorization").replace("Bearer ", "");
@@ -125,12 +136,7 @@ export const githubWebhookMiddleware = asyncHandler(async (req, res, next) => {
         throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
     }
 
-    // TODO: Separate Github into its own integration, rather than using internal
-    const rawToken = dataService.integrations.fetchInternalToken();
-    const integration = await dataService.integrations.findByToken(rawToken);
-    if (!integration) {
-        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
-    }
+    const integration = await fetchInternalIntegration();
 
     const context = createContext("webhook", integration);
     requestContext.run(context, next);
@@ -149,13 +155,16 @@ export const discordEventMiddleware = async (
     member: APIGuildMember | GuildMember | undefined,
     callback: () => void
 ) => {
-    // TODO: Separate Discord into its own integration, rather than using internal
-    const rawToken = dataService.integrations.fetchInternalToken();
-    const integration = await dataService.integrations.findByToken(rawToken);
-    if (!integration) {
-        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Invalid signature");
-    }
+    const integration = await fetchInternalIntegration();
 
     const context = createContext("webhook", integration);
     requestContext.run(context, callback);
+};
+
+// Runs work which has no originating request (eg. scheduled syncs) under an internal context
+export const internalContextMiddleware = async <T>(callback: () => Promise<T>) => {
+    const integration = await fetchInternalIntegration();
+
+    const context = createContext("internal", integration);
+    return requestContext.run(context, callback);
 };
