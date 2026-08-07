@@ -151,8 +151,19 @@ export async function syncDataPullRequests(forced?: boolean) {
                     continue;
                 }
 
+                // Released cards ship in their own published pack, so only unreleased ones belong in this one
+                const unreleased = await dataService.cards.read({
+                    project: project.number,
+                    latest: true,
+                    released: { $exists: false }
+                });
+                if (unreleased.length === 0) {
+                    applyPullRequestState(playtestingUpdate, "data", lastSynced);
+                    continue;
+                }
+
                 // Builds the new data file & compares it to current development file
-                const cards = await syncImage(await dataService.cards.read({ project: project.number, latest: true }));
+                const cards = await syncImage(unreleased);
                 const pack = {
                     cgdbId: null,
                     code: project.code,
@@ -235,7 +246,7 @@ export async function syncDataPullRequests(forced?: boolean) {
 
 // Updates sync until their code changes merge, whilst each project's latest update always keeps syncing
 async function readSyncingUpdates() {
-    const projects = await dataService.projects.read();
+    const projects = await dataService.projects.read({ active: true });
     return await dataService.playtestingUpdates.read([
         { _metadata: { github: { code: { status: { $exists: false } } } } },
         { _metadata: { github: { code: { status: "open" } } } },

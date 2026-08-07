@@ -695,7 +695,7 @@ const api = createApi({
             invalidatesTags: (result) => generateFor(result, "card")
         }),
         syncPlaytestingUpdateGithub: builder.mutation<
-            IPlaytestingUpdate[],
+            IPlaytestingUpdate,
             { project: number; version: number; type: "code" | "data"; forced?: boolean }
         >({
             query: ({ project, version, type, forced }) => {
@@ -706,19 +706,18 @@ const api = createApi({
                 if (!result) {
                     return [];
                 }
-                const tags: { type: ApiTag; id: string | number | undefined }[] = [];
-                for (const playtestingUpdate of result) {
-                    const projectTags = generateFor(playtestingUpdate.project, "project", {
-                        idFunc: (project) => project
-                    });
-                    const cardTags = Object.entries(playtestingUpdate.cardChanges).map(([number, version]) => ({
-                        type: "card" as ApiTag,
-                        id: `${playtestingUpdate.project}|${number}|${version}`
-                    }));
-                    tags.push(...generateFor(playtestingUpdate, "playtestingUpdate"), ...projectTags, ...cardTags);
-                }
+                const projectTags = generateFor(result.project, "project", { idFunc: (project) => project });
+                const cardTags = Object.entries(result.cardChanges).map(([number, version]) => ({
+                    type: "card" as ApiTag,
+                    id: `${result.project}|${number}|${version}`
+                }));
 
-                return tags;
+                return [
+                    ...generateFor(result, "playtestingUpdate"),
+                    ...projectTags,
+                    ...cardTags,
+                    { type: "card" as ApiTag, id: "LIST" }
+                ];
             }
         }),
         syncReviewDiscord: builder.mutation<
