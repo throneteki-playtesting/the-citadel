@@ -90,11 +90,11 @@ export async function onReleaseCheckMessageDeleted(messageUrl: string) {
 
 /**
  * Whether a check still owes Discord a message
- * @param latest Version of the slot's latest card; omitted for a cheap staleness-agnostic pre-filter
+ * @param latest Latest card version; omit for a cheap staleness-agnostic pre-filter
  */
 function needsSync(entry: IReleaseCheck, latest?: SemanticVersion) {
     const posted = !!entry._metadata?.discord?.messageUrl;
-    // A verdict on a version nobody is looking at any more is only worth syncing to amend what it already said
+    // Nothing left to say about a version nobody is looking at, short of amending what it already said
     if (!posted && isCheckStale(entry, latest)) {
         return false;
     }
@@ -134,13 +134,12 @@ async function syncSlotChecks(slot: ISlot): Promise<ISlot> {
     return await persistMetadata(slot);
 }
 
-// A message is only ever kept for the version it was posted against - re-checking a newer version clears
-// it on submission, so anything still here belongs to the thread this check speaks to
+// A message is only kept for the version it was posted against, as re-checking a newer version clears it
 async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
     const existing = entry._metadata?.discord?.messageUrl;
     if (existing) {
         const target = await fetchMessage(existing);
-        // A message deleted from Discord leaves nothing to amend, so the verdict is posted afresh below
+        // Anything deleted from Discord leaves nothing to amend, so it is posted afresh below
         if (target) {
             await target.edit(checkMessage(slot, entry, true));
             merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
@@ -155,8 +154,7 @@ async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
     merge(entry, { _metadata: { discord: { messageUrl: posted.url, lastSynced: new Date() } } });
 }
 
-// A check speaks to the version it was made against, so it belongs in that version's thread rather than
-// whichever thread happens to be current - a newer version opens a thread the old verdict says nothing about
+// A check belongs in the thread of the version it was made against, not whichever thread is current
 async function threadFor(slot: ISlot, entry: IReleaseCheck) {
     const [card] = await dataService.cards.read({
         project: slot.project,
@@ -170,10 +168,7 @@ async function threadFor(slot: ISlot, entry: IReleaseCheck) {
     return thread;
 }
 
-/**
- * Saves the message data gathered above against the stored slot. Slots are written whole, so anything
- * persisted while we were talking to Discord would be lost by saving our own copy over the top
- */
+/** Re-reads before writing, as slots are stored whole and ours is as old as the Discord round trip */
 async function persistMetadata(slot: ISlot): Promise<ISlot> {
     const [current] = await dataService.slots.read({ project: slot.project, number: slot.number });
     if (!current) {
@@ -247,11 +242,10 @@ function reasoning(entry: IReleaseCheck, withdrawn: boolean) {
 }
 
 /**
- * @param amending Whether this replaces the same version's earlier verdict, rather than opening a new one
+ * @param amending Whether this replaces the same version's earlier verdict rather than opening a new one
  */
 function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
-    // Reasoning only ever accompanies an objection, so a "ready" verdict carrying it once said no - but only
-    // against the version it was raised on. Saying yes to a newer version is a verdict of its own, not a withdrawal
+    // Reasoning only ever accompanies an objection, so amending one into a "ready" verdict withdraws it
     const withdrawn = amending && entry.ready && !!reasoning(entry, false);
     if (entry.ready && !withdrawn) {
         return readyMessage(slot, entry);
@@ -259,7 +253,7 @@ function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
     return objectionMessage(slot, entry, withdrawn);
 }
 
-// Lean by design - a sign-off has no reasoning to read, so it stays a single glanceable line
+// A sign-off has no reasoning to read, so it stays a single glanceable line
 function readyMessage(slot: ISlot, entry: IReleaseCheck) {
     const container = new ContainerBuilder()
         .setAccentColor(READY_COLOR)
