@@ -3,7 +3,9 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ContainerBuilder,
+    DiscordAPIError,
     MessageFlags,
+    RESTJSONErrorCodes,
     SeparatorBuilder,
     TextDisplayBuilder
 } from "discord.js";
@@ -53,7 +55,7 @@ export async function deleteReleaseChecks(slots: ISlot[]) {
         for (const entry of slot.statuses.design.checks.filter((check) => check._metadata?.discord?.messageUrl)) {
             try {
                 const message = await fetchMessage(entry._metadata.discord.messageUrl);
-                await message.delete();
+                await message?.delete();
             } catch (err) {
                 logger.warn(
                     new Error(`[Discord] Failed to delete release check message for ${label(slot)}`, {
@@ -132,21 +134,23 @@ async function syncSlotChecks(slot: ISlot): Promise<ISlot> {
     return await persistMetadata(slot);
 }
 
+// A message is only ever kept for the version it was posted against - re-checking a newer version clears
+// it on submission, so anything still here belongs to the thread this check speaks to
 async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
     const existing = entry._metadata?.discord?.messageUrl;
-    const thread = await threadFor(slot, entry);
-
-    // Re-checking a new version moves the verdict to that version's thread, leaving what was said about
-    // the old one where it was said
-    if (existing && extractFromURL(existing).channelId === thread.id) {
+    if (existing) {
         const target = await fetchMessage(existing);
-        await target.edit(checkMessage(slot, entry, true));
-        merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
-        logger.verbose(`[Discord] Updated release check for ${label(slot)} by ${entry.createdBy}`);
-        return;
+        // A message deleted from Discord leaves nothing to amend, so the verdict is posted afresh below
+        if (target) {
+            await target.edit(checkMessage(slot, entry, true));
+            merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
+            logger.verbose(`[Discord] Updated release check for ${label(slot)} by ${entry.createdBy}`);
+            return;
+        }
     }
 
     logger.info(`[Discord] Posting release check for ${label(slot)} by ${entry.createdBy}`);
+    const thread = await threadFor(slot, entry);
     const posted = await thread.send(checkMessage(slot, entry, false));
     merge(entry, { _metadata: { discord: { messageUrl: posted.url, lastSynced: new Date() } } });
 }
@@ -189,14 +193,26 @@ async function persistMetadata(slot: ISlot): Promise<ISlot> {
     return updated;
 }
 
+/** Fetches a stored message, or undefined if it (or the thread holding it) has since been deleted */
 async function fetchMessage(messageUrl: string) {
     const { channelId, messageId } = extractFromURL(messageUrl);
     const guild = await discordService.getGuild();
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel?.isTextBased()) {
-        throw new Error(`Found channel is not text based with id: ${channelId}`);
+    try {
+        const channel = await guild.channels.fetch(channelId);
+        if (!channel) {
+            return undefined;
+        }
+        if (!channel.isTextBased()) {
+            throw new Error(`Found channel is not text based with id: ${channelId}`);
+        }
+        return await channel.messages.fetch(messageId);
+    } catch (err) {
+        const missing = [RESTJSONErrorCodes.UnknownChannel, RESTJSONErrorCodes.UnknownMessage];
+        if (err instanceof DiscordAPIError && missing.some((code) => code === err.code)) {
+            return undefined;
+        }
+        throw err;
     }
-    return await channel.messages.fetch(messageId);
 }
 
 function label(slot: ISlot) {

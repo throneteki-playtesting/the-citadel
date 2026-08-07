@@ -36,7 +36,7 @@ export interface IReleaseCheck extends IAuditable {
     /** Card version this verdict was made against - stamped server side */
     version: SemanticVersion;
     _metadata?: {
-        /** The objection mirrored into the card's forum thread; only ever set for a "not ready" verdict */
+        /** The verdict mirrored into the card's forum thread; cleared when re-checked against a new version */
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;

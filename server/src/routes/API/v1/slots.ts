@@ -428,6 +428,12 @@ router.patch(
         const now = new Date();
         const existingIndex = slot.statuses.design.checks.findIndex((entry) => entry.createdBy === principal.id);
         const exists = existingIndex >= 0;
+
+        // Verdict on newer version submits a new message to new thread, abandoning old message
+        if (exists && isCheckStale(slot.statuses.design.checks[existingIndex], latestCard.version)) {
+            delete slot.statuses.design.checks[existingIndex]._metadata;
+        }
+
         const entry: IReleaseCheck = !exists
             ? {
                   ready,
