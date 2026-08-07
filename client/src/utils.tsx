@@ -1,7 +1,7 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faSpellCheck } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
-import { SemanticVersion } from "common/utils";
+import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 import ThronesIcon, { Icon } from "./components/thronesIcon";
 
@@ -32,7 +32,7 @@ export function parseParamSemanticVersion(param?: string) {
 }
 
 export function getFactionCardImage(faction: Faction) {
-    return `https://thronesdb.com/images/factions/${faction}.png`;
+    return `${THRONESDB_URL}/images/factions/${faction}.png`;
 }
 
 export const noteTypeIcon: Record<NoteType, IconDefinition> = {

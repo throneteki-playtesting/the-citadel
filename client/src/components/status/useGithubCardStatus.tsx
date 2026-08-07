@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import { faRotate } from "@fortawesome/free-solid-svg-icons";
-import { getMostRecent, SemanticVersion } from "common/utils";
+import { getMostRecent, PLAYTESTING_TIT_URL, SemanticVersion, TIT_URL } from "common/utils";
 import Permission from "common/models/permissions";
 import { useGetCardsQuery, useSyncCardGithubMutation } from "../../api";
 import { useCardSync } from "../../hooks/useSync";
@@ -69,7 +69,7 @@ export function useGithubCardStatus(project: number, number: number, version?: S
                 icon: <ThronesIcon name="power" />,
                 description: "Implemented (Live)",
                 color: "success",
-                href: "https://theironthrone.net"
+                href: TIT_URL
             };
         }
         if (!card._metadata?.github && !card.implemented) {
@@ -88,7 +88,7 @@ export function useGithubCardStatus(project: number, number: number, version?: S
                 description: "Implemented",
                 longPressOptions,
                 color: "success",
-                href: "https://playtesting.theironthrone.net"
+                href: PLAYTESTING_TIT_URL
             };
         }
         const href = card._metadata!.github!.issueUrl;

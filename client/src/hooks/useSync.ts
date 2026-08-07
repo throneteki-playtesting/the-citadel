@@ -20,7 +20,7 @@ type SyncListenerState<K extends SyncType> = UnionToIntersection<DotNested<SyncO
 const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     card: { image: {}, discord: {}, github: {} },
     review: { discord: {} },
-    playtestingUpdate: { github: { code: {}, data: {} } }
+    playtestingUpdate: { github: { code: {}, data: {} }, discord: {} }
 };
 
 // One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }

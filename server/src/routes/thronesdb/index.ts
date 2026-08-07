@@ -2,7 +2,7 @@ import { convertTDBCard, fetchTDBDeck } from "@/utils";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import { Code, ILabeledCard } from "common/models/cards";
 import { IDecklist } from "common/models/decks";
-import { Regex } from "common/utils";
+import { Regex, THRONESDB_URL } from "common/utils";
 import { UUID } from "common/models/shared";
 import express from "express";
 import asyncHandler from "express-async-handler";
@@ -37,7 +37,7 @@ router.get(
     asyncHandler<{ code: Code }, unknown, unknown, ILabeledCard>(async (req, res) => {
         const { code } = req.params;
 
-        const response = await fetch(`https://thronesdb.com/api/public/card/${code}`);
+        const response = await fetch(`${THRONESDB_URL}/api/public/card/${code}`);
 
         if (!response.ok) {
             throw new Error(`Failed to fetch card with code "${code}": ${response.statusText}`);

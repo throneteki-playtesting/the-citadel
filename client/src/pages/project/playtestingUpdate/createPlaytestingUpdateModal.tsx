@@ -128,7 +128,7 @@ export default function CreatePlaytestingUpdateModal({
             <ModalContent>
                 {(onClose) => (
                     <Wizard schema={PlaytestingUpdate.Draft} onSubmit={onSubmit} data={playtestingUpdate}>
-                        <ModalHeader className="font-cinzel">{`Create PT Update - ${project.code} #${project.version + 1}`}</ModalHeader>
+                        <ModalHeader className="font-cinzel">{`Confirm PT Update - ${project.code} #${project.version + 1}`}</ModalHeader>
                         <ModalBody>
                             <ValidationSummary />
                             <div>
@@ -146,13 +146,18 @@ export default function CreatePlaytestingUpdateModal({
                                             {draftCardSelectors}
                                         </div>
                                     </WizardPage>
-                                    <WizardPage>
+                                    <WizardPage className="space-y-2">
                                         <div className="text-md font-cinzel">Describe the update</div>
                                         <div className="text-sm font-sans">
                                             This is optional, but helps tell playtesters any broad details about this
                                             update.
                                         </div>
                                         <Textarea label="Description" name="description" />
+                                        <Alert color="warning" className="text-sm" title="Confirming is immediate">
+                                            These cards go live for playtesters and the update is announced on Discord
+                                            straight away. Cards which aren't implemented yet can still be tested in
+                                            person — the update page tracks what becomes playable online.
+                                        </Alert>
                                     </WizardPage>
                                 </WizardPages>
                             </div>

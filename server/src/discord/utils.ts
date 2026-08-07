@@ -1,4 +1,5 @@
 import { ColorResolvable } from "discord.js";
+import { dataService } from "@/services";
 
 export const emojis = {
     unique: "<:unique:701045474332770385>",
@@ -51,6 +52,12 @@ export const colors = {
 export const icons = {
     reviewer: "https://cdn-icons-png.flaticon.com/128/6138/6138221.png"
 } as { [icon: string]: string };
+
+// Read from our synced roles rather than the guild; 0 is Discord's own "no colour", so it doubles as the fallback
+export async function getRoleColor(name: string) {
+    const [role] = await dataService.roles.read({ name });
+    return role?.color ?? 0;
+}
 
 // Discord messages read as prose, so counts are written out rather than hedged with "(s)"
 export function plural(count: number, singular: string, plural = `${singular}s`) {

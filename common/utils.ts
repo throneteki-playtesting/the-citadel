@@ -5,11 +5,15 @@ import { DeckLink, DecklistLink, DeepPartial, ISO8601String, SingleOrArray } fro
 import { Principal } from "./models/auth";
 import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
-import type { IProject, ReleaseSlotAllocation } from "./models/projects";
+import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
+
+export const THRONESDB_URL = "https://thronesdb.com";
+export const TIT_URL = "https://theironthrone.net";
+export const PLAYTESTING_TIT_URL = "https://playtesting.theironthrone.net";
 
 export function maxEnum(o: object) {
     return (
@@ -634,3 +638,46 @@ export function getMostRecent(cards: Cards.IPlaytestCard[]): Cards.IPlaytestCard
 
 export const isFaction = (code: Cards.Code | Cards.Faction): code is Cards.Faction =>
     Cards.factions.includes(code as Cards.Faction);
+
+// Derived from the cards themselves rather than stored, so it can never disagree with what was implemented
+export function summarisePlaytestingUpdate(cards: Cards.IPlaytestCard[]) {
+    const factions: Partial<Record<Cards.Faction, number>> = {};
+    const notes: Partial<Record<Cards.NoteType, number>> = {};
+    let implemented = 0;
+
+    for (const card of cards) {
+        factions[card.faction] = (factions[card.faction] ?? 0) + 1;
+        if (card.note) {
+            notes[card.note.type] = (notes[card.note.type] ?? 0) + 1;
+        }
+        if (card.implemented) {
+            implemented++;
+        }
+    }
+
+    let state: PlaytestingUpdateState = "partial";
+    if (implemented === cards.length) {
+        state = "playable";
+    } else if (implemented === 0) {
+        state = "pending";
+    }
+
+    return { factions, notes, implemented, total: cards.length, state };
+}
+
+// The announcement also goes stale as its cards are implemented, not just when the update itself changes
+export function isAnnouncementStale(playtestingUpdate: IPlaytestingUpdate, cards: Cards.IPlaytestCard[]) {
+    const lastSynced = playtestingUpdate._metadata?.discord?.lastSynced;
+    if (!lastSynced) {
+        return true;
+    }
+    if (playtestingUpdate.updated > lastSynced) {
+        return true;
+    }
+    return cards.some(
+        (card) =>
+            card.project === playtestingUpdate.project &&
+            playtestingUpdate.cardChanges[card.number] === card.version &&
+            card.updated > lastSynced
+    );
+}

@@ -10,7 +10,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Textarea, Button, Accordion, AccordionItem, Chip, Skeleton, Link, Checkbox } from "@heroui/react";
 import { DeckLink, DecklistLink, isThronesDbLink } from "common/types";
-import { extractDeckIdentifier, isPlaytestingCode } from "common/utils";
+import { extractDeckIdentifier, isPlaytestingCode, THRONESDB_URL } from "common/utils";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useGetTDBDeckQuery, useLazyGetTDBCardQuery, useLazyGetTDBDeckQuery } from "../../api/thronesdb";
 import { useWizard } from "../../components/wizard/context";
@@ -118,7 +118,7 @@ export default function SubmitDecks({ card, decks: initial = [], onValueChange: 
             <div className="text-base md:text-lg font-cinzel">Which deck(s) did you playtest this card with?</div>
             <div className="text-sm md:text-base font-sans">
                 Provide at least one{" "}
-                <a href="https://thronesdb.com/" target="_blank" className="text-primary hover:brightness-75">
+                <a href={THRONESDB_URL} target="_blank" className="text-primary hover:brightness-75">
                     ThronesDB
                 </a>{" "}
                 deck in which you playtested this card. For private decks, please ensure you have "Share your decks"

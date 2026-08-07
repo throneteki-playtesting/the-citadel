@@ -13,6 +13,7 @@ import Permission from "common/models/permissions";
 import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
+import { PLAYTESTING_TIT_URL, summarisePlaytestingUpdate } from "common/utils";
 
 export function useCodeUpdateStatus(project: number, version: number) {
     const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({
@@ -20,11 +21,12 @@ export function useCodeUpdateStatus(project: number, version: number) {
         version
     });
     const { data: cards, isLoading: isLoadingCards } = useGetPlaytestingUpdateCardsQuery(
-        { project: playtestingUpdate!.project, version: playtestingUpdate!.version },
+        { project, version },
         { skip: !playtestingUpdate }
     );
 
     const isLoading = isLoadingPlaytestingUpdate || isLoadingCards;
+    const { implemented, total, state } = summarisePlaytestingUpdate(cards ?? []);
 
     const [syncPlaytestingUpdateGithub, { isLoading: isSyncing }] = useSyncPlaytestingUpdateGithubMutation();
     const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github.code;
@@ -48,8 +50,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
             };
         }
 
-        const syncFn = (forced?: boolean) =>
-            syncPlaytestingUpdateGithub({ project, version, type: "code", forced });
+        const syncFn = (forced?: boolean) => syncPlaytestingUpdateGithub({ project, version, type: "code", forced });
         const onPress = hasSyncPermission ? () => syncFn() : undefined;
         const longPressOptions = hasSyncPermission
             ? [
@@ -84,6 +85,17 @@ export function useCodeUpdateStatus(project: number, version: number) {
                 description: "Requires Syncing"
             };
         }
+        // Playability follows the cards themselves, so a card implemented by a later PR still counts
+        if (implemented > 0) {
+            return {
+                title,
+                icon: <ThronesIcon name="power" />,
+                description: state === "playable" ? "Playable" : `Partially Playable ${implemented}/${total}`,
+                longPressOptions,
+                color: state === "playable" ? "success" : "warning",
+                href: PLAYTESTING_TIT_URL
+            };
+        }
         // If its been synced, but no PR was created due to no code changes
         if (codeMeta.lastSynced && !codeMeta.pullRequestUrl) {
             return {
@@ -94,28 +106,19 @@ export function useCodeUpdateStatus(project: number, version: number) {
                 description: "None Implemented"
             };
         }
-        if (codeMeta.mergedAt) {
-            if (cards && cards.some((card) => !card.implemented)) {
-                return {
-                    title,
-                    icon: <ThronesIcon name="power" />,
-                    description: "Partially Implemented",
-                    longPressOptions,
-                    color: "success",
-                    href: "https://playtesting.theironthrone.net"
-                };
-            }
-            return {
-                title,
-                icon: <ThronesIcon name="power" />,
-                description: "Implemented",
-                longPressOptions,
-                color: "success",
-                href: "https://playtesting.theironthrone.net"
-            };
-        }
         const href = codeMeta.pullRequestUrl;
         const icon = <FontAwesomeIcon icon={faGithub} size="2xl" />;
+        // A merged pull request still implements none of this update whilst its cards remain open
+        if (codeMeta.mergedAt) {
+            return {
+                title,
+                icon,
+                description: "Not Yet Playable",
+                longPressOptions,
+                color: "warning",
+                href
+            };
+        }
         switch (codeMeta.status) {
             case "open": {
                 return {
@@ -140,15 +143,17 @@ export function useCodeUpdateStatus(project: number, version: number) {
         }
         return null;
     }, [
-        cards,
         error,
         hasSyncPermission,
+        implemented,
         isSyncing,
         playtestingUpdate,
         project,
+        state,
         status,
         step,
         syncPlaytestingUpdateGithub,
+        total,
         version
     ]);
 

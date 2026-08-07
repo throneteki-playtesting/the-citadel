@@ -1,7 +1,7 @@
 import { ILabeledCard, NoteType, factions } from "common/models/cards";
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
-import { getReleaseCapacity } from "common/utils";
+import { getReleaseCapacity, THRONESDB_URL } from "common/utils";
 import { IGetResponse, OAuthTokenResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase } from "lodash-es";
@@ -146,7 +146,7 @@ async function getThronesDBToken() {
         return token;
     }
 
-    const response = await fetch("https://thronesdb.com/oauth/v2/token", {
+    const response = await fetch(`${THRONESDB_URL}/oauth/v2/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({
@@ -177,11 +177,11 @@ export async function fetchTDBDeck(identifier: number | UUID): Promise<IDecklist
     let response: Response;
     if (typeof identifier === "number") {
         // Id decks are publicly available
-        response = await fetch(`https://thronesdb.com/api/public/decklist/${identifier}`);
+        response = await fetch(`${THRONESDB_URL}/api/public/decklist/${identifier}`);
     } else {
         // UUID decks require protected API (auth)
         const authToken = await getThronesDBToken();
-        response = await fetch(`https://thronesdb.com/api/oauth2/deck/load/${identifier}`, {
+        response = await fetch(`${THRONESDB_URL}/api/oauth2/deck/load/${identifier}`, {
             headers: { Authorization: `Bearer ${authToken}` }
         });
     }

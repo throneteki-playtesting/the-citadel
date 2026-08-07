@@ -604,7 +604,8 @@ export const PlaytestingUpdate = {
         cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)).required(),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
-            github: GithubPRMetadata
+            github: GithubPRMetadata,
+            discord: DiscordMetadata
         }),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -618,7 +619,8 @@ export const PlaytestingUpdate = {
         cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
-            github: GithubPRMetadata
+            github: GithubPRMetadata,
+            discord: DiscordMetadata
         }),
         created: Joi.date(),
         createdBy: Joi.string(),
