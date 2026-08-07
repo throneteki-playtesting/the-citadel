@@ -428,6 +428,16 @@ router.patch(
         const now = new Date();
         const existingIndex = slot.statuses.design.checks.findIndex((entry) => entry.createdBy === principal.id);
         const exists = existingIndex >= 0;
+
+        // A verdict on a newer version stands on its own, abandoning the message and reasoning the last
+        // one left against a card which has since changed
+        const previous = exists ? slot.statuses.design.checks[existingIndex] : undefined;
+        if (previous && isCheckStale(previous, latestCard.version)) {
+            delete previous._metadata;
+            delete previous.categories;
+            delete previous.note;
+        }
+
         const entry: IReleaseCheck = !exists
             ? {
                   ready,
@@ -440,7 +450,7 @@ router.patch(
                   updatedBy: principal.id
               }
             : {
-                  ...slot.statuses.design.checks[existingIndex],
+                  ...previous,
                   ready,
                   // Only sent alongside a "not ready" verdict, so withdrawing one keeps the reasoning it
                   // was given rather than erasing the record of why it was ever raised

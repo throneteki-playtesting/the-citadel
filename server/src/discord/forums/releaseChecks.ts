@@ -3,7 +3,9 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ContainerBuilder,
+    DiscordAPIError,
     MessageFlags,
+    RESTJSONErrorCodes,
     SeparatorBuilder,
     TextDisplayBuilder
 } from "discord.js";
@@ -53,7 +55,7 @@ export async function deleteReleaseChecks(slots: ISlot[]) {
         for (const entry of slot.statuses.design.checks.filter((check) => check._metadata?.discord?.messageUrl)) {
             try {
                 const message = await fetchMessage(entry._metadata.discord.messageUrl);
-                await message.delete();
+                await message?.delete();
             } catch (err) {
                 logger.warn(
                     new Error(`[Discord] Failed to delete release check message for ${label(slot)}`, {
@@ -88,11 +90,11 @@ export async function onReleaseCheckMessageDeleted(messageUrl: string) {
 
 /**
  * Whether a check still owes Discord a message
- * @param latest Version of the slot's latest card; omitted for a cheap staleness-agnostic pre-filter
+ * @param latest Latest card version; omit for a cheap staleness-agnostic pre-filter
  */
 function needsSync(entry: IReleaseCheck, latest?: SemanticVersion) {
     const posted = !!entry._metadata?.discord?.messageUrl;
-    // A verdict on a version nobody is looking at any more is only worth syncing to amend what it already said
+    // Nothing left to say about a version nobody is looking at, short of amending what it already said
     if (!posted && isCheckStale(entry, latest)) {
         return false;
     }
@@ -132,27 +134,27 @@ async function syncSlotChecks(slot: ISlot): Promise<ISlot> {
     return await persistMetadata(slot);
 }
 
+// A message is only kept for the version it was posted against, as re-checking a newer version clears it
 async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
     const existing = entry._metadata?.discord?.messageUrl;
-    const thread = await threadFor(slot, entry);
-
-    // Re-checking a new version moves the verdict to that version's thread, leaving what was said about
-    // the old one where it was said
-    if (existing && extractFromURL(existing).channelId === thread.id) {
+    if (existing) {
         const target = await fetchMessage(existing);
-        await target.edit(checkMessage(slot, entry, true));
-        merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
-        logger.verbose(`[Discord] Updated release check for ${label(slot)} by ${entry.createdBy}`);
-        return;
+        // Anything deleted from Discord leaves nothing to amend, so it is posted afresh below
+        if (target) {
+            await target.edit(checkMessage(slot, entry, true));
+            merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
+            logger.verbose(`[Discord] Updated release check for ${label(slot)} by ${entry.createdBy}`);
+            return;
+        }
     }
 
     logger.info(`[Discord] Posting release check for ${label(slot)} by ${entry.createdBy}`);
+    const thread = await threadFor(slot, entry);
     const posted = await thread.send(checkMessage(slot, entry, false));
     merge(entry, { _metadata: { discord: { messageUrl: posted.url, lastSynced: new Date() } } });
 }
 
-// A check speaks to the version it was made against, so it belongs in that version's thread rather than
-// whichever thread happens to be current - a newer version opens a thread the old verdict says nothing about
+// A check belongs in the thread of the version it was made against, not whichever thread is current
 async function threadFor(slot: ISlot, entry: IReleaseCheck) {
     const [card] = await dataService.cards.read({
         project: slot.project,
@@ -166,10 +168,7 @@ async function threadFor(slot: ISlot, entry: IReleaseCheck) {
     return thread;
 }
 
-/**
- * Saves the message data gathered above against the stored slot. Slots are written whole, so anything
- * persisted while we were talking to Discord would be lost by saving our own copy over the top
- */
+/** Re-reads before writing, as slots are stored whole and ours is as old as the Discord round trip */
 async function persistMetadata(slot: ISlot): Promise<ISlot> {
     const [current] = await dataService.slots.read({ project: slot.project, number: slot.number });
     if (!current) {
@@ -189,14 +188,26 @@ async function persistMetadata(slot: ISlot): Promise<ISlot> {
     return updated;
 }
 
+/** Fetches a stored message, or undefined if it (or the thread holding it) has since been deleted */
 async function fetchMessage(messageUrl: string) {
     const { channelId, messageId } = extractFromURL(messageUrl);
     const guild = await discordService.getGuild();
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel?.isTextBased()) {
-        throw new Error(`Found channel is not text based with id: ${channelId}`);
+    try {
+        const channel = await guild.channels.fetch(channelId);
+        if (!channel) {
+            return undefined;
+        }
+        if (!channel.isTextBased()) {
+            throw new Error(`Found channel is not text based with id: ${channelId}`);
+        }
+        return await channel.messages.fetch(messageId);
+    } catch (err) {
+        const missing = [RESTJSONErrorCodes.UnknownChannel, RESTJSONErrorCodes.UnknownMessage];
+        if (err instanceof DiscordAPIError && missing.some((code) => code === err.code)) {
+            return undefined;
+        }
+        throw err;
     }
-    return await channel.messages.fetch(messageId);
 }
 
 function label(slot: ISlot) {
@@ -231,11 +242,10 @@ function reasoning(entry: IReleaseCheck, withdrawn: boolean) {
 }
 
 /**
- * @param amending Whether this replaces the same version's earlier verdict, rather than opening a new one
+ * @param amending Whether this replaces the same version's earlier verdict rather than opening a new one
  */
 function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
-    // Reasoning only ever accompanies an objection, so a "ready" verdict carrying it once said no - but only
-    // against the version it was raised on. Saying yes to a newer version is a verdict of its own, not a withdrawal
+    // Reasoning only ever accompanies an objection, so amending one into a "ready" verdict withdraws it
     const withdrawn = amending && entry.ready && !!reasoning(entry, false);
     if (entry.ready && !withdrawn) {
         return readyMessage(slot, entry);
@@ -243,7 +253,7 @@ function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
     return objectionMessage(slot, entry, withdrawn);
 }
 
-// Lean by design - a sign-off has no reasoning to read, so it stays a single glanceable line
+// A sign-off has no reasoning to read, so it stays a single glanceable line
 function readyMessage(slot: ISlot, entry: IReleaseCheck) {
     const container = new ContainerBuilder()
         .setAccentColor(READY_COLOR)
