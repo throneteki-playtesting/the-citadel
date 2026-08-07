@@ -4,7 +4,7 @@ import { MongoClient } from "mongodb";
 import { BasicAuditableRepository } from "./shared";
 import { Filter, SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
-import { deleteReleaseCheckObjections, syncReleaseCheckObjections } from "@/discord/forums/releaseCheckObjections";
+import { deleteReleaseChecks, syncReleaseChecks } from "@/discord/forums/releaseChecks";
 
 export default class SlotsRepository extends BasicAuditableRepository<"slot"> {
     constructor(mongoClient: MongoClient) {
@@ -57,7 +57,7 @@ export default class SlotsRepository extends BasicAuditableRepository<"slot"> {
         let data = asArray(syncing);
         const syncs = [
             () =>
-                syncReleaseCheckObjections(data).then((result) => {
+                syncReleaseChecks(data).then((result) => {
                     data = result;
                 })
         ];
@@ -71,7 +71,7 @@ export default class SlotsRepository extends BasicAuditableRepository<"slot"> {
     public async desync(desyncing: ISlot[]): Promise<ISlot[]>;
     public async desync(desyncing: SingleOrArray<ISlot>) {
         const data = asArray(desyncing);
-        const syncs = [() => deleteReleaseCheckObjections(data)];
+        const syncs = [() => deleteReleaseChecks(data)];
 
         await this.internalSync(syncs);
 
