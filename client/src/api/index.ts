@@ -19,6 +19,7 @@ import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { DesignStatus, IReleaseCheckSummary, ISlot, ReleaseCheckCategory, SlotStatuses } from "common/models/slots";
+import { IArtist } from "common/models/artwork";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
 import { IDeck } from "common/models/decks";
@@ -431,6 +432,38 @@ const api = createApi({
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "project")
+        }),
+        // Artists API
+        getArtists: builder.query<IGetResponse<IArtist>, IGetRequest<IArtist> | void>({
+            query: (options) => {
+                const url = buildUrl("artists", options ?? undefined);
+                return { url, method: "GET" };
+            },
+            providesTags: (response) => generateFor(response?.items, "artist")
+        }),
+        createArtist: builder.mutation<
+            IArtist,
+            Omit<IArtist, "id" | "created" | "updated" | "createdBy" | "updatedBy">
+        >({
+            query: (body) => {
+                const url = buildUrl("artists");
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
+        }),
+        updateArtist: builder.mutation<IArtist, Pick<IArtist, "id"> & Partial<IArtist>>({
+            query: ({ id, ...body }) => {
+                const url = buildUrl(`artists/${id}`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
+        }),
+        deleteArtist: builder.mutation<IArtist, { id: string }>({
+            query: ({ id }) => {
+                const url = buildUrl(`artists/${id}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
         }),
         // Slots API
         getSlot: builder.query<ISlot, { project: number; number: number }>({
@@ -864,6 +897,11 @@ export const {
     useUpdateProjectMutation,
     useDeleteProjectMutation,
     useArchiveProjectMutation,
+
+    useGetArtistsQuery,
+    useCreateArtistMutation,
+    useUpdateArtistMutation,
+    useDeleteArtistMutation,
 
     useGetSlotQuery,
     useGetSlotsQuery,

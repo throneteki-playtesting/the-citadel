@@ -15,7 +15,7 @@ import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
 import SectionTitle from "../../components/sectionTitle";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { highlightTarget, watermarkClasses } from "../../constants";
+import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
 import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -33,8 +33,6 @@ const sortOptions: Record<SortOption, string> = {
     priority: "Testing Priority",
     progress: "Progress"
 };
-
-const REORDER_TRANSITION = { duration: 0.4, ease: [0.65, 0, 0.35, 1] } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
 const CORNER_BADGE_CLASS =
@@ -282,7 +280,7 @@ function FactionCarousel({
                         <motion.div
                             key={parseCardCode(false, card.project, card.number)}
                             layout
-                            transition={REORDER_TRANSITION}
+                            transition={reorderTransition}
                             className={classNames(
                                 "snap-start",
                                 card.type === "plot"

@@ -106,3 +106,13 @@ export function convertToNode(htmlString: string): React.ReactNode[] {
     };
     return body ? Array.from(body.childNodes).map((node, i) => transformNode(node, i)) : [];
 }
+
+export function formatCurrency(amount: number, currency: string, options?: Intl.NumberFormatOptions) {
+    return Intl.NumberFormat(navigator.language, {
+        style: "currency",
+        currency,
+        // "symbol" gives "US$50" where the money fields show "$50" - the same cost has to read the same way
+        currencyDisplay: "narrowSymbol",
+        ...options
+    }).format(amount);
+}

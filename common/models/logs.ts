@@ -9,6 +9,7 @@ export enum LogCategory {
     PROJECT = "project",
     RELEASE = "release",
     SLOT = "slot",
+    ARTIST = "artist",
     PLAYTESTING_UPDATE = "playtestingUpdate",
     CARD = "card",
     REVIEW = "review",

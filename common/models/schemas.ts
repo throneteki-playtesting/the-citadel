@@ -2,6 +2,7 @@ import BaseJoi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
 import * as Slots from "./slots";
+import * as Artwork from "./artwork";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
@@ -369,7 +370,101 @@ export const Release = {
     })
 };
 
+// Artwork and artists are addressed by link rather than stored, so a half-typed one is the whole failure
+const Link = Joi.string()
+    .uri({ scheme: ["http", "https"] })
+    .messages({
+        "string.uri": "Enter a full link, starting with http:// or https://",
+        "string.uriCustomScheme": "Enter a full link, starting with http:// or https://"
+    });
+
+export const Artist = {
+    Full: Joi.object({
+        id: Joi.string().required(),
+        name: Joi.string().required(),
+        contact: Joi.string().allow(""),
+        portfolio: Joi.string().uri().allow(""),
+        blanketPermission: Joi.boolean(),
+        notes: Joi.string().allow(""),
+        created: Joi.date().required(),
+        createdBy: Joi.string().required(),
+        updated: Joi.date().required(),
+        updatedBy: Joi.string().required()
+    }),
+    // Body for create/edit - id and the audit fields are server-managed
+    Draft: Joi.object({
+        id: Joi.forbidden(),
+        name: Joi.string().trim().required().messages({
+            "any.required": "Provide the artist's name",
+            "string.empty": "Provide the artist's name"
+        }),
+        contact: Joi.string().trim().allow(""),
+        portfolio: Link.allow(""),
+        blanketPermission: Joi.boolean(),
+        notes: Joi.string().trim().allow(""),
+        created: Joi.forbidden(),
+        createdBy: Joi.forbidden(),
+        updated: Joi.forbidden(),
+        updatedBy: Joi.forbidden()
+    })
+};
+
+// A link is blank until somebody finds one, so empty is a real state rather than a missing value
+const SourcedOption = Joi.object({
+    id: Joi.string().required(),
+    url: Link.allow("").required(),
+    artist: Joi.string(),
+    ffg: Joi.boolean(),
+    contact: Joi.string()
+        .required()
+        .valid(...Artwork.artworkContactStates),
+    notes: Joi.string().allow("")
+});
+
+// The per-type blocks are the same whether a slot is being read whole or patched, so only status/type differ
+const ArtworkDetails = {
+    sourced: Joi.object({
+        options: Joi.array().required().items(SourcedOption),
+        selectedId: Joi.string()
+    }),
+    commissioned: Joi.object({
+        artist: Joi.string(),
+        estimatedCompletion: Joi.date(),
+        paidBy: Joi.string().allow(""),
+        cost: Joi.object({
+            amount: Joi.number().min(0).required(),
+            currency: Joi.string().required()
+        }),
+        url: Link.allow(""),
+        notes: Joi.string().allow("")
+    }),
+    ai: Joi.object({
+        generatedBy: Joi.string(),
+        resource: Joi.string().allow(""),
+        url: Link.allow(""),
+        notes: Joi.string().allow("")
+    }),
+    prep: Joi.array().items(
+        Joi.object({
+            flag: Joi.string()
+                .required()
+                .valid(...Artwork.artworkPrepFlags),
+            done: Joi.boolean().required()
+        })
+    )
+};
+
+// The whole artwork block. Exported as Slot.ArtworkProgress so the tab validates its draft against the
+// same object PATCH does, rather than against a hand-written mirror of it
+const ArtworkProgress = Joi.object({
+    status: Joi.string().valid(...Slots.artworkStatuses),
+    type: Joi.string().valid(...Slots.artworkTypes),
+    ...ArtworkDetails
+});
+
 export const Slot = {
+    // Shared with the client's artwork form, so the tab and PATCH refuse the same things
+    ArtworkProgress,
     Full: Joi.object({
         project: Joi.number().required(),
         number: Joi.number().required(),
@@ -405,12 +500,7 @@ export const Slot = {
                     at: Joi.date().required()
                 })
             }).required(),
-            artwork: Joi.object({
-                status: Joi.string()
-                    .required()
-                    .valid(...Slots.artworkStatuses),
-                type: Joi.string().valid(...Slots.artworkTypes)
-            }).required(),
+            artwork: ArtworkProgress.fork("status", (status) => status.required()).required(),
             production: Joi.string()
                 .required()
                 .valid(...Slots.productionStatuses)
@@ -454,10 +544,7 @@ export const Slot = {
                     at: Joi.date().required()
                 }).allow(null)
             }),
-            artwork: Joi.object({
-                status: Joi.string().valid(...Slots.artworkStatuses),
-                type: Joi.string().valid(...Slots.artworkTypes)
-            }),
+            artwork: ArtworkProgress,
             production: Joi.string().valid(...Slots.productionStatuses)
         }),
         release: Joi.object({

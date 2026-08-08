@@ -16,6 +16,7 @@ import {
     ReleaseCheckCategory,
     SlotStatuses
 } from "common/models/slots";
+import { artworkBlocker } from "common/models/artwork";
 import { factions } from "common/models/cards";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { IProject } from "common/models/projects";
@@ -253,6 +254,18 @@ router.patch(
             ...(statuses.design && { design: { ...slot.statuses.design, ...statuses.design } }),
             ...(statuses.artwork && { artwork: { ...slot.statuses.artwork, ...statuses.artwork } })
         };
+
+        // Artwork can't be moved to a status its own details don't support. Only the move is refused -
+        // a record already sitting at one it no longer satisfies must stay editable, or repairing the
+        // details it is missing would be impossible
+        const artworkStatusChanged = mergedStatuses && mergedStatuses.artwork.status !== slot.statuses.artwork.status;
+        if (mergedStatuses && artworkStatusChanged) {
+            const artists = await dataService.artists.read();
+            const blocker = artworkBlocker(mergedStatuses.artwork, mergedStatuses.artwork.status, artists);
+            if (blocker) {
+                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Data", blocker);
+            }
+        }
 
         // Production is downstream of design & artwork, and the invariant breaks from both directions
         if (

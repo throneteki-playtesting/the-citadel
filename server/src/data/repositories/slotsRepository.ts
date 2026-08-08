@@ -67,6 +67,24 @@ export default class SlotsRepository extends BasicAuditableRepository<"slot"> {
         return Array.isArray(syncing) ? data : data[0];
     }
 
+    /**
+     * Slots whose artwork credits an artist, whether sourced from them or commissioned of them. Queried
+     * against the collection directly, since Filter has no way to match one field of an array's entries
+     */
+    public async byArtist(artist: string): Promise<Pick<ISlot, "project" | "number">[]> {
+        return await this.database.collection
+            .find(
+                {
+                    $or: [
+                        { "statuses.artwork.sourced.options.artist": artist },
+                        { "statuses.artwork.commissioned.artist": artist }
+                    ]
+                },
+                { projection: { _id: 0, project: 1, number: 1 }, sort: { project: 1, number: 1 } }
+            )
+            .toArray();
+    }
+
     public async desync(desyncing: ISlot): Promise<ISlot>;
     public async desync(desyncing: ISlot[]): Promise<ISlot[]>;
     public async desync(desyncing: SingleOrArray<ISlot>) {

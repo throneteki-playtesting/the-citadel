@@ -3,6 +3,7 @@ import { IPlaytestingUpdate, IProject } from "./models/projects";
 import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
 import { ISlot } from "./models/slots";
+import { IArtist } from "./models/artwork";
 import { ILogEntry } from "./models/logs";
 import { IDeck } from "./models/decks";
 
@@ -16,6 +17,7 @@ export type ResourceType =
     | "playtestingUpdate"
     | "review"
     | "slot"
+    | "artist"
     | "log"
     | "deck";
 
@@ -29,6 +31,7 @@ export interface ResourceDataMap {
     playtestingUpdate: IPlaytestingUpdate;
     review: IPlaytestReview;
     slot: ISlot;
+    artist: IArtist;
     log: ILogEntry;
     deck: IDeck;
 }
@@ -43,6 +46,7 @@ type ResourceIdKeys = {
     playtestingUpdate: "project" | "version";
     review: "project" | "number" | "version" | "reviewer";
     slot: "project" | "number";
+    artist: "id";
     log: "id";
     deck: "identifier";
 };
@@ -61,6 +65,7 @@ export const resourceIdFuncs: {
     playtestingUpdate: (u) => `${u.project}|${u.version}`,
     review: (r) => `${r.project}|${r.number}|${r.version}|${r.reviewer}`,
     slot: (s) => `${s.project}|${s.number}`,
+    artist: (a) => a.id,
     log: (l) => l.id,
     deck: (d) => String(d.identifier)
 };
