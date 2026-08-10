@@ -3,6 +3,7 @@ import { Button } from "@heroui/react";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
+import { useIsPageActive } from "../../hooks/useIsPageActive";
 import { UIColor } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 
@@ -28,6 +29,9 @@ export type ProcessAction = {
  * is how a save button ends up existing on only one of them.
  */
 export default function ProcessActions({ actions, className }: ProcessActionsProps) {
+    // Only the portalled column needs this - the foot buttons travel with the page they belong to
+    const isPageActive = useIsPageActive();
+
     if (actions.length === 0) {
         return null;
     }
@@ -51,28 +55,29 @@ export default function ProcessActions({ actions, className }: ProcessActionsPro
                     ))}
             </div>
 
-            {createPortal(
-                <div className="sm:hidden fixed bottom-6 right-20 z-20 flex items-center gap-2">
-                    {actions.map((action) => (
-                        <TouchTooltip key={action.key} content={action.label} placement="top">
-                            <Button
-                                isIconOnly
-                                radius="full"
-                                size="lg"
-                                className="shadow-lg"
-                                aria-label={action.label}
-                                color={action.color}
-                                variant={action.variant}
-                                isDisabled={action.isDisabled}
-                                onPress={action.onPress}
-                            >
-                                <FontAwesomeIcon icon={action.icon} />
-                            </Button>
-                        </TouchTooltip>
-                    ))}
-                </div>,
-                document.body
-            )}
+            {isPageActive &&
+                createPortal(
+                    <div className="sm:hidden fixed bottom-6 right-20 z-20 flex items-center gap-2">
+                        {actions.map((action) => (
+                            <TouchTooltip key={action.key} content={action.label} placement="top">
+                                <Button
+                                    isIconOnly
+                                    radius="full"
+                                    size="lg"
+                                    className="shadow-lg"
+                                    aria-label={action.label}
+                                    color={action.color}
+                                    variant={action.variant}
+                                    isDisabled={action.isDisabled}
+                                    onPress={action.onPress}
+                                >
+                                    <FontAwesomeIcon icon={action.icon} />
+                                </Button>
+                            </TouchTooltip>
+                        ))}
+                    </div>,
+                    document.body
+                )}
         </>
     );
 }

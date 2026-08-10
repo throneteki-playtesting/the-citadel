@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
     DndContext,
     DragEndEvent,
@@ -16,6 +17,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import { motion } from "framer-motion";
 import { IArtist, ISourcedArtwork, ISourcedOption } from "common/models/artwork";
+import { ISlotRef } from "common/models/slots";
 import { reorderTransition } from "../../../constants";
 import { dropAnimation as DROP_ANIMATION } from "../../project/releases/releaseDnd";
 import SortableSourcedOption, { SourcedOptionCard } from "./sourcedOptionCard";
@@ -25,10 +27,14 @@ const EMPTY: ISourcedArtwork = { options: [] };
 // Long enough to cover dnd-kit's own drop transition before framer is allowed to measure again
 const DROP_SETTLE_MS = 300;
 
-// The copy under the cursor is there to be moved, not edited, so its handlers lead nowhere
-const NOT_INTERACTIVE = () => undefined;
-
-export default function SourcedPanel({ sourced = EMPTY, artists, isDisabled, onAdd, onChange }: SourcedPanelProps) {
+export default function SourcedPanel({
+    sourced = EMPTY,
+    artists,
+    slot,
+    isDisabled,
+    onAdd,
+    onChange
+}: SourcedPanelProps) {
     // Matches the release board's sensors - a touch drag needs a hold, so the page still scrolls freely
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -123,6 +129,24 @@ export default function SourcedPanel({ sourced = EMPTY, artists, isDisabled, onA
         });
     }, [sourced.options, artists]);
 
+    // Portalled out, or a transformed ancestor re-bases the overlay and the clipping cuts it off
+    const overlay = (
+        <DragOverlay dropAnimation={DROP_ANIMATION}>
+            {activeOption && (
+                <SourcedOptionCard
+                    isOverlay
+                    option={activeOption}
+                    title={titles[sourced.options.indexOf(activeOption)]}
+                    artists={artists}
+                    isSelected={sourced.selectedId === activeOption.id}
+                    onChange={() => undefined}
+                    onSelect={() => undefined}
+                    onRemove={() => undefined}
+                />
+            )}
+        </DragOverlay>
+    );
+
     return (
         <div className="flex flex-col gap-3">
             {sourced.options.length === 0 ? (
@@ -171,6 +195,7 @@ export default function SourcedPanel({ sourced = EMPTY, artists, isDisabled, onA
                                         option={option}
                                         title={titles[index]}
                                         artists={artists}
+                                        slot={slot}
                                         name={`sourced.options.${index}.url`}
                                         isSelected={sourced.selectedId === option.id}
                                         isDisabled={isDisabled}
@@ -190,20 +215,7 @@ export default function SourcedPanel({ sourced = EMPTY, artists, isDisabled, onA
                             ))}
                         </div>
                     </SortableContext>
-                    <DragOverlay dropAnimation={DROP_ANIMATION}>
-                        {activeOption && (
-                            <SourcedOptionCard
-                                isOverlay
-                                option={activeOption}
-                                title={titles[sourced.options.indexOf(activeOption)]}
-                                artists={artists}
-                                isSelected={sourced.selectedId === activeOption.id}
-                                onChange={NOT_INTERACTIVE}
-                                onSelect={NOT_INTERACTIVE}
-                                onRemove={NOT_INTERACTIVE}
-                            />
-                        )}
-                    </DragOverlay>
+                    {createPortal(overlay, document.body)}
                 </DndContext>
             )}
             {!isDisabled && sourced.options.length > 0 && (
@@ -224,6 +236,8 @@ export default function SourcedPanel({ sourced = EMPTY, artists, isDisabled, onA
 type SourcedPanelProps = {
     sourced?: ISourcedArtwork;
     artists: IArtist[];
+    /** The card being edited, forwarded to ArtistSelect */
+    slot?: ISlotRef;
     isDisabled?: boolean;
     onAdd: () => void;
     onChange: (sourced: ISourcedArtwork) => void;

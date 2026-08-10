@@ -5,9 +5,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBan, faGripVertical, faStar, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { faStar as faStarOutline } from "@fortawesome/free-regular-svg-icons";
+import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import { ArtworkContactState, artworkContactStates, IArtist, ISourcedOption } from "common/models/artwork";
-import { artworkContactMeta, FFG_ARTWORK_DESCRIPTION } from "../../../constants";
+import { ISlotRef } from "common/models/slots";
+import { artworkContactMeta, FFG_ARTWORK_DESCRIPTION, reorderTransition } from "../../../constants";
 import { UIColor } from "../../../types";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ArtworkImage from "../../../components/artwork/artworkImage";
@@ -38,9 +40,11 @@ const CONTACT_REACHED_CLASSES: Partial<Record<UIColor, string>> = {
  * handed to the DragOverlay - anything less and the card you carry isn't the card you picked up
  */
 export default function SortableSourcedOption(props: SourcedOptionCardProps) {
+    // The final choice is out of the sort entirely, droppable too, or another option displaces it
+    const isFixed = props.isDisabled || props.isSelected;
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
         id: props.option.id,
-        disabled: props.isDisabled
+        disabled: { draggable: isFixed, droppable: isFixed }
     });
 
     return (
@@ -60,6 +64,7 @@ export function SourcedOptionCard({
     title,
     artists,
     name,
+    slot,
     isSelected,
     isDisabled,
     onChange,
@@ -77,6 +82,39 @@ export function SourcedOptionCard({
     const set = <K extends keyof ISourcedOption>(key: K, value: ISourcedOption[K]) =>
         onChange({ ...option, [key]: value });
 
+    // Gathered up front so the wrapping header only gives them a line when there is one to fill
+    const chips = [
+        isSelected && (
+            <Chip key="selected" size="sm" color="primary" variant="flat">
+                Final choice
+            </Chip>
+        ),
+        isDenied && (
+            <TouchTooltip
+                key="denied"
+                content={<div className="max-w-56 text-xs">{artworkContactMeta.denied.description}</div>}
+            >
+                <Chip size="sm" color="danger" variant="flat" className="cursor-help">
+                    Denied
+                </Chip>
+            </TouchTooltip>
+        ),
+        artist?.blanketPermission && (
+            <TouchTooltip
+                key="blanket"
+                content={
+                    <div className="max-w-56 text-xs">
+                        {artist.name} has allowed all of their work up front, so this counts as granted.
+                    </div>
+                }
+            >
+                <Chip size="sm" color="success" variant="flat" className="cursor-help">
+                    Blanket permission
+                </Chip>
+            </TouchTooltip>
+        )
+    ].filter(Boolean);
+
     return (
         <div
             ref={nodeRef}
@@ -89,49 +127,31 @@ export function SourcedOptionCard({
                 isDenied && !isSelected && "brightness-75"
             )}
         >
-            <div className="flex items-center gap-1">
-                {!isDisabled && (
-                    <button
-                        type="button"
-                        aria-label="Reorder option"
-                        className="shrink-0 px-1 text-foreground/30 hover:text-foreground/60 cursor-grab touch-manipulation"
-                        {...handleProps}
-                    >
-                        <FontAwesomeIcon icon={faGripVertical} />
-                    </button>
-                )}
-                <span className="shrink-0 font-cinzel uppercase tracking-wide text-xs text-foreground/60 truncate">
+            <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
+                <AnimatePresence initial={false}>
+                    {!isDisabled && !isSelected && (
+                        <motion.button
+                            type="button"
+                            aria-label="Reorder option"
+                            className="shrink-0 overflow-hidden text-foreground/30 hover:text-foreground/60 cursor-grab touch-manipulation"
+                            initial={{ width: 0, opacity: 0, scale: 0.6 }}
+                            animate={{ width: "auto", opacity: 1, scale: 1 }}
+                            exit={{ width: 0, opacity: 0, scale: 0.6 }}
+                            transition={reorderTransition}
+                            {...handleProps}
+                        >
+                            <FontAwesomeIcon icon={faGripVertical} className="px-1" />
+                        </motion.button>
+                    )}
+                </AnimatePresence>
+                <span className="flex-1 min-w-0 truncate font-cinzel uppercase tracking-wide text-xs text-foreground/60">
                     {title}
                 </span>
-                <div className="flex-1 min-w-0 flex items-center gap-1.5">
-                    {isSelected && (
-                        <Chip size="sm" color="primary" variant="flat">
-                            Final choice
-                        </Chip>
-                    )}
-                    {isDenied && (
-                        <TouchTooltip
-                            content={<div className="max-w-56 text-xs">{artworkContactMeta.denied.description}</div>}
-                        >
-                            <Chip size="sm" color="danger" variant="flat" className="cursor-help">
-                                Denied
-                            </Chip>
-                        </TouchTooltip>
-                    )}
-                    {artist?.blanketPermission && (
-                        <TouchTooltip
-                            content={
-                                <div className="max-w-56 text-xs">
-                                    {artist.name} has allowed all of their work up front, so this counts as granted.
-                                </div>
-                            }
-                        >
-                            <Chip size="sm" color="success" variant="flat" className="cursor-help">
-                                Blanket permission
-                            </Chip>
-                        </TouchTooltip>
-                    )}
-                </div>
+                {chips.length > 0 && (
+                    <div className="order-last sm:order-none basis-full sm:basis-auto shrink-0 flex flex-wrap items-center gap-1.5">
+                        {chips}
+                    </div>
+                )}
                 <TouchTooltip content={isSelected ? "Chosen as the final artwork" : "Set as the final artwork"}>
                     <Button
                         isIconOnly
@@ -139,6 +159,7 @@ export function SourcedOptionCard({
                         variant="light"
                         color={isSelected ? "primary" : "default"}
                         aria-label="Set as final artwork"
+                        className="shrink-0"
                         isDisabled={isDisabled}
                         onPress={onSelect}
                     >
@@ -152,6 +173,7 @@ export function SourcedOptionCard({
                         variant="light"
                         color="danger"
                         aria-label="Remove option"
+                        className="shrink-0"
                         isDisabled={isDisabled}
                         onPress={onRemove}
                     >
@@ -180,6 +202,7 @@ export function SourcedOptionCard({
                             <ArtistSelect
                                 size="sm"
                                 selectedId={option.artist}
+                                slot={slot}
                                 isDisabled={isDisabled}
                                 onChange={(id) => set("artist", id)}
                             />
@@ -225,6 +248,8 @@ type SourcedOptionCardProps = {
     artists: IArtist[];
     /** The link's path in the artwork schema, so the form can attach its error to this input */
     name?: string;
+    /** The card being edited, forwarded to ArtistSelect */
+    slot?: ISlotRef;
     isSelected: boolean;
     isDisabled?: boolean;
     onChange: (option: ISourcedOption) => void;

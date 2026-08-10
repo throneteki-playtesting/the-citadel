@@ -1,5 +1,6 @@
 import React, { Children, HTMLAttributes, ReactNode, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
+import { PageActiveContext } from "../hooks/useIsPageActive";
 import { BaseElementProps } from "../types";
 
 /**
@@ -46,16 +47,18 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
                         return page;
                     }
                     const pageNo = index + 1;
+                    // Portals escape both `inert` and the clipping, so are told outright when off show
+                    const isActive = pageNo === currentPage;
                     return (
                         <div
                             key={pageNo}
-                            ref={pageNo === currentPage ? activeWrapperRef : null}
-                            aria-hidden={pageNo !== currentPage}
-                            inert={pageNo !== currentPage}
-                            className="flex-shrink-0 w-full"
+                            ref={isActive ? activeWrapperRef : null}
+                            aria-hidden={!isActive}
+                            inert={!isActive}
+                            className={classNames("flex-shrink-0 w-full", !isActive && "overflow-clip")}
                             {...pageProps?.(pageNo)}
                         >
-                            {page}
+                            <PageActiveContext.Provider value={isActive}>{page}</PageActiveContext.Provider>
                         </div>
                     );
                 })}

@@ -18,7 +18,14 @@ import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
-import { DesignStatus, IReleaseCheckSummary, ISlot, ReleaseCheckCategory, SlotStatuses } from "common/models/slots";
+import {
+    DesignStatus,
+    IReleaseCheckSummary,
+    ISlot,
+    ISlotRef,
+    ReleaseCheckCategory,
+    SlotStatuses
+} from "common/models/slots";
 import { IArtist } from "common/models/artwork";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
@@ -458,9 +465,10 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "artist")
         }),
-        deleteArtist: builder.mutation<IArtist, { id: string }>({
-            query: ({ id }) => {
-                const url = buildUrl(`artists/${id}`);
+        // `editing` names the card being worked on, whose own credit doesn't count against the removal
+        deleteArtist: builder.mutation<IArtist, { id: string; editing?: ISlotRef }>({
+            query: ({ id, editing }) => {
+                const url = buildUrl(`artists/${id}`, editing);
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => generateFor(result, "artist")

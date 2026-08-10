@@ -41,6 +41,9 @@ import ArtworkTypePicker from "./artworkTypePicker";
 
 const trackSteps = laneSteps(artworkLane);
 
+// A modal's form opened from in here submits through this one too, so only our own submit is answered
+const ARTWORK_FORM_ID = "artwork-form";
+
 export default function ArtworkTab({ project, number, showTrack, onBack }: ArtworkTabProps) {
     const navigate = useNavigate();
     const [pendingChange, setPendingChange] = useState<ArtworkStatus>();
@@ -102,8 +105,13 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
         void save();
     };
 
-    const step = artworkLane.meta[draft.status];
+    // Where the card stands, not where the draft would put it - a track cannot claim a save nobody made
+    const savedStatus = committed?.status ?? draft.status;
+    const step = artworkLane.meta[savedStatus];
+    // Once the artwork is in hand how it was obtained is settled, reopened by dropping the status back
+    const isTypeSettled = savedStatus === "confirming" || savedStatus === "complete";
     const card = cardsData?.items[0];
+    const slotRef = { project, number };
     // Where each link's error goes. Only the current type's panel is on screen, so anything wrong in the
     // blocks kept beside it has no input to attach to and is summarised instead
     const mappedPaths =
@@ -148,9 +156,13 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
 
     return (
         <Form
+            id={ARTWORK_FORM_ID}
             className="flex flex-col items-stretch gap-4 p-1 sm:p-2"
             validationErrors={errors}
             onSubmit={(e) => {
+                if ((e.target as HTMLElement).id !== ARTWORK_FORM_ID) {
+                    return;
+                }
                 e.preventDefault();
                 onSave();
             }}
@@ -177,7 +189,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
             {showTrack && (
                 <StatusStepper
                     steps={trackSteps}
-                    currentIndex={artworkLane.statuses.indexOf(draft.status)}
+                    currentIndex={artworkLane.statuses.indexOf(savedStatus)}
                     color={artworkLane.color}
                     size="md"
                     className="w-full"
@@ -192,7 +204,12 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                 <StatusNotice icon={step.icon} label={step.label} detail={step.description} />
             )}
 
-            <ArtworkTypePicker value={draft.type} isDisabled={!isEditable} onChange={(type) => set("type", type)} />
+            <ArtworkTypePicker
+                value={draft.type}
+                isDisabled={!isEditable}
+                isLocked={isTypeSettled}
+                onChange={(type) => set("type", type)}
+            />
 
             {draft.type && (
                 <div className="flex flex-col gap-3">
@@ -201,6 +218,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                         <SourcedPanel
                             sourced={draft.sourced}
                             artists={artists}
+                            slot={slotRef}
                             isDisabled={!isEditable}
                             onAdd={() => set("sourced", withAddedOption(draft.sourced))}
                             onChange={(sourced) => set("sourced", sourced)}
@@ -209,6 +227,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                     {draft.type === "commissioned" && (
                         <CommissionedPanel
                             commissioned={draft.commissioned}
+                            slot={slotRef}
                             isDisabled={!isEditable}
                             onChange={(commissioned) => set("commissioned", commissioned)}
                         />
@@ -219,7 +238,9 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                 </div>
             )}
 
-            <PrepChecklist prep={draft.prep} isDisabled={!isEditable} onChange={(prep) => set("prep", prep)} />
+            {draft.type && (
+                <PrepChecklist prep={draft.prep} isDisabled={!isEditable} onChange={(prep) => set("prep", prep)} />
+            )}
 
             <FormValidationSummary errors={errors} mappedPaths={mappedPaths} />
 

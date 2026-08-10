@@ -243,9 +243,18 @@ export function selectableStatuses(
     return artworkStatuses.map((status) => ({ status, blocker: artworkBlocker(artwork, status, artists) }));
 }
 
-/** Prep which has been flagged but not yet handled. Surfaced as a warning, never as a blocker */
-export function outstandingPrep(artwork: IArtworkProgress): ArtworkPrepFlag[] {
-    return (artwork.prep ?? []).filter((entry) => !entry.done).map((entry) => entry.flag);
+export function isPrepDone(prep: IArtworkPrep[] = []): boolean {
+    return prep.every((entry) => entry.done);
+}
+
+/** No type means no piece to prepare, so prep set against an earlier attempt says nothing anywhere */
+export function visiblePrep(artwork: IArtworkProgress): IArtworkPrep[] {
+    return artwork.type ? (artwork.prep ?? []) : [];
+}
+
+/** Open checklist rows, all of prep counting as the one row the checklist draws it as */
+export function remainingTasks(requirements: IArtworkRequirement[], prep: IArtworkPrep[] = []): number {
+    return requirements.filter((requirement) => !requirement.done).length + (isPrepDone(prep) ? 0 : 1);
 }
 
 // Drive share links point at a viewer page rather than the file, so an <img> pointed at one gets HTML

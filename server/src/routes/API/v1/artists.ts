@@ -4,6 +4,7 @@ import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express from "express";
 import { IArtist } from "common/models/artwork";
+import { ISlotRef } from "common/models/slots";
 import { dataService } from "@/services";
 import { validateRequest } from "@/middleware/permissions";
 import { IGetRequest, IGetResponse } from "@/types";
@@ -13,7 +14,6 @@ import { ApiErrorResponse } from "@/errors";
 import { getRequestSchema } from "@/schemas";
 import { logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { parseCardCode } from "common/utils";
 
 const router = express.Router();
 
@@ -32,10 +32,10 @@ async function getArtists(
 
 const getQuerySchema = getRequestSchema(Schemas.Artist.Full, { name: "asc" });
 
-/** Every card whose artwork credits this artist, as card codes for an error message */
-async function referencedBy(id: string): Promise<string[]> {
+/** Whether any artwork besides `excluding` still credits this artist */
+async function isCreditedElsewhere(id: string, excluding?: ISlotRef): Promise<boolean> {
     const slots = await dataService.slots.byArtist(id);
-    return slots.map((slot) => parseCardCode(false, slot.project, slot.number));
+    return slots.some((slot) => slot.project !== excluding?.project || slot.number !== excluding?.number);
 }
 
 // Read artists
@@ -106,24 +106,31 @@ router.patch(
     })
 );
 
-// Delete artist - refused while any artwork still points at them, since the reference would be orphaned
+// Refused while another artwork credits them; project/number name the card the caller is clearing
 router.delete(
     "/:id",
     validateRequest(Permission.EDIT_ARTISTS),
-    celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
-    asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
+    celebrate({
+        [Segments.PARAMS]: { id: Joi.string().required() },
+        [Segments.QUERY]: Joi.object({
+            project: Joi.number().integer(),
+            number: Joi.number().integer()
+        }).and("project", "number")
+    }),
+    asyncHandler<{ id: string }, unknown, unknown, Partial<ISlotRef>>(async (req, res) => {
         const { id } = req.params;
+        const { project, number } = req.query;
         const [artist] = await dataService.artists.read({ id });
         if (!artist) {
             throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Artist "${id}" does not exist`);
         }
 
-        const referencing = await referencedBy(id);
-        if (referencing.length > 0) {
+        const editing = project !== undefined && number !== undefined ? { project, number } : undefined;
+        if (await isCreditedElsewhere(id, editing)) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
                 "Invalid Data",
-                `${artist.name} is still credited on ${referencing.join(", ")} - clear those first`
+                `${artist.name} is still credited on one or more artworks - clear those first`
             );
         }
 

@@ -1,6 +1,7 @@
 import { DatePicker, Input, Textarea } from "@heroui/react";
 import { CalendarDate, parseDate } from "@internationalized/date";
 import { ICommissionedArtwork } from "common/models/artwork";
+import { ISlotRef } from "common/models/slots";
 import ArtworkReveal from "../../../components/artwork/artworkReveal";
 import OpenLink from "../../../components/artwork/openLink";
 import ArtistSelect from "../../../components/artwork/artistSelect";
@@ -8,7 +9,12 @@ import CostInput from "../../../components/artwork/costInput";
 
 const EMPTY: ICommissionedArtwork = {};
 
-export default function CommissionedPanel({ commissioned = EMPTY, isDisabled, onChange }: CommissionedPanelProps) {
+export default function CommissionedPanel({
+    commissioned = EMPTY,
+    slot,
+    isDisabled,
+    onChange
+}: CommissionedPanelProps) {
     const set = <K extends keyof ICommissionedArtwork>(key: K, value: ICommissionedArtwork[K]) =>
         onChange({ ...commissioned, [key]: value });
 
@@ -17,6 +23,7 @@ export default function CommissionedPanel({ commissioned = EMPTY, isDisabled, on
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <ArtistSelect
                     selectedId={commissioned.artist}
+                    slot={slot}
                     isDisabled={isDisabled}
                     onChange={(id) => set("artist", id)}
                 />
@@ -80,6 +87,8 @@ function toCalendarDate(value?: Date | string): CalendarDate | null {
 
 type CommissionedPanelProps = {
     commissioned?: ICommissionedArtwork;
+    /** The card being edited, forwarded to ArtistSelect */
+    slot?: ISlotRef;
     isDisabled?: boolean;
     onChange: (commissioned: ICommissionedArtwork) => void;
 };

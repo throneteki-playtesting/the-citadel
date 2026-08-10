@@ -224,11 +224,7 @@ export function BaseStatus({
                 target={!hasLongPress && data.href ? "_blank" : undefined}
                 rel={!hasLongPress && data.href ? "noreferrer" : undefined}
                 disableAnimation={!data.onPress && !data.href}
-                className={classNames(
-                    "font-sans",
-                    { [interactiveClass]: !!(data.onPress || data.href) },
-                    elementClass
-                )}
+                className={classNames("font-sans", { [interactiveClass]: !!(data.onPress || data.href) }, elementClass)}
             >
                 {data.icon}
             </Button>
@@ -305,11 +301,7 @@ export function BaseStatus({
     }
 
     const el = (
-        <div
-            className={classNames("font-sans", elementClass)}
-            style={style}
-            {...(hasLongPress ? lpDomHandlers : {})}
-        >
+        <div className={classNames("font-sans", elementClass)} style={style} {...(hasLongPress ? lpDomHandlers : {})}>
             {alert}
         </div>
     );

@@ -1,36 +1,33 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Button, Chip, Input, Select, SelectItem, Skeleton, Switch } from "@heroui/react";
+import { Button, Chip, Input, ScrollShadow, Select, SelectItem, Skeleton, Switch } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faArrowDownWideShort,
     faImage,
+    faListCheck,
     faMagnifyingGlass,
     faPencil,
-    faTriangleExclamation,
     faXmarkCircle
 } from "@fortawesome/free-solid-svg-icons";
+import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { typeNames } from "common/utils";
 import classNames from "classnames";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { ArtworkStatus, artworkStatuses, ArtworkType, artworkTypes } from "common/models/slots";
+import { isPrepDone } from "common/models/artwork";
 import Permission from "common/models/permissions";
 import { useGetArtistsQuery, useGetCardsQuery, useGetSlotsQuery } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
-import {
-    artworkLane,
-    artworkPrepMeta,
-    artworkTypeNames,
-    factionAccentClasses,
-    reorderTransition
-} from "../../../constants";
+import { artworkLane, artworkTypeNames, factionAccentClasses, reorderTransition } from "../../../constants";
 import ProgressRing from "../../../components/progressRing";
 import SectionTitle from "../../../components/sectionTitle";
 import ThronesIcon from "../../../components/thronesIcon";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ArtworkImage from "../../../components/artwork/artworkImage";
 import ArtworkTab from "../../card/artwork/artworkTab";
+import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
 import SlidingPages from "../../../components/slidingPages";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
 
@@ -85,10 +82,10 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
     };
 
     const rows = useMemo(
-        // Blanket permission can't be read without the artist list, so blockers are left to the card page
+        // Blanket permission can't be read without the artist list, so the checklist is left to the card page
         () =>
             buildArtworkRows(slotsData?.items ?? [], cardsData?.items ?? [], artistsData?.items ?? [], {
-                includeBlockers: canReadArtists
+                includeRequirements: canReadArtists
             }),
         [slotsData?.items, cardsData?.items, artistsData?.items, canReadArtists]
     );
@@ -440,20 +437,20 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
     );
 }
 
-/**
- * One filter axis and its chips. Label beside the row on desktop, above it on a phone - and there the
- * chips run off the side rather than wrapping, since a row which grows taller as it fills up pushes the
- * list it is filtering off the screen.
- */
+/** One filter axis. On a phone the chips scroll rather than wrap, so the row cannot push the list away */
 function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
     return (
         <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
             <span className="sm:w-14 shrink-0 sm:text-right text-[0.65rem] uppercase tracking-widest text-foreground/40">
                 {label}
             </span>
-            <div className="flex gap-1.5 overflow-x-auto sm:flex-wrap sm:overflow-visible -mx-1 px-1 py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <ScrollShadow
+                orientation="horizontal"
+                hideScrollBar
+                className="flex gap-1.5 py-0.5 sm:flex-wrap sm:overflow-visible"
+            >
                 {children}
-            </div>
+            </ScrollShadow>
         </div>
     );
 }
@@ -481,16 +478,13 @@ type FilterChipProps = {
     onPress: () => void;
 };
 
-/**
- * One card's artwork at a glance. Reads as a table from sm up and a stacked card below it, from the
- * same markup - a real table would need its columns hidden one by one to survive a phone.
- */
+/** One card's artwork at a glance - a scrolling table from sm up, a stacked card below it */
 function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
     const artwork = row.slot.statuses.artwork;
     const step = artworkLane.meta[artwork.status];
 
     return (
-        <div className="flex items-stretch gap-3 pr-2 rounded-md border border-content3 bg-content1 overflow-hidden">
+        <div className="flex items-stretch gap-2 sm:gap-3 pr-1 sm:pr-2 rounded-md border border-content3 bg-content1 overflow-hidden">
             <div className={classNames("w-1.5 shrink-0", factionAccentClasses[row.slot.faction])} />
 
             <TouchTooltip
@@ -509,7 +503,7 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
             </TouchTooltip>
 
             <div className="flex-1 min-w-0 py-2 flex flex-col sm:flex-row sm:items-center gap-x-3 gap-y-0.5">
-                <div className="sm:w-72 lg:w-80 shrink-0 flex items-center gap-1.5 min-w-0">
+                <div className="sm:w-48 md:w-56 lg:w-72 shrink-0 min-w-0 flex items-center gap-1.5">
                     {row.card && (
                         <TouchTooltip content={typeNames[row.card.type]}>
                             <ThronesIcon name={row.card.type} className="shrink-0 text-foreground/50 cursor-help" />
@@ -530,39 +524,51 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                     )}
                 </div>
 
-                <Column className="sm:w-24">{artwork.type ? artworkTypeNames[artwork.type] : "—"}</Column>
-
-                <Column className="hidden lg:block lg:w-36">{row.artist?.name ?? "—"}</Column>
-
-                <Column className="flex-1 sm:min-w-32">{row.detail}</Column>
+                <ScrollShadow
+                    orientation="horizontal"
+                    hideScrollBar
+                    className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 overflow-visible sm:overflow-auto"
+                >
+                    <Column className="sm:w-24">{artwork.type ? artworkTypeNames[artwork.type] : "—"}</Column>
+                    <Column className="sm:w-36">{row.artist?.name ?? "—"}</Column>
+                    <Column className="sm:w-48">{row.detail}</Column>
+                </ScrollShadow>
 
                 <Attention row={row} />
             </div>
 
-            {row.finalUrl && (
-                <TouchTooltip
-                    content={
-                        <div className="w-56 p-1">
-                            <ArtworkImage url={row.finalUrl} alt={`Final artwork for ${row.name}`} ratio="square" />
-                        </div>
-                    }
-                >
-                    <span className="shrink-0 self-center px-1 text-success cursor-help" aria-label="Final artwork">
-                        <FontAwesomeIcon icon={faImage} />
-                    </span>
-                </TouchTooltip>
-            )}
+            <div className="shrink-0 self-center flex flex-col sm:flex-row items-center gap-0.5">
+                <span className="size-6 flex items-center justify-center">
+                    {row.finalUrl && (
+                        <TouchTooltip
+                            content={
+                                <div className="w-56 p-1">
+                                    <ArtworkImage
+                                        url={row.finalUrl}
+                                        alt={`Final artwork for ${row.name}`}
+                                        ratio="square"
+                                    />
+                                </div>
+                            }
+                        >
+                            <span className="text-success cursor-help" aria-label="Final artwork">
+                                <FontAwesomeIcon icon={faImage} />
+                            </span>
+                        </TouchTooltip>
+                    )}
+                </span>
 
-            <Button
-                isIconOnly
-                size="sm"
-                variant="light"
-                aria-label={`Edit artwork for ${row.name}`}
-                className="shrink-0 self-center text-foreground/40"
-                onPress={onEdit}
-            >
-                <FontAwesomeIcon icon={faPencil} />
-            </Button>
+                <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    aria-label={`Edit artwork for ${row.name}`}
+                    className="shrink-0 size-6 min-w-6 sm:size-8 sm:min-w-8 text-foreground/40"
+                    onPress={onEdit}
+                >
+                    <FontAwesomeIcon icon={faPencil} />
+                </Button>
+            </div>
         </div>
     );
 }
@@ -573,15 +579,12 @@ type ArtworkRowProps = {
     onEdit: () => void;
 };
 
-/**
- * One cell of the row. The rule down its left edge is what makes a truncated value legible as a value -
- * without it, a cut-off "No optio..." reads as text which simply ran out rather than as a column.
- */
+/** One cell - ruled and fixed width from sm up, since a truncated value needs a rule to read as one */
 function Column({ className, children }: { className?: string; children?: React.ReactNode }) {
     return (
         <div
             className={classNames(
-                "shrink-0 min-w-0 truncate text-xs text-foreground/60 sm:border-l sm:border-content3/60 sm:pl-3",
+                "sm:shrink-0 min-w-0 truncate text-xs text-foreground/60 sm:border-l sm:border-content3/60 sm:pl-3",
                 className
             )}
             title={typeof children === "string" ? children : undefined}
@@ -591,36 +594,36 @@ function Column({ className, children }: { className?: string; children?: React.
     );
 }
 
-// What is actually holding this card up - a blocker first, since prep never stops anything on its own.
-// Nothing is reserved when there is none, so the detail beside it gets the room instead
+/** The card's checklist as one dot per task, with the editor's own rows behind it in the tooltip */
 function Attention({ row }: { row: IArtworkRow }) {
-    if (!row.blocker && row.outstanding.length === 0) {
+    // Prep is one dot, as the checklist draws it; the strip is sized for a full four so rows stay aligned
+    const tasks = [...row.requirements.map(({ done }) => done), ...(row.prep.length > 0 ? [isPrepDone(row.prep)] : [])];
+    if (tasks.length === 0) {
         return null;
     }
 
-    const prep = row.outstanding.map((flag) => artworkPrepMeta[flag].label).join(", ");
-    // One thing can be named; several can only be counted without running over the edit button beside it
-    const summary =
-        row.blocker ?? (row.outstanding.length === 1 ? prep : `${row.outstanding.length} outstanding tasks`);
-
     return (
-        <div className="w-full sm:w-44 shrink-0 min-w-0 sm:border-l sm:border-content3/60 sm:pl-3">
+        <div className="shrink-0 sm:border-l sm:border-content3/60 sm:pl-3">
             <TouchTooltip
                 content={
-                    <div className="max-w-64 text-xs flex flex-col gap-1">
-                        {row.blocker && <span>{row.blocker}</span>}
-                        {prep && <span className="text-foreground/60">Outstanding: {prep}</span>}
+                    <div className="max-w-64 py-0.5 flex flex-col gap-1 text-xs">
+                        <span className="font-cinzel uppercase tracking-wide text-sm">Artwork Checklist</span>
+                        <ArtworkChecklistItems requirements={row.requirements} prep={row.prep} />
                     </div>
                 }
             >
                 <div
-                    className={classNames(
-                        "flex items-center gap-1.5 text-xs cursor-help min-w-0",
-                        row.blocker ? "text-warning" : "text-foreground/50"
-                    )}
+                    className="flex items-center justify-start gap-1 w-20 text-xs cursor-help"
+                    aria-label={`${row.remaining} of ${tasks.length} tasks remaining`}
                 >
-                    <FontAwesomeIcon icon={faTriangleExclamation} className="shrink-0" />
-                    <span className="truncate">{summary}</span>
+                    <FontAwesomeIcon icon={faListCheck} className="w-4 text-foreground/40" />
+                    {tasks.map((done, task) => (
+                        <FontAwesomeIcon
+                            key={task}
+                            icon={done ? faCircleCheck : faCircle}
+                            className={classNames("w-3", done ? "text-success" : "text-foreground/30")}
+                        />
+                    ))}
                 </div>
             </TouchTooltip>
         </div>

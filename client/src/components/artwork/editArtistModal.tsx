@@ -14,6 +14,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 import { IArtist } from "common/models/artwork";
+import { ISlotRef } from "common/models/slots";
 import { Artist } from "common/models/schemas";
 import { useCreateArtistMutation, useDeleteArtistMutation, useUpdateArtistMutation } from "../../api";
 import { useFormValidation } from "../../hooks/useFormValidation";
@@ -22,8 +23,11 @@ import FormValidationSummary from "../formValidationSummary";
 
 const EMPTY: ArtistDraft = { name: "", contact: "", portfolio: "", blanketPermission: false, notes: "" };
 
+// Its own form, named so its Add button submits it and nothing else - this opens from inside other forms
+const ARTIST_FORM_ID = "edit-artist-form";
+
 /** Add or edit an artist, opened from wherever one is being picked so the flow is never interrupted */
-export default function EditArtistModal({ isOpen, artist, onClose, onSaved, onDeleted }: EditArtistModalProps) {
+export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved, onDeleted }: EditArtistModalProps) {
     const [createArtist, { isLoading: isCreating }] = useCreateArtistMutation();
     const [updateArtist, { isLoading: isUpdating }] = useUpdateArtistMutation();
     const [deleteArtist, { isLoading: isDeleting }] = useDeleteArtistMutation();
@@ -65,14 +69,13 @@ export default function EditArtistModal({ isOpen, artist, onClose, onSaved, onDe
         }
     };
 
-    // Whether anything still credits them is only knowable server-side, so the refusal comes from there
-    // and is shown as it was written rather than guessed at up front
+    // Only the server knows who else credits them; the card being edited is named so it does not count
     const onDelete = async () => {
         if (!artist) {
             return;
         }
         try {
-            await deleteArtist({ id: artist.id }).unwrap();
+            await deleteArtist({ id: artist.id, editing: slot }).unwrap();
             onDeleted?.(artist);
             onClose();
         } catch (err) {
@@ -94,6 +97,7 @@ export default function EditArtistModal({ isOpen, artist, onClose, onSaved, onDe
                     </span>
                 </ModalHeader>
                 <Form
+                    id={ARTIST_FORM_ID}
                     className="contents"
                     validationErrors={errors}
                     onSubmit={(e) => {
@@ -153,7 +157,7 @@ export default function EditArtistModal({ isOpen, artist, onClose, onSaved, onDe
                                 </span>
                                 <p className="text-xs text-foreground/60">
                                     Removing {artist.name} takes them out of every project. This is refused while any
-                                    artwork still credits them.
+                                    other artwork still credits them.
                                 </p>
                                 {isConfirmingDelete ? (
                                     <div className="flex items-center gap-2">
@@ -187,7 +191,7 @@ export default function EditArtistModal({ isOpen, artist, onClose, onSaved, onDe
                     </ModalBody>
                     <ModalFooter>
                         <Button onPress={onClose}>Cancel</Button>
-                        <Button type="submit" color="primary" isDisabled={isSaving}>
+                        <Button type="submit" form={ARTIST_FORM_ID} color="primary" isDisabled={isSaving}>
                             {artist ? "Save" : "Add"}
                         </Button>
                     </ModalFooter>
@@ -204,6 +208,8 @@ type EditArtistModalProps = {
     isOpen: boolean;
     /** The artist being edited, or undefined to add a new one */
     artist?: IArtist;
+    /** The card this was opened from, whose own credit doesn't stand in the way of removing them */
+    slot?: ISlotRef;
     onClose: () => void;
     onSaved?: (artist: IArtist) => void;
     /** Whoever was picking them is left holding a reference to nothing, so they get told to let go */

@@ -1,13 +1,15 @@
 import { IPlaytestCard } from "common/models/cards";
 import { ISlot } from "common/models/slots";
 import {
-    artworkBlocker,
-    ArtworkPrepFlag,
+    artworkRequirements,
     finalArtworkUrl,
     hasArtistPermission,
     IArtist,
-    outstandingPrep,
-    selectedOption
+    IArtworkPrep,
+    IArtworkRequirement,
+    remainingTasks,
+    selectedOption,
+    visiblePrep
 } from "common/models/artwork";
 import { cardLaneBreakdown } from "common/progress/calc";
 import { formatCurrency } from "../../../utils";
@@ -22,11 +24,14 @@ export interface IArtworkRow {
     artist?: IArtist;
     /** Type-specific one-liner, eg. how many options are in play or what a commission is costing */
     detail?: string;
-    /** Why the current status can't be saved, if the details behind it have gone missing */
-    blocker?: string;
+    /** The same checklist the editor shows, or empty when the artist list isn't readable */
+    requirements: IArtworkRequirement[];
+    /** The prep the checklist would list, which is nothing at all until a type is chosen */
+    prep: IArtworkPrep[];
+    /** Open checklist rows, all of prep counting as the one row it renders as */
+    remaining: number;
     /** The piece the card would actually print with, once one has been settled on */
     finalUrl?: string;
-    outstanding: ArtworkPrepFlag[];
 }
 
 function sourcedDetail(row: ISlot, artists: IArtist[]): string {
@@ -76,7 +81,7 @@ export function buildArtworkRows(
     slots: ISlot[],
     cards: IPlaytestCard[],
     artists: IArtist[],
-    { includeBlockers = true }: { includeBlockers?: boolean } = {}
+    { includeRequirements = true }: { includeRequirements?: boolean } = {}
 ): IArtworkRow[] {
     const cardsByNumber = new Map(cards.map((card) => [card.number, card]));
 
@@ -97,6 +102,9 @@ export function buildArtworkRows(
                 break;
         }
 
+        const requirements = includeRequirements ? artworkRequirements(artwork, artists) : [];
+        const prep = visiblePrep(artwork);
+
         return {
             slot,
             card,
@@ -104,16 +112,17 @@ export function buildArtworkRows(
             percent: cardLaneBreakdown(slot.statuses).artwork,
             artist: creditedArtist(slot, artists),
             detail,
-            blocker: includeBlockers ? artworkBlocker(artwork, artwork.status, artists) : undefined,
-            finalUrl: finalArtworkUrl(artwork),
-            outstanding: outstandingPrep(artwork)
+            requirements,
+            prep,
+            remaining: remainingTasks(requirements, prep),
+            finalUrl: finalArtworkUrl(artwork)
         };
     });
 }
 
-/** A row wants looking at when it can't hold its status, or has prep nobody has got to */
+/** A row wants looking at while anything on its checklist is still open */
 export function needsAttention(row: IArtworkRow): boolean {
-    return !!row.blocker || row.outstanding.length > 0;
+    return row.remaining > 0;
 }
 
 /**

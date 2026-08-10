@@ -4,6 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPencil, faPlus } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { IArtist } from "common/models/artwork";
+import { ISlotRef } from "common/models/slots";
 import Permission from "common/models/permissions";
 import { fuzzyMatch } from "common/utils";
 import { useGetArtistsQuery } from "../../api";
@@ -27,6 +28,7 @@ export default function ArtistSelect({
     label = "Artist",
     size = "md",
     selectedId,
+    slot,
     isDisabled,
     onChange
 }: ArtistSelectProps) {
@@ -93,6 +95,7 @@ export default function ArtistSelect({
             <EditArtistModal
                 isOpen={!!editing}
                 artist={editing === "new" ? undefined : editing}
+                slot={slot}
                 onClose={() => setEditing(undefined)}
                 onSaved={(artist) => onChange(artist.id)}
                 onDeleted={() => onChange(undefined)}
@@ -108,6 +111,8 @@ type ArtistSelectProps = {
     /** Matches the inputs it sits beside; "sm" for the packed sourced option rows */
     size?: "sm" | "md" | "lg";
     selectedId?: string;
+    /** The card being edited, so removing an artist isn't blocked by the credit this field is about to drop */
+    slot?: ISlotRef;
     isDisabled?: boolean;
     onChange: (id?: string) => void;
 };

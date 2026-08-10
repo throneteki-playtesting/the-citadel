@@ -132,6 +132,9 @@ export interface SlotRelease {
     released?: boolean;
 }
 
+/** Enough to name a slot without carrying it - the pair which identifies one everywhere */
+export type ISlotRef = Pick<ISlot, "project" | "number">;
+
 export interface ISlot extends IAuditable {
     project: number;
     /** Permanent key alongside project; matches ICard.number */

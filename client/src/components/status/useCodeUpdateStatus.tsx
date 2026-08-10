@@ -48,8 +48,7 @@ export function useCodeUpdateStatus(project: number, version: number) {
             };
         }
 
-        const syncFn = (forced?: boolean) =>
-            syncPlaytestingUpdateGithub({ project, version, type: "code", forced });
+        const syncFn = (forced?: boolean) => syncPlaytestingUpdateGithub({ project, version, type: "code", forced });
         const onPress = hasSyncPermission ? () => syncFn() : undefined;
         const longPressOptions = hasSyncPermission
             ? [
