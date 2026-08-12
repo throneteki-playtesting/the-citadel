@@ -409,24 +409,39 @@ export const Artist = {
     })
 };
 
-// A link is blank until somebody finds one, so empty is a real state rather than a missing value
-const SourcedOption = Joi.object({
-    id: Joi.string().required(),
-    url: Link.allow("").required(),
-    artist: Joi.string(),
-    ffg: Joi.boolean(),
-    contact: Joi.string()
-        .required()
-        .valid(...Artwork.artworkContactStates),
-    notes: Joi.string().allow("")
-});
+// In use, an option is being put forward and must name both a piece and an artist; held, it answers for nothing
+const sourcedOption = (isInUse: boolean) =>
+    Joi.object({
+        id: Joi.string().required(),
+        url: isInUse
+            ? Link.required().messages({
+                  "any.required": "Add a link to this option's image",
+                  "string.empty": "Add a link to this option's image"
+              })
+            : Link.allow("").required(),
+        artist: isInUse
+            ? Joi.string().required().messages({
+                  "any.required": "Choose the artist behind this option",
+                  "string.empty": "Choose the artist behind this option"
+              })
+            : Joi.string().allow(""),
+        ffg: Joi.boolean(),
+        contact: Joi.string()
+            .required()
+            .valid(...Artwork.artworkContactStates),
+        notes: Joi.string().allow("")
+    });
+
+const sourcedArtwork = (isInUse: boolean) =>
+    Joi.object({
+        options: Joi.array().required().items(sourcedOption(isInUse)),
+        selectedId: Joi.string()
+    });
 
 // The per-type blocks are the same whether a slot is being read whole or patched, so only status/type differ
 const ArtworkDetails = {
-    sourced: Joi.object({
-        options: Joi.array().required().items(SourcedOption),
-        selectedId: Joi.string()
-    }),
+    // Only the type actually in use is validated strictly, so an unused block never holds up an unrelated save
+    sourced: Joi.when("type", { is: "sourced", then: sourcedArtwork(true), otherwise: sourcedArtwork(false) }),
     commissioned: Joi.object({
         artist: Joi.string(),
         estimatedCompletion: Joi.date(),
@@ -459,6 +474,8 @@ const ArtworkDetails = {
 const ArtworkProgress = Joi.object({
     status: Joi.string().valid(...Slots.artworkStatuses),
     type: Joi.string().valid(...Slots.artworkTypes),
+    // allow("") rather than optional - the PATCH merge only touches keys present in the body, and JSON drops undefined
+    assignee: Joi.string().allow(""),
     ...ArtworkDetails
 });
 

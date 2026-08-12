@@ -1,6 +1,6 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Select, SelectItem, Skeleton } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
@@ -14,6 +14,7 @@ import { HighlightTarget } from "../../components/highlightTarget";
 import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
 import SectionTitle from "../../components/sectionTitle";
+import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
@@ -58,12 +59,15 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     const canReadSlots = usePermission(Permission.READ_SLOTS);
     const canReadProgress = usePermission(Permission.READ_STATS_SLOT) && canReadSlots;
     const availableSortOptions = useMemo(
-        () => Object.entries(sortOptions).filter(([key]) => key !== "progress" || canReadProgress),
+        () =>
+            Object.fromEntries(
+                Object.entries(sortOptions).filter(([key]) => key !== "progress" || canReadProgress)
+            ) as Partial<Record<SortOption, string>>,
         [canReadProgress]
     );
 
     // An entry can outlive the permission which allowed its sort, so what it holds is only a request
-    const sortBy = availableSortOptions.some(([key]) => key === storedSort) ? storedSort : "number";
+    const sortBy = storedSort in availableSortOptions ? storedSort : "number";
     const setSortBy = (sort: SortOption) => startSorting(() => setStoredSort(sort));
 
     const cardStats = useMemo(() => {
@@ -167,22 +171,13 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         <div className="flex flex-col gap-2">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <SectionTitle className="sm:flex-1">Project Cards</SectionTitle>
-                <Select
-                    label="Sort by..."
-                    selectedKeys={[sortBy]}
-                    onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
-                    className="w-full max-w-64"
-                    classNames={{ value: "font-cinzel" }}
-                    size="sm"
-                    disallowEmptySelection
+                <SortSelect
+                    options={availableSortOptions}
+                    value={sortBy}
                     isDisabled={isLoading}
-                >
-                    {availableSortOptions.map(([key, label]) => (
-                        <SelectItem key={key} className="font-cinzel">
-                            {label}
-                        </SelectItem>
-                    ))}
-                </Select>
+                    className="w-full sm:max-w-44"
+                    onChange={setSortBy}
+                />
             </div>
             {isLoading ? (
                 <div className="flex flex-col gap-2">

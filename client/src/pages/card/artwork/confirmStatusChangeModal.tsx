@@ -21,7 +21,6 @@ export default function ConfirmStatusChangeModal({
 }: ConfirmStatusChangeModalProps) {
     // Losing ground is worth saying plainly - it means work the track was claiming is no longer backed up
     const isRetreat = artworkLane.statuses.indexOf(to) < artworkLane.statuses.indexOf(from);
-    const tone = isRetreat ? "warning" : "primary";
 
     return (
         <Modal isOpen={isOpen} placement="center" size="md" onOpenChange={(open) => !open && onCancel()}>
@@ -46,7 +45,7 @@ export default function ConfirmStatusChangeModal({
                             icon={isRetreat ? faArrowLeft : faArrowRight}
                             className={isRetreat ? "text-warning" : "text-foreground/30"}
                         />
-                        <Step status={to} tone={tone} />
+                        <Step status={to} tone="primary" />
                     </div>
                     <p className="text-center text-sm text-foreground/60">{reason}</p>
                     {isRetreat && (
@@ -60,7 +59,7 @@ export default function ConfirmStatusChangeModal({
                 </ModalBody>
                 <ModalFooter>
                     <Button onPress={onCancel}>Cancel</Button>
-                    <Button color={tone} isDisabled={isSaving} onPress={onConfirm}>
+                    <Button color="primary" isDisabled={isSaving} onPress={onConfirm}>
                         {isRetreat ? "Save and step back" : "Save and move on"}
                     </Button>
                 </ModalFooter>

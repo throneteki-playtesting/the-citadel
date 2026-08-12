@@ -63,7 +63,7 @@ export function SourcedOptionCard({
     option,
     title,
     artists,
-    name,
+    path,
     slot,
     isSelected,
     isDisabled,
@@ -192,7 +192,8 @@ export function SourcedOptionCard({
                             label="Image link"
                             size="sm"
                             className="flex-1 min-w-0"
-                            name={name}
+                            name={path && `${path}.url`}
+                            isRequired
                             isDisabled={isDisabled}
                             value={option.url}
                             onValueChange={(value) => set("url", value)}
@@ -201,6 +202,8 @@ export function SourcedOptionCard({
                         <div className="flex-1 min-w-0">
                             <ArtistSelect
                                 size="sm"
+                                name={path && `${path}.artist`}
+                                isRequired
                                 selectedId={option.artist}
                                 slot={slot}
                                 isDisabled={isDisabled}
@@ -246,8 +249,8 @@ type SourcedOptionCardProps = {
     /** Its place in the running and who made it, eg. "#2 Preference - Stephen Patane (1)" */
     title: string;
     artists: IArtist[];
-    /** The link's path in the artwork schema, so the form can attach its error to this input */
-    name?: string;
+    /** The option's own path in the artwork schema, so the form can attach errors to its fields */
+    path?: string;
     /** The card being edited, forwarded to ArtistSelect */
     slot?: ISlotRef;
     isSelected: boolean;

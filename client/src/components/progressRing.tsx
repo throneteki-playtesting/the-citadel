@@ -1,4 +1,4 @@
-import { forwardRef, HTMLAttributes, ReactNode } from "react";
+import { HTMLAttributes, ReactNode, Ref } from "react";
 import classNames from "classnames";
 
 // Drawn on a 24-unit viewBox, so the ring's geometry is fixed regardless of what it surrounds
@@ -7,10 +7,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 // Wraps content in a completeness ring, centring it absolutely so that surrounding it never changes its
 // rendered size. Forwards its ref, so a tooltip or popover can use the ring itself as the trigger.
-const ProgressRing = forwardRef<HTMLSpanElement, ProgressRingProps>(function ProgressRing(
-    { value, className, ringClassName, children, ...props },
-    ref
-) {
+function ProgressRing({ value, className, ringClassName, children, ref, ...props }: ProgressRingProps) {
     return (
         <span
             ref={ref}
@@ -38,11 +35,12 @@ const ProgressRing = forwardRef<HTMLSpanElement, ProgressRingProps>(function Pro
             {children}
         </span>
     );
-});
+}
 
 export default ProgressRing;
 
 type ProgressRingProps = HTMLAttributes<HTMLSpanElement> & {
+    ref?: Ref<HTMLSpanElement>;
     value: number;
     /** Sizes the ring and the box it centres its children in; defaults to size-6 */
     className?: string;

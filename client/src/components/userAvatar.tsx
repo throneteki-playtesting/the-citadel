@@ -1,15 +1,14 @@
-import { ReactNode } from "react";
+import { ReactNode, Ref } from "react";
 import { Avatar, AvatarProps } from "@heroui/react";
 import classNames from "classnames";
 import { useGetUserQuery } from "../api";
 import { BaseElementProps } from "../types";
 
-// A user's avatar looked up by id, falling back to their initial while the lookup is in flight or the
-// user is unknown. Shared so every avatar in the app agrees on that fallback
-export default function UserAvatar({ className, style, discordId, title, size = "sm" }: UserAvatarProps) {
+export default function UserAvatar({ className, style, discordId, title, size = "sm", ref, ...rest }: UserAvatarProps) {
     const { data: user, isLoading } = useGetUserQuery({ discordId });
     return (
         <Avatar
+            ref={ref}
             size={size}
             src={user?.avatarUrl}
             name={user?.displayname?.charAt(0) ?? "?"}
@@ -17,6 +16,7 @@ export default function UserAvatar({ className, style, discordId, title, size = 
             title={title ?? user?.displayname}
             className={classNames("shrink-0", className)}
             style={style}
+            {...rest}
         />
     );
 }
@@ -35,13 +35,15 @@ export function UserRow({ className, style, discordId, trailing }: UserRowProps)
     );
 }
 
-type UserAvatarProps = Omit<BaseElementProps, "children"> & {
-    discordId: string;
-    /** Overrides the hover title, which is otherwise just the display name */
-    title?: string;
-    /** HeroUI Avatar size; defaults to the small avatar used in rows and tallies */
-    size?: AvatarProps["size"];
-};
+type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children"> &
+    Omit<BaseElementProps, "children"> & {
+        ref?: Ref<HTMLSpanElement>;
+        discordId: string;
+        /** Overrides the hover title, which is otherwise just the display name */
+        title?: string;
+        /** HeroUI Avatar size; defaults to the small avatar used in rows and tallies */
+        size?: AvatarProps["size"];
+    };
 
 type UserRowProps = Omit<BaseElementProps, "children"> & {
     discordId: string;

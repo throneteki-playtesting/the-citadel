@@ -27,8 +27,10 @@ const FIELD_HEIGHT_CLASSES: Record<NonNullable<ArtistSelectProps["size"]>, strin
 export default function ArtistSelect({
     label = "Artist",
     size = "md",
+    name,
     selectedId,
     slot,
+    isRequired,
     isDisabled,
     onChange
 }: ArtistSelectProps) {
@@ -53,6 +55,8 @@ export default function ArtistSelect({
             <Autocomplete
                 label={label}
                 size={size}
+                name={name}
+                isRequired={isRequired}
                 className="flex-1 min-w-0"
                 description={canRead ? undefined : "You don't have permission to view the artist list"}
                 isLoading={isLoading}
@@ -110,9 +114,13 @@ type ArtistSelectProps = {
     label?: string;
     /** Matches the inputs it sits beside; "sm" for the packed sourced option rows */
     size?: "sm" | "md" | "lg";
+    /** Its path in the artwork schema, so the form can attach its error to this field */
+    name?: string;
     selectedId?: string;
     /** The card being edited, so removing an artist isn't blocked by the credit this field is about to drop */
     slot?: ISlotRef;
+    /** Mirrors the schema, so the field answers for itself on blur rather than only on save */
+    isRequired?: boolean;
     isDisabled?: boolean;
     onChange: (id?: string) => void;
 };

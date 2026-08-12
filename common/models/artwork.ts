@@ -84,6 +84,8 @@ export interface IArtworkProgress {
     status: ArtworkStatus;
     /** Chosen once work actually starts; unset while pending */
     type?: ArtworkType;
+    /** Discord id of whoever has taken this artwork on - one piece, one owner, not a list */
+    assignee?: string;
     /**
      * Details for each way artwork can be obtained. Kept side by side rather than as one union, so
      * switching type mid-flight never discards what was already gathered under the old one
@@ -92,6 +94,31 @@ export interface IArtworkProgress {
     commissioned?: ICommissionedArtwork;
     ai?: IAiArtwork;
     prep?: IArtworkPrep[];
+}
+
+// Reduced to what it actually states, so a draft that only re-set a field back to blank isn't dirty
+export function comparableArtwork(artwork: IArtworkProgress): unknown {
+    return pruneEmpty(artwork);
+}
+
+function pruneEmpty(value: unknown): unknown {
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    if (Array.isArray(value)) {
+        const items = value.map(pruneEmpty);
+        return items.length > 0 ? items : undefined;
+    }
+    if (value && typeof value === "object") {
+        const entries = Object.entries(value)
+            .map(([key, entry]) => [key, pruneEmpty(entry)] as const)
+            .filter(([, entry]) => entry !== undefined);
+        return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+    }
+    if (value === "" || value === false || value === null) {
+        return undefined;
+    }
+    return value;
 }
 
 /**
@@ -257,22 +284,40 @@ export function remainingTasks(requirements: IArtworkRequirement[], prep: IArtwo
     return requirements.filter((requirement) => !requirement.done).length + (isPrepDone(prep) ? 0 : 1);
 }
 
+// Every checklist row ticked, prep included - prep never gates a status, but it does gate signing off
+export function isChecklistDone(artwork: IArtworkProgress, artists: IArtist[] = []): boolean {
+    return remainingTasks(artworkRequirements(artwork, artists), visiblePrep(artwork)) === 0;
+}
+
 // Drive share links point at a viewer page rather than the file, so an <img> pointed at one gets HTML
-const DRIVE_FILE_PATTERNS = [
-    /drive\.google\.com\/file\/d\/([\w-]+)/,
-    /drive\.google\.com\/(?:open|uc|thumbnail)\?(?:[^#]*&)?id=([\w-]+)/,
-    /lh3\.googleusercontent\.com\/d\/([\w-]+)/
+const DRIVE_HOSTS = [
+    "drive.google.com",
+    "docs.google.com",
+    "drive.usercontent.google.com",
+    "lh3.googleusercontent.com"
 ];
 
-/** The Drive file id in a share link, if it is one */
+// /file/d/{id}/view, and lh3's bare /d/{id}
+const DRIVE_PATH_ID = /\/(?:file\/)?d\/([\w-]+)/;
+
+const DRIVE_ID = /^[\w-]+$/;
+
+// The Drive file id in a share link - read from an `id` query parameter, or a `/file/d/{id}` path
 export function driveFileId(url: string): string | undefined {
-    for (const pattern of DRIVE_FILE_PATTERNS) {
-        const match = url.match(pattern);
-        if (match) {
-            return match[1];
-        }
+    let parsed: URL;
+    try {
+        parsed = new URL(url.trim());
+    } catch {
+        return undefined;
     }
-    return undefined;
+    if (!DRIVE_HOSTS.includes(parsed.hostname)) {
+        return undefined;
+    }
+    const param = parsed.searchParams.get("id");
+    if (param && DRIVE_ID.test(param)) {
+        return param;
+    }
+    return parsed.pathname.match(DRIVE_PATH_ID)?.[1];
 }
 
 /**

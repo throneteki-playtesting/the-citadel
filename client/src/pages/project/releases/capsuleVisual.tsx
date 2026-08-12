@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, Ref, useRef, useState } from "react";
 import classNames from "classnames";
 import { useSortable } from "@dnd-kit/sortable";
 import { IPlaytestCard } from "common/models/cards";
@@ -23,7 +23,7 @@ function CapsuleVisual({
     card,
     className,
     style,
-    forwardRef,
+    ref,
     listeners,
     attributes,
     draggable = true,
@@ -78,7 +78,7 @@ function CapsuleVisual({
     return (
         <>
             <div
-                ref={forwardRef}
+                ref={ref}
                 style={style}
                 data-flip-slot={flipSlot}
                 {...(draggable ? listeners : undefined)}
@@ -150,7 +150,7 @@ type CapsuleVisualProps = {
     card: IPlaytestCard;
     className?: string;
     style?: React.CSSProperties;
-    forwardRef?: (node: HTMLElement | null) => void;
+    ref?: Ref<HTMLDivElement>;
     listeners?: ReturnType<typeof useSortable>["listeners"];
     attributes?: ReturnType<typeof useSortable>["attributes"];
     draggable?: boolean;

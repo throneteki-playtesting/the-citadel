@@ -10,8 +10,8 @@ import {
     IArtworkPrep,
     IArtworkProgress,
     IArtworkRequirement,
+    isChecklistDone,
     isPrepDone,
-    remainingTasks,
     visiblePrep
 } from "common/models/artwork";
 import { artworkPrepMeta } from "../../../constants";
@@ -27,7 +27,7 @@ const ROW_TRANSITION = { duration: 0.25, ease: [0.65, 0, 0.35, 1] } as const;
 export default function ArtworkChecklist({ artwork, artists }: ArtworkChecklistProps) {
     const requirements = artworkRequirements(artwork, artists);
     const prep = visiblePrep(artwork);
-    const isDone = remainingTasks(requirements, prep) === 0;
+    const isDone = isChecklistDone(artwork, artists);
 
     return (
         <StatusNotice

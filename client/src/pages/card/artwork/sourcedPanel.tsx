@@ -196,7 +196,7 @@ export default function SourcedPanel({
                                         title={titles[index]}
                                         artists={artists}
                                         slot={slot}
-                                        name={`sourced.options.${index}.url`}
+                                        path={`sourced.options.${index}`}
                                         isSelected={sourced.selectedId === option.id}
                                         isDisabled={isDisabled}
                                         onChange={(updated) =>

@@ -22,8 +22,8 @@ export interface IArtworkRow {
     /** The artwork lane's own percentage, the same figure the card page shows */
     percent: number;
     artist?: IArtist;
-    /** Type-specific one-liner, eg. how many options are in play or what a commission is costing */
-    detail?: string;
+    /** The artwork read as one run, whoever made it always first - see `artworkDetails` */
+    details: string[];
     /** The same checklist the editor shows, or empty when the artist list isn't readable */
     requirements: IArtworkRequirement[];
     /** The prep the checklist would list, which is nothing at all until a type is chosen */
@@ -34,37 +34,47 @@ export interface IArtworkRow {
     finalUrl?: string;
 }
 
-function sourcedDetail(row: ISlot, artists: IArtist[]): string {
-    const sourced = row.statuses.artwork.sourced;
-    const options = sourced?.options ?? [];
-    if (options.length === 0) {
-        return "No options yet";
-    }
-    const granted = options.filter((option) => hasArtistPermission(option, artists)).length;
-    const plural = options.length === 1 ? "option" : "options";
-    return `${options.length} ${plural} · ${granted} granted`;
-}
+const NO_ARTIST = "No artist";
 
-function commissionedDetail(slot: ISlot): string | undefined {
-    const commissioned = slot.statuses.artwork.commissioned;
-    if (!commissioned) {
-        return undefined;
-    }
-    const parts: string[] = [];
-    if (commissioned.estimatedCompletion) {
-        const due = new Date(commissioned.estimatedCompletion);
-        if (!isNaN(due.getTime())) {
-            parts.push(due.toLocaleDateString(undefined, { day: "numeric", month: "short" }));
+// One run of facts about the artwork, whoever made it always leading so a list of cards skims consistently
+function artworkDetails(slot: ISlot, artist: IArtist | undefined, artists: IArtist[]): string[] {
+    const { artwork } = slot.statuses;
+
+    switch (artwork.type) {
+        case "sourced": {
+            const options = artwork.sourced?.options ?? [];
+            if (options.length === 0) {
+                return [artist?.name ?? NO_ARTIST, "No options yet"];
+            }
+            const granted = options.filter((option) => hasArtistPermission(option, artists)).length;
+            return [
+                artist?.name ?? NO_ARTIST,
+                `${options.length} ${options.length === 1 ? "option" : "options"}`,
+                `${granted} granted`
+            ];
         }
+        case "commissioned": {
+            const commissioned = artwork.commissioned;
+            const details = [artist?.name ?? NO_ARTIST];
+            const due = commissioned?.estimatedCompletion && new Date(commissioned.estimatedCompletion);
+            if (due && !isNaN(due.getTime())) {
+                details.push(`Due ${due.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`);
+            }
+            if (commissioned?.cost) {
+                details.push(formatCurrency(commissioned.cost.amount, commissioned.cost.currency));
+            }
+            if (commissioned?.paidBy?.trim()) {
+                details.push(`Paid by ${commissioned.paidBy.trim()}`);
+            }
+            return details;
+        }
+        case "ai": {
+            // Nobody's hand made this one, so what generated it is the nearest thing to its maker
+            return [artwork.ai?.resource?.trim() || "AI generated"];
+        }
+        default:
+            return [];
     }
-    if (commissioned.cost) {
-        parts.push(formatCurrency(commissioned.cost.amount, commissioned.cost.currency));
-    }
-    return parts.join(" · ");
-}
-
-function aiDetail(slot: ISlot): string | undefined {
-    return slot.statuses.artwork.ai?.resource?.trim() || undefined;
 }
 
 /** The artist credited for the artwork, whichever way it is being obtained */
@@ -89,29 +99,17 @@ export function buildArtworkRows(
         const { artwork } = slot.statuses;
         const card = cardsByNumber.get(slot.number);
 
-        let detail: string | undefined;
-        switch (artwork.type) {
-            case "sourced":
-                detail = sourcedDetail(slot, artists);
-                break;
-            case "commissioned":
-                detail = commissionedDetail(slot);
-                break;
-            case "ai":
-                detail = aiDetail(slot);
-                break;
-        }
-
         const requirements = includeRequirements ? artworkRequirements(artwork, artists) : [];
         const prep = visiblePrep(artwork);
+        const artist = creditedArtist(slot, artists);
 
         return {
             slot,
             card,
             name: card?.name ?? `Slot ${slot.number}`,
             percent: cardLaneBreakdown(slot.statuses).artwork,
-            artist: creditedArtist(slot, artists),
-            detail,
+            artist,
+            details: artworkDetails(slot, artist, artists),
             requirements,
             prep,
             remaining: remainingTasks(requirements, prep),
@@ -140,7 +138,7 @@ export function searchHaystack(row: IArtworkRow): string {
         artwork.type,
         artwork.status,
         row.artist?.name,
-        row.detail,
+        row.details.join(" "),
         row.slot.release?.code,
         artwork.sourced?.options.map((option) => option.notes).join(" "),
         artwork.commissioned?.notes,

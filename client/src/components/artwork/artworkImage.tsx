@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Skeleton } from "@heroui/react";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faImage, faLinkSlash } from "@fortawesome/free-solid-svg-icons";
+import { motion } from "framer-motion";
 import classNames from "classnames";
 import { displayableUrls, driveFileId } from "common/models/artwork";
 import { BaseElementProps } from "../../types";
+import ArtworkFocus from "./artworkFocus";
 
 const ratioClasses = {
     landscape: "aspect-[4/3]",
@@ -27,6 +29,8 @@ export default function ArtworkImage({ className, style, url, alt, ratio = "land
     const candidates = displayableUrls(url);
     const [attempt, setAttempt] = useState(0);
     const [state, setState] = useState<LoadState>(url ? "loading" : "empty");
+    const [origin, setOrigin] = useState<DOMRect>();
+    const imageRef = useRef<HTMLImageElement | null>(null);
     const isDrive = !!url && !!driveFileId(url);
 
     // A new url is a fresh attempt, including one which failed a moment ago
@@ -41,6 +45,7 @@ export default function ArtworkImage({ className, style, url, alt, ratio = "land
      * is right there. The element itself is the only answer that survives the move
      */
     const onAttach = (img: HTMLImageElement | null) => {
+        imageRef.current = img;
         if (img?.complete && img.naturalWidth > 0) {
             setState("loaded");
         }
@@ -77,22 +82,51 @@ export default function ArtworkImage({ className, style, url, alt, ratio = "land
         );
     }
 
+    const canFocus = state === "loaded";
+    const focus = () => setOrigin(imageRef.current?.getBoundingClientRect());
+
     return (
-        <div className={frameClasses} style={style}>
-            {state === "loading" && <Skeleton className="absolute inset-0" />}
-            <img
-                key={candidates[attempt]}
-                ref={onAttach}
+        <>
+            <motion.div
+                className={classNames(frameClasses, canFocus && "cursor-zoom-in")}
+                style={style}
+                whileHover={canFocus ? { scale: 0.97 } : undefined}
+                whileTap={canFocus ? { scale: 0.94 } : undefined}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                role={canFocus ? "button" : undefined}
+                tabIndex={canFocus ? 0 : undefined}
+                aria-label={canFocus ? `View ${alt} up close` : undefined}
+                onClick={canFocus ? focus : undefined}
+                onKeyDown={(event: React.KeyboardEvent) => {
+                    if (canFocus && (event.key === "Enter" || event.key === " ")) {
+                        event.preventDefault();
+                        focus();
+                    }
+                }}
+            >
+                {state === "loading" && <Skeleton className="absolute inset-0" />}
+                <img
+                    key={candidates[attempt]}
+                    ref={onAttach}
+                    src={candidates[attempt]}
+                    alt={alt}
+                    className={classNames(
+                        "absolute inset-0 size-full object-contain transition-opacity duration-200",
+                        state === "loading" ? "opacity-0" : "opacity-100"
+                    )}
+                    onLoad={() => setState("loaded")}
+                    onError={onError}
+                />
+            </motion.div>
+
+            <ArtworkFocus
+                origin={origin}
                 src={candidates[attempt]}
                 alt={alt}
-                className={classNames(
-                    "absolute inset-0 size-full object-contain transition-opacity duration-200",
-                    state === "loading" ? "opacity-0" : "opacity-100"
-                )}
-                onLoad={() => setState("loaded")}
-                onError={onError}
+                url={url}
+                onClose={() => setOrigin(undefined)}
             />
-        </div>
+        </>
     );
 }
 

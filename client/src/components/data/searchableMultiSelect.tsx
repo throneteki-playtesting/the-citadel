@@ -1,17 +1,25 @@
-import { Select, SelectItem, SharedSelection } from "@heroui/react";
+import { Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
 import { useInfiniteScroll } from "@heroui/use-infinite-scroll";
 import { ReactNode, useMemo, useRef, useState } from "react";
+import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 
 const SENTINEL_KEY = "__searchable-select-sentinel__";
+
+// Keys the listbox is entitled to while the search field has focus - everything else is editing the term
+const LISTBOX_KEYS = ["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"];
 
 function SearchableMultiSelect<T extends object>({
     className,
     style,
     label,
+    ariaLabel,
+    size,
+    variant,
     placeholder = "Search...",
     items,
     getKey,
+    matches,
     renderItem,
     renderSelected,
     selectedKeys,
@@ -31,7 +39,11 @@ function SearchableMultiSelect<T extends object>({
     const collectionItems = useMemo(() => [...items, sentinel], [items, sentinel]);
     const selectedKeysWithSentinel = useMemo(() => [...selectedKeys, SENTINEL_KEY], [selectedKeys]);
 
+    const term = search.trim();
+    const isHidden = (item: T) => term.length > 0 && !!matches && !matches(item, term);
+
     const handleSelectionChange = (keys: SharedSelection) => {
+        onSearchChange("");
         if (keys === "all") {
             onSelectionChange(keys);
             return;
@@ -48,6 +60,7 @@ function SearchableMultiSelect<T extends object>({
                     // Prevent HeroUI's own trigger press-toggle from fighting our controlled isOpen below
                     e.stopPropagation();
                     inputRef.current?.focus();
+                    setIsOpen(true);
                 }}
             >
                 {renderSelected(selectedItems)}
@@ -55,8 +68,15 @@ function SearchableMultiSelect<T extends object>({
                     ref={inputRef}
                     aria-label={label ? `${label} search` : "Search"}
                     value={search}
-                    onChange={(e) => onSearchChange(e.target.value)}
-                    onFocus={() => setIsOpen(true)}
+                    onChange={(e) => {
+                        onSearchChange(e.target.value);
+                        setIsOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                        if (!LISTBOX_KEYS.includes(e.key)) {
+                            e.stopPropagation();
+                        }
+                    }}
                     placeholder={selectedItems.length === 0 ? placeholder : undefined}
                     className="flex-1 min-w-[80px] bg-transparent outline-none text-foreground mx-1"
                 />
@@ -67,7 +87,9 @@ function SearchableMultiSelect<T extends object>({
     return (
         <Select
             label={label}
-            aria-label={label ?? "Search select"}
+            aria-label={ariaLabel ?? label ?? "Search select"}
+            size={size}
+            variant={variant}
             selectionMode="multiple"
             isMultiline
             items={collectionItems}
@@ -87,7 +109,11 @@ function SearchableMultiSelect<T extends object>({
                 item === sentinel ? (
                     <SelectItem key={SENTINEL_KEY} textValue="" className="hidden" aria-hidden="true" />
                 ) : (
-                    <SelectItem key={getKey(item)} classNames={{ title: "min-w-0 overflow-hidden" }}>
+                    <SelectItem
+                        key={getKey(item)}
+                        className={classNames(isHidden(item) && "hidden")}
+                        classNames={{ title: "min-w-0 overflow-hidden" }}
+                    >
                         {renderItem(item)}
                     </SelectItem>
                 )
@@ -98,9 +124,15 @@ function SearchableMultiSelect<T extends object>({
 
 type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     label?: string;
+    /** Names the field where there is no room for a visible label */
+    ariaLabel?: string;
+    size?: SelectProps["size"];
+    variant?: SelectProps["variant"];
     placeholder?: string;
     items: T[];
     getKey: (item: T) => string;
+    /** Whether an item survives the current search. Without it the list is left to the server alone */
+    matches?: (item: T, search: string) => boolean;
     renderItem: (item: T) => ReactNode;
     renderSelected: (items: T[]) => ReactNode;
     selectedKeys: string[];

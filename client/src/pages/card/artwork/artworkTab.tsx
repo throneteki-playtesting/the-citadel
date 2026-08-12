@@ -3,18 +3,23 @@ import { Button, Form, Skeleton } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faArrowLeft,
+    faCheck,
     faFloppyDisk,
     faPlus,
     faRotateLeft,
     faUpRightFromSquare
 } from "@fortawesome/free-solid-svg-icons";
+import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
+import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { isEqual } from "lodash-es";
 import { Slot } from "common/models/schemas";
 import { ArtworkStatus } from "common/models/slots";
 import {
     artworkPrepFlags,
+    comparableArtwork,
     IArtworkProgress,
+    isChecklistDone,
     statusReason,
     withAddedOption,
     withInferredStatus
@@ -24,13 +29,13 @@ import { useGetArtistsQuery, useGetCardsQuery, useGetSlotQuery, useUpdateSlotMut
 import { usePermission } from "../../../hooks/usePermission";
 import { useFormValidation } from "../../../hooks/useFormValidation";
 import { showApiErrorToast } from "../../../api/errors";
-import { artworkLane, artworkTypeNames, laneSteps } from "../../../constants";
+import { artworkLane, laneSteps } from "../../../constants";
 import StatusStepper from "../../../components/statusStepper";
-import SectionTitle from "../../../components/sectionTitle";
 import StatusNotice from "../../../components/statusNotice";
 import ProcessActions, { ProcessAction } from "../../../components/actions/processActions";
 import FormValidationSummary from "../../../components/formValidationSummary";
 import ProductionLockAlert from "../productionLockAlert";
+import AssigneeField from "./assigneeField";
 import SourcedPanel from "./sourcedPanel";
 import CommissionedPanel from "./commissionedPanel";
 import AiPanel from "./aiPanel";
@@ -43,6 +48,9 @@ const trackSteps = laneSteps(artworkLane);
 
 // A modal's form opened from in here submits through this one too, so only our own submit is answered
 const ARTWORK_FORM_ID = "artwork-form";
+
+const PANEL_TRAVEL = 16;
+const PANEL_TRANSITION = { duration: 0.2, ease: [0.65, 0, 0.35, 1] } as const;
 
 export default function ArtworkTab({ project, number, showTrack, onBack }: ArtworkTabProps) {
     const navigate = useNavigate();
@@ -71,7 +79,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
     // Artwork is frozen once a card file exists downstream of it
     const isLockedByProduction = !!slot && slot.statuses.production !== "waiting";
     const isEditable = canEdit && !isLockedByProduction;
-    const isDirty = !!committed && !!draft && !isEqual(draft, committed);
+    const isDirty = !!committed && !!draft && !isEqual(comparableArtwork(draft), comparableArtwork(committed));
 
     if (isLoading || !slot || !draft) {
         return <ArtworkTabSkeleton showTrack={showTrack} />;
@@ -82,10 +90,11 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
     const set = <K extends keyof IArtworkProgress>(key: K, value: IArtworkProgress[K]) =>
         setDraft((previous) => previous && withInferredStatus({ ...previous, [key]: value }, artists));
 
-    const save = async () => {
+    // The status is carried separately from the draft, so a confirmation turned down leaves nothing behind
+    const save = async (status: ArtworkStatus = draft.status) => {
         setPendingChange(undefined);
         try {
-            await updateSlot({ project, number, statuses: { artwork: draft } }).unwrap();
+            await updateSlot({ project, number, statuses: { artwork: { ...draft, status } } }).unwrap();
         } catch (err) {
             if (!isValidationError(err)) {
                 showApiErrorToast(err, { title: "Failed to update artwork" });
@@ -105,6 +114,13 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
         void save();
     };
 
+    const onMarkComplete = () => {
+        if (!validate(draft)) {
+            return;
+        }
+        save("complete");
+    };
+
     // Where the card stands, not where the draft would put it - a track cannot claim a save nobody made
     const savedStatus = committed?.status ?? draft.status;
     const step = artworkLane.meta[savedStatus];
@@ -112,15 +128,20 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
     const isTypeSettled = savedStatus === "confirming" || savedStatus === "complete";
     const card = cardsData?.items[0];
     const slotRef = { project, number };
-    // Where each link's error goes. Only the current type's panel is on screen, so anything wrong in the
-    // blocks kept beside it has no input to attach to and is summarised instead
+    // Where each field's error goes - only the current type's panel is on screen, so errors elsewhere summarise
     const mappedPaths =
         draft.type === "sourced"
-            ? (draft.sourced?.options ?? []).map((_, index) => `sourced.options.${index}.url`)
+            ? (draft.sourced?.options ?? []).flatMap((_, index) => [
+                  `sourced.options.${index}.url`,
+                  `sourced.options.${index}.artist`
+              ])
             : draft.type
               ? [`${draft.type}.url`]
               : [];
     const canSave = isDirty && !isSaving;
+    // Complete is never awarded by automation - offered here once the checklist, prep included, is clear
+    const canComplete =
+        isEditable && canReadArtists && committed?.status === "confirming" && isChecklistDone(draft, artists);
 
     const actions: ProcessAction[] = [];
     if (isEditable && draft.type === "sourced") {
@@ -181,11 +202,18 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                     <div className="h-4 w-px shrink-0 bg-content3" />
                     <span className="text-xs text-foreground/40 tabular-nums">Card {slot.number}</span>
                 </div>
-                <h2 className="font-cinzel text-xl sm:text-2xl tracking-wide truncate">
-                    {card?.name ?? `Slot ${slot.number}`}
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                    <h2 className="flex-1 min-w-0 font-cinzel text-xl sm:text-2xl tracking-wide truncate">
+                        {card?.name ?? `Slot ${slot.number}`}
+                    </h2>
+                    <AssigneeField
+                        project={project}
+                        number={number}
+                        assignee={committed?.assignee}
+                        isDisabled={!isEditable}
+                    />
+                </div>
             </div>
-
             {showTrack && (
                 <StatusStepper
                     steps={trackSteps}
@@ -195,48 +223,95 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                     className="w-full"
                 />
             )}
-
             {isLockedByProduction && canEdit && <ProductionLockAlert lane="artwork" />}
-
-            {canReadArtists ? (
-                <ArtworkChecklist artwork={draft} artists={artists} />
-            ) : (
-                <StatusNotice icon={step.icon} label={step.label} detail={step.description} />
-            )}
-
+            <div className="flex flex-col">
+                {canReadArtists ? (
+                    <ArtworkChecklist artwork={draft} artists={artists} />
+                ) : (
+                    <StatusNotice icon={step.icon} label={step.label} detail={step.description} />
+                )}
+                <AnimatePresence>
+                    {canComplete && (
+                        <motion.div
+                            key="complete-status"
+                            className="overflow-hidden"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.25, ease: [0.65, 0, 0.35, 1] }}
+                        >
+                            <StatusNotice
+                                icon={faCircleCheck}
+                                tone="info"
+                                label="Ready to sign off"
+                                detail="This artwork is ready to be marked as complete — this action can be reverted."
+                                className="mt-2"
+                            >
+                                <Button
+                                    size="sm"
+                                    color="success"
+                                    variant="flat"
+                                    className="shrink-0"
+                                    isDisabled={isSaving}
+                                    startContent={<FontAwesomeIcon icon={faCheck} />}
+                                    onPress={onMarkComplete}
+                                >
+                                    Mark complete
+                                </Button>
+                            </StatusNotice>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
             <ArtworkTypePicker
                 value={draft.type}
                 isDisabled={!isEditable}
                 isLocked={isTypeSettled}
-                onChange={(type) => set("type", type)}
+                onChange={(type) => {
+                    clearErrors();
+                    set("type", type);
+                }}
             />
-
-            {draft.type && (
-                <div className="flex flex-col gap-3">
-                    <SectionTitle>{artworkTypeNames[draft.type]}</SectionTitle>
-                    {draft.type === "sourced" && (
-                        <SourcedPanel
-                            sourced={draft.sourced}
-                            artists={artists}
-                            slot={slotRef}
-                            isDisabled={!isEditable}
-                            onAdd={() => set("sourced", withAddedOption(draft.sourced))}
-                            onChange={(sourced) => set("sourced", sourced)}
-                        />
-                    )}
-                    {draft.type === "commissioned" && (
-                        <CommissionedPanel
-                            commissioned={draft.commissioned}
-                            slot={slotRef}
-                            isDisabled={!isEditable}
-                            onChange={(commissioned) => set("commissioned", commissioned)}
-                        />
-                    )}
-                    {draft.type === "ai" && (
-                        <AiPanel ai={draft.ai} isDisabled={!isEditable} onChange={(ai) => set("ai", ai)} />
-                    )}
-                </div>
-            )}
+            <AnimatePresence mode="wait" initial={false}>
+                {draft.type && (
+                    <motion.div
+                        key={draft.type}
+                        className="flex flex-col gap-3"
+                        initial={{ opacity: 0, y: -PANEL_TRAVEL }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -PANEL_TRAVEL }}
+                        transition={PANEL_TRANSITION}
+                    >
+                        {draft.type === "sourced" && (
+                            <SourcedPanel
+                                sourced={draft.sourced}
+                                artists={artists}
+                                slot={slotRef}
+                                isDisabled={!isEditable}
+                                onAdd={() => set("sourced", withAddedOption(draft.sourced))}
+                                onChange={(sourced) => {
+                                    // Errors are addressed by index, so adding/removing an option renames the rest
+                                    if (sourced.options.length !== (draft.sourced?.options.length ?? 0)) {
+                                        clearErrors();
+                                    }
+                                    set("sourced", sourced);
+                                }}
+                            />
+                        )}
+                        {draft.type === "commissioned" && (
+                            <CommissionedPanel
+                                commissioned={draft.commissioned}
+                                slot={slotRef}
+                                isDisabled={!isEditable}
+                                onChange={(commissioned) => set("commissioned", commissioned)}
+                            />
+                        )}
+                        {draft.type === "ai" && (
+                            <AiPanel ai={draft.ai} isDisabled={!isEditable} onChange={(ai) => set("ai", ai)} />
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {draft.type && (
                 <PrepChecklist prep={draft.prep} isDisabled={!isEditable} onChange={(prep) => set("prep", prep)} />
@@ -252,7 +327,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                 to={pendingChange ?? "pending"}
                 reason={statusReason(draft, artists)}
                 isSaving={isSaving}
-                onConfirm={save}
+                onConfirm={() => void save(pendingChange)}
                 onCancel={() => setPendingChange(undefined)}
             />
         </Form>

@@ -20,7 +20,7 @@ export default function CommissionedPanel({
 
     return (
         <ArtworkReveal url={commissioned.url} alt="Commissioned artwork">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <ArtistSelect
                     selectedId={commissioned.artist}
                     slot={slot}
@@ -34,7 +34,7 @@ export default function CommissionedPanel({
                     value={toCalendarDate(commissioned.estimatedCompletion)}
                     onChange={(value) => set("estimatedCompletion", value ? value.toDate("UTC") : undefined)}
                 />
-                <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
+                <div className="md:col-span-2 flex flex-col sm:flex-row gap-3">
                     <Input
                         label="Paid by"
                         placeholder="GOT funded"
@@ -45,14 +45,14 @@ export default function CommissionedPanel({
                     />
                     <CostInput
                         value={commissioned.cost}
-                        className="w-full sm:w-64"
+                        className="w-full sm:flex-1 sm:w-auto sm:min-w-44 sm:max-w-64"
                         isDisabled={isDisabled}
                         onChange={(cost) => set("cost", cost)}
                     />
                 </div>
                 <Input
                     label="Artwork link"
-                    className="sm:col-span-2"
+                    className="md:col-span-2"
                     placeholder="The finished piece, once it has been delivered"
                     name="commissioned.url"
                     isDisabled={isDisabled}
@@ -62,7 +62,7 @@ export default function CommissionedPanel({
                 />
                 <Textarea
                     label="Notes"
-                    className="sm:col-span-2"
+                    className="md:col-span-2"
                     minRows={2}
                     isDisabled={isDisabled}
                     value={commissioned.notes ?? ""}

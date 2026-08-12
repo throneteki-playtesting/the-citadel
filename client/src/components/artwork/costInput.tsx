@@ -34,7 +34,7 @@ export default function CostInput({ value, isDisabled, className, onChange }: Co
             label="Cost"
             placeholder="0.00"
             minValue={0}
-            className={classNames("sm:max-w-xs", className)}
+            className={classNames("min-w-0", className)}
             isDisabled={isDisabled}
             value={value?.amount ?? NaN}
             onValueChange={(amount) => onChange(isNaN(amount) ? undefined : { amount, currency })}

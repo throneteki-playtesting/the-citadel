@@ -1,14 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Button, Chip, Input, ScrollShadow, Select, SelectItem, Skeleton, Switch } from "@heroui/react";
+import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch, Tooltip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-    faArrowDownWideShort,
-    faImage,
-    faListCheck,
-    faMagnifyingGlass,
-    faPencil,
-    faXmarkCircle
-} from "@fortawesome/free-solid-svg-icons";
+import { faImage, faListCheck, faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
@@ -18,14 +11,24 @@ import { IProject, IProjectRelease } from "common/models/projects";
 import { ArtworkStatus, artworkStatuses, ArtworkType, artworkTypes } from "common/models/slots";
 import { isPrepDone } from "common/models/artwork";
 import Permission from "common/models/permissions";
-import { useGetArtistsQuery, useGetCardsQuery, useGetSlotsQuery } from "../../../api";
+import { useGetArtistsQuery, useGetCardsQuery, useGetSlotsQuery, useGetUserQuery } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
-import { artworkLane, artworkTypeNames, factionAccentClasses, reorderTransition } from "../../../constants";
+import { useAuth } from "../../../hooks/useAuth";
+import {
+    artworkLane,
+    artworkTypeIcons,
+    artworkTypeNames,
+    factionAccentClasses,
+    reorderTransition
+} from "../../../constants";
 import ProgressRing from "../../../components/progressRing";
+import UserAvatar from "../../../components/userAvatar";
 import SectionTitle from "../../../components/sectionTitle";
+import SortSelect from "../../../components/sortSelect";
 import ThronesIcon from "../../../components/thronesIcon";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ArtworkImage from "../../../components/artwork/artworkImage";
+import ArtworkFocus from "../../../components/artwork/artworkFocus";
 import ArtworkTab from "../../card/artwork/artworkTab";
 import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
 import SlidingPages from "../../../components/slidingPages";
@@ -59,11 +62,13 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists });
+    const { user } = useAuth();
 
     const [status, setStatus] = useState<ArtworkStatus | "all">("all");
     const [type, setType] = useState<ArtworkType | "all">("all");
     const [releases, setReleases] = useState<string[]>([]);
     const [attentionOnly, setAttentionOnly] = useState(false);
+    const [assignedToMe, setAssignedToMe] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>("number");
     const [search, setSearch] = useState("");
     // Which card the editor holds, kept apart from whether the editor is the page on show. Clearing it on
@@ -126,12 +131,15 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
             if (attentionOnly && !needsAttention(row)) {
                 return false;
             }
+            if (assignedToMe && artwork.assignee !== user?.discordId) {
+                return false;
+            }
             if (term.length > 0 && !searchHaystack(row).includes(term)) {
                 return false;
             }
             return true;
         },
-        [status, type, releases, attentionOnly, search]
+        [status, type, releases, attentionOnly, assignedToMe, user?.discordId, search]
     );
 
     const counts = useMemo(() => {
@@ -258,7 +266,6 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
             <div className="flex flex-col gap-3">
                 <div className="text-sm text-foreground/50">{ARTWORKS_DESCRIPTION}</div>
                 <SectionTitle size="lg">Artworks</SectionTitle>
-
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
                         {artworkStatuses.map((entry) => (
@@ -302,11 +309,10 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
                         </FilterRow>
                     )}
                 </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-content3 pb-2">
                     <Input
                         size="sm"
-                        className="sm:max-w-96"
+                        className="sm:flex-1 sm:shrink sm:max-w-96"
                         placeholder="Filter by name, artist, notes, etc...."
                         value={search}
                         onValueChange={setSearch}
@@ -319,32 +325,25 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
                             ) : null
                         }
                     />
-                    <Switch size="sm" isSelected={attentionOnly} onValueChange={setAttentionOnly}>
-                        <span className="text-xs whitespace-nowrap">Needs attention</span>
-                    </Switch>
+                    <div className="flex-1 flex items-center flex-wrap justify-between gap-2 sm:shrink-0">
+                        <div className="flex items-center gap-2">
+                            <Switch size="sm" isSelected={attentionOnly} onValueChange={setAttentionOnly}>
+                                <span className="text-xs whitespace-nowrap">Needs attention</span>
+                            </Switch>
+                            {user && user.discordId !== "anonymous" && (
+                                <Switch size="sm" isSelected={assignedToMe} onValueChange={setAssignedToMe}>
+                                    <span className="text-xs whitespace-nowrap">Assigned to me</span>
+                                </Switch>
+                            )}
+                        </div>
+                        <SortSelect
+                            options={sortOptions}
+                            value={sortBy}
+                            className="ml-auto w-40 sm:w-44"
+                            onChange={setSortBy}
+                        />
+                    </div>
                 </div>
-
-                <div className="flex items-center justify-between gap-2 border-b border-content3 pb-1.5">
-                    <span className="text-xs text-foreground/40">
-                        {visible.length} of {rows.length} cards
-                    </span>
-                    <Select
-                        size="sm"
-                        aria-label="Sort by"
-                        className="max-w-44"
-                        selectedKeys={[sortBy]}
-                        disallowEmptySelection
-                        startContent={
-                            <FontAwesomeIcon icon={faArrowDownWideShort} className="shrink-0 text-foreground/40" />
-                        }
-                        onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
-                    >
-                        {Object.entries(sortOptions).map(([key, label]) => (
-                            <SelectItem key={key}>{label}</SelectItem>
-                        ))}
-                    </Select>
-                </div>
-
                 {visible.length === 0 ? (
                     <div className="p-8 text-center text-sm text-foreground/50 border border-dashed border-content3 rounded-md">
                         No cards match these filters.
@@ -383,6 +382,9 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
                         </AnimatePresence>
                     </div>
                 )}
+                <div className="text-xs text-foreground/40 text-center border-t border-content3 pt-1.5">
+                    {visible.length} of {rows.length} cards
+                </div>
             </div>
         );
     }
@@ -402,7 +404,6 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
         <div className="flex flex-col gap-3">
             <div className="text-sm text-foreground/50">{ARTWORKS_DESCRIPTION}</div>
             <SectionTitle size="lg">Artworks</SectionTitle>
-
             <div className="flex flex-col gap-1.5">
                 {[4, 3, project.releases.length].map((chips, row) =>
                     chips > 0 ? (
@@ -417,21 +418,20 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
                     ) : null
                 )}
             </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <Skeleton className="h-10 w-full sm:max-w-96 rounded-md" />
-                <Skeleton className="h-6 w-32 rounded-md" />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-content3 pb-2">
+                <Skeleton className="h-10 w-full sm:flex-1 sm:max-w-96 rounded-md" />
+                <div className="flex items-center justify-between gap-2 sm:shrink-0">
+                    <Skeleton className="h-6 w-32 rounded-md" />
+                    <Skeleton className="h-8 w-40 sm:w-44 rounded-md" />
+                </div>
             </div>
-
-            <div className="flex items-center justify-between gap-2 border-b border-content3 pb-1.5">
-                <Skeleton className="h-3 w-24 rounded-sm" />
-                <Skeleton className="h-8 w-44 rounded-md" />
-            </div>
-
             <div className="flex flex-col gap-1.5">
                 {Array.from({ length: rowCount }, (_, row) => (
                     <Skeleton key={row} className="h-14 w-full rounded-md" />
                 ))}
+            </div>
+            <div className="border-t border-content3 pt-1.5 flex justify-center">
+                <Skeleton className="h-3 w-24 rounded-sm" />
             </div>
         </div>
     );
@@ -486,7 +486,6 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
     return (
         <div className="flex items-stretch gap-2 sm:gap-3 pr-1 sm:pr-2 rounded-md border border-content3 bg-content1 overflow-hidden">
             <div className={classNames("w-1.5 shrink-0", factionAccentClasses[row.slot.faction])} />
-
             <TouchTooltip
                 content={
                     <div className="max-w-56 px-1 py-0.5">
@@ -501,7 +500,6 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                     <FontAwesomeIcon icon={step.icon} className="text-sm text-primary" />
                 </ProgressRing>
             </TouchTooltip>
-
             <div className="flex-1 min-w-0 py-2 flex flex-col sm:flex-row sm:items-center gap-x-3 gap-y-0.5">
                 <div className="sm:w-48 md:w-56 lg:w-72 shrink-0 min-w-0 flex items-center gap-1.5">
                     {row.card && (
@@ -523,40 +521,46 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                         </TouchTooltip>
                     )}
                 </div>
+                <div className="shrink-0 flex items-center gap-2 justify-start sm:justify-end">
+                    <Assignee id={artwork.assignee} />
+                    {artwork.type ? (
+                        <TouchTooltip content={artworkTypeNames[artwork.type]}>
+                            <span className="flex items-center gap-1.5 text-foreground/50 cursor-help">
+                                <FontAwesomeIcon icon={artworkTypeIcons[artwork.type]} className="w-5 text-xl" />
+                                <span className="sm:hidden text-xs">{artworkTypeNames[artwork.type]}</span>
+                            </span>
+                        </TouchTooltip>
+                    ) : (
+                        <span className="w-5 text-center text-foreground/30">—</span>
+                    )}
+                </div>
+
+                <Divider
+                    orientation="vertical"
+                    className="hidden sm:block self-stretch h-auto w-px shrink-0 bg-content3/60"
+                />
 
                 <ScrollShadow
                     orientation="horizontal"
                     hideScrollBar
-                    className="flex-1 min-w-0 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 overflow-visible sm:overflow-auto"
+                    className="flex-1 min-w-0 flex items-center gap-1.5 text-xs text-foreground/60 whitespace-nowrap"
                 >
-                    <Column className="sm:w-24">{artwork.type ? artworkTypeNames[artwork.type] : "—"}</Column>
-                    <Column className="sm:w-36">{row.artist?.name ?? "—"}</Column>
-                    <Column className="sm:w-48">{row.detail}</Column>
+                    {row.details.map((detail, index) => (
+                        <span key={detail} className="flex items-center gap-1.5">
+                            {index > 0 && <span className="text-foreground/25">·</span>}
+                            {detail}
+                        </span>
+                    ))}
                 </ScrollShadow>
 
                 <Attention row={row} />
             </div>
-
-            <div className="shrink-0 self-center flex flex-col sm:flex-row items-center gap-0.5">
-                <span className="size-6 flex items-center justify-center">
-                    {row.finalUrl && (
-                        <TouchTooltip
-                            content={
-                                <div className="w-56 p-1">
-                                    <ArtworkImage
-                                        url={row.finalUrl}
-                                        alt={`Final artwork for ${row.name}`}
-                                        ratio="square"
-                                    />
-                                </div>
-                            }
-                        >
-                            <span className="text-success cursor-help" aria-label="Final artwork">
-                                <FontAwesomeIcon icon={faImage} />
-                            </span>
-                        </TouchTooltip>
-                    )}
-                </span>
+            <div className="shrink-0 self-center flex flex-col sm:flex-row items-center justify-center gap-0.5">
+                {row.finalUrl ? (
+                    <FinalArtwork url={row.finalUrl} name={row.name} />
+                ) : (
+                    <span aria-hidden className="hidden sm:block size-6" />
+                )}
 
                 <Button
                     isIconOnly
@@ -579,18 +583,67 @@ type ArtworkRowProps = {
     onEdit: () => void;
 };
 
-/** One cell - ruled and fixed width from sm up, since a truncated value needs a rule to read as one */
-function Column({ className, children }: { className?: string; children?: React.ReactNode }) {
+// A plain Tooltip, not TouchTooltip, so a tap goes straight to opening the piece instead of the preview
+function FinalArtwork({ url, name }: { url: string; name: string }) {
+    const [origin, setOrigin] = useState<DOMRect>();
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const alt = `Final artwork for ${name}`;
+
     return (
-        <div
-            className={classNames(
-                "sm:shrink-0 min-w-0 truncate text-xs text-foreground/60 sm:border-l sm:border-content3/60 sm:pl-3",
-                className
-            )}
-            title={typeof children === "string" ? children : undefined}
+        <>
+            <Tooltip
+                content={
+                    <div className="w-56 p-1">
+                        <ArtworkImage url={url} alt={alt} ratio="square" />
+                    </div>
+                }
+            >
+                <button
+                    ref={triggerRef}
+                    type="button"
+                    aria-label={`View ${alt}`}
+                    className="size-6 flex items-center justify-center text-success cursor-zoom-in"
+                    onClick={() => setOrigin(triggerRef.current?.getBoundingClientRect())}
+                >
+                    <FontAwesomeIcon icon={faImage} />
+                </button>
+            </Tooltip>
+            <ArtworkFocus origin={origin} url={url} alt={alt} onClose={() => setOrigin(undefined)} />
+        </>
+    );
+}
+
+// Empty state drawn at the same size as a filled one, so the type icon beside it never has to jump
+function Assignee({ id }: { id?: string }) {
+    if (!id) {
+        return <span aria-hidden className="size-6 rounded-full border border-dashed border-content3/60" />;
+    }
+    return <AssigneeAvatar discordId={id} />;
+}
+
+// A second useGetUserQuery subscription (same cache key as UserAvatar's own) just for the tooltip's name/username
+function AssigneeAvatar({ discordId }: { discordId: string }) {
+    const { data: user } = useGetUserQuery({ discordId });
+
+    return (
+        <TouchTooltip
+            content={
+                <div className="max-w-56 px-1 py-0.5 flex flex-col gap-1">
+                    <span className="text-[0.65rem] uppercase tracking-wide text-foreground/40">Assigned to</span>
+                    <div className="flex items-center gap-2">
+                        <Avatar size="sm" src={user?.avatarUrl} alt={user?.displayname} />
+                        <div className="min-w-0 flex flex-col">
+                            <span className="truncate text-small">{user?.displayname ?? "…"}</span>
+                            {user?.username && (
+                                <span className="truncate text-tiny text-foreground/40">{user.username}</span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            }
         >
-            {children}
-        </div>
+            <UserAvatar discordId={discordId} title="" className="!size-6 text-[0.6rem] cursor-help" />
+        </TouchTooltip>
     );
 }
 
@@ -602,8 +655,13 @@ function Attention({ row }: { row: IArtworkRow }) {
         return null;
     }
 
+    // The rule belongs to the checklist, not the row, so it goes when the checklist has nothing to show too
     return (
-        <div className="shrink-0 sm:border-l sm:border-content3/60 sm:pl-3">
+        <>
+            <Divider
+                orientation="vertical"
+                className="hidden sm:block self-stretch h-auto w-px shrink-0 bg-content3/60"
+            />
             <TouchTooltip
                 content={
                     <div className="max-w-64 py-0.5 flex flex-col gap-1 text-xs">
@@ -613,7 +671,7 @@ function Attention({ row }: { row: IArtworkRow }) {
                 }
             >
                 <div
-                    className="flex items-center justify-start gap-1 w-20 text-xs cursor-help"
+                    className="shrink-0 flex items-center justify-start gap-1 w-20 text-xs cursor-help"
                     aria-label={`${row.remaining} of ${tasks.length} tasks remaining`}
                 >
                     <FontAwesomeIcon icon={faListCheck} className="w-4 text-foreground/40" />
@@ -626,6 +684,6 @@ function Attention({ row }: { row: IArtworkRow }) {
                     ))}
                 </div>
             </TouchTooltip>
-        </div>
+        </>
     );
 }
