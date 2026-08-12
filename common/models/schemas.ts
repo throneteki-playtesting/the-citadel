@@ -378,6 +378,69 @@ const Link = Joi.string()
         "string.uriCustomScheme": "Enter a full link, starting with http:// or https://"
     });
 
+// ISO 13616: 2-letter country code, 2 check digits, then up to 30 alphanumeric BBAN characters (15-34 total)
+const IBAN_FORMAT = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/;
+
+// ISO 9362: 4-letter bank code, 2-letter country code, 2-character location code, optional 3-character branch code
+const SWIFT_BIC_FORMAT = /^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/;
+
+// Digit-by-digit remainder, so the numeric string (which can run past 30 characters) never has to be
+// parsed as a single number
+function mod97(numeric: string): number {
+    return numeric.split("").reduce((remainder, digit) => (remainder * 10 + Number(digit)) % 97, 0);
+}
+
+// ISO 7064 MOD 97-10 checksum: move the country code and check digits to the end, letters become A=10..Z=35,
+// and the result must be 1 - catches typos a format check alone lets through
+function isValidIbanChecksum(iban: string): boolean {
+    const rearranged = iban.slice(4) + iban.slice(0, 4);
+    const numeric = rearranged
+        .split("")
+        .map((char) => (/[A-Z]/.test(char) ? (char.charCodeAt(0) - 55).toString() : char))
+        .join("");
+    return mod97(numeric) === 1;
+}
+
+// Required with a friendly message while its type is selected, left optional otherwise - same reasoning
+// as sourcedOption's isInUse split. `base` carries any extra rules a field needs beyond "required"
+function requiredWhen(type: Artwork.PaymentType, message: string, base: BaseJoi.StringSchema = Joi.string().trim()) {
+    return Joi.when("type", {
+        is: type,
+        then: base.required().messages({ "any.required": message, "string.empty": message }),
+        otherwise: Joi.string().trim().allow("")
+    });
+}
+
+const artistPayment = Joi.object({
+    type: Joi.string()
+        .required()
+        .valid(...Artwork.paymentTypes),
+    revtag: requiredWhen("revolut", "Provide their Revtag"),
+    email: requiredWhen("paypal", "Provide their PayPal email"),
+    accountName: requiredWhen("bankTransfer", "Provide the account name"),
+    iban: requiredWhen(
+        "bankTransfer",
+        "Provide the IBAN",
+        Joi.string()
+            .trim()
+            .uppercase()
+            .replace(/\s+/g, "")
+            .pattern(IBAN_FORMAT)
+            .custom((value, helpers) => (isValidIbanChecksum(value) ? value : helpers.error("any.invalid")))
+            .messages({ "string.pattern.base": "Enter a valid IBAN", "any.invalid": "Enter a valid IBAN" })
+    ),
+    swiftBic: requiredWhen(
+        "bankTransfer",
+        "Provide the SWIFT/BIC",
+        Joi.string()
+            .trim()
+            .uppercase()
+            .replace(/\s+/g, "")
+            .pattern(SWIFT_BIC_FORMAT)
+            .messages({ "string.pattern.base": "Enter a valid SWIFT/BIC code" })
+    )
+});
+
 export const Artist = {
     Full: Joi.object({
         id: Joi.string().required(),
@@ -385,6 +448,7 @@ export const Artist = {
         contact: Joi.string().allow(""),
         portfolio: Joi.string().uri().allow(""),
         blanketPermission: Joi.boolean(),
+        payment: artistPayment,
         notes: Joi.string().allow(""),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -401,6 +465,7 @@ export const Artist = {
         contact: Joi.string().trim().allow(""),
         portfolio: Link.allow(""),
         blanketPermission: Joi.boolean(),
+        payment: artistPayment,
         notes: Joi.string().trim().allow(""),
         created: Joi.forbidden(),
         createdBy: Joi.forbidden(),
@@ -426,9 +491,17 @@ const sourcedOption = (isInUse: boolean) =>
               })
             : Joi.string().allow(""),
         ffg: Joi.boolean(),
+        // Restates Artwork.canImplyPermission's rule rather than calling it: .custom() chained after
+        // .valid() is silently never invoked in Joi 17.13.3, so routing through it would disable the check
         contact: Joi.string()
             .required()
-            .valid(...Artwork.artworkContactStates),
+            .valid(...Artwork.artworkContactStates)
+            .when("ffg", {
+                is: Joi.not(true),
+                then: Joi.invalid("implied").messages({
+                    "any.invalid": "Implied permission requires FFG artwork to be checked"
+                })
+            }),
         notes: Joi.string().allow("")
     });
 
@@ -451,6 +524,7 @@ const ArtworkDetails = {
             currency: Joi.string().required()
         }),
         url: Link.allow(""),
+        paid: Joi.boolean(),
         notes: Joi.string().allow("")
     }),
     ai: Joi.object({

@@ -1,4 +1,4 @@
-import { DatePicker, Input, Textarea } from "@heroui/react";
+import { Checkbox, DatePicker, Input, Textarea } from "@heroui/react";
 import { CalendarDate, parseDate } from "@internationalized/date";
 import { ICommissionedArtwork } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
@@ -49,6 +49,14 @@ export default function CommissionedPanel({
                         isDisabled={isDisabled}
                         onChange={(cost) => set("cost", cost)}
                     />
+                    <Checkbox
+                        className="shrink-0 self-start sm:self-center"
+                        isSelected={!!commissioned.paid}
+                        isDisabled={isDisabled}
+                        onValueChange={(value) => set("paid", value)}
+                    >
+                        <span className="text-sm whitespace-nowrap">Paid</span>
+                    </Checkbox>
                 </div>
                 <Input
                     label="Artwork link"

@@ -8,20 +8,42 @@ import {
     ModalContent,
     ModalFooter,
     ModalHeader,
+    Select,
+    SelectItem,
     Switch,
     Textarea
 } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
-import { IArtist } from "common/models/artwork";
+import { AnimatePresence, motion } from "framer-motion";
+import { IArtist, IArtistPayment, PaymentType, paymentTypes } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
 import { Artist } from "common/models/schemas";
+import { EASE_STANDARD } from "../../constants";
 import { useCreateArtistMutation, useDeleteArtistMutation, useUpdateArtistMutation } from "../../api";
 import { useFormValidation } from "../../hooks/useFormValidation";
 import { showApiErrorToast } from "../../api/errors";
 import FormValidationSummary from "../formValidationSummary";
 
-const EMPTY: ArtistDraft = { name: "", contact: "", portfolio: "", blanketPermission: false, notes: "" };
+const EMPTY: ArtistDraft = {
+    name: "",
+    contact: "",
+    portfolio: "",
+    blanketPermission: false,
+    payment: undefined,
+    notes: ""
+};
+
+const EMPTY_PAYMENT = { revtag: "", email: "", accountName: "", iban: "", swiftBic: "" };
+
+const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
+    revolut: "Revolut",
+    paypal: "PayPal",
+    bankTransfer: "International Bank Transfer"
+};
+
+const PANEL_TRAVEL = 12;
+const PANEL_TRANSITION = { duration: 0.18, ease: EASE_STANDARD } as const;
 
 // Its own form, named so its Add button submits it and nothing else - this opens from inside other forms
 const ARTIST_FORM_ID = "edit-artist-form";
@@ -51,6 +73,14 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
             contact: draft.contact?.trim() || undefined,
             portfolio: draft.portfolio?.trim() || undefined,
             blanketPermission: draft.blanketPermission || undefined,
+            payment: draft.payment && {
+                type: draft.payment.type,
+                revtag: draft.payment.revtag?.trim() || undefined,
+                email: draft.payment.email?.trim() || undefined,
+                accountName: draft.payment.accountName?.trim() || undefined,
+                iban: draft.payment.iban?.trim() || undefined,
+                swiftBic: draft.payment.swiftBic?.trim() || undefined
+            },
             notes: draft.notes?.trim() || undefined
         };
         if (!validate(body)) {
@@ -86,6 +116,12 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
 
     const set = <K extends keyof ArtistDraft>(key: K, value: ArtistDraft[K]) =>
         setDraft((previous) => ({ ...previous, [key]: value }));
+
+    const setPaymentType = (type: PaymentType) =>
+        setDraft((previous) => ({ ...previous, payment: { ...EMPTY_PAYMENT, ...previous.payment, type } }));
+
+    const setPaymentField = <K extends keyof IArtistPayment>(key: K, value: IArtistPayment[K]) =>
+        setDraft((previous) => ({ ...previous, payment: previous.payment && { ...previous.payment, [key]: value } }));
 
     return (
         <Modal isOpen={isOpen} placement="center" scrollBehavior="inside" onOpenChange={(open) => !open && onClose()}>
@@ -138,6 +174,82 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
                                 </span>
                             </div>
                         </Switch>
+                        <div className="flex flex-col gap-3 p-3 rounded-md border border-content3">
+                            <span className="font-cinzel uppercase tracking-wide text-xs text-foreground/60">
+                                Payment info
+                            </span>
+                            <Select
+                                label="Payment type"
+                                name="payment.type"
+                                isClearable
+                                selectedKeys={draft.payment?.type ? [draft.payment.type] : []}
+                                onChange={(e) => e.target.value && setPaymentType(e.target.value as PaymentType)}
+                                onClear={() => set("payment", undefined)}
+                            >
+                                {paymentTypes.map((type) => (
+                                    <SelectItem key={type}>{PAYMENT_TYPE_LABELS[type]}</SelectItem>
+                                ))}
+                            </Select>
+                            <AnimatePresence mode="wait" initial={false}>
+                                {draft.payment?.type && (
+                                    <motion.div
+                                        key={draft.payment.type}
+                                        className="flex flex-col sm:flex-row gap-3"
+                                        initial={{ opacity: 0, y: -PANEL_TRAVEL }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -PANEL_TRAVEL }}
+                                        transition={PANEL_TRANSITION}
+                                    >
+                                        {draft.payment.type === "revolut" && (
+                                            <Input
+                                                label="Revtag"
+                                                name="payment.revtag"
+                                                className="flex-1"
+                                                isRequired
+                                                value={draft.payment.revtag ?? ""}
+                                                onValueChange={(value) => setPaymentField("revtag", value)}
+                                            />
+                                        )}
+                                        {draft.payment.type === "paypal" && (
+                                            <Input
+                                                label="Email"
+                                                name="payment.email"
+                                                className="flex-1"
+                                                isRequired
+                                                value={draft.payment.email ?? ""}
+                                                onValueChange={(value) => setPaymentField("email", value)}
+                                            />
+                                        )}
+                                        {draft.payment.type === "bankTransfer" && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                                                <Input
+                                                    label="Account name"
+                                                    name="payment.accountName"
+                                                    className="sm:col-span-2"
+                                                    isRequired
+                                                    value={draft.payment.accountName ?? ""}
+                                                    onValueChange={(value) => setPaymentField("accountName", value)}
+                                                />
+                                                <Input
+                                                    label="IBAN"
+                                                    name="payment.iban"
+                                                    isRequired
+                                                    value={draft.payment.iban ?? ""}
+                                                    onValueChange={(value) => setPaymentField("iban", value)}
+                                                />
+                                                <Input
+                                                    label="SWIFT/BIC"
+                                                    name="payment.swiftBic"
+                                                    isRequired
+                                                    value={draft.payment.swiftBic ?? ""}
+                                                    onValueChange={(value) => setPaymentField("swiftBic", value)}
+                                                />
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
                         <Textarea
                             label="Notes"
                             name="notes"
@@ -147,7 +259,18 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
 
                         <FormValidationSummary
                             errors={errors}
-                            mappedPaths={["name", "contact", "portfolio", "notes"]}
+                            mappedPaths={[
+                                "name",
+                                "contact",
+                                "portfolio",
+                                "payment.type",
+                                "payment.revtag",
+                                "payment.email",
+                                "payment.accountName",
+                                "payment.iban",
+                                "payment.swiftBic",
+                                "notes"
+                            ]}
                         />
 
                         {artist && (
@@ -202,7 +325,7 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
 }
 
 type ArtistDraft = Pick<IArtist, "name"> &
-    Partial<Pick<IArtist, "contact" | "portfolio" | "blanketPermission" | "notes">>;
+    Partial<Pick<IArtist, "contact" | "portfolio" | "blanketPermission" | "payment" | "notes">>;
 
 type EditArtistModalProps = {
     isOpen: boolean;

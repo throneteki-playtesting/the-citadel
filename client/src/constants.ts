@@ -31,8 +31,11 @@ import {
     faWandMagicSparkles
 } from "@fortawesome/free-solid-svg-icons";
 
+// The one easing curve panels/rows settle with, so every fade/slide in the app moves the same way
+export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
+
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
-export const reorderTransition = { duration: 0.4, ease: [0.65, 0, 0.35, 1] } as const;
+export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
 
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
@@ -338,6 +341,12 @@ export const artworkContactMeta: Record<ArtworkContactState, { label: string; de
         color: "primary"
     },
     granted: { label: "Granted", description: "The artist has allowed this piece to be used", color: "success" },
+    implied: {
+        label: "Implied",
+        description:
+            "The artist was contacted but never responded - work is going ahead anyway, since this is existing FFG artwork",
+        color: "success"
+    },
     denied: { label: "Denied", description: "The artist has refused this piece", color: "danger" }
 };
 

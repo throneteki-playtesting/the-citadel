@@ -3,11 +3,11 @@ import { Button, Checkbox, Chip, Input, Textarea } from "@heroui/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBan, faGripVertical, faStar, faTrash } from "@fortawesome/free-solid-svg-icons";
+import { faBan, faCircleInfo, faGripVertical, faStar, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { faStar as faStarOutline } from "@fortawesome/free-regular-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
-import { ArtworkContactState, artworkContactStates, IArtist, ISourcedOption } from "common/models/artwork";
+import { ArtworkContactState, canImplyPermission, IArtist, ISourcedOption } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
 import { artworkContactMeta, FFG_ARTWORK_DESCRIPTION, reorderTransition } from "../../../constants";
 import { UIColor } from "../../../types";
@@ -16,9 +16,9 @@ import ArtworkImage from "../../../components/artwork/artworkImage";
 import ArtistSelect from "../../../components/artwork/artistSelect";
 import OpenLink from "../../../components/artwork/openLink";
 
-// The run an approach actually walks. Denied is a state but not a step on it - see ContactPicker.
-// Held as the whole union rather than the filtered subset, so a denied option can still be looked up in it
-const CONTACT_PROGRESSION: ArtworkContactState[] = artworkContactStates.filter((state) => state !== "denied");
+// The literal step order - denied/implied are states an option can be in, not steps on this run, so
+// they're never in this list rather than filtered back out of it. See ContactPicker.
+const CONTACT_PROGRESSION: ArtworkContactState[] = ["none", "contacted", "responded", "granted"];
 
 // Written out per colour rather than composed, since Tailwind only sees class names it can read whole
 const CONTACT_CURRENT_CLASSES: Partial<Record<UIColor, string>> = {
@@ -214,6 +214,7 @@ export function SourcedOptionCard({
                     <div className="flex flex-col md:flex-row md:items-center gap-3">
                         <ContactPicker
                             value={option.contact}
+                            canImply={canImplyPermission(option)}
                             isDisabled={isDisabled}
                             onChange={(contact) => set("contact", contact)}
                         />
@@ -223,7 +224,15 @@ export function SourcedOptionCard({
                                     size="sm"
                                     isSelected={!!option.ffg}
                                     isDisabled={isDisabled}
-                                    onValueChange={(value) => set("ffg", value)}
+                                    onValueChange={(value) =>
+                                        // Implied only exists because FFG is checked, so unchecking it
+                                        // takes the permission back to unasked rather than leaving it on record
+                                        onChange({
+                                            ...option,
+                                            ffg: value,
+                                            contact: !value && option.contact === "implied" ? "none" : option.contact
+                                        })
+                                    }
                                 >
                                     <span className="text-sm whitespace-nowrap">FFG artwork</span>
                                 </Checkbox>
@@ -276,11 +285,18 @@ type SourcedOptionDragProps = {
  *
  * Denied is not a step on that run. It is the run being called off, so it sits apart and, while it holds,
  * greys the whole progression out - there is nothing to advance through until it is taken back.
+ *
+ * Implied sits apart too, but is one-way like every other step rather than toggle-off like Denied. It
+ * only exists while FFG is checked, so it fades with that checkbox and shares Granted's border.
  */
-function ContactPicker({ value, isDisabled, onChange }: ContactPickerProps) {
+function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerProps) {
     const isDenied = value === "denied";
+    const isImplied = value === "implied";
     const currentIndex = CONTACT_PROGRESSION.indexOf(value);
     const deniedMeta = artworkContactMeta.denied;
+    const impliedMeta = artworkContactMeta.implied;
+    const grantedIndex = CONTACT_PROGRESSION.length - 1;
+    const showImplied = canImply && !isDenied;
 
     return (
         <div className="flex flex-col gap-1 min-w-0">
@@ -289,32 +305,58 @@ function ContactPicker({ value, isDisabled, onChange }: ContactPickerProps) {
                 <div
                     className={classNames("flex flex-wrap items-stretch gap-1", isDenied && "brightness-75 grayscale")}
                 >
-                    {CONTACT_PROGRESSION.map((state, index) => {
-                        const meta = artworkContactMeta[state];
-                        const isCurrent = !isDenied && value === state;
-                        const isReached = !isDenied && index <= currentIndex;
+                    {CONTACT_PROGRESSION.slice(0, -1).map((state, index) => (
+                        <ContactStep
+                            key={state}
+                            state={state}
+                            isCurrent={!isDenied && value === state}
+                            isReached={!isDenied && index <= currentIndex}
+                            isDisabled={isDisabled || isDenied}
+                            onClick={() => onChange(state)}
+                        />
+                    ))}
 
-                        return (
-                            <TouchTooltip
-                                key={state}
-                                content={<div className="max-w-56 text-xs">{meta.description}</div>}
-                            >
-                                <button
+                    {/* Granted and Implied share one border - rounded only at the outer edges, borders
+                        overlapped with a negative margin, the same technique HeroUI's own ButtonGroup uses */}
+                    <div className="flex">
+                        <ContactStep
+                            state="granted"
+                            isCurrent={!isDenied && value === "granted"}
+                            isReached={!isDenied && grantedIndex <= currentIndex}
+                            isDisabled={isDisabled || isDenied}
+                            roundedClassName={showImplied ? "rounded-l-md rounded-r-none" : "rounded-md"}
+                            onClick={() => onChange("granted")}
+                        />
+                        <AnimatePresence initial={false}>
+                            {showImplied && (
+                                <motion.button
+                                    key="implied"
                                     type="button"
-                                    disabled={isDisabled || isDenied}
-                                    aria-current={isCurrent}
-                                    onClick={() => onChange(state)}
+                                    disabled={isDisabled}
+                                    aria-current={isImplied}
+                                    onClick={() => onChange("implied")}
+                                    initial={{ width: 0, opacity: 0, scale: 0.6 }}
+                                    animate={{ width: "auto", opacity: 1, scale: 1 }}
+                                    exit={{ width: 0, opacity: 0, scale: 0.6 }}
+                                    transition={reorderTransition}
                                     className={classNames(
-                                        "px-2 py-1 rounded-md border text-xs whitespace-nowrap transition-colors",
-                                        isDisabled || isDenied ? "cursor-default" : "cursor-pointer",
-                                        contactChevronClasses(meta.color, isCurrent, isReached)
+                                        "flex items-center gap-1 overflow-hidden -ml-px px-2 py-1 rounded-r-md rounded-l-none border text-xs whitespace-nowrap transition-colors",
+                                        isDisabled ? "cursor-default" : "cursor-pointer",
+                                        isImplied
+                                            ? CONTACT_CURRENT_CLASSES.success
+                                            : "bg-content2 border-content3 text-foreground/40 hover:text-success"
                                     )}
                                 >
-                                    {meta.label}
-                                </button>
-                            </TouchTooltip>
-                        );
-                    })}
+                                    {impliedMeta.label}
+                                    <TouchTooltip
+                                        content={<div className="max-w-56 text-xs">{impliedMeta.description}</div>}
+                                    >
+                                        <FontAwesomeIcon icon={faCircleInfo} className="opacity-70" />
+                                    </TouchTooltip>
+                                </motion.button>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 <TouchTooltip
@@ -357,8 +399,44 @@ function contactChevronClasses(color: UIColor, isCurrent: boolean, isReached: bo
     return "bg-content2 border-content3 text-foreground/40 hover:text-foreground/70";
 }
 
+// One chevron on the progression run, shared by the plain steps and Granted (which otherwise only
+// differs in its corner rounding, once Implied is sharing its border)
+function ContactStep({ state, isCurrent, isReached, isDisabled, roundedClassName = "rounded-md", onClick }: ContactStepProps) {
+    const meta = artworkContactMeta[state];
+
+    return (
+        <TouchTooltip content={<div className="max-w-56 text-xs">{meta.description}</div>}>
+            <button
+                type="button"
+                disabled={isDisabled}
+                aria-current={isCurrent}
+                onClick={onClick}
+                className={classNames(
+                    "px-2 py-1 border text-xs whitespace-nowrap transition-colors",
+                    roundedClassName,
+                    isDisabled ? "cursor-default" : "cursor-pointer",
+                    contactChevronClasses(meta.color, isCurrent, isReached)
+                )}
+            >
+                {meta.label}
+            </button>
+        </TouchTooltip>
+    );
+}
+
+type ContactStepProps = {
+    state: ArtworkContactState;
+    isCurrent: boolean;
+    isReached: boolean;
+    isDisabled?: boolean;
+    roundedClassName?: string;
+    onClick: () => void;
+};
+
 type ContactPickerProps = {
     value: ArtworkContactState;
+    /** Whether FFG artwork is checked on this option, the only condition under which implied is offered */
+    canImply: boolean;
     isDisabled?: boolean;
     onChange: (value: ArtworkContactState) => void;
 };

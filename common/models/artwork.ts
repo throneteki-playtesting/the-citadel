@@ -10,8 +10,11 @@ export type ArtworkType = (typeof artworkTypes)[number];
  * How far an approach to an artist has got. A single progression rather than separate flags, since each
  * state implies the ones before it - nobody responds without being contacted first.
  */
-export const artworkContactStates = ["none", "contacted", "responded", "granted", "denied"] as const;
+export const artworkContactStates = ["none", "contacted", "responded", "granted", "implied", "denied"] as const;
 export type ArtworkContactState = (typeof artworkContactStates)[number];
+
+export const paymentTypes = ["revolut", "paypal", "bankTransfer"] as const;
+export type PaymentType = (typeof paymentTypes)[number];
 
 /** Tweaks a piece needs before it is usable on a card. Advisory - none of them hold a status back */
 export const artworkPrepFlags = ["upscaling", "outpainting", "cropping", "cleanup", "colour", "attribution"] as const;
@@ -23,6 +26,16 @@ export interface IArtworkPrep {
     done: boolean;
 }
 
+/** How an artist is paid. Kept as one block per type rather than a union, same reasoning as IArtworkProgress's per-type details - switching type shouldn't discard what was already gathered under the old one */
+export interface IArtistPayment {
+    type: PaymentType;
+    revtag?: string;
+    email?: string;
+    accountName?: string;
+    iban?: string;
+    swiftBic?: string;
+}
+
 /** An artist, kept once and referenced by id from every artwork which involves them */
 export interface IArtist extends IAuditable {
     id: string;
@@ -32,6 +45,7 @@ export interface IArtist extends IAuditable {
     portfolio?: string;
     /** Set for artists who have allowed all their work up front, so nobody re-asks each time */
     blanketPermission?: boolean;
+    payment?: IArtistPayment;
     notes?: string;
 }
 
@@ -68,6 +82,7 @@ export interface ICommissionedArtwork {
     paidBy?: string;
     cost?: IArtworkCost;
     url?: string;
+    paid?: boolean;
     notes?: string;
 }
 
@@ -150,15 +165,20 @@ export function selectedOption(sourced?: ISourcedArtwork): ISourcedOption | unde
 }
 
 /**
- * Whether an option's artist has been cleared to use it. Blanket permission stands in for a granted
- * reply, since it was granted once for everything - see IArtist.blanketPermission
+ * Whether an option's artist has been cleared to use it. Blanket permission and implied both stand in
+ * for a granted reply - see IArtist.blanketPermission and canImplyPermission.
  */
 export function hasArtistPermission(option: ISourcedOption, artists: IArtist[]): boolean {
-    if (option.contact === "granted") {
+    if (option.contact === "granted" || option.contact === "implied") {
         return true;
     }
     const artist = artists.find((entry) => entry.id === option.artist);
     return !!artist?.blanketPermission;
+}
+
+/** Whether "implied" is available for this option - only once FFG artwork is actually recorded */
+export function canImplyPermission(option: Pick<ISourcedOption, "ffg">): boolean {
+    return !!option.ffg;
 }
 
 /** One thing an artwork needs before it counts as obtained, and whether it has been done */

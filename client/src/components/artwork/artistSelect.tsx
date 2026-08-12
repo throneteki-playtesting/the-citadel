@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Autocomplete, AutocompleteItem, Button, Chip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPencil, faPlus } from "@fortawesome/free-solid-svg-icons";
-import classNames from "classnames";
 import { IArtist } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
 import Permission from "common/models/permissions";
@@ -11,14 +10,6 @@ import { useGetArtistsQuery } from "../../api";
 import { usePermission } from "../../hooks/usePermission";
 import { TouchTooltip } from "../touchTooltip";
 import EditArtistModal from "./editArtistModal";
-
-// A labelled HeroUI field is taller than a button of the same size name, so the square is sized to the
-// field rather than to the button scale - anything else leaves it floating short of the input's foot
-const FIELD_HEIGHT_CLASSES: Record<NonNullable<ArtistSelectProps["size"]>, string> = {
-    sm: "h-12 w-12",
-    md: "h-14 w-14",
-    lg: "h-16 w-16"
-};
 
 /**
  * Picks from the shared artist list, with add & edit alongside so a missing artist never sends anyone
@@ -51,13 +42,12 @@ export default function ArtistSelect({
     }, [artists, input]);
 
     return (
-        <div className="flex items-end gap-1">
+        <>
             <Autocomplete
                 label={label}
                 size={size}
                 name={name}
                 isRequired={isRequired}
-                className="flex-1 min-w-0"
                 description={canRead ? undefined : "You don't have permission to view the artist list"}
                 isLoading={isLoading}
                 isDisabled={isDisabled || !canRead}
@@ -69,6 +59,27 @@ export default function ArtistSelect({
                     setInput("");
                     onChange(key ? String(key) : undefined);
                 }}
+                // order-last puts it after Autocomplete's own trailing chevron, and keeps it pinned to the
+                // field itself rather than the row bottom once a validation error grows below it
+                endContent={
+                    canEdit &&
+                    !isDisabled && (
+                        <span className="order-last">
+                            <TouchTooltip content={selected ? `Edit ${selected.name}` : "New artist"}>
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    className="h-8 w-8 min-w-8"
+                                    aria-label={selected ? "Edit artist" : "New artist"}
+                                    onPress={() => setEditing(selected ?? "new")}
+                                >
+                                    <FontAwesomeIcon icon={selected ? faPencil : faPlus} />
+                                </Button>
+                            </TouchTooltip>
+                        </span>
+                    )
+                }
             >
                 {(artist) => (
                     <AutocompleteItem key={artist.id} textValue={artist.name}>
@@ -83,19 +94,6 @@ export default function ArtistSelect({
                     </AutocompleteItem>
                 )}
             </Autocomplete>
-            {canEdit && !isDisabled && (
-                <TouchTooltip content={selected ? `Edit ${selected.name}` : "New artist"}>
-                    <Button
-                        isIconOnly
-                        variant="flat"
-                        className={classNames("shrink-0 min-w-0", FIELD_HEIGHT_CLASSES[size])}
-                        aria-label={selected ? "Edit artist" : "New artist"}
-                        onPress={() => setEditing(selected ?? "new")}
-                    >
-                        <FontAwesomeIcon icon={selected ? faPencil : faPlus} />
-                    </Button>
-                </TouchTooltip>
-            )}
             <EditArtistModal
                 isOpen={!!editing}
                 artist={editing === "new" ? undefined : editing}
@@ -104,7 +102,7 @@ export default function ArtistSelect({
                 onSaved={(artist) => onChange(artist.id)}
                 onDeleted={() => onChange(undefined)}
             />
-        </div>
+        </>
     );
 }
 

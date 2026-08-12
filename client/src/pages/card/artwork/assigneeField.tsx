@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Avatar, Button } from "@heroui/react";
+import { Avatar, Button, ButtonGroup } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faPencil, faTrash, faUserPlus } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faPencil, faTrash, faUserPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useGetUserQuery, useUpdateSlotMutation } from "../../../api";
 import { showApiErrorToast } from "../../../api/errors";
 import UserAutocomplete from "../../../components/data/userAutocomplete";
@@ -50,28 +50,30 @@ export default function AssigneeField({ project, number, assignee, isDisabled }:
                     selectedId={pending}
                     onChange={setPending}
                 />
-                <Button
-                    isIconOnly
-                    size="sm"
-                    variant="flat"
-                    color="danger"
-                    aria-label="Unassign"
-                    isDisabled={isSaving || !assignee}
-                    onPress={() => save(undefined)}
-                >
-                    <FontAwesomeIcon icon={faTrash} />
-                </Button>
-                <Button
-                    isIconOnly
-                    size="sm"
-                    variant="flat"
-                    color="primary"
-                    aria-label="Save assignee"
-                    isLoading={isSaving}
-                    onPress={() => save(pending)}
-                >
-                    <FontAwesomeIcon icon={faCheck} />
-                </Button>
+                <ButtonGroup>
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="flat"
+                        color="danger"
+                        aria-label="Unassign"
+                        isDisabled={!!shown && (isSaving || !assignee)}
+                        onPress={() => (shown ? save(undefined) : setIsEditing(false))}
+                    >
+                        <FontAwesomeIcon icon={!shown ? faXmark : faTrash} />
+                    </Button>
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="flat"
+                        color="primary"
+                        aria-label="Save assignee"
+                        isLoading={isSaving}
+                        onPress={() => save(pending)}
+                    >
+                        <FontAwesomeIcon icon={faCheck} />
+                    </Button>
+                </ButtonGroup>
             </div>
         );
     }
@@ -83,7 +85,7 @@ export default function AssigneeField({ project, number, assignee, isDisabled }:
             <Button
                 size="sm"
                 variant="flat"
-                className="shrink-0"
+                className="shrink-0 w-32"
                 startContent={<FontAwesomeIcon icon={faUserPlus} />}
                 onPress={edit}
             >
