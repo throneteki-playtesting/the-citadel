@@ -1,14 +1,14 @@
 import { CardPreview } from "@agot/card-preview";
-import { factionNames, parseCardCode, renderPlaytestingCard } from "common/utils";
-import { Select, SelectItem, Skeleton } from "@heroui/react";
+import { factionNames, parseCardCode, renderPlaytestingCard, typeNames } from "common/utils";
+import { Input, Select, SelectItem, Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useLayoutEffect, useMemo, useRef, useTransition } from "react";
+import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
 import { HighlightTarget } from "../../components/highlightTarget";
 import classNames from "classnames";
@@ -17,7 +17,13 @@ import SectionTitle from "../../components/sectionTitle";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { highlightTarget, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
-import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
+import {
+    faCrosshairs,
+    faFeather,
+    faMagnifyingGlass,
+    faScroll,
+    faXmarkCircle
+} from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
 import Watermark from "../../components/watermark";
 import ProgressRing from "../../components/progressRing";
@@ -25,6 +31,7 @@ import CardProgressBreakdown from "../../components/cardProgressBreakdown";
 import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
 import useHistoryState from "../../hooks/useHistoryState";
+import CardGrid from "../../components/cardGrid";
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
@@ -35,6 +42,7 @@ const sortOptions: Record<SortOption, string> = {
 };
 
 const REORDER_TRANSITION = { duration: 0.4, ease: [0.65, 0, 0.35, 1] } as const;
+const FADE_TRANSITION = { duration: 0.12 } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
 const CORNER_BADGE_CLASS =
@@ -46,6 +54,25 @@ function compareByReviews(cardStats: Map<number, CardStats>, a: IPlaytestCard, b
     return statA.latest - statB.latest || statA.total - statB.total || a.number - b.number;
 }
 
+function matchesSearch(card: IPlaytestCard, term: string) {
+    if (card.name.toLowerCase().includes(term)) {
+        return true;
+    }
+    if (card.text?.toLowerCase().includes(term)) {
+        return true;
+    }
+    if (factionNames[card.faction]?.toLowerCase().includes(term)) {
+        return true;
+    }
+    if (typeNames[card.type]?.toLowerCase().includes(term)) {
+        return true;
+    }
+    if (card.traits?.some((trait) => trait.toLowerCase().includes(term))) {
+        return true;
+    }
+    return false;
+}
+
 export default function ProjectContent({ project }: ProjectContentProps) {
     const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
     const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({
@@ -55,6 +82,11 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     const [storedSort, setStoredSort] = useHistoryState<SortOption>("sortBy", "number");
     const [isSorting, startSorting] = useTransition();
+
+    const [search, setSearch] = useState("");
+    // Deferred so the input's own re-render (and the character it shows) is never blocked by
+    // mounting the — potentially large — search-results grid.
+    const deferredSearch = useDeferredValue(search.trim());
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -120,15 +152,8 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         return map;
     }, [slotsData?.items, canReadProgress]);
 
-    const cardsByFaction = useMemo(() => {
-        const map = new Map<Faction, IPlaytestCard[]>();
-        for (const card of data?.items ?? []) {
-            const array = map.get(card.faction) ?? [];
-            array.push(card);
-            map.set(card.faction, array);
-        }
-
-        const comparators: Record<SortOption, (a: IPlaytestCard, b: IPlaytestCard) => number> = {
+    const comparators = useMemo<Record<SortOption, (a: IPlaytestCard, b: IPlaytestCard) => number>>(
+        () => ({
             number: (a, b) => a.number - b.number,
             name: (a, b) => a.name.localeCompare(b.name),
             reviews: (a, b) => compareByReviews(cardStats, a, b),
@@ -149,12 +174,37 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                 const pctB = cardProgress.get(b.number)?.overall ?? 0;
                 return pctB - pctA || a.number - b.number;
             }
-        };
+        }),
+        [cardStats, cardReleases, cardProgress]
+    );
+
+    const cardsByFaction = useMemo(() => {
+        const map = new Map<Faction, IPlaytestCard[]>();
+        for (const card of data?.items ?? []) {
+            const array = map.get(card.faction) ?? [];
+            array.push(card);
+            map.set(card.faction, array);
+        }
         for (const cards of map.values()) {
             cards.sort(comparators[sortBy]);
         }
         return map;
-    }, [data?.items, cardStats, cardReleases, cardProgress, sortBy]);
+    }, [data?.items, comparators, sortBy]);
+
+    const filteredCards = useMemo(() => {
+        const term = deferredSearch.toLowerCase();
+        if (!term) {
+            return [];
+        }
+        return (data?.items ?? []).filter((card) => matchesSearch(card, term)).sort(comparators[sortBy]);
+    }, [data?.items, deferredSearch, comparators, sortBy]);
+
+    // Plots are landscape — laid out at the same column count as upright cards they'd look
+    // cramped, so when every result is a plot, switch to the wider preset built for them.
+    const allFilteredArePlots = useMemo(
+        () => filteredCards.length > 0 && filteredCards.every((card) => card.type === "plot"),
+        [filteredCards]
+    );
 
     if (!isLoading && !data) {
         return (
@@ -169,6 +219,22 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         <div className="flex flex-col gap-2">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <SectionTitle className="sm:flex-1">Project Cards</SectionTitle>
+                <Input
+                    placeholder="Search cards..."
+                    value={search}
+                    onValueChange={setSearch}
+                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
+                    endContent={
+                        search ? (
+                            <button type="button" onClick={() => setSearch("")}>
+                                <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                            </button>
+                        ) : null
+                    }
+                    className="w-full sm:max-w-64"
+                    size="sm"
+                    isDisabled={isLoading}
+                />
                 <Select
                     label="Sort by..."
                     selectedKeys={[sortBy]}
@@ -195,26 +261,86 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         ))}
                 </div>
             ) : (
-                <div
-                    className={classNames("flex flex-col gap-2 transition-opacity", {
-                        "opacity-50 pointer-events-none": isSorting
-                    })}
-                >
-                    {[...cardsByFaction.entries()].map(([faction, cards]) => (
-                        <FactionCarousel
-                            key={faction}
-                            faction={faction}
-                            cards={cards}
-                            cardStats={cardStats}
-                            cardReleases={cardReleases}
-                            cardProgress={cardProgress}
-                            nextReleaseCode={nextReleaseCode}
-                            sortBy={sortBy}
-                            showReviewBadge={sortBy === "reviews"}
-                            showProgressBadge={sortBy === "progress"}
-                            isLoadingReviews={isLoadingReviews || !reviewsData}
-                        />
-                    ))}
+                <div className="grid grid-cols-1">
+                    <AnimatePresence initial={false}>
+                        {deferredSearch ? (
+                            <motion.div
+                                key="search-results"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={FADE_TRANSITION}
+                                className="col-start-1 row-start-1 min-w-0"
+                            >
+                                {filteredCards.length === 0 ? (
+                                    <div className="p-8 text-center text-default-400">
+                                        No cards match &ldquo;{deferredSearch}&rdquo;.
+                                    </div>
+                                ) : (
+                                    <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
+                                        {(card) => (
+                                            <div
+                                                key={parseCardCode(false, card.project, card.number)}
+                                                className={classNames(
+                                                    "w-full",
+                                                    card.type === "plot" ? "aspect-[333/240]" : "aspect-[240/333]"
+                                                )}
+                                            >
+                                                <PermissionedLink
+                                                    to={`/project/${card.project}/${card.number}`}
+                                                    requires={Permission.READ_CARDS}
+                                                    className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                                >
+                                                    <ProjectContentCard
+                                                        card={card}
+                                                        stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
+                                                        release={cardReleases.get(card.number)}
+                                                        progress={cardProgress.get(card.number)}
+                                                        isNextRelease={
+                                                            !!nextReleaseCode &&
+                                                            cardReleases.get(card.number)?.code === nextReleaseCode
+                                                        }
+                                                        showReviewBadge={sortBy === "reviews"}
+                                                        showProgressBadge={sortBy === "progress"}
+                                                    />
+                                                </PermissionedLink>
+                                            </div>
+                                        )}
+                                    </CardGrid>
+                                )}
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="carousels"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={FADE_TRANSITION}
+                                className={classNames(
+                                    "col-start-1 row-start-1 min-w-0 flex flex-col gap-2 transition-opacity",
+                                    {
+                                        "opacity-50 pointer-events-none": isSorting
+                                    }
+                                )}
+                            >
+                                {[...cardsByFaction.entries()].map(([faction, cards]) => (
+                                    <FactionCarousel
+                                        key={faction}
+                                        faction={faction}
+                                        cards={cards}
+                                        cardStats={cardStats}
+                                        cardReleases={cardReleases}
+                                        cardProgress={cardProgress}
+                                        nextReleaseCode={nextReleaseCode}
+                                        sortBy={sortBy}
+                                        showReviewBadge={sortBy === "reviews"}
+                                        showProgressBadge={sortBy === "progress"}
+                                        isLoadingReviews={isLoadingReviews || !reviewsData}
+                                    />
+                                ))}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             )}
         </div>
