@@ -6,12 +6,8 @@ import ArtworkImage from "./artworkImage";
 const REVEAL_TRANSITION = { duration: 0.35, ease: [0.65, 0, 0.35, 1] } as const;
 
 /**
- * The canvas for artwork which may not exist yet. An empty frame sat above the fields is a promise the
- * record can't keep, so nothing is reserved until there is a link worth drawing - and it opens into the
- * space rather than appearing in it, so the layout shifting is something you watch happen.
- *
- * It waits for a whole link rather than the first keystroke; revealing mid-type would flicker the layout
- * open and shut for every character.
+ * The canvas for artwork which may not exist yet - nothing is reserved until there is a link worth
+ * drawing, and it opens into the space rather than appearing in it, so the shift is something you watch.
  */
 export default function ArtworkReveal({ url, alt, children }: ArtworkRevealProps) {
     const isReady = !!url && !artworkUrlIssue(url);
@@ -43,14 +39,8 @@ export default function ArtworkReveal({ url, alt, children }: ArtworkRevealProps
     );
 }
 
-/**
- * True only for the length of the canvas opening or closing. `layout` animates every movement framer sees,
- * so left on permanently it also slides the whole row whenever something above it (the checklist) resizes -
- * which is the page reflowing, not the artwork arriving, and should simply land in its new place.
- *
- * It's derived during render rather than in an effect because framer reads `layout` on the render the
- * change happens on; a commit later is a frame too late and the reveal jumps instead.
- */
+// True only for the length of the canvas opening/closing, so `layout` doesn't also slide the row when
+// something above it resizes. Derived during render, since framer reads `layout` on that same render.
 function useReveal(isReady: boolean) {
     const [isRevealing, setIsRevealing] = useState(false);
     const [lastReady, setLastReady] = useState(isReady);

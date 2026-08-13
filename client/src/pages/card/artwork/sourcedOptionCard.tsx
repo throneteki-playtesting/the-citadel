@@ -35,10 +35,7 @@ const CONTACT_REACHED_CLASSES: Partial<Record<UIColor, string>> = {
     danger: "bg-danger-100 border-danger-200 text-danger-700"
 };
 
-/**
- * The option as it sits in the list. The card itself is presentational, so the very same markup can be
- * handed to the DragOverlay - anything less and the card you carry isn't the card you picked up
- */
+// The option as it sits in the list. Presentational, so the same markup can be handed to the DragOverlay
 export default function SortableSourcedOption(props: SourcedOptionCardProps) {
     // The final choice is out of the sort entirely, droppable too, or another option displaces it
     const isFixed = props.isDisabled || props.isSelected;
@@ -181,7 +178,6 @@ export function SourcedOptionCard({
                     </Button>
                 </TouchTooltip>
             </div>
-
             <div className="flex flex-col sm:flex-row gap-3">
                 <div className="sm:w-56 shrink-0">
                     <ArtworkImage url={option.url} alt="Sourced artwork option" />
@@ -278,17 +274,8 @@ type SourcedOptionDragProps = {
     isOverlay?: boolean;
 };
 
-/**
- * The approach as one progression, so states which can't coexist never can. Plain buttons in order, with
- * everything up to the current one filled in - that trail is what says it is a flow, without any joinery
- * between the buttons having to say it.
- *
- * Denied is not a step on that run. It is the run being called off, so it sits apart and, while it holds,
- * greys the whole progression out - there is nothing to advance through until it is taken back.
- *
- * Implied sits apart too, but is one-way like every other step rather than toggle-off like Denied. It
- * only exists while FFG is checked, so it fades with that checkbox and shares Granted's border.
- */
+// The approach as one progression, everything up to the current step filled in. Denied calls the run off
+// and greys it out; Implied fades in only while FFG is checked, sharing Granted's border.
 function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerProps) {
     const isDenied = value === "denied";
     const isImplied = value === "implied";
@@ -315,9 +302,6 @@ function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerP
                             onClick={() => onChange(state)}
                         />
                     ))}
-
-                    {/* Granted and Implied share one border - rounded only at the outer edges, borders
-                        overlapped with a negative margin, the same technique HeroUI's own ButtonGroup uses */}
                     <div className="flex">
                         <ContactStep
                             state="granted"
@@ -358,7 +342,6 @@ function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerP
                         </AnimatePresence>
                     </div>
                 </div>
-
                 <TouchTooltip
                     content={
                         <div className="max-w-56 text-xs">
@@ -401,7 +384,14 @@ function contactChevronClasses(color: UIColor, isCurrent: boolean, isReached: bo
 
 // One chevron on the progression run, shared by the plain steps and Granted (which otherwise only
 // differs in its corner rounding, once Implied is sharing its border)
-function ContactStep({ state, isCurrent, isReached, isDisabled, roundedClassName = "rounded-md", onClick }: ContactStepProps) {
+function ContactStep({
+    state,
+    isCurrent,
+    isReached,
+    isDisabled,
+    roundedClassName = "rounded-md",
+    onClick
+}: ContactStepProps) {
     const meta = artworkContactMeta[state];
 
     return (

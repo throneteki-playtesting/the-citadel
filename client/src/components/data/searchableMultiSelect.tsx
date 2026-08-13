@@ -6,9 +6,6 @@ import { BaseElementProps } from "../../types";
 
 const SENTINEL_KEY = "__searchable-select-sentinel__";
 
-// Keys the listbox is entitled to while the search field has focus - everything else is editing the term
-const LISTBOX_KEYS = ["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"];
-
 function SearchableMultiSelect<T extends object>({
     className,
     style,
@@ -73,7 +70,9 @@ function SearchableMultiSelect<T extends object>({
                         setIsOpen(true);
                     }}
                     onKeyDown={(e) => {
-                        if (!LISTBOX_KEYS.includes(e.key)) {
+                        // Keys the listbox is entitled to while the search field has focus - everything
+                        // else is editing the term
+                        if (!["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"].includes(e.key)) {
                             e.stopPropagation();
                         }
                     }}

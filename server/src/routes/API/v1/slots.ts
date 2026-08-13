@@ -255,9 +255,8 @@ router.patch(
             ...(statuses.artwork && { artwork: { ...slot.statuses.artwork, ...statuses.artwork } })
         };
 
-        // Artwork can't be moved to a status its own details don't support. Only the move is refused -
-        // a record already sitting at one it no longer satisfies must stay editable, or repairing the
-        // details it is missing would be impossible
+        // Artwork can't be moved to a status its own details don't support. Only the move is refused,
+        // so a record already sitting at an unsatisfied status stays editable so it can be repaired.
         const artworkStatusChanged = mergedStatuses && mergedStatuses.artwork.status !== slot.statuses.artwork.status;
         if (mergedStatuses && artworkStatusChanged) {
             const artists = await dataService.artists.read();

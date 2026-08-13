@@ -256,7 +256,6 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
                             value={draft.notes}
                             onValueChange={(value) => set("notes", value)}
                         />
-
                         <FormValidationSummary
                             errors={errors}
                             mappedPaths={[
@@ -272,7 +271,6 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
                                 "notes"
                             ]}
                         />
-
                         {artist && (
                             <div className="flex flex-col gap-2 p-3 rounded-md border border-danger/40 bg-danger/5">
                                 <span className="font-cinzel uppercase tracking-wide text-xs text-danger">

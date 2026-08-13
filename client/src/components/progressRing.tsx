@@ -5,8 +5,7 @@ import classNames from "classnames";
 const RADIUS = 10;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-// Wraps content in a completeness ring, centring it absolutely so that surrounding it never changes its
-// rendered size. Forwards its ref, so a tooltip or popover can use the ring itself as the trigger.
+// Wraps content in a completeness ring; forwards its ref, so a tooltip or popover can use the ring itself as the trigger.
 function ProgressRing({ value, className, ringClassName, children, ref, ...props }: ProgressRingProps) {
     return (
         <span

@@ -14,16 +14,12 @@ import {
     isPrepDone,
     visiblePrep
 } from "common/models/artwork";
-import { artworkPrepMeta } from "../../../constants";
+import { artworkPrepMeta, EASE_STANDARD } from "../../../constants";
 import StatusNotice from "../../../components/statusNotice";
 
-const ROW_TRANSITION = { duration: 0.25, ease: [0.65, 0, 0.35, 1] } as const;
+const ROW_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
-/**
- * What the artwork still needs, ticked off as it is gathered. Deliberately says nothing about the status -
- * where the track lands is settled at the point of saving, and repeating it here only invites the two to
- * be read as one thing.
- */
+// What the artwork still needs, ticked off as it is gathered - says nothing about the status itself
 export default function ArtworkChecklist({ artwork, artists }: ArtworkChecklistProps) {
     const requirements = artworkRequirements(artwork, artists);
     const prep = visiblePrep(artwork);
@@ -32,7 +28,7 @@ export default function ArtworkChecklist({ artwork, artists }: ArtworkChecklistP
     return (
         <StatusNotice
             icon={isDone ? faCircleCheck : faListCheck}
-            tone={isDone ? "success" : "neutral"}
+            color={isDone ? "success" : "neutral"}
             label="Artwork checklist"
             detail={<ArtworkChecklistItems requirements={requirements} prep={prep} />}
         />

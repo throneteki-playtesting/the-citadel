@@ -10,12 +10,8 @@ const CURRENCIES = ["AUD", "HUF", "CAD", "EUR", "GBP", "USD"];
 const DEFAULT_CURRENCY = "USD";
 
 /**
- * What a commission cost, as one money field: the amount formats itself in the chosen currency, which is
- * picked at the trailing edge.
- *
- * The pick is held here as well as on the value, because a currency is choosable before there is any
- * amount to attach it to - a stored cost only exists once both halves do, and picking "EUR" on an empty
- * field has to stick until an amount arrives rather than silently doing nothing.
+ * What a commission cost, as one money field: the amount formats itself in the chosen currency, picked at
+ * the trailing edge. The pick is also held locally, since a currency is choosable before there's an amount.
  */
 export default function CostInput({ value, isDisabled, className, onChange }: CostInputProps) {
     const [picked, setPicked] = useState(DEFAULT_CURRENCY);

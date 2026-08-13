@@ -15,11 +15,7 @@ import ProductionLockAlert from "../productionLockAlert";
 
 const steps = laneSteps(artworkLane);
 
-/**
- * Manual control of the artwork track alone. The status normally follows what happens on the Artwork
- * tab, so this exists for the two cases automation can't cover - signing a finished piece off, and
- * correcting a track which has got ahead of, or behind, reality.
- */
+// Manual control of the artwork track, for the two cases automation can't cover: signing off, and correcting
 export default function ArtworkStatusModal({
     isOpen,
     onClose,
@@ -68,8 +64,8 @@ export default function ArtworkStatusModal({
         [blockedReasons]
     );
 
-    // Worth saying out loud when a manual pick is one the next detail change would undo. Complete is the
-    // exception - automation never awards it, so choosing it is never second-guessed
+    // Worth saying when a manual pick is one the next detail change would undo - Complete is exempt since
+    // automation never awards it
     const willBeOverridden =
         !!artwork &&
         canReadArtists &&
@@ -116,7 +112,7 @@ export default function ArtworkStatusModal({
                             {willBeOverridden && (
                                 <StatusNotice
                                     icon={faTriangleExclamation}
-                                    tone="warning"
+                                    color="warning"
                                     label="This may not stick"
                                     detail="The artwork's own details point elsewhere, so the next change made on the Artwork tab will set the status again."
                                 />

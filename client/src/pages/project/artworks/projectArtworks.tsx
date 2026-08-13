@@ -105,11 +105,8 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
         [project.releases]
     );
 
-    /**
-     * Whether a row survives the filters, optionally ignoring one axis. Skipping an axis is what lets its
-     * own chips be counted against everything else that is filtering, so "12" beside a status means twelve
-     * within the release currently picked rather than twelve in the project.
-     */
+    // Whether a row survives the filters, optionally ignoring one axis - so a chip's count reflects
+    // everything else filtering rather than itself
     const matches = useCallback(
         (row: IArtworkRow, ignore?: FilterAxis) => {
             const artwork = row.slot.statuses.artwork;
@@ -183,16 +180,8 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
         return [...filtered].sort(comparators[sortBy]);
     }, [rows, matches, sortBy]);
 
-    /**
-     * The list as one flat run of headers and rows, rather than rows nested inside a element per group.
-     * A grouped wrapper has to be keyed by its release, so turning grouping on or off changes that key and
-     * React throws away every row inside it - they unmount and remount rather than moving, and there is
-     * nothing left for a layout animation to animate. Flat, a row keeps its identity whatever the grouping
-     * does around it.
-     *
-     * Release order, then everything without one - an unassigned card is furthest from being printed.
-     * Narrowing to particular releases is itself the ask to see them apart, so grouping follows the filter.
-     */
+    // One flat run of headers and rows rather than rows nested per group, so a row keeps its layout-animation
+    // identity whatever the grouping does around it. Release order, then everything without one.
     const entries = useMemo((): ListEntry[] => {
         // The release only rides on a row while the list is ungrouped. Once headers name it, repeating the
         // code on every row beneath says nothing the header did not already say
@@ -392,11 +381,8 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
 
 type ProjectArtworksProps = { project: IProject };
 
-/**
- * The page's own shape while the slots load, rather than one block standing in for all of it. The row
- * count comes from the project's cached slot tally, so the list settles into the space it was already
- * holding instead of shoving the page down as it arrives.
- */
+// The page's own shape while the slots load, sized from the project's cached slot tally so the list
+// settles into the space it was already holding rather than shoving the page down as it arrives
 function ArtworksSkeleton({ project }: { project: IProject }) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
@@ -405,7 +391,7 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
             <div className="text-sm text-foreground/50">{ARTWORKS_DESCRIPTION}</div>
             <SectionTitle size="lg">Artworks</SectionTitle>
             <div className="flex flex-col gap-1.5">
-                {[4, 3, project.releases.length].map((chips, row) =>
+                {[artworkStatuses.length, artworkTypes.length, project.releases.length].map((chips, row) =>
                     chips > 0 ? (
                         <div key={row} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                             <Skeleton className="h-3 w-14 shrink-0 rounded-sm" />
@@ -534,12 +520,10 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                         <span className="w-5 text-center text-foreground/30">—</span>
                     )}
                 </div>
-
                 <Divider
                     orientation="vertical"
                     className="hidden sm:block self-stretch h-auto w-px shrink-0 bg-content3/60"
                 />
-
                 <ScrollShadow
                     orientation="horizontal"
                     hideScrollBar
@@ -552,7 +536,6 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                         </span>
                     ))}
                 </ScrollShadow>
-
                 <Attention row={row} />
             </div>
             <div className="shrink-0 self-center flex flex-col sm:flex-row items-center justify-center gap-0.5">
@@ -561,7 +544,6 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                 ) : (
                     <span aria-hidden className="hidden sm:block size-6" />
                 )}
-
                 <Button
                     isIconOnly
                     size="sm"

@@ -5,9 +5,7 @@ import { BaseElementProps } from "../types";
 
 /**
  * Lays its children out side by side and slides between them, keeping only the active one's height so
- * the surrounding page doesn't jump. The Wizard's pages are built on this; anywhere else wanting the
- * same "shift across to a new screen" feel can use it directly without taking on the Wizard's form
- * handling, validation or context.
+ * the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling.
  */
 export default function SlidingPages({ className, style, currentPage, pageProps, children }: SlidingPagesProps) {
     const activeWrapperRef = useRef<HTMLDivElement>(null);

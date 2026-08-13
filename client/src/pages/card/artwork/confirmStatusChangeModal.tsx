@@ -6,10 +6,7 @@ import { ArtworkStatus } from "common/models/slots";
 import { artworkLane } from "../../../constants";
 import StatusNotice from "../../../components/statusNotice";
 
-/**
- * Saved details can move the artwork's track on their own, which is the point - but a status moving is
- * still a statement about the card, so it is agreed to rather than discovered afterwards.
- */
+// A status moving is a statement about the card, so it is agreed to rather than discovered afterwards
 export default function ConfirmStatusChangeModal({
     isOpen,
     from,
@@ -45,13 +42,13 @@ export default function ConfirmStatusChangeModal({
                             icon={isRetreat ? faArrowLeft : faArrowRight}
                             className={isRetreat ? "text-warning" : "text-foreground/30"}
                         />
-                        <Step status={to} tone="primary" />
+                        <Step status={to} color="primary" />
                     </div>
                     <p className="text-center text-sm text-foreground/60">{reason}</p>
                     {isRetreat && (
                         <StatusNotice
                             icon={faTriangleExclamation}
-                            tone="warning"
+                            color="warning"
                             label="This gives up progress"
                             detail={`${artworkLane.meta[from].label} will no longer be recorded against this card.`}
                         />
@@ -68,7 +65,7 @@ export default function ConfirmStatusChangeModal({
     );
 }
 
-function Step({ status, tone }: { status: ArtworkStatus; tone?: "primary" | "warning" }) {
+function Step({ status, color }: { status: ArtworkStatus; color?: "primary" | "warning" }) {
     const meta = artworkLane.meta[status];
 
     return (
@@ -76,9 +73,9 @@ function Step({ status, tone }: { status: ArtworkStatus; tone?: "primary" | "war
             <div
                 className={classNames(
                     "flex items-center justify-center size-12 rounded-full border",
-                    tone === "primary" && "border-primary bg-primary/10 text-primary",
-                    tone === "warning" && "border-warning bg-warning/10 text-warning",
-                    !tone && "border-content3 text-foreground/40"
+                    color === "primary" && "border-primary bg-primary/10 text-primary",
+                    color === "warning" && "border-warning bg-warning/10 text-warning",
+                    !color && "border-content3 text-foreground/40"
                 )}
             >
                 <FontAwesomeIcon icon={meta.icon} className="text-lg" />
@@ -86,9 +83,9 @@ function Step({ status, tone }: { status: ArtworkStatus; tone?: "primary" | "war
             <span
                 className={classNames(
                     "font-cinzel uppercase tracking-wide text-xs text-center",
-                    tone === "primary" && "text-primary",
-                    tone === "warning" && "text-warning",
-                    !tone && "text-foreground/40"
+                    color === "primary" && "text-primary",
+                    color === "warning" && "text-warning",
+                    !color && "text-foreground/40"
                 )}
             >
                 {meta.label}

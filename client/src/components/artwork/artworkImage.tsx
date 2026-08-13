@@ -16,12 +16,8 @@ const ratioClasses = {
 } as const;
 
 /**
- * Artwork shown straight from wherever it is hosted. Nothing is stored on our side, so a link which has
- * since been taken down is a real outcome rather than an error - it gets its own state, since the artwork
- * is then only recoverable from whoever saved it into the art folders.
- *
- * The frame is a fixed shape but the piece inside it is never cropped to fill it. Artwork arrives in every
- * ratio going, and a crop here would hide exactly the part someone is trying to judge.
+ * Artwork shown straight from wherever it is hosted; nothing is stored on our side, so a taken-down link
+ * is a real state rather than an error. The frame never crops the piece inside it - artwork arrives in every ratio going.
  */
 export default function ArtworkImage({ className, style, url, alt, ratio = "landscape" }: ArtworkImageProps) {
     // A Drive share link points at a viewer page, so it is rewritten - and Drive's two hosts fail
@@ -39,11 +35,8 @@ export default function ArtworkImage({ className, style, url, alt, ratio = "land
         setState(url ? "loading" : "empty");
     }, [url]);
 
-    /**
-     * Reordering a list moves the <img> rather than remounting it, and a browser can hand back an element
-     * which is already complete without firing load again - the skeleton would then sit over a picture that
-     * is right there. The element itself is the only answer that survives the move
-     */
+    // Reordering a list moves the <img> rather than remounting it, and a browser can hand back an element
+    // already complete without firing load again, so the element itself is checked directly.
     const onAttach = (img: HTMLImageElement | null) => {
         imageRef.current = img;
         if (img?.complete && img.naturalWidth > 0) {
@@ -118,7 +111,6 @@ export default function ArtworkImage({ className, style, url, alt, ratio = "land
                     onError={onError}
                 />
             </motion.div>
-
             <ArtworkFocus
                 origin={origin}
                 src={candidates[attempt]}

@@ -1,4 +1,4 @@
-import { ISlot } from "common/models/slots";
+import { ISlot, ISlotRef } from "common/models/slots";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient } from "mongodb";
 import { BasicAuditableRepository } from "./shared";
@@ -67,11 +67,8 @@ export default class SlotsRepository extends BasicAuditableRepository<"slot"> {
         return Array.isArray(syncing) ? data : data[0];
     }
 
-    /**
-     * Slots whose artwork credits an artist, whether sourced from them or commissioned of them. Queried
-     * against the collection directly, since Filter has no way to match one field of an array's entries
-     */
-    public async byArtist(artist: string): Promise<Pick<ISlot, "project" | "number">[]> {
+    // Queried against the collection directly, since Filter has no way to match one field of an array's entries
+    public async byArtist(artist: string): Promise<ISlotRef[]> {
         return await this.database.collection
             .find(
                 {

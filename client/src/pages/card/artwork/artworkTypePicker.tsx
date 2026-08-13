@@ -6,11 +6,7 @@ import { ArtworkType, artworkTypes } from "common/models/slots";
 import { artworkTypeDescriptions, artworkTypeIcons, artworkTypeNames } from "../../../constants";
 import SectionTitle from "../../../components/sectionTitle";
 
-/**
- * How the artwork is being obtained. Laid out as tiles rather than hidden behind a dropdown, because this
- * one choice decides the whole shape of everything below it - a decision that consequential should be
- * visible with its alternatives, not something you have to open a menu to reconsider.
- */
+// How the artwork is being obtained. Tiles rather than a dropdown - this one choice shapes everything below it
 export default function ArtworkTypePicker({ value, isDisabled, isLocked, onChange }: ArtworkTypePickerProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     // Stacked, three tiles answering a settled question is most of a screen. sm: opens them all again

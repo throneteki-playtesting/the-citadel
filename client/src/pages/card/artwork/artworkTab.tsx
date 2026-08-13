@@ -17,6 +17,7 @@ import { Slot } from "common/models/schemas";
 import { ArtworkStatus } from "common/models/slots";
 import {
     artworkPrepFlags,
+    artworkTypes,
     comparableArtwork,
     IArtworkProgress,
     isChecklistDone,
@@ -29,7 +30,7 @@ import { useGetArtistsQuery, useGetCardsQuery, useGetSlotQuery, useUpdateSlotMut
 import { usePermission } from "../../../hooks/usePermission";
 import { useFormValidation } from "../../../hooks/useFormValidation";
 import { showApiErrorToast } from "../../../api/errors";
-import { artworkLane, laneSteps } from "../../../constants";
+import { artworkLane, EASE_STANDARD, laneSteps } from "../../../constants";
 import StatusStepper from "../../../components/statusStepper";
 import StatusNotice from "../../../components/statusNotice";
 import ProcessActions, { ProcessAction } from "../../../components/actions/processActions";
@@ -49,8 +50,8 @@ const trackSteps = laneSteps(artworkLane);
 // A modal's form opened from in here submits through this one too, so only our own submit is answered
 const ARTWORK_FORM_ID = "artwork-form";
 
-const PANEL_TRAVEL = 16;
-const PANEL_TRANSITION = { duration: 0.2, ease: [0.65, 0, 0.35, 1] } as const;
+const TYPE_PANEL_TRAVEL = 16;
+const PANEL_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 
 export default function ArtworkTab({ project, number, showTrack, onBack }: ArtworkTabProps) {
     const navigate = useNavigate();
@@ -238,11 +239,11 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.25, ease: [0.65, 0, 0.35, 1] }}
+                            transition={{ duration: 0.25, ease: EASE_STANDARD }}
                         >
                             <StatusNotice
                                 icon={faCircleCheck}
-                                tone="info"
+                                color="info"
                                 label="Ready to sign off"
                                 detail="This artwork is ready to be marked as complete — this action can be reverted."
                                 className="mt-2"
@@ -277,9 +278,9 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                     <motion.div
                         key={draft.type}
                         className="flex flex-col gap-3"
-                        initial={{ opacity: 0, y: -PANEL_TRAVEL }}
+                        initial={{ opacity: 0, y: -TYPE_PANEL_TRAVEL }}
                         animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -PANEL_TRAVEL }}
+                        exit={{ opacity: 0, y: -TYPE_PANEL_TRAVEL }}
                         transition={PANEL_TRANSITION}
                     >
                         {draft.type === "sourced" && (
@@ -312,15 +313,11 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                     </motion.div>
                 )}
             </AnimatePresence>
-
             {draft.type && (
                 <PrepChecklist prep={draft.prep} isDisabled={!isEditable} onChange={(prep) => set("prep", prep)} />
             )}
-
             <FormValidationSummary errors={errors} mappedPaths={mappedPaths} />
-
             <ProcessActions actions={actions} className="pt-2" />
-
             <ConfirmStatusChangeModal
                 isOpen={!!pendingChange && !!committed}
                 from={committed?.status ?? "pending"}
@@ -334,11 +331,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
     );
 }
 
-/**
- * The tab's own shape while it loads. Reachable both from the card page and from the project's artwork
- * list, where it is what covers a card being swapped for another - so it has to hold the layout it is
- * about to become rather than a single block the real thing then shoves around.
- */
+// The tab's own shape while it loads, holding the layout it is about to become rather than one block
 function ArtworkTabSkeleton({ showTrack }: { showTrack?: boolean }) {
     return (
         <div className="flex flex-col gap-4 p-1 sm:p-2">
@@ -346,20 +339,16 @@ function ArtworkTabSkeleton({ showTrack }: { showTrack?: boolean }) {
                 <Skeleton className="h-4 w-40 rounded-sm" />
                 <Skeleton className="h-7 w-64 rounded-sm" />
             </div>
-
             {showTrack && <Skeleton className="h-12 w-full rounded-md" />}
-
             <Skeleton className="h-8 w-full rounded-md" />
-
             <div className="flex flex-col gap-2">
                 <Skeleton className="h-3 w-48 rounded-sm" />
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {[0, 1, 2].map((tile) => (
-                        <Skeleton key={tile} className="h-20 w-full rounded-md" />
+                    {artworkTypes.map((type) => (
+                        <Skeleton key={type} className="h-20 w-full rounded-md" />
                     ))}
                 </div>
             </div>
-
             <div className="flex flex-col sm:flex-row gap-3">
                 <Skeleton className="w-full sm:w-64 aspect-square shrink-0 rounded-md" />
                 <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -369,7 +358,6 @@ function ArtworkTabSkeleton({ showTrack }: { showTrack?: boolean }) {
                     <Skeleton className="h-20 w-full sm:col-span-2 rounded-md" />
                 </div>
             </div>
-
             <div className="flex flex-col gap-2">
                 <Skeleton className="h-3 w-32 rounded-sm" />
                 <div className="flex flex-wrap gap-2">

@@ -8,8 +8,7 @@ import { User } from "common/models/auth";
 import { fuzzyMatch } from "common/utils";
 import usePaginatedUsers from "../../hooks/usePaginatedUsers";
 import SearchableMultiSelect from "./searchableMultiSelect";
-
-const BASE_FILTER = { discordId: { $ne: "anonymous" } };
+import { EXCLUDE_ANONYMOUS_USER_FILTER } from "../../constants";
 
 const UserSelect = ({
     className,
@@ -23,7 +22,8 @@ const UserSelect = ({
     isDisabled,
     onChange
 }: UserSelectProps) => {
-    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } = usePaginatedUsers(BASE_FILTER);
+    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } =
+        usePaginatedUsers(EXCLUDE_ANONYMOUS_USER_FILTER);
     const { data: selectedData } = useGetUsersQuery(
         { filter: { discordId: { $in: selectedIds } } },
         { skip: selectedIds.length === 0 }

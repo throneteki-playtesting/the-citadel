@@ -6,17 +6,14 @@ export const artworkTypes = ["sourced", "commissioned", "ai"] as const;
 export type ArtworkStatus = (typeof artworkStatuses)[number];
 export type ArtworkType = (typeof artworkTypes)[number];
 
-/**
- * How far an approach to an artist has got. A single progression rather than separate flags, since each
- * state implies the ones before it - nobody responds without being contacted first.
- */
+// A single progression rather than separate flags - each state implies the ones before it
 export const artworkContactStates = ["none", "contacted", "responded", "granted", "implied", "denied"] as const;
 export type ArtworkContactState = (typeof artworkContactStates)[number];
 
 export const paymentTypes = ["revolut", "paypal", "bankTransfer"] as const;
 export type PaymentType = (typeof paymentTypes)[number];
 
-/** Tweaks a piece needs before it is usable on a card. Advisory - none of them hold a status back */
+// Advisory tweaks a piece needs before it is usable on a card - none of them hold a status back
 export const artworkPrepFlags = ["upscaling", "outpainting", "cropping", "cleanup", "colour", "attribution"] as const;
 export type ArtworkPrepFlag = (typeof artworkPrepFlags)[number];
 
@@ -26,7 +23,7 @@ export interface IArtworkPrep {
     done: boolean;
 }
 
-/** How an artist is paid. Kept as one block per type rather than a union, same reasoning as IArtworkProgress's per-type details - switching type shouldn't discard what was already gathered under the old one */
+// One block per type rather than a union - switching type shouldn't discard fields already gathered
 export interface IArtistPayment {
     type: PaymentType;
     revtag?: string;
@@ -54,10 +51,7 @@ export interface ISourcedOption {
     id: string;
     url: string;
     artist?: string;
-    /**
-     * Existing game artwork owned by FFG. Recorded for the manager's judgement only - it never satisfies
-     * the permission gate on its own
-     */
+    // Existing FFG artwork - recorded for the manager's judgement only, never satisfies the permission gate alone
     ffg?: boolean;
     contact: ArtworkContactState;
     notes?: string;
@@ -101,10 +95,7 @@ export interface IArtworkProgress {
     type?: ArtworkType;
     /** Discord id of whoever has taken this artwork on - one piece, one owner, not a list */
     assignee?: string;
-    /**
-     * Details for each way artwork can be obtained. Kept side by side rather than as one union, so
-     * switching type mid-flight never discards what was already gathered under the old one
-     */
+    // Side by side rather than one union, so switching type mid-flight keeps what was gathered under the old one
     sourced?: ISourcedArtwork;
     commissioned?: ICommissionedArtwork;
     ai?: IAiArtwork;
@@ -136,18 +127,17 @@ function pruneEmpty(value: unknown): unknown {
     return value;
 }
 
-/**
- * What is wrong with a link, or undefined when nothing is. Blank is always fine - a piece being gathered
- * legitimately has no link yet. Mirrors the schema's Link rule, and is for deciding whether a link is
- * worth pointing an <img> at; validating one on the way in is the schema's job.
- */
+// What is wrong with a link, or undefined when nothing is (blank is always fine). For deciding whether a
+// link is worth pointing an <img> at; validating one on the way in is the schema's job.
 export function artworkUrlIssue(url?: string): string | undefined {
     if (!url || url.trim().length === 0) {
         return undefined;
     }
     try {
         const { protocol } = new URL(url.trim());
-        return protocol === "http:" || protocol === "https:" ? undefined : "Links must start with http:// or https://";
+        return protocol === "http:" || protocol === "https:"
+            ? undefined
+            : "Enter a full link, starting with http:// or https://";
     } catch {
         return "Enter a full link, starting with http:// or https://";
     }
@@ -155,7 +145,7 @@ export function artworkUrlIssue(url?: string): string | undefined {
 
 /** A sourced artwork with one more blank option on the end, ready to be filled in */
 export function withAddedOption(sourced: ISourcedArtwork = { options: [] }): ISourcedArtwork {
-    const option: ISourcedOption = { id: crypto.randomUUID(), url: "", contact: "none" };
+    const option: ISourcedOption = { id: crypto.randomUUID(), url: "", contact: artworkContactStates[0] };
     return { ...sourced, options: [...sourced.options, option] };
 }
 
@@ -164,10 +154,7 @@ export function selectedOption(sourced?: ISourcedArtwork): ISourcedOption | unde
     return sourced?.options.find((option) => option.id === sourced.selectedId);
 }
 
-/**
- * Whether an option's artist has been cleared to use it. Blanket permission and implied both stand in
- * for a granted reply - see IArtist.blanketPermission and canImplyPermission.
- */
+// Blanket permission and implied both stand in for a granted reply
 export function hasArtistPermission(option: ISourcedOption, artists: IArtist[]): boolean {
     if (option.contact === "granted" || option.contact === "implied") {
         return true;
@@ -187,13 +174,8 @@ export interface IArtworkRequirement {
     done: boolean;
 }
 
-/**
- * Everything this artwork needs before it counts as obtained, in the order it is worked through and
- * including what is already done. The single statement of the rules - the gate below reports the first
- * unmet one, so a checklist on screen and a refusal from the API can never disagree about what is left.
- *
- * Only the type is knowable while none is chosen; what follows depends entirely on which one it is.
- */
+// The single statement of the rules, in order - the gate below reports the first unmet one, so the
+// checklist and the API's refusal can never disagree about what is left.
 export function artworkRequirements(artwork: IArtworkProgress, artists: IArtist[] = []): IArtworkRequirement[] {
     const type: IArtworkRequirement = { label: "Choose how this artwork is being obtained", done: !!artwork.type };
     if (!artwork.type) {
@@ -226,10 +208,8 @@ function acquiredRequirements(type: ArtworkType, artwork: IArtworkProgress, arti
     }
 }
 
-/**
- * Why artwork cannot reach `target` yet, or undefined when it can. Shared so the API's refusal and the
- * reason the UI shows against a blocked step are always the same sentence.
- */
+// Why artwork cannot reach `target` yet, or undefined when it can - shared so the API's refusal and the
+// UI's blocked-step reason are always the same sentence.
 export function artworkBlocker(
     artwork: IArtworkProgress,
     target: ArtworkStatus,
@@ -244,14 +224,8 @@ export function artworkBlocker(
     return relevant.find((requirement) => !requirement.done)?.label;
 }
 
-/**
- * The status the artwork's own details imply, so the track follows the work rather than being driven by
- * hand. Complete is never awarded automatically - signing a piece off is a person's statement - but it is
- * given up automatically, since a card can't stay finished once the artwork behind it has gone.
- *
- * Regression is the point: clearing a final artwork drops Confirming back to Acquiring, so the track can
- * never claim work which is no longer there.
- */
+// The status the artwork's details imply. Complete is never awarded automatically (a person must sign
+// off), but is given up automatically once the artwork behind it is no longer there.
 export function inferredStatus(artwork: IArtworkProgress, artists: IArtist[] = []): ArtworkStatus {
     if (!artwork.type) {
         return "pending";
@@ -261,10 +235,8 @@ export function inferredStatus(artwork: IArtworkProgress, artists: IArtist[] = [
     return artwork.status === "complete" && supported === "confirming" ? "complete" : supported;
 }
 
-/**
- * Why the artwork sits where it does, in the same words the gate uses. Said out loud before a save which
- * moves the status, so a track changing under somebody is something they agreed to rather than noticed.
- */
+// Why the artwork sits where it does, in the same words the gate uses - said out loud before a save
+// moves the status, so a change under somebody is agreed to rather than noticed.
 export function statusReason(artwork: IArtworkProgress, artists: IArtist[] = []): string {
     if (!artwork.type) {
         return "No artwork type has been chosen";
@@ -278,11 +250,8 @@ export function withInferredStatus(artwork: IArtworkProgress, artists: IArtist[]
     return status === artwork.status ? artwork : { ...artwork, status };
 }
 
-/**
- * Which statuses a person may pick by hand right now. Everything the data supports, plus Complete once
- * the artwork is actually in hand - offered as a disabled option with its reason rather than refused
- * after the fact, so the track can never be argued with.
- */
+// Statuses a person may pick by hand - offered as a disabled option with its reason rather than refused
+// after the fact, so the track can never be argued with.
 export function selectableStatuses(
     artwork: IArtworkProgress,
     artists: IArtist[] = []
@@ -340,16 +309,8 @@ export function driveFileId(url: string): string | undefined {
     return parsed.pathname.match(DRIVE_PATH_ID)?.[1];
 }
 
-/**
- * Every host worth pointing an <img> at for this url, best first. A Google Drive share link needs
- * rewriting because it addresses a viewer page rather than the file, and Drive serves the same file from
- * two hosts which fail independently - the thumbnail service is quick and reliable but caps out at its
- * largest size, while the image host serves the original and is the one which rate limits. Trying them
- * in turn is what stops a piece which loaded yesterday reading as missing today.
- *
- * Either only works while the file is shared with anyone holding the link, so a Drive image which won't
- * load from either is nearly always a sharing setting rather than a broken link.
- */
+// Every host worth pointing an <img> at, best first - Drive serves the same file from two hosts which
+// fail independently, so trying both is what stops a piece that loaded yesterday reading as missing today.
 export function displayableUrls(url?: string): string[] {
     if (!url) {
         return [];

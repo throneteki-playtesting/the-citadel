@@ -10,11 +10,9 @@ const PIECE_TRANSITION = { duration: 0.28, ease: [0.32, 0.72, 0, 1] } as const;
 
 // Breathing room around the piece, and the strip the caption sits in beneath it
 const EDGE_PADDING = 24;
-const CAPTION_HEIGHT = 44;
 
-// Driven from the trigger's own measured rectangle rather than framer's shared layout, so there is no
-// clipping ancestor to cut the returning piece off. Portalled to the body since SlidingPages' transform
-// would otherwise reposition a fixed child against it instead of the viewport
+// Driven from the trigger's own measured rectangle so there is no clipping ancestor to cut the returning
+// piece off. Portalled to the body so a fixed child positions against the viewport, not SlidingPages.
 export default function ArtworkFocus({ origin, src, url, alt, onClose }: ArtworkFocusProps) {
     const viewport = useViewport();
 
@@ -27,7 +25,7 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
         top: EDGE_PADDING,
         left: EDGE_PADDING,
         width: Math.max(viewport.width - EDGE_PADDING * 2, 0),
-        height: Math.max(viewport.height - EDGE_PADDING * 2 - CAPTION_HEIGHT, 0)
+        height: Math.max(viewport.height - EDGE_PADDING * 2 - 44, 0)
     };
 
     const resting = origin && {
@@ -63,7 +61,6 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                             onClick={(event) => event.stopPropagation()}
                         />
                     </motion.div>
-
                     <motion.div
                         className="fixed inset-x-0 bottom-0 pointer-events-none flex items-center justify-center gap-3 px-4 h-11 text-sm text-white/70"
                         initial={{ opacity: 0, y: 8 }}
@@ -85,7 +82,6 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                             </a>
                         )}
                     </motion.div>
-
                     <button
                         type="button"
                         aria-label="Close the focused artwork"

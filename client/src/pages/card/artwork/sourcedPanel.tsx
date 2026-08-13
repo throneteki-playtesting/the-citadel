@@ -47,20 +47,13 @@ export default function SourcedPanel({
         onChange({ options, selectedId: stillExists ? selectedId : undefined });
     };
 
-    /**
-     * The card being carried, drawn in a DragOverlay the way the release board does it. Left in the list,
-     * a dropped card has no flight of its own - the others slide aside to make room and it simply appears
-     * in the gap. In an overlay, dnd-kit animates it from wherever it was let go to the space now waiting
-     * for it, so the one card actually being moved is the one you can see moving.
-     */
+    // The card being carried, drawn in a DragOverlay the way the release board does it - dnd-kit animates it
+    // from where it was let go to the space now waiting for it, rather than it just appearing in the gap
     const [activeId, setActiveId] = useState<string>();
     const activeOption = sourced.options.find((option) => option.id === activeId);
 
-    /**
-     * Framer stands down for the length of that flight. It would otherwise animate the same move a second
-     * time from measurements taken before the drag, dragging the list out from under the overlay while the
-     * overlay is aiming at where the list is meant to end up.
-     */
+    // Framer stands down for the length of that flight, so it doesn't re-animate the same move a second time
+    // from measurements taken before the drag
     const [isSettlingDrop, setIsSettlingDrop] = useState(false);
 
     useEffect(() => {
@@ -101,11 +94,8 @@ export default function SourcedPanel({
         setOptions([chosen, ...sourced.options.filter((option) => option.id !== id)], id);
     };
 
-    /**
-     * What each option is called, in list order: "#2 Preference - Stephen Patane (1)". The trailing count
-     * only appears where an artist has more than one piece in the running, since that is the only time
-     * naming them leaves any doubt about which is which.
-     */
+    // What each option is called, in list order: "#2 Preference - Stephen Patane (1)". The trailing count
+    // only appears once an artist has more than one piece in the running.
     const titles = useMemo(() => {
         const totals = new Map<string, number>();
         for (const option of sourced.options) {

@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { Button } from "@heroui/react";
+import { Button, ButtonProps } from "@heroui/react";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
@@ -13,7 +13,7 @@ export type ProcessAction = {
     label: string;
     icon: IconDefinition;
     color?: UIColor;
-    variant?: "solid" | "flat" | "light" | "bordered";
+    variant?: ButtonProps["variant"];
     isDisabled?: boolean;
     /** For actions which already have a home in the layout, and only need lifting out on a phone */
     isMobileOnly?: boolean;
@@ -21,12 +21,8 @@ export type ProcessAction = {
 };
 
 /**
- * The actions which actually progress whatever is on screen. On desktop they read as buttons at the foot
- * of the work; on a phone they lift out into the floating column beside the page's own action button,
- * where they stay reachable however far down the form somebody has scrolled.
- *
- * Deliberately one component rather than two sets of markup - the mobile and desktop forms drifting apart
- * is how a save button ends up existing on only one of them.
+ * The actions which progress whatever is on screen: buttons at the foot of the work on desktop, lifted
+ * into a floating column beside the page's action button on a phone.
  */
 export default function ProcessActions({ actions, className }: ProcessActionsProps) {
     // Only the portalled column needs this - the foot buttons travel with the page they belong to
@@ -54,7 +50,6 @@ export default function ProcessActions({ actions, className }: ProcessActionsPro
                         </Button>
                     ))}
             </div>
-
             {isPageActive &&
                 createPortal(
                     <div className="sm:hidden fixed bottom-6 right-20 z-20 flex items-center gap-2">

@@ -31,10 +31,7 @@ function modeOf(entry?: IArtworkPrep): PrepMode {
     return entry.done ? "done" : "needed";
 }
 
-/**
- * Tweaks a piece needs before it can be used. Flagging one never blocks a status - it only surfaces the
- * card as needing attention, so work nobody has got to yet stays visible rather than being forgotten.
- */
+// Tweaks a piece needs before use. Flagging one never blocks a status, only surfaces the card as needing attention
 export default function PrepChecklist({ prep = [], isDisabled, onChange }: PrepChecklistProps) {
     const byFlag = new Map(prep.map((entry) => [entry.flag, entry]));
 

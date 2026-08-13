@@ -123,10 +123,7 @@ export function needsAttention(row: IArtworkRow): boolean {
     return row.remaining > 0;
 }
 
-/**
- * Everything a reader might type to find a card, in one string. Mirrors the Playtesting Update filter,
- * which searches across a card rather than asking which field the words belong to.
- */
+/** Everything a reader might type to find a card, in one string - mirrors the Playtesting Update filter */
 export function searchHaystack(row: IArtworkRow): string {
     const artwork = row.slot.statuses.artwork;
     return [

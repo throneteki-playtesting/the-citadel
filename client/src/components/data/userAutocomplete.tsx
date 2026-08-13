@@ -3,8 +3,7 @@ import { Autocomplete, AutocompleteItem, AutocompleteProps, Avatar } from "@hero
 import { useGetUsersQuery } from "../../api";
 import usePaginatedUsers from "../../hooks/usePaginatedUsers";
 import { BaseElementProps } from "../../types";
-
-const BASE_FILTER = { discordId: { $ne: "anonymous" } };
+import { EXCLUDE_ANONYMOUS_USER_FILTER } from "../../constants";
 
 // One person, picked by discord id - paged and searched server-side, with whoever is currently selected
 // fetched by id alongside it since a saved choice may sit outside the loaded page
@@ -19,7 +18,7 @@ export default function UserAutocomplete({
     isDisabled,
     onChange
 }: UserAutocompleteProps) {
-    const { items, isLoading, search, setSearch } = usePaginatedUsers(BASE_FILTER);
+    const { items, isLoading, search, setSearch } = usePaginatedUsers(EXCLUDE_ANONYMOUS_USER_FILTER);
     const { data: selectedData } = useGetUsersQuery({ filter: { discordId: selectedId } }, { skip: !selectedId });
 
     const users = useMemo(() => {

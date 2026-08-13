@@ -37,6 +37,9 @@ export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
 export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
 
+// Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
+export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };
+
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
 

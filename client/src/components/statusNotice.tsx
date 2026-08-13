@@ -4,7 +4,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import { BaseElementProps } from "../types";
 
-const toneClasses = {
+const colorClasses = {
     neutral: "border-content3 bg-content2/40 text-foreground/70",
     info: "border-primary/30 bg-primary/5 text-primary",
     warning: "border-warning/40 bg-warning/5 text-warning",
@@ -13,15 +13,14 @@ const toneClasses = {
 } as const;
 
 /**
- * A single line stating where something stands. Deliberately not a HeroUI Alert - an alert announces a
- * problem and takes the room to match, where these are the steady state of a record and sit above it all
- * the time. A thin left rule and one line of text carry the same meaning without shouting it.
+ * A single line stating where something stands. Deliberately not a HeroUI Alert - these are the steady
+ * state of a record and sit above it all the time, so a thin left rule carries the meaning without shouting.
  */
 export default function StatusNotice({
     icon,
     label,
     detail,
-    tone = "neutral",
+    color = "neutral",
     className,
     children
 }: StatusNoticeProps) {
@@ -29,7 +28,7 @@ export default function StatusNotice({
         <div
             className={classNames(
                 "flex items-center gap-2.5 rounded-md border border-l-4 py-1.5 px-2.5 text-xs",
-                toneClasses[tone],
+                colorClasses[color],
                 className
             )}
         >
@@ -43,11 +42,11 @@ export default function StatusNotice({
     );
 }
 
-export type StatusNoticeTone = keyof typeof toneClasses;
+export type StatusNoticeColor = keyof typeof colorClasses;
 
 type StatusNoticeProps = Omit<BaseElementProps, "style"> & {
     icon?: IconDefinition;
     label: string;
     detail?: ReactNode;
-    tone?: StatusNoticeTone;
+    color?: StatusNoticeColor;
 };
