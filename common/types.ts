@@ -72,6 +72,93 @@ export function isIterable(v: unknown): v is Iterable<unknown> {
     );
 }
 
+// Evaluates an already-exploded Filter<T> against a real in-memory object - the counterpart to
+// buildFilterQuery, which instead turns a Filter<T> into a MongoDB query for the database to evaluate.
+export function matchesFilter<T>(item: T, filter: Filter<T>): boolean {
+    return matchesValue(item, filter);
+}
+
+function matchesValue(value: unknown, filter: unknown): boolean {
+    if (filter === undefined) {
+        return true;
+    }
+    if (filter instanceof Date) {
+        const comparable = value instanceof Date ? value : new Date(value as string);
+        return comparable.getTime() === filter.getTime();
+    }
+    if (filter === null || typeof filter !== "object") {
+        return value === filter;
+    }
+    if (isOperatorObject(filter)) {
+        return matchesOperators(value, filter);
+    }
+    return Object.entries(filter as Record<string, unknown>).every(([key, nested]) =>
+        matchesValue((value as Record<string, unknown> | null | undefined)?.[key], nested)
+    );
+}
+
+function compareValues(value: unknown, operand: unknown): number {
+    if (value instanceof Date || operand instanceof Date) {
+        return new Date(value as string | Date).getTime() - new Date(operand as string | Date).getTime();
+    }
+    if (typeof value === "number" && typeof operand === "number") {
+        return value - operand;
+    }
+    if (typeof value === "string" && typeof operand === "string") {
+        return value.localeCompare(operand);
+    }
+    return NaN;
+}
+
+function matchesIn(value: unknown, operands: unknown[]): boolean {
+    return isIterable(value) ? Array.from(value).some((v) => operands.includes(v)) : operands.includes(value);
+}
+
+function matchesRegex(value: unknown, pattern: string): boolean {
+    if (typeof value !== "string") {
+        return false;
+    }
+    // Mongo's PCRE engine supports inline "(?i)" flags; JS RegExp doesn't, so translate it
+    const caseInsensitive = pattern.startsWith("(?i)");
+    const source = caseInsensitive ? pattern.slice(4) : pattern;
+    return new RegExp(source, caseInsensitive ? "i" : undefined).test(value);
+}
+
+function matchesOperators(value: unknown, operators: Record<string, unknown>): boolean {
+    for (const [operator, operand] of Object.entries(operators)) {
+        switch (operator) {
+            case "$gt":
+                if (!(compareValues(value, operand) > 0)) return false;
+                break;
+            case "$gte":
+                if (!(compareValues(value, operand) >= 0)) return false;
+                break;
+            case "$lt":
+                if (!(compareValues(value, operand) < 0)) return false;
+                break;
+            case "$lte":
+                if (!(compareValues(value, operand) <= 0)) return false;
+                break;
+            case "$ne":
+                if (value === operand) return false;
+                break;
+            case "$in":
+                if (!matchesIn(value, operand as unknown[])) return false;
+                break;
+            case "$nin":
+                if (matchesIn(value, operand as unknown[])) return false;
+                break;
+            case "$regex":
+                if (!matchesRegex(value, operand as string)) return false;
+                break;
+            case "$exists":
+                if ((value !== undefined) !== operand) return false;
+                break;
+        }
+    }
+    return true;
+}
+
 export type SortDirection = "asc" | "desc";
 export type Sort<T> = EntriesOf<T, SortDirection>;
 

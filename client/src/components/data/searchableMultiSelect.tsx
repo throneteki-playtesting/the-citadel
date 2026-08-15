@@ -32,6 +32,9 @@ function SearchableMultiSelect<T extends object>({
     const selectedKeysWithSentinel = useMemo(() => [...selectedKeys, SENTINEL_KEY], [selectedKeys]);
 
     const handleSelectionChange = (keys: SharedSelection) => {
+        // Picking a result clears the search so the next keystroke starts a fresh search
+        // rather than continuing to filter against what was just typed
+        onSearchChange("");
         if (keys === "all") {
             onSelectionChange(keys);
             return;
@@ -39,13 +42,14 @@ function SearchableMultiSelect<T extends object>({
         onSelectionChange(new Set([...keys].filter((key) => key !== SENTINEL_KEY)));
     };
 
+    // onPointerDown stops HeroUI's own trigger toggle from fighting our controlled isOpen; onKeyDown
+    // stops typed characters from bubbling into HeroUI's listbox "type to select" handling.
     const renderValue = (selected: { data?: T | null }[]) => {
         const selectedItems = selected.map((s) => s.data).filter((s): s is T => s != null && s !== sentinel);
         return (
             <div
                 className="flex flex-wrap items-center gap-1 w-full cursor-text"
                 onPointerDown={(e) => {
-                    // Prevent HeroUI's own trigger press-toggle from fighting our controlled isOpen below
                     e.stopPropagation();
                     inputRef.current?.focus();
                 }}
@@ -57,6 +61,7 @@ function SearchableMultiSelect<T extends object>({
                     value={search}
                     onChange={(e) => onSearchChange(e.target.value)}
                     onFocus={() => setIsOpen(true)}
+                    onKeyDown={(e) => e.stopPropagation()}
                     placeholder={selectedItems.length === 0 ? placeholder : undefined}
                     className="flex-1 min-w-[80px] bg-transparent outline-none text-foreground mx-1"
                 />

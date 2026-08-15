@@ -1,6 +1,6 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard, typeNames } from "common/utils";
-import { Input, Select, SelectItem, Skeleton } from "@heroui/react";
+import { Select, SelectItem, Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
@@ -17,13 +17,7 @@ import SectionTitle from "../../components/sectionTitle";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { highlightTarget, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
-import {
-    faCrosshairs,
-    faFeather,
-    faMagnifyingGlass,
-    faScroll,
-    faXmarkCircle
-} from "@fortawesome/free-solid-svg-icons";
+import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
 import Watermark from "../../components/watermark";
 import ProgressRing from "../../components/progressRing";
@@ -32,6 +26,13 @@ import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
 import useHistoryState from "../../hooks/useHistoryState";
 import CardGrid from "../../components/cardGrid";
+import {
+    CardFilterSearchBar,
+    CardFilterValue,
+    EMPTY_CARD_FILTER,
+    isCardFilterActive,
+    useCardFilterPredicate
+} from "../../components/data/cardFilter";
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
@@ -84,9 +85,12 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     const [isSorting, startSorting] = useTransition();
 
     const [search, setSearch] = useState("");
+    const [cardFilter, setCardFilter] = useState<CardFilterValue>(EMPTY_CARD_FILTER);
     // Deferred so the input's own re-render (and the character it shows) is never blocked by
     // mounting the — potentially large — search-results grid.
     const deferredSearch = useDeferredValue(search.trim());
+    const deferredCardFilter = useDeferredValue(cardFilter);
+    const isFilterActive = isCardFilterActive(deferredCardFilter);
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -152,6 +156,16 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         return map;
     }, [slotsData?.items, canReadProgress]);
 
+    const releaseCodeByCardNumber = useMemo(
+        () => new Map([...cardReleases].map(([number, release]) => [number, release.code])),
+        [cardReleases]
+    );
+    const distinctTraits = useMemo(
+        () => [...new Set((data?.items ?? []).flatMap((card) => card.traits))].sort(),
+        [data?.items]
+    );
+    const matchesCardFilter = useCardFilterPredicate(deferredCardFilter, { releaseCodeByCardNumber });
+
     const comparators = useMemo<Record<SortOption, (a: IPlaytestCard, b: IPlaytestCard) => number>>(
         () => ({
             number: (a, b) => a.number - b.number,
@@ -191,13 +205,19 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         return map;
     }, [data?.items, comparators, sortBy]);
 
+    // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
+    // search text stays visible in the (now tucked-away) search box but no longer applies
+    const effectiveSearch = isFilterActive ? "" : deferredSearch;
+    const isFiltering = !!effectiveSearch || isFilterActive;
     const filteredCards = useMemo(() => {
-        const term = deferredSearch.toLowerCase();
-        if (!term) {
+        if (!isFiltering) {
             return [];
         }
-        return (data?.items ?? []).filter((card) => matchesSearch(card, term)).sort(comparators[sortBy]);
-    }, [data?.items, deferredSearch, comparators, sortBy]);
+        const term = effectiveSearch.toLowerCase();
+        return (data?.items ?? [])
+            .filter((card) => (!term || matchesSearch(card, term)) && matchesCardFilter(card))
+            .sort(comparators[sortBy]);
+    }, [data?.items, isFiltering, effectiveSearch, matchesCardFilter, comparators, sortBy]);
 
     // Plots are landscape — laid out at the same column count as upright cards they'd look
     // cramped, so when every result is a plot, switch to the wider preset built for them.
@@ -219,38 +239,33 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         <div className="flex flex-col gap-2">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 <SectionTitle className="sm:flex-1">Project Cards</SectionTitle>
-                <Input
-                    placeholder="Search cards..."
-                    value={search}
-                    onValueChange={setSearch}
-                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
-                    endContent={
-                        search ? (
-                            <button type="button" onClick={() => setSearch("")}>
-                                <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
-                            </button>
-                        ) : null
-                    }
-                    className="w-full sm:max-w-64"
-                    size="sm"
-                    isDisabled={isLoading}
-                />
-                <Select
-                    label="Sort by..."
-                    selectedKeys={[sortBy]}
-                    onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
-                    className="w-full max-w-64"
-                    classNames={{ value: "font-cinzel" }}
-                    size="sm"
-                    disallowEmptySelection
-                    isDisabled={isLoading}
-                >
-                    {availableSortOptions.map(([key, label]) => (
-                        <SelectItem key={key} className="font-cinzel">
-                            {label}
-                        </SelectItem>
-                    ))}
-                </Select>
+                <div className="flex items-center gap-2 sm:contents">
+                    <CardFilterSearchBar
+                        search={search}
+                        onSearchChange={setSearch}
+                        filter={cardFilter}
+                        onFilterChange={setCardFilter}
+                        traits={distinctTraits}
+                        releases={project.releases}
+                        isDisabled={isLoading}
+                    />
+                    <Select
+                        label="Sort by..."
+                        selectedKeys={[sortBy]}
+                        onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
+                        className="w-40 sm:w-full sm:max-w-64"
+                        classNames={{ value: "font-cinzel" }}
+                        size="sm"
+                        disallowEmptySelection
+                        isDisabled={isLoading}
+                    >
+                        {availableSortOptions.map(([key, label]) => (
+                            <SelectItem key={key} className="font-cinzel">
+                                {label}
+                            </SelectItem>
+                        ))}
+                    </Select>
+                </div>
             </div>
             {isLoading ? (
                 <div className="flex flex-col gap-2">
@@ -263,7 +278,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
             ) : (
                 <div className="grid grid-cols-1">
                     <AnimatePresence initial={false}>
-                        {deferredSearch ? (
+                        {isFiltering ? (
                             <motion.div
                                 key="search-results"
                                 initial={{ opacity: 0 }}
@@ -274,7 +289,9 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             >
                                 {filteredCards.length === 0 ? (
                                     <div className="p-8 text-center text-default-400">
-                                        No cards match &ldquo;{deferredSearch}&rdquo;.
+                                        {effectiveSearch
+                                            ? <>No cards match &ldquo;{effectiveSearch}&rdquo;.</>
+                                            : "No cards match the current filters."}
                                     </div>
                                 ) : (
                                     <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
