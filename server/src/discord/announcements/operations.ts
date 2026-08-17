@@ -7,6 +7,10 @@ import { getRoleColor, plural } from "../utils";
 import { logger } from "@/services";
 import { updateUrl } from "./playtestingUpdates";
 
+function releasesUrl(project: IProject) {
+    return `${process.env.CLIENT_HOST}/project/${project.number}?tab=releases`;
+}
+
 // Fire and forget into a server the bot is not a member of; nothing is tracked and the post is never revisited
 export async function announceToOperations(
     project: IProject,
@@ -52,6 +56,13 @@ const messages = {
                     (clientUrl ? `\n\n**[Visit The Citadel to get started!](${clientUrl})**` : "")
             );
 
-        return { content, embeds: [embed] };
+        const scheduleEmbed = new EmbedBuilder()
+            .setTitle(":calendar_spiral: Curious what's coming next?")
+            .setDescription(
+                "Everyone's welcome to check out the current work-in-progress" +
+                    ` **[release schedule](${releasesUrl(project)})**.`
+            );
+
+        return { content, embeds: [embed, scheduleEmbed] };
     }
 };
