@@ -72,7 +72,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
     // Consumed once here for the whole page - two callers would each strip their own keys and race
     const { releaseCheck: entryReleaseCheck, tab: entryTab } = useConsumableParams(CARD_PARAMS);
     const [tab, setTab] = useHistoryState<CardTab>("tab", entryTab === "artwork" ? "artwork" : "development");
-    const canReadArtwork = usePermission(Permission.READ_SLOTS);
+    const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
 
     if (isLoadingProject || isLoadingCard) {
         return (

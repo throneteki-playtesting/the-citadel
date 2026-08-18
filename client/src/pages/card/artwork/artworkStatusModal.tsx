@@ -5,7 +5,7 @@ import { faArrowRight, faTriangleExclamation } from "@fortawesome/free-solid-svg
 import { ArtworkStatus } from "common/models/slots";
 import { inferredStatus, selectableStatuses } from "common/models/artwork";
 import Permission from "common/models/permissions";
-import { useGetArtistsQuery, useGetSlotQuery, useUpdateSlotMutation } from "../../../api";
+import { useGetArtistsQuery, useGetSlotArtworkQuery, useUpdateSlotArtworkMutation } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
 import { showApiErrorToast } from "../../../api/errors";
 import { artworkLane, laneSteps } from "../../../constants";
@@ -23,13 +23,13 @@ export default function ArtworkStatusModal({
     project,
     number
 }: ArtworkStatusModalProps) {
-    const { data: slot, isLoading } = useGetSlotQuery({ project, number });
-    const canEdit = usePermission(Permission.EDIT_SLOTS);
+    const { data: slotArtwork, isLoading } = useGetSlotArtworkQuery({ project, number });
+    const canEdit = usePermission(Permission.EDIT_ARTWORKS);
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists });
-    const [updateSlot, { isLoading: isSaving }] = useUpdateSlotMutation();
+    const [updateSlotArtwork, { isLoading: isSaving }] = useUpdateSlotArtworkMutation();
 
-    const artwork = slot?.statuses.artwork;
+    const artwork = slotArtwork?.artwork;
     const [status, setStatus] = useState<ArtworkStatus>("pending");
 
     useEffect(() => {
@@ -38,8 +38,7 @@ export default function ArtworkStatusModal({
         }
     }, [artwork, isOpen]);
 
-    // Artwork is frozen once a card file exists downstream of it
-    const isLockedByProduction = !!slot && slot.statuses.production !== "waiting";
+    const isLockedByProduction = !!slotArtwork?.isLockedByProduction;
     const isPickable = canEdit && !isLockedByProduction;
     const isDirty = !!artwork && status !== artwork.status;
 
@@ -75,7 +74,7 @@ export default function ArtworkStatusModal({
 
     const onSave = async () => {
         try {
-            await updateSlot({ project, number, statuses: { artwork: { status } } }).unwrap();
+            await updateSlotArtwork({ project, number, status }).unwrap();
             onClose();
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to update artwork" });

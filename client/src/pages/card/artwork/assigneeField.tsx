@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Avatar, Button, ButtonGroup } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faPencil, faTrash, faUserPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { useGetUserQuery, useUpdateSlotMutation } from "../../../api";
+import { useGetUserQuery, useUpdateSlotArtworkMutation } from "../../../api";
 import { showApiErrorToast } from "../../../api/errors";
 import UserAutocomplete from "../../../components/data/userAutocomplete";
 
@@ -11,8 +11,8 @@ import UserAutocomplete from "../../../components/data/userAutocomplete";
 export default function AssigneeField({ project, number, assignee, isDisabled }: AssigneeFieldProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [pending, setPending] = useState(assignee);
-    const [updateSlot, { isLoading: isSaving }] = useUpdateSlotMutation();
-    // Optimistic - shown immediately rather than waiting for the invalidated getSlot refetch to catch up
+    const [updateSlotArtwork, { isLoading: isSaving }] = useUpdateSlotArtworkMutation();
+    // Optimistic - shown immediately rather than waiting for the invalidated getSlotArtwork refetch to catch up
     const [justSaved, setJustSaved] = useState<string>();
     useEffect(() => {
         if (justSaved !== undefined && (assignee ?? "") === justSaved) {
@@ -30,7 +30,7 @@ export default function AssigneeField({ project, number, assignee, isDisabled }:
 
     const save = async (value: string | undefined) => {
         try {
-            await updateSlot({ project, number, statuses: { artwork: { assignee: value ?? "" } } }).unwrap();
+            await updateSlotArtwork({ project, number, assignee: value ?? "" }).unwrap();
             setJustSaved(value ?? "");
             setIsEditing(false);
         } catch (err) {

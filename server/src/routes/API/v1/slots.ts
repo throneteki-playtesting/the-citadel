@@ -13,10 +13,12 @@ import {
     IReleaseCheckSummary,
     isCheckStale,
     ISlot,
+    ISlotArtwork,
+    ISlotArtworkDetail,
     ReleaseCheckCategory,
     SlotStatuses
 } from "common/models/slots";
-import { artworkBlocker } from "common/models/artwork";
+import { artworkBlocker, IArtworkProgress } from "common/models/artwork";
 import { factions } from "common/models/cards";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { IProject } from "common/models/projects";
@@ -53,6 +55,24 @@ async function getSlots(
     return generateGetResponse(result, count);
 }
 
+// Artwork is frozen once a card file exists downstream of it - see PATCH /:slot/artwork
+function toArtworkDetail(slot: ISlot): ISlotArtworkDetail {
+    return {
+        artwork: slot.statuses.artwork,
+        isLockedByProduction: slot.statuses.production !== "waiting"
+    };
+}
+
+function toArtworkRow(slot: ISlot): ISlotArtwork {
+    return {
+        project: slot.project,
+        number: slot.number,
+        faction: slot.faction,
+        release: slot.release,
+        ...toArtworkDetail(slot)
+    };
+}
+
 const getQuerySchema = getRequestSchema(Schemas.Slot.Full, { project: "asc", number: "asc" });
 
 // Read slots for project
@@ -73,6 +93,25 @@ router.get(
     })
 );
 
+// Read every slot's artwork lane for a project - the project's Artworks list, decoupled from READ_SLOTS.
+// Registered ahead of GET /:slot so "artworks" isn't swallowed as a (non-numeric, so rejected) :slot value.
+router.get(
+    "/artworks",
+    celebrate({
+        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.QUERY]: getQuerySchema
+    }),
+    validateRequest(Permission.READ_ARTWORKS),
+    loadProjectByNumber,
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+        const { number: project } = req.params;
+        const { filter, orderBy, page, perPage } = req.query;
+        const normalizedFilter = applyToFilter(filter, { project });
+        const response = await getSlots(normalizedFilter, orderBy, page, perPage);
+        res.status(StatusCodes.OK).json({ ...response, items: response.items.map(toArtworkRow) });
+    })
+);
+
 // Read single slot
 router.get(
     "/:slot",
@@ -89,6 +128,25 @@ router.get(
             );
         }
         res.status(StatusCodes.OK).json(result);
+    })
+);
+
+// Read a single slot's artwork lane alone, gated by READ_ARTWORKS rather than READ_SLOTS
+router.get(
+    "/:slot/artwork",
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    validateRequest(Permission.READ_ARTWORKS),
+    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { number: project, slot } = req.params;
+        const [result] = await dataService.slots.read({ project, number: slot });
+        if (!result) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Slot #${slot} does not exist for project #${project}`
+            );
+        }
+        res.status(StatusCodes.OK).json(toArtworkDetail(result));
     })
 );
 
@@ -247,24 +305,20 @@ router.patch(
                 "This sort of status change cannot be submitted this way"
             );
         }
+        // The artwork lane has its own endpoint & permission - see PATCH /:slot/artwork
+        if (statuses?.artwork !== undefined) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Artwork cannot be updated this way"
+            );
+        }
 
         const mergedStatuses: SlotStatuses | undefined = statuses && {
             ...slot.statuses,
             ...statuses,
-            ...(statuses.design && { design: { ...slot.statuses.design, ...statuses.design } }),
-            ...(statuses.artwork && { artwork: { ...slot.statuses.artwork, ...statuses.artwork } })
+            ...(statuses.design && { design: { ...slot.statuses.design, ...statuses.design } })
         };
-
-        // Artwork can't be moved to a status its own details don't support. Only the move is refused,
-        // so a record already sitting at an unsatisfied status stays editable so it can be repaired.
-        const artworkStatusChanged = mergedStatuses && mergedStatuses.artwork.status !== slot.statuses.artwork.status;
-        if (mergedStatuses && artworkStatusChanged) {
-            const artists = await dataService.artists.read();
-            const blocker = artworkBlocker(mergedStatuses.artwork, mergedStatuses.artwork.status, artists);
-            if (blocker) {
-                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Data", blocker);
-            }
-        }
 
         // Production is downstream of design & artwork, and the invariant breaks from both directions
         if (
@@ -293,6 +347,65 @@ router.patch(
         });
 
         res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Edit a slot's artwork lane alone, gated by EDIT_ARTWORKS rather than EDIT_SLOTS - see PATCH /:slot
+router.patch(
+    "/:slot/artwork",
+    validateRequest(Permission.EDIT_ARTWORKS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.ArtworkProgress
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number; slot: number }, unknown, Partial<IArtworkProgress>, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber } = req.params;
+        const artworkUpdate = req.body;
+
+        const [slot] = await dataService.slots.read({ project: project.number, number: slotNumber });
+        if (!slot) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Data",
+                `Slot #${slotNumber} does not exist for project #${project.number}`
+            );
+        }
+
+        // Mirrors the generic PATCH /:slot invariant - a card file downstream of this can't be reopened
+        if (slot.statuses.production !== "waiting") {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                "Artwork is locked while production is underway - revert production to Waiting before changing it"
+            );
+        }
+
+        const mergedArtwork: IArtworkProgress = { ...slot.statuses.artwork, ...artworkUpdate };
+
+        // Only the move is refused, so a record already at an unsupported status stays editable to repair
+        if (mergedArtwork.status !== slot.statuses.artwork.status) {
+            const artists = await dataService.artists.read();
+            const blocker = artworkBlocker(mergedArtwork, mergedArtwork.status, artists);
+            if (blocker) {
+                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Data", blocker);
+            }
+        }
+
+        const updated = await dataService.slots.update({
+            ...slot,
+            statuses: { ...slot.statuses, artwork: mergedArtwork }
+        });
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.updated",
+            `<principal> updated the artwork for slot ${slotNumber} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
+        res.status(StatusCodes.OK).json(toArtworkDetail(updated));
     })
 );
 

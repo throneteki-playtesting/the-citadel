@@ -1,5 +1,5 @@
 import { IPlaytestCard } from "common/models/cards";
-import { ISlot } from "common/models/slots";
+import { ISlotArtwork } from "common/models/slots";
 import {
     artworkRequirements,
     finalArtworkUrl,
@@ -11,12 +11,12 @@ import {
     selectedOption,
     visiblePrep
 } from "common/models/artwork";
-import { cardLaneBreakdown } from "common/progress/calc";
+import { artworkStagePct } from "common/progress/calc";
 import { formatCurrency } from "../../../utils";
 
 /** One row of the project's artwork overview, flattened so filtering and sorting never re-derive it */
 export interface IArtworkRow {
-    slot: ISlot;
+    slot: ISlotArtwork;
     card?: IPlaytestCard;
     name: string;
     /** The artwork lane's own percentage, the same figure the card page shows */
@@ -37,8 +37,8 @@ export interface IArtworkRow {
 const NO_ARTIST = "No artist";
 
 // One run of facts about the artwork, whoever made it always leading so a list of cards skims consistently
-function artworkDetails(slot: ISlot, artist: IArtist | undefined, artists: IArtist[]): string[] {
-    const { artwork } = slot.statuses;
+function artworkDetails(slot: ISlotArtwork, artist: IArtist | undefined, artists: IArtist[]): string[] {
+    const { artwork } = slot;
 
     switch (artwork.type) {
         case "sourced": {
@@ -78,8 +78,8 @@ function artworkDetails(slot: ISlot, artist: IArtist | undefined, artists: IArti
 }
 
 /** The artist credited for the artwork, whichever way it is being obtained */
-function creditedArtist(slot: ISlot, artists: IArtist[]): IArtist | undefined {
-    const { artwork } = slot.statuses;
+function creditedArtist(slot: ISlotArtwork, artists: IArtist[]): IArtist | undefined {
+    const { artwork } = slot;
     const id =
         artwork.type === "commissioned"
             ? artwork.commissioned?.artist
@@ -88,7 +88,7 @@ function creditedArtist(slot: ISlot, artists: IArtist[]): IArtist | undefined {
 }
 
 export function buildArtworkRows(
-    slots: ISlot[],
+    slots: ISlotArtwork[],
     cards: IPlaytestCard[],
     artists: IArtist[],
     { includeRequirements = true }: { includeRequirements?: boolean } = {}
@@ -96,7 +96,7 @@ export function buildArtworkRows(
     const cardsByNumber = new Map(cards.map((card) => [card.number, card]));
 
     return slots.map((slot) => {
-        const { artwork } = slot.statuses;
+        const { artwork } = slot;
         const card = cardsByNumber.get(slot.number);
 
         const requirements = includeRequirements ? artworkRequirements(artwork, artists) : [];
@@ -107,7 +107,7 @@ export function buildArtworkRows(
             slot,
             card,
             name: card?.name ?? `Slot ${slot.number}`,
-            percent: cardLaneBreakdown(slot.statuses).artwork,
+            percent: artworkStagePct(artwork.status),
             artist,
             details: artworkDetails(slot, artist, artists),
             requirements,
@@ -125,7 +125,7 @@ export function needsAttention(row: IArtworkRow): boolean {
 
 /** Everything a reader might type to find a card, in one string - mirrors the Playtesting Update filter */
 export function searchHaystack(row: IArtworkRow): string {
-    const artwork = row.slot.statuses.artwork;
+    const artwork = row.slot.artwork;
     return [
         row.name,
         String(row.slot.number),

@@ -58,6 +58,11 @@ export function cardOverallPct(statuses: SlotStatuses): number {
     return cardLaneBreakdown(statuses).overall;
 }
 
+/** The artwork lane's own percentage in isolation - for callers holding only an artwork projection, not a full SlotStatuses */
+export function artworkStagePct(status: ArtworkStatus): number {
+    return stagePct(status, artworkStatuses, artworkStageWeights);
+}
+
 export function releaseProgressBreakdown(
     cardsPct: number,
     status: ReleaseStatus

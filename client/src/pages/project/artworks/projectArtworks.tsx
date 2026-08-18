@@ -1,7 +1,14 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch, Tooltip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faImage, faListCheck, faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
+import {
+    faEye,
+    faImage,
+    faListCheck,
+    faMagnifyingGlass,
+    faPencil,
+    faXmarkCircle
+} from "@fortawesome/free-solid-svg-icons";
 import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
@@ -11,7 +18,7 @@ import { IProject, IProjectRelease } from "common/models/projects";
 import { ArtworkStatus, artworkStatuses, ArtworkType, artworkTypes } from "common/models/slots";
 import { isPrepDone } from "common/models/artwork";
 import Permission from "common/models/permissions";
-import { useGetArtistsQuery, useGetCardsQuery, useGetSlotsQuery, useGetUserQuery } from "../../../api";
+import { useGetArtistsQuery, useGetCardsQuery, useGetSlotArtworksQuery, useGetUserQuery } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
 import { useAuth } from "../../../hooks/useAuth";
 import {
@@ -58,7 +65,7 @@ type ListEntry =
     | { kind: "row"; key: string; row: IArtworkRow; release?: IProjectRelease };
 
 export default function ProjectArtworks({ project }: ProjectArtworksProps) {
-    const { data: slotsData, isLoading } = useGetSlotsQuery({ project: project.number });
+    const { data: slotsData, isLoading } = useGetSlotArtworksQuery({ project: project.number });
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists });
@@ -109,7 +116,7 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
     // everything else filtering rather than itself
     const matches = useCallback(
         (row: IArtworkRow, ignore?: FilterAxis) => {
-            const artwork = row.slot.statuses.artwork;
+            const artwork = row.slot.artwork;
             const term = search.trim().toLowerCase();
 
             if (ignore !== "status" && status !== "all" && artwork.status !== status) {
@@ -149,7 +156,7 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
             release: {} as Record<string, number>
         };
         for (const row of rows) {
-            const artwork = row.slot.statuses.artwork;
+            const artwork = row.slot.artwork;
             if (matches(row, "status")) {
                 tally.status[artwork.status] += 1;
             }
@@ -466,8 +473,10 @@ type FilterChipProps = {
 
 /** One card's artwork at a glance - a scrolling table from sm up, a stacked card below it */
 function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
-    const artwork = row.slot.statuses.artwork;
+    const artwork = row.slot.artwork;
     const step = artworkLane.meta[artwork.status];
+    // Read-only for a READ_ARTWORKS-only visitor - the row still opens, just to look rather than to change
+    const canEdit = usePermission(Permission.EDIT_ARTWORKS);
 
     return (
         <div className="flex items-stretch gap-2 sm:gap-3 pr-1 sm:pr-2 rounded-md border border-content3 bg-content1 overflow-hidden">
@@ -548,11 +557,11 @@ function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
                     isIconOnly
                     size="sm"
                     variant="light"
-                    aria-label={`Edit artwork for ${row.name}`}
+                    aria-label={canEdit ? `Edit artwork for ${row.name}` : `View artwork for ${row.name}`}
                     className="shrink-0 size-6 min-w-6 sm:size-8 sm:min-w-8 text-foreground/40"
                     onPress={onEdit}
                 >
-                    <FontAwesomeIcon icon={faPencil} />
+                    <FontAwesomeIcon icon={canEdit ? faPencil : faEye} />
                 </Button>
             </div>
         </div>

@@ -22,11 +22,13 @@ import {
     DesignStatus,
     IReleaseCheckSummary,
     ISlot,
+    ISlotArtwork,
+    ISlotArtworkDetail,
     ISlotRef,
     ReleaseCheckCategory,
     SlotStatuses
 } from "common/models/slots";
-import { IArtist } from "common/models/artwork";
+import { IArtist, IArtworkProgress } from "common/models/artwork";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
 import { IDeck } from "common/models/decks";
@@ -514,6 +516,31 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
+        // The artwork lane alone - gated by READ_ARTWORKS/EDIT_ARTWORKS rather than READ_SLOTS/EDIT_SLOTS
+        getSlotArtwork: builder.query<ISlotArtworkDetail, { project: number; number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/artwork`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        getSlotArtworks: builder.query<IGetResponse<ISlotArtwork>, { project: number } & IGetRequest<ISlot>>({
+            query: ({ project, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/artworks`, options);
+                return { url, method: "GET" };
+            },
+            providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
+        }),
+        updateSlotArtwork: builder.mutation<
+            ISlotArtworkDetail,
+            { project: number; number: number } & DeepPartial<IArtworkProgress>
+        >({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/artwork`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
         assignSlotRelease: builder.mutation<
             { slot: ISlot; evictedSlot?: ISlot },
             { project: number; number: number; code: string | null; position?: number }
@@ -919,6 +946,9 @@ export const {
     useCreateSlotMutation,
     useDeleteSlotMutation,
     useUpdateSlotMutation,
+    useGetSlotArtworkQuery,
+    useGetSlotArtworksQuery,
+    useUpdateSlotArtworkMutation,
     useAssignSlotReleaseMutation,
     useGetCardProgressQuery,
     useSetSlotDesignStatusMutation,

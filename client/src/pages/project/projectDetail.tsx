@@ -44,7 +44,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
     const [tab, setTab] = useHistoryState<ProjectTab>("tab", entryProjectTab(entryTab, entryRelease));
     const navigate = useNavigate();
     const canViewReleases = usePermission(Permission.READ_RELEASES);
-    const canViewArtworks = usePermission(Permission.READ_SLOTS);
+    const canViewArtworks = usePermission(Permission.READ_ARTWORKS);
 
     if (isLoading) {
         return (

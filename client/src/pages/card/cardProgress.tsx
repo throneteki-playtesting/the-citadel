@@ -56,10 +56,11 @@ export default function CardProgress({ className, style, project, number }: Card
     const [isExpanded, setIsExpanded] = useState(false);
 
     const canEdit = usePermission(Permission.EDIT_SLOTS);
+    const canEditArtworks = usePermission(Permission.EDIT_ARTWORKS);
     const canApprove = usePermission(Permission.APPROVE_CARD_DESIGN);
     const canOpen: Record<CardLaneKey, boolean> = {
         design: canEdit || canApprove,
-        artwork: canEdit,
+        artwork: canEditArtworks,
         production: canEdit
     };
 

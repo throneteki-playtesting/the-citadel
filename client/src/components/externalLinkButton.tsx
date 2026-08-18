@@ -16,7 +16,8 @@ export default function ExternalLinkButton({ url, label }: ExternalLinkButtonPro
             target="_blank"
             rel="noopener noreferrer"
             aria-label={label}
-            className="text-foreground/40 hover:text-foreground focus-visible:text-foreground rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            // Stays clickable even when a disabled Input's endContent would otherwise block it
+            className="pointer-events-auto text-foreground/40 hover:text-foreground focus-visible:text-foreground rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
             <FontAwesomeIcon icon={faUpRightFromSquare} aria-hidden="true" />
         </a>

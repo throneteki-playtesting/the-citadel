@@ -26,7 +26,12 @@ import {
     withInferredStatus
 } from "common/models/artwork";
 import Permission from "common/models/permissions";
-import { useGetArtistsQuery, useGetCardsQuery, useGetSlotQuery, useUpdateSlotMutation } from "../../../api";
+import {
+    useGetArtistsQuery,
+    useGetCardsQuery,
+    useGetSlotArtworkQuery,
+    useUpdateSlotArtworkMutation
+} from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
 import { useFormValidation } from "../../../hooks/useFormValidation";
 import { showApiErrorToast } from "../../../api/errors";
@@ -56,17 +61,17 @@ const PANEL_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 export default function ArtworkTab({ project, number, showTrack, onBack }: ArtworkTabProps) {
     const navigate = useNavigate();
     const [pendingChange, setPendingChange] = useState<ArtworkStatus>();
-    const { data: slot, isLoading } = useGetSlotQuery({ project, number });
+    const { data: slotArtwork, isLoading } = useGetSlotArtworkQuery({ project, number });
     // The artwork is only meaningful against the card it is for, and this tab is reachable from the
     // project overview where nothing else on screen names it
     const { data: cardsData } = useGetCardsQuery({ filter: { project, number, latest: true } });
-    const canEdit = usePermission(Permission.EDIT_SLOTS);
+    const canEdit = usePermission(Permission.EDIT_ARTWORKS);
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists });
-    const [updateSlot, { isLoading: isSaving }] = useUpdateSlotMutation();
+    const [updateSlotArtwork, { isLoading: isSaving }] = useUpdateSlotArtworkMutation();
     const { errors, validate, isValidationError, clearErrors } = useFormValidation(Slot.ArtworkProgress);
 
-    const committed = slot?.statuses.artwork;
+    const committed = slotArtwork?.artwork;
     const [draft, setDraft] = useState<IArtworkProgress>();
 
     // Reset whenever the stored artwork changes, so a save elsewhere isn't silently overwritten
@@ -77,12 +82,11 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
 
     const artists = useMemo(() => artistsData?.items ?? [], [artistsData?.items]);
 
-    // Artwork is frozen once a card file exists downstream of it
-    const isLockedByProduction = !!slot && slot.statuses.production !== "waiting";
+    const isLockedByProduction = !!slotArtwork?.isLockedByProduction;
     const isEditable = canEdit && !isLockedByProduction;
     const isDirty = !!committed && !!draft && !isEqual(comparableArtwork(draft), comparableArtwork(committed));
 
-    if (isLoading || !slot || !draft) {
+    if (isLoading || !slotArtwork || !draft) {
         return <ArtworkTabSkeleton showTrack={showTrack} />;
     }
 
@@ -95,7 +99,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
     const save = async (status: ArtworkStatus = draft.status) => {
         setPendingChange(undefined);
         try {
-            await updateSlot({ project, number, statuses: { artwork: { ...draft, status } } }).unwrap();
+            await updateSlotArtwork({ project, number, ...draft, status }).unwrap();
         } catch (err) {
             if (!isValidationError(err)) {
                 showApiErrorToast(err, { title: "Failed to update artwork" });
@@ -163,7 +167,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                 label: "Discard",
                 icon: faRotateLeft,
                 isDisabled: !isDirty || isSaving,
-                onPress: () => setDraft({ ...slot.statuses.artwork })
+                onPress: () => setDraft({ ...slotArtwork.artwork })
             },
             {
                 key: "save",
@@ -201,11 +205,11 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                         All Artworks
                     </Button>
                     <div className="h-4 w-px shrink-0 bg-content3" />
-                    <span className="text-xs text-foreground/40 tabular-nums">Card {slot.number}</span>
+                    <span className="text-xs text-foreground/40 tabular-nums">Card {number}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                     <h2 className="flex-1 min-w-0 font-cinzel text-xl sm:text-2xl tracking-wide truncate">
-                        {card?.name ?? `Slot ${slot.number}`}
+                        {card?.name ?? `Slot ${number}`}
                     </h2>
                     <AssigneeField
                         project={project}

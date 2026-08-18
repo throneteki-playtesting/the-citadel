@@ -135,6 +135,18 @@ export interface SlotRelease {
 /** Enough to name a slot without carrying it - the pair which identifies one everywhere */
 export type ISlotRef = Pick<ISlot, "project" | "number">;
 
+/**
+ * GET .../slots/:slot/artwork response - the artwork lane alone, gated by READ_ARTWORKS, not READ_SLOTS.
+ * `isLockedByProduction` stands in for the raw production status, which this permission shouldn't expose.
+ */
+export interface ISlotArtworkDetail {
+    artwork: IArtworkProgress;
+    isLockedByProduction: boolean;
+}
+
+/** One row of GET .../slots/artworks - the project's Artworks list, projected down to what it uses */
+export interface ISlotArtwork extends Pick<ISlot, "project" | "number" | "faction" | "release">, ISlotArtworkDetail {}
+
 export interface ISlot extends IAuditable {
     project: number;
     /** Permanent key alongside project; matches ICard.number */
