@@ -26,7 +26,10 @@ export async function announceToOperations(
     const webhook = new WebhookClient({ url: webhookUrl });
     try {
         const color = await getRoleColor(PLAYTESTING_TEAM_ROLE_NAME);
-        await webhook.send(messages.recruitment(project, playtestingUpdate, cards, color));
+        await webhook.send({
+            ...messages.recruitment(project, playtestingUpdate, cards, color),
+            allowedMentions: { parse: ["everyone"] }
+        });
         logger.info(`[Discord] Posted operations recruitment for ${project.code} v${playtestingUpdate.version}`);
     } catch (err) {
         logger.warn(new Error("[Discord] Failed to post operations recruitment", { cause: err }));
@@ -42,6 +45,7 @@ const messages = {
 
         const content = [
             `## :dart: ${project.emoji ? `:${project.emoji}: ` : ""}${project.name} - Playtesting Update #${playtestingUpdate.version}`,
+            "@everyone",
             `The Design Team has released a new update for playtesting, pushing through **${total}** ${plural(total, "new card change")}.`,
             ":warning: *These changes may take some time to reach ThronesDB, or the playtesting instance of TheIronThrone.*\n",
             `### :scroll: [View Update](${updateUrl(playtestingUpdate)})`
