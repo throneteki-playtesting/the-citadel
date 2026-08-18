@@ -1,14 +1,18 @@
-import { ReactNode } from "react";
+import { HTMLAttributes, ReactNode, Ref } from "react";
 import classNames from "classnames";
 
 // Drawn on a 24-unit viewBox, so the ring's geometry is fixed regardless of what it surrounds
 const RADIUS = 10;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-// Wraps content in a completeness ring, centring it absolutely so that surrounding it never changes its rendered size
-export default function ProgressRing({ value, className, ringClassName, children }: ProgressRingProps) {
+// Wraps content in a completeness ring; forwards its ref, so a tooltip or popover can use the ring itself as the trigger.
+function ProgressRing({ value, className, ringClassName, children, ref, ...props }: ProgressRingProps) {
     return (
-        <span className={classNames("relative shrink-0 flex items-center justify-center", className ?? "size-6")}>
+        <span
+            ref={ref}
+            className={classNames("relative shrink-0 flex items-center justify-center", className ?? "size-6")}
+            {...props}
+        >
             <svg
                 viewBox="0 0 24 24"
                 className={classNames("absolute inset-0 size-full -rotate-90", ringClassName)}
@@ -32,7 +36,10 @@ export default function ProgressRing({ value, className, ringClassName, children
     );
 }
 
-type ProgressRingProps = {
+export default ProgressRing;
+
+type ProgressRingProps = HTMLAttributes<HTMLSpanElement> & {
+    ref?: Ref<HTMLSpanElement>;
     value: number;
     /** Sizes the ring and the box it centres its children in; defaults to size-6 */
     className?: string;

@@ -25,6 +25,14 @@ enum Permission {
     EDIT_SLOTS = "EDIT_SLOTS",
     /** Can move (or emergency-reverse) a card's design into the finalising phase */
     APPROVE_CARD_DESIGN = "APPROVE_CARD_DESIGN",
+    /** Can view the shared artist list */
+    READ_ARTISTS = "READ_ARTISTS",
+    /** Can create, edit and delete artists in the shared list */
+    EDIT_ARTISTS = "EDIT_ARTISTS",
+    /** Can view a slot's artwork lane */
+    READ_ARTWORKS = "READ_ARTWORKS",
+    /** Can edit a slot's artwork lane */
+    EDIT_ARTWORKS = "EDIT_ARTWORKS",
     /** Can see everyone's release checks on a card */
     READ_RELEASE_CHECKS = "READ_RELEASE_CHECKS",
     /** Can submit a release check on a card */
@@ -164,6 +172,10 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         group: "Projects",
         dependencies: Permission.READ_SLOTS
     },
+    [Permission.READ_ARTWORKS]: { label: "Read", group: "Artwork" },
+    [Permission.EDIT_ARTWORKS]: { label: "Edit", group: "Artwork", dependencies: Permission.READ_ARTWORKS },
+    [Permission.READ_ARTISTS]: { label: "Read Artists", group: "Artwork" },
+    [Permission.EDIT_ARTISTS]: { label: "Edit Artists", group: "Artwork", dependencies: Permission.READ_ARTISTS },
     [Permission.READ_RELEASE_CHECKS]: {
         label: "Read Release Checks",
         group: "Projects",

@@ -12,6 +12,7 @@ import { TouchTooltip } from "../../components/touchTooltip";
 import StatusStepper from "../../components/statusStepper";
 import TooltipDetail from "../../components/tooltipDetail";
 import { useCountUp } from "../../hooks/useCountUp";
+import useHistoryState from "../../hooks/useHistoryState";
 import {
     artworkLane,
     CardLaneKey,
@@ -23,8 +24,9 @@ import {
     statusNodeClass,
     stepperSizeClasses
 } from "../../constants";
+import type { CardTab } from "./cardDetail";
 import DesignProgressModal from "./designProgressModal";
-import ArtworkProgressModal from "./artworkProgressModal";
+import ArtworkStatusModal from "./artwork/artworkStatusModal";
 import ProductionProgressModal from "./productionProgressModal";
 
 const lanes = Object.keys(cardLanes) as CardLaneKey[];
@@ -48,14 +50,17 @@ function laneStep(lane: CardLaneKey, statuses?: ICardProgress["statuses"]): Stat
 export default function CardProgress({ className, style, project, number }: CardProgressProps) {
     const { data, isLoading } = useGetCardProgressQuery({ project, number });
     const [openLane, setOpenLane] = useState<CardLaneKey | null>(null);
+    // Artwork outgrew a modal - its lane opens the card's Artwork tab instead, sharing the tab's own state
+    const [, setTab] = useHistoryState<CardTab>("tab", "development");
     // Mobile only - from sm up the lanes are always on show, whatever this holds
     const [isExpanded, setIsExpanded] = useState(false);
 
     const canEdit = usePermission(Permission.EDIT_SLOTS);
+    const canEditArtworks = usePermission(Permission.EDIT_ARTWORKS);
     const canApprove = usePermission(Permission.APPROVE_CARD_DESIGN);
     const canOpen: Record<CardLaneKey, boolean> = {
         design: canEdit || canApprove,
-        artwork: canEdit,
+        artwork: canEditArtworks,
         production: canEdit
     };
 
@@ -97,9 +102,13 @@ export default function CardProgress({ className, style, project, number }: Card
                 project={project}
                 number={number}
             />
-            <ArtworkProgressModal
+            <ArtworkStatusModal
                 isOpen={openLane === "artwork"}
                 onClose={() => setOpenLane(null)}
+                onOpenArtwork={() => {
+                    setOpenLane(null);
+                    setTab("artwork");
+                }}
                 project={project}
                 number={number}
             />

@@ -13,6 +13,7 @@ import {
     productionStatuses,
     ProductionStatus
 } from "common/models/slots";
+import { ArtworkContactState, ArtworkPrepFlag } from "common/models/artwork";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { UIColor } from "./types";
 import {
@@ -21,11 +22,23 @@ import {
     faFeather,
     faHammer,
     faHourglassStart,
+    faImages,
     faLayerGroup,
     faLock,
     faMagnifyingGlass,
-    faPalette
+    faPaintbrush,
+    faPalette,
+    faWandMagicSparkles
 } from "@fortawesome/free-solid-svg-icons";
+
+// The one easing curve panels/rows settle with, so every fade/slide in the app moves the same way
+export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
+
+// How every reordering list in the app settles, so a row moving reads the same wherever it is watched
+export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
+
+// Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
+export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };
 
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
@@ -128,6 +141,20 @@ export const factionBgClasses: Record<Faction, string> = {
     targaryen: "bg-targaryen/10",
     tyrell: "bg-tyrell/10",
     neutral: "bg-neutral/10"
+};
+
+// Full strength, for a stripe or rule which is the only thing carrying the faction - the faded border and
+// background variants above are washes sat behind other content, and vanish at a few pixels wide
+export const factionAccentClasses: Record<Faction, string> = {
+    baratheon: "bg-baratheon",
+    greyjoy: "bg-greyjoy",
+    lannister: "bg-lannister",
+    martell: "bg-martell",
+    thenightswatch: "bg-thenightswatch",
+    stark: "bg-stark",
+    targaryen: "bg-targaryen",
+    tyrell: "bg-tyrell",
+    neutral: "bg-neutral"
 };
 
 export const watermarkClasses: Record<string, string> = {
@@ -292,6 +319,55 @@ export const artworkTypeDescriptions: Record<ArtworkType, string> = {
     commissioned: "An artist is creating original art for this card",
     ai: "Art generated using AI tools"
 };
+
+export const artworkTypeIcons: Record<ArtworkType, IconDefinition> = {
+    sourced: faImages,
+    commissioned: faPaintbrush,
+    ai: faWandMagicSparkles
+};
+
+// How far an approach to an artist has got. Ordered, since the picker walks it left to right
+export const artworkContactMeta: Record<ArtworkContactState, { label: string; description: string; color: UIColor }> = {
+    none: {
+        label: "Not Contacted",
+        description: "Nobody has approached the artist about using this piece yet",
+        color: "default"
+    },
+    contacted: {
+        label: "Contacted",
+        description: "The artist has been asked, but has not replied yet",
+        color: "default"
+    },
+    responded: {
+        label: "Responded",
+        description: "The artist replied, but has not given a yes or no yet",
+        color: "primary"
+    },
+    granted: { label: "Granted", description: "The artist has allowed this piece to be used", color: "success" },
+    implied: {
+        label: "Implied",
+        description:
+            "The artist was contacted but never responded - work is going ahead anyway, since this is existing FFG artwork",
+        color: "success"
+    },
+    denied: { label: "Denied", description: "The artist has refused this piece", color: "danger" }
+};
+
+export const artworkPrepMeta: Record<ArtworkPrepFlag, { label: string; description: string }> = {
+    upscaling: { label: "Upscaling", description: "The resolution is too low to print as is" },
+    outpainting: { label: "Out-painting", description: "The image needs canvas added to fill the card frame" },
+    cropping: {
+        label: "Cropping",
+        description: "The composition needs reframing around the title and text boxes"
+    },
+    cleanup: { label: "Cleanup", description: "Artefacts, watermarks or anatomy need tidying up" },
+    colour: { label: "Colour Correction", description: "Contrast and palette need matching to its release" },
+    attribution: { label: "Attribution", description: "The artist wants a specific credit recorded" }
+};
+
+// FFG owning a piece never grants permission on its own, so the wording stays a prompt to judge, not a pass
+export const FFG_ARTWORK_DESCRIPTION =
+    "Existing artwork from a previous edition, owned by FFG. Recorded so the manager can weigh up how much permission matters here - it does not count as permission by itself.";
 
 export const changeTypeClasses: Record<ChangeType, string> = {
     new: "border-success-300 bg-success-100 text-success-700",

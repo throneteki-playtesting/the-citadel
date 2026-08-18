@@ -9,6 +9,7 @@ import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import ProjectReleases from "./releases/projectReleases";
+import ProjectArtworks from "./artworks/projectArtworks";
 import classNames from "classnames";
 import { dismoji, highlightTarget } from "../../constants";
 import Error from "../../components/error";
@@ -20,7 +21,15 @@ import useHistoryState from "../../hooks/useHistoryState";
 import Watermark from "../../components/watermark";
 
 const PROJECT_PARAMS = ["tab", "release"] as const;
-type ProjectTab = "development" | "releases";
+type ProjectTab = "development" | "artworks" | "releases";
+
+// A release code implies the releases tab even without one named, so it wins over an absent tab param
+function entryProjectTab(tab?: string, release?: string): ProjectTab {
+    if (tab === "releases" || release) {
+        return "releases";
+    }
+    return tab === "artworks" ? "artworks" : "development";
+}
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
     const { data: project, isLoading } = useGetProjectQuery({ number });
@@ -32,12 +41,10 @@ export default function ProjectDetail({ className, style, project: number }: Pro
         release ? { highlight: highlightTarget.release(number, release) } : null
     );
 
-    const [tab, setTab] = useHistoryState<ProjectTab>(
-        "tab",
-        entryTab === "releases" || entryRelease ? "releases" : "development"
-    );
+    const [tab, setTab] = useHistoryState<ProjectTab>("tab", entryProjectTab(entryTab, entryRelease));
     const navigate = useNavigate();
     const canViewReleases = usePermission(Permission.READ_RELEASES);
+    const canViewArtworks = usePermission(Permission.READ_ARTWORKS);
 
     if (isLoading) {
         return (
@@ -82,7 +89,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                 />
                 {project.draft ? (
                     <ProjectDrafting project={project} />
-                ) : canViewReleases ? (
+                ) : canViewReleases || canViewArtworks ? (
                     <Tabs
                         selectedKey={tab}
                         onSelectionChange={(key) => setTab(key as ProjectTab)}
@@ -95,9 +102,16 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                         <Tab key="development" title="Development">
                             <ProjectDevelopment project={project} />
                         </Tab>
-                        <Tab key="releases" title="Releases">
-                            <ProjectReleases project={project} isActive={tab === "releases"} />
-                        </Tab>
+                        {canViewArtworks ? (
+                            <Tab key="artworks" title="Artworks">
+                                <ProjectArtworks project={project} />
+                            </Tab>
+                        ) : null}
+                        {canViewReleases ? (
+                            <Tab key="releases" title="Releases">
+                                <ProjectReleases project={project} isActive={tab === "releases"} />
+                            </Tab>
+                        ) : null}
                     </Tabs>
                 ) : (
                     <ProjectDevelopment project={project} />

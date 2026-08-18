@@ -68,7 +68,7 @@ function PoolCapsule({ id, card, isInteractive, isVisible }: PoolCapsuleProps) {
         <CapsuleVisual
             card={card}
             style={style}
-            forwardRef={setNodeRef}
+            ref={setNodeRef}
             listeners={listeners}
             attributes={attributes}
             className="h-9"

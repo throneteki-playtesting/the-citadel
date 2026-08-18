@@ -18,7 +18,17 @@ import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
-import { DesignStatus, IReleaseCheckSummary, ISlot, ReleaseCheckCategory, SlotStatuses } from "common/models/slots";
+import {
+    DesignStatus,
+    IReleaseCheckSummary,
+    ISlot,
+    ISlotArtwork,
+    ISlotArtworkDetail,
+    ISlotRef,
+    ReleaseCheckCategory,
+    SlotStatuses
+} from "common/models/slots";
+import { IArtist, IArtworkProgress } from "common/models/artwork";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
 import { IDeck } from "common/models/decks";
@@ -432,6 +442,39 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
+        // Artists API
+        getArtists: builder.query<IGetResponse<IArtist>, IGetRequest<IArtist> | void>({
+            query: (options) => {
+                const url = buildUrl("artists", options ?? undefined);
+                return { url, method: "GET" };
+            },
+            providesTags: (response) => generateFor(response?.items, "artist")
+        }),
+        createArtist: builder.mutation<
+            IArtist,
+            Omit<IArtist, "id" | "created" | "updated" | "createdBy" | "updatedBy">
+        >({
+            query: (body) => {
+                const url = buildUrl("artists");
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
+        }),
+        updateArtist: builder.mutation<IArtist, Pick<IArtist, "id"> & Partial<IArtist>>({
+            query: ({ id, ...body }) => {
+                const url = buildUrl(`artists/${id}`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
+        }),
+        // `editing` names the card being worked on, whose own credit doesn't count against the removal
+        deleteArtist: builder.mutation<IArtist, { id: string; editing?: ISlotRef }>({
+            query: ({ id, editing }) => {
+                const url = buildUrl(`artists/${id}`, editing);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (result) => generateFor(result, "artist")
+        }),
         // Slots API
         getSlot: builder.query<ISlot, { project: number; number: number }>({
             query: ({ project, number }) => {
@@ -472,6 +515,31 @@ const api = createApi({
                 return { url, method: "PATCH", body };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        // The artwork lane alone - gated by READ_ARTWORKS/EDIT_ARTWORKS rather than READ_SLOTS/EDIT_SLOTS
+        getSlotArtwork: builder.query<ISlotArtworkDetail, { project: number; number: number }>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/artwork`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        getSlotArtworks: builder.query<IGetResponse<ISlotArtwork>, { project: number } & IGetRequest<ISlot>>({
+            query: ({ project, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/artworks`, options);
+                return { url, method: "GET" };
+            },
+            providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
+        }),
+        updateSlotArtwork: builder.mutation<
+            ISlotArtworkDetail,
+            { project: number; number: number } & DeepPartial<IArtworkProgress>
+        >({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/artwork`);
+                return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
         }),
         assignSlotRelease: builder.mutation<
             { slot: ISlot; evictedSlot?: ISlot },
@@ -867,12 +935,20 @@ export const {
     useDeleteProjectMutation,
     useArchiveProjectMutation,
 
+    useGetArtistsQuery,
+    useCreateArtistMutation,
+    useUpdateArtistMutation,
+    useDeleteArtistMutation,
+
     useGetSlotQuery,
     useGetSlotsQuery,
     useLazyGetSlotsQuery,
     useCreateSlotMutation,
     useDeleteSlotMutation,
     useUpdateSlotMutation,
+    useGetSlotArtworkQuery,
+    useGetSlotArtworksQuery,
+    useUpdateSlotArtworkMutation,
     useAssignSlotReleaseMutation,
     useGetCardProgressQuery,
     useSetSlotDesignStatusMutation,
