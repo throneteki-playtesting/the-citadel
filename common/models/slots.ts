@@ -2,17 +2,19 @@ import { Faction, Type } from "./cards";
 import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
 import { IAuditable } from "./shared";
+import { IArtworkProgress } from "./artwork";
 import { SemanticVersion } from "../utils";
 
+// The artwork lane lives in ./artwork, but is re-exported here so a slot's three lanes stay importable together
+export { artworkStatuses, artworkTypes } from "./artwork";
+export type { ArtworkStatus, ArtworkType } from "./artwork";
+export type { IArtworkProgress };
+
 export const designStatuses = ["preview", "forging", "refinement", "complete"] as const;
-export const artworkStatuses = ["pending", "acquiring", "confirming", "complete"] as const;
-export const artworkTypes = ["sourced", "commissioned", "ai"] as const;
 export const productionStatuses = ["waiting", "compositing", "complete"] as const;
 export const releaseCheckCategories = ["balance", "fun", "complexity", "interaction", "other"] as const;
 
 export type DesignStatus = (typeof designStatuses)[number];
-export type ArtworkStatus = (typeof artworkStatuses)[number];
-export type ArtworkType = (typeof artworkTypes)[number];
 export type ProductionStatus = (typeof productionStatuses)[number];
 export type ReleaseCheckCategory = (typeof releaseCheckCategories)[number];
 
@@ -116,12 +118,6 @@ export interface IReleaseCheckParticipation {
     completed: string[];
 }
 
-export interface IArtworkProgress {
-    status: ArtworkStatus;
-    /** Chosen once work actually starts; unset while pending */
-    type?: ArtworkType;
-}
-
 export interface SlotStatuses {
     design: IDesignProgress;
     artwork: IArtworkProgress;
@@ -135,6 +131,21 @@ export interface SlotRelease {
     /** Set by publish; once true the position is immutable and no new draft can be started against it */
     released?: boolean;
 }
+
+/** Enough to name a slot without carrying it - the pair which identifies one everywhere */
+export type ISlotRef = Pick<ISlot, "project" | "number">;
+
+/**
+ * GET .../slots/:slot/artwork response - the artwork lane alone, gated by READ_ARTWORKS, not READ_SLOTS.
+ * `isLockedByProduction` stands in for the raw production status, which this permission shouldn't expose.
+ */
+export interface ISlotArtworkDetail {
+    artwork: IArtworkProgress;
+    isLockedByProduction: boolean;
+}
+
+/** One row of GET .../slots/artworks - the project's Artworks list, projected down to what it uses */
+export interface ISlotArtwork extends Pick<ISlot, "project" | "number" | "faction" | "release">, ISlotArtworkDetail {}
 
 export interface ISlot extends IAuditable {
     project: number;

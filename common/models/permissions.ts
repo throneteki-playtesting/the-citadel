@@ -25,6 +25,14 @@ enum Permission {
     EDIT_SLOTS = "EDIT_SLOTS",
     /** Can move (or emergency-reverse) a card's design into the finalising phase */
     APPROVE_CARD_DESIGN = "APPROVE_CARD_DESIGN",
+    /** Can view the shared artist list */
+    READ_ARTISTS = "READ_ARTISTS",
+    /** Can create, edit and delete artists in the shared list */
+    EDIT_ARTISTS = "EDIT_ARTISTS",
+    /** Can view a slot's artwork lane */
+    READ_ARTWORKS = "READ_ARTWORKS",
+    /** Can edit a slot's artwork lane */
+    EDIT_ARTWORKS = "EDIT_ARTWORKS",
     /** Can see everyone's release checks on a card */
     READ_RELEASE_CHECKS = "READ_RELEASE_CHECKS",
     /** Can submit a release check on a card */
@@ -131,6 +139,8 @@ enum Permission {
     SYNC_PLAYTESTINGUPDATE_GITHUB_CODE = "SYNC_PLAYTESTINGUPDATE_GITHUB_CODE",
     /** Can sync playtesting update data pull requests */
     SYNC_PLAYTESTINGUPDATE_GITHUB_DATA = "SYNC_PLAYTESTINGUPDATE_GITHUB_DATA",
+    /** Can sync playtesting update discord announcements */
+    SYNC_PLAYTESTINGUPDATE_DISCORD = "SYNC_PLAYTESTINGUPDATE_DISCORD",
     /** Can sync review discord forum threads */
     SYNC_REVIEW_DISCORD = "SYNC_REVIEW_DISCORD"
 }
@@ -164,6 +174,10 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         group: "Projects",
         dependencies: Permission.READ_SLOTS
     },
+    [Permission.READ_ARTWORKS]: { label: "Read", group: "Artwork" },
+    [Permission.EDIT_ARTWORKS]: { label: "Edit", group: "Artwork", dependencies: Permission.READ_ARTWORKS },
+    [Permission.READ_ARTISTS]: { label: "Read Artists", group: "Artwork" },
+    [Permission.EDIT_ARTISTS]: { label: "Edit Artists", group: "Artwork", dependencies: Permission.READ_ARTISTS },
     [Permission.READ_RELEASE_CHECKS]: {
         label: "Read Release Checks",
         group: "Projects",
@@ -293,6 +307,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
     [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA]: { label: "PT Update Github Data", group: "Sync" },
+    [Permission.SYNC_PLAYTESTINGUPDATE_DISCORD]: { label: "PT Update Discord", group: "Sync" },
     [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS }
 };
 

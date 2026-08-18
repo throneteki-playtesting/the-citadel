@@ -1,15 +1,29 @@
-import { Avatar, SharedSelection } from "@heroui/react";
+import { Avatar, SelectProps, SharedSelection } from "@heroui/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useGetUsersQuery } from "../../api";
 import { useCallback, useMemo } from "react";
 import { BaseElementProps } from "../../types";
 import { User } from "common/models/auth";
+import { fuzzyMatch } from "common/utils";
 import usePaginatedUsers from "../../hooks/usePaginatedUsers";
 import SearchableMultiSelect from "./searchableMultiSelect";
+import { EXCLUDE_ANONYMOUS_USER_FILTER } from "../../constants";
 
-const BASE_FILTER = { discordId: { $ne: "anonymous" } };
-
-const UserSelect = ({ className, style, label = "Users", selectedIds, onChange }: UserSelectProps) => {
-    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } = usePaginatedUsers(BASE_FILTER);
+const UserSelect = ({
+    className,
+    style,
+    label,
+    ariaLabel,
+    size,
+    variant,
+    placeholder,
+    selectedIds,
+    isDisabled,
+    onChange
+}: UserSelectProps) => {
+    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } =
+        usePaginatedUsers(EXCLUDE_ANONYMOUS_USER_FILTER);
     const { data: selectedData } = useGetUsersQuery(
         { filter: { discordId: { $in: selectedIds } } },
         { skip: selectedIds.length === 0 }
@@ -37,8 +51,14 @@ const UserSelect = ({ className, style, label = "Users", selectedIds, onChange }
     return (
         <SearchableMultiSelect
             label={label}
+            ariaLabel={ariaLabel}
+            size={size}
+            variant={variant}
+            placeholder={placeholder}
+            isDisabled={isDisabled}
             items={allItems}
             getKey={(user) => user.discordId}
+            matches={(user, term) => fuzzyMatch(term, user.displayname, user.username)}
             selectedKeys={selectedIds}
             onSelectionChange={handleSelectionChange}
             search={search}
@@ -47,7 +67,13 @@ const UserSelect = ({ className, style, label = "Users", selectedIds, onChange }
             onLoadMore={handleLoadMore}
             isLoading={isLoading || isFetching}
             renderSelected={(users) =>
-                users.map((user) => <Avatar key={user.discordId} size="sm" src={user.avatarUrl} />)
+                users.map((user) => (
+                    <RemovableUser
+                        key={user.discordId}
+                        user={user}
+                        onRemove={() => onChange(selectedIds.filter((id) => id !== user.discordId))}
+                    />
+                ))
             }
             renderItem={(user) => (
                 <div className="flex gap-2 items-center w-full min-w-0">
@@ -64,9 +90,37 @@ const UserSelect = ({ className, style, label = "Users", selectedIds, onChange }
     );
 };
 
+// The avatar itself is the remove button - a cross over it on hover, kept off the Select's own press handling
+function RemovableUser({ user, onRemove }: { user: User; onRemove: () => void }) {
+    return (
+        <button
+            type="button"
+            aria-label={`Remove ${user.displayname}`}
+            title={`Remove ${user.displayname}`}
+            className="group relative shrink-0 rounded-full cursor-pointer"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+            }}
+        >
+            <Avatar size="sm" src={user.avatarUrl} alt={user.displayname} className="pointer-events-none" />
+            <span className="absolute inset-0 grid place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                <FontAwesomeIcon icon={faXmark} />
+            </span>
+        </button>
+    );
+}
+
 type UserSelectProps = Omit<BaseElementProps, "children"> & {
     label?: string;
+    /** Names the field where it is drawn without a visible label */
+    ariaLabel?: string;
+    size?: SelectProps["size"];
+    variant?: SelectProps["variant"];
+    placeholder?: string;
     selectedIds: string[];
+    isDisabled?: boolean;
     onChange: (ids: string[]) => void;
 };
 

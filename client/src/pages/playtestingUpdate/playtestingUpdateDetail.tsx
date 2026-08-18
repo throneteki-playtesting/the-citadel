@@ -31,6 +31,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useCodeUpdateStatus } from "../../components/status/useCodeUpdateStatus";
 import { useDataUpdateStatus } from "../../components/status/useDataUpdateStatus";
+import { useDiscordUpdateStatus } from "../../components/status/useDiscordUpdateStatus";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
 import { BaseStatus } from "../../components/status/baseStatus";
@@ -43,7 +44,7 @@ import usePageTitle from "../../hooks/usePageTitle";
 import useConsumableParams from "../../hooks/useConsumableParams";
 import { HighlightTarget } from "../../components/highlightTarget";
 import useTimezone from "../../hooks/useTimezone";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import Watermark from "../../components/watermark";
@@ -58,7 +59,6 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     });
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(project ? `${project.code} #${version}` : undefined);
-    const navigate = useNavigate();
     // Arriving from a card's change badge, which points at the one card it wants shown
     useConsumableParams(UPDATE_PARAMS, ({ card }) =>
         card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
@@ -124,18 +124,20 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                 <div className="flex gap-2">
                     {playtestingUpdate.version > 1 && (
                         <Button
+                            as={Link}
+                            to={`/project/${projectNumber}/update/${version - 1}`}
                             variant="bordered"
                             startContent={<FontAwesomeIcon icon={faChevronLeft} />}
-                            onPress={() => navigate(`/project/${projectNumber}/update/${version - 1}`)}
                         >
                             Previous Update
                         </Button>
                     )}
                     {playtestingUpdate.version < project.version && (
                         <Button
+                            as={Link}
+                            to={`/project/${projectNumber}/update/${version + 1}`}
                             variant="bordered"
                             endContent={<FontAwesomeIcon icon={faChevronRight} />}
-                            onPress={() => navigate(`/project/${projectNumber}/update/${version + 1}`)}
                             className="ml-auto"
                         >
                             Next Update
@@ -161,6 +163,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
         playtestingUpdate.version
     );
     const { data: dataStatus, isLoading: isDataStatusLoading } = useDataUpdateStatus(
+        playtestingUpdate.project,
+        playtestingUpdate.version
+    );
+    const { data: discordStatus, isLoading: isDiscordStatusLoading } = useDiscordUpdateStatus(
         playtestingUpdate.project,
         playtestingUpdate.version
     );
@@ -198,6 +204,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                         <div className="hidden sm:flex items-center gap-1.5">
                             <BaseStatus isIconOnly data={codeStatus} isLoading={isCodeStatusLoading} />
                             <BaseStatus isIconOnly data={dataStatus} isLoading={isDataStatusLoading} />
+                            <BaseStatus isIconOnly data={discordStatus} isLoading={isDiscordStatusLoading} />
                         </div>
                         <HeaderActions
                             items={[
@@ -208,6 +215,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                                 statusActionItem("data-status", dataStatus, {
                                     isDropdownOnly: true,
                                     isLoading: isDataStatusLoading
+                                }),
+                                statusActionItem("discord-status", discordStatus, {
+                                    isDropdownOnly: true,
+                                    isLoading: isDiscordStatusLoading
                                 }),
                                 {
                                     key: "print",

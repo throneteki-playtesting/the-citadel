@@ -2,6 +2,7 @@
 import { MongoClient } from "mongodb";
 import { logger } from "@/services";
 import { createClient, RedisClientType } from "redis";
+import ArtistsRepository from "./repositories/artistsRepository";
 import AuthRepository from "./repositories/authRepository";
 import CardsRepository from "./repositories/cardsRepository";
 import DecksRepository from "./repositories/decksRepository";
@@ -36,6 +37,7 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "playtestingUpdates", ctor: PlaytestingUpdateRepository },
     { key: "cards", ctor: CardsRepository },
     { key: "slots", ctor: SlotsRepository },
+    { key: "artists", ctor: ArtistsRepository },
     { key: "reviews", ctor: ReviewsRepository },
     { key: "decks", ctor: DecksRepository },
     { key: "users", ctor: UsersRepository },
@@ -137,6 +139,9 @@ class DataService {
     }
     get slots() {
         return this.getRepository<SlotsRepository>("slots");
+    }
+    get artists() {
+        return this.getRepository<ArtistsRepository>("artists");
     }
     get reviews() {
         return this.getRepository<ReviewsRepository>("reviews");

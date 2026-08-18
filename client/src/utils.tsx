@@ -1,7 +1,7 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faSpellCheck } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
-import { SemanticVersion } from "common/utils";
+import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 import ThronesIcon, { Icon } from "./components/thronesIcon";
 
@@ -32,7 +32,7 @@ export function parseParamSemanticVersion(param?: string) {
 }
 
 export function getFactionCardImage(faction: Faction) {
-    return `https://thronesdb.com/images/factions/${faction}.png`;
+    return `${THRONESDB_URL}/images/factions/${faction}.png`;
 }
 
 export const noteTypeIcon: Record<NoteType, IconDefinition> = {
@@ -105,4 +105,14 @@ export function convertToNode(htmlString: string): React.ReactNode[] {
         return null;
     };
     return body ? Array.from(body.childNodes).map((node, i) => transformNode(node, i)) : [];
+}
+
+export function formatCurrency(amount: number, currency: string, options?: Intl.NumberFormatOptions) {
+    return Intl.NumberFormat(navigator.language, {
+        style: "currency",
+        currency,
+        // "symbol" gives "US$50" where the money fields show "$50" - the same cost has to read the same way
+        currencyDisplay: "narrowSymbol",
+        ...options
+    }).format(amount);
 }

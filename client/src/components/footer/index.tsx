@@ -2,6 +2,7 @@ import { Link } from "@heroui/react";
 import { Link as RouterLink } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
+import { THRONESDB_URL, TIT_URL } from "common/utils";
 
 export default function Footer() {
     return (
@@ -11,18 +12,13 @@ export default function Footer() {
                     <p className="font-semibold text-default-600 mb-3">Resources</p>
                     <ul className="space-y-2">
                         <li>
-                            <Link
-                                href="https://www.theironthrone.net"
-                                isExternal
-                                color="foreground"
-                                className="text-default-500 text-small"
-                            >
+                            <Link href={TIT_URL} isExternal color="foreground" className="text-default-500 text-small">
                                 The Iron Throne
                             </Link>
                         </li>
                         <li>
                             <Link
-                                href="https://thronesdb.com"
+                                href={THRONESDB_URL}
                                 isExternal
                                 color="foreground"
                                 className="text-default-500 text-small"

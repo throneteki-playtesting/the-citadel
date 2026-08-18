@@ -29,7 +29,14 @@ import { abilityIcons, factionNames, titleCase } from "common/utils";
 import { challengeIcons, factions, PlotStat, plotStats } from "common/models/cards";
 
 function convertIncomingText(text?: string) {
-    return text?.replace(/\n/g, "<br>") ?? "";
+    return (
+        text
+            ?.replace(/\n/g, "<br>")
+            .replace(/(?::([a-zA-Z0-9_]+):|\[([a-zA-Z0-9_]+)\])/g, (match, colonName, bracketName) => {
+                const name = colonName || bracketName;
+                return abilityIcons[name] ? `<span data-thrones-icon="${name}">[${name}]</span>` : match;
+            }) ?? ""
+    );
 }
 
 function convertOutgoingHtml(html: string) {

@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { IProject, IProjectRelease } from "common/models/projects";
+import { IProject, IProjectRelease, releaseStatuses } from "common/models/projects";
 import { factions } from "common/models/cards";
 import { ReleaseDate } from "common/models/shared";
 import { getReleaseCapacity, getReleaseOffset, Regex } from "common/utils";
@@ -26,12 +26,24 @@ const CodeParams = {
     code: Joi.string().required()
 };
 
-function assertNotLocked(release: IProjectRelease | undefined, code: string) {
+function assertNotLocked(release: IProjectRelease | undefined, updated?: Pick<IProjectRelease, "code" | "name">) {
     if (release?.releasedDate) {
         throw new ApiErrorResponse(
             StatusCodes.NOT_ACCEPTABLE,
             "Invalid Release",
-            `Release "${code}" has already been released and cannot be modified`
+            `Release "${release.code}" has already been released and cannot be modified`
+        );
+    }
+    if (!release || !updated) {
+        return;
+    }
+
+    const isLocked = releaseStatuses.indexOf(release.status) >= releaseStatuses.indexOf("confirming");
+    if (isLocked && (updated.code !== release.code || updated.name !== release.name)) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Release",
+            `Release "${release.code}" is currently in status "${release.status}", and cannot have its code or name modified`
         );
     }
 }
@@ -175,7 +187,7 @@ router.put(
                 `Release "${code}" does not exist for project #${project.number}`
             );
         }
-        assertNotLocked(existing, code);
+        assertNotLocked(existing, req.body);
 
         const newCode = req.body.code;
         if (newCode !== code && project.releases.some((r) => r.code === newCode)) {
@@ -321,7 +333,7 @@ router.post(
                     `Release "${code}" does not exist for project #${project.number}`
                 );
             }
-            assertNotLocked(release, code);
+            assertNotLocked(release);
 
             // Releases can only be published in sequence order
             const earlierUnreleased = project.releases.find((r) => r.number < release.number && !r.releasedDate);
@@ -401,7 +413,7 @@ router.delete(
                 `Release "${code}" does not exist for project #${project.number}`
             );
         }
-        assertNotLocked(release, code);
+        assertNotLocked(release);
 
         const releaseSlots = await dataService.slots.read({ project: project.number, release: { code } });
         let evictedSlots: ISlot[] = [];

@@ -10,6 +10,7 @@ import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
+import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
 
 export default class CardsRepository extends BasicAuditableRepository<"card"> {
     declare protected database: CardMongoDataSource;
@@ -87,7 +88,8 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
                         data = result;
                     })
             },
-            { priority: 1, func: () => syncCodePullRequests() }
+            { priority: 1, func: () => syncCodePullRequests() },
+            { priority: 2, func: () => syncPlaytestingUpdateAnnouncements() }
         ];
 
         await this.internalSync(syncs);

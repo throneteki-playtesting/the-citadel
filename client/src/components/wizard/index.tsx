@@ -3,10 +3,10 @@ import React, {
     Children,
     cloneElement,
     FormEvent,
+    HTMLAttributes,
     ReactNode,
     useCallback,
     useEffect,
-    useLayoutEffect,
     useMemo,
     useRef,
     useState
@@ -18,6 +18,7 @@ import { DeepPartial } from "common/types";
 import { flatten, unflatten } from "flat";
 import { isEqual, merge } from "lodash-es";
 import { BaseElementProps } from "../../types";
+import SlidingPages from "../slidingPages";
 import { showApiErrorToast, toNormalizedError } from "../../api/errors";
 import {
     countErrorsInDirection,
@@ -233,8 +234,6 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
     const { currentPage, totalPages, setTotalPages, setFieldMeta } = useWizard();
 
     const containerRef = useRef<HTMLDivElement>(null);
-    const activeWrapperRef = useRef<HTMLDivElement>(null);
-    const [measuredHeight, setMeasuredHeight] = useState<number>();
 
     useEffect(() => {
         const pagesArr = Children.toArray(pages);
@@ -286,62 +285,17 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
         });
     }, [pages]);
 
-    useLayoutEffect(() => {
-        const measure = () => {
-            const activePage = activeWrapperRef.current;
-            if (activePage) {
-                setMeasuredHeight(activePage.offsetHeight);
-            } else {
-                setMeasuredHeight(undefined);
-            }
-        };
-
-        measure();
-
-        let observer: ResizeObserver | undefined;
-        const activePage = activeWrapperRef.current;
-        if (activePage && typeof ResizeObserver !== "undefined") {
-            observer = new ResizeObserver(measure);
-            observer.observe(activePage);
-        }
-
-        return () => {
-            if (observer) {
-                observer.disconnect();
-            }
-        };
-    }, [currentPage, pageElements]);
-
+    // The sliding itself is generic; only the page marker the field scan reads above is wizard-specific
     return (
-        <div
+        <SlidingPages
             ref={containerRef}
-            className={classNames("relative w-full overflow-hidden transition-height", className)}
-            style={{ ...style, height: measuredHeight ? `${measuredHeight}px` : undefined }}
+            currentPage={currentPage}
+            className={className}
+            style={style}
+            pageProps={(pageNo) => ({ "data-wizard-page": pageNo }) as HTMLAttributes<HTMLDivElement>}
         >
-            <div
-                className="flex flex-row items-start transition-transform duration-500 ease-in-out"
-                style={{
-                    transform: `translateX(-${(currentPage - 1) * 100}%)`
-                }}
-            >
-                {Children.map(pageElements, (page) => {
-                    if (!React.isValidElement(page)) {
-                        return page;
-                    }
-                    const props = page.props as WizardPageProps;
-                    return (
-                        <div
-                            key={props.pageNo!}
-                            data-wizard-page={props.pageNo}
-                            ref={props.pageNo === currentPage ? activeWrapperRef : null}
-                            className="flex-shrink-0 w-full"
-                        >
-                            {page}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
+            {pageElements}
+        </SlidingPages>
     );
 }
 

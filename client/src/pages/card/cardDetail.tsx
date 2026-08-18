@@ -31,7 +31,7 @@ import LoadingCard from "../../components/loadingCard";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ImageStatus from "../../components/status/imageStatus";
 import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
@@ -53,9 +53,13 @@ import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
 import useConsumableParams from "../../hooks/useConsumableParams";
 import CardHeader from "./cardHeader";
+import ArtworkTab from "./artwork/artworkTab";
+import useHistoryState from "../../hooks/useHistoryState";
 import Error from "../../components/error";
 
-const CARD_PARAMS = ["releaseCheck"] as const;
+const CARD_PARAMS = ["releaseCheck", "tab"] as const;
+
+export type CardTab = "development" | "artwork";
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading: isLoadingProject } = useGetProjectQuery({ number: projectNumber });
@@ -65,6 +69,10 @@ export default function CardDetail({ className, style, project: projectNumber, n
         version: "latest"
     });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
+    // Consumed once here for the whole page - two callers would each strip their own keys and race
+    const { releaseCheck: entryReleaseCheck, tab: entryTab } = useConsumableParams(CARD_PARAMS);
+    const [tab, setTab] = useHistoryState<CardTab>("tab", entryTab === "artwork" ? "artwork" : "development");
+    const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
 
     if (isLoadingProject || isLoadingCard) {
         return (
@@ -87,24 +95,54 @@ export default function CardDetail({ className, style, project: projectNumber, n
         <div className={classNames("space-y-2", className)} style={style}>
             <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
                 <CardHeader project={projectNumber} number={number} className="flex-1" />
-                <ButtonSection project={projectNumber} number={number} className="self-end sm:self-start" />
+                <ButtonSection
+                    project={projectNumber}
+                    number={number}
+                    entryReleaseCheck={entryReleaseCheck}
+                    className="self-end sm:self-start"
+                />
             </div>
             <PermissionGate requires={Permission.READ_STATS_SLOT}>
                 <CardProgress project={projectNumber} number={number} />
             </PermissionGate>
-            <div className="space-y-4">
-                <div className="flex flex-col md:flex-row gap-2 w-full overflow-hidden">
-                    <CardVersions project={projectNumber} number={number} className="z-10" />
-                    <div className="flex flex-col gap-2 flex-1">
-                        <PermissionGate requires={Permission.READ_DECKS}>
-                            <DeckSummaries project={projectNumber} number={number} className="flex-1" />
-                        </PermissionGate>
-                    </div>
+            {canReadArtwork ? (
+                <Tabs
+                    selectedKey={tab}
+                    onSelectionChange={(key) => setTab(key as CardTab)}
+                    aria-label="Card Sections"
+                    variant="underlined"
+                    color="primary"
+                    size="lg"
+                    destroyInactiveTabPanel={false}
+                >
+                    <Tab key="development" title="Development">
+                        <DevelopmentSection project={projectNumber} number={number} />
+                    </Tab>
+                    <Tab key="artwork" title="Artwork">
+                        <ArtworkTab project={projectNumber} number={number} />
+                    </Tab>
+                </Tabs>
+            ) : (
+                <DevelopmentSection project={projectNumber} number={number} />
+            )}
+        </div>
+    );
+}
+
+function DevelopmentSection({ project, number }: { project: number; number: number }) {
+    return (
+        <div className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-2 w-full overflow-hidden">
+                <CardVersions project={project} number={number} className="z-10" />
+                <div className="flex flex-col gap-2 flex-1">
+                    <PermissionGate requires={Permission.READ_DECKS}>
+                        <DeckSummaries project={project} number={number} className="flex-1" />
+                    </PermissionGate>
                 </div>
-                <PermissionGate requires={Permission.READ_REVIEWS}>
-                    <FeedbackStatistics project={projectNumber} number={number} />
-                </PermissionGate>
             </div>
+            <PermissionGate requires={Permission.READ_REVIEWS}>
+                <FeedbackStatistics project={project} number={number} />
+            </PermissionGate>
         </div>
     );
 }
@@ -338,7 +376,6 @@ type VersionArrowProps = {
 
 // Marks a version that arrived with a change note, and leads back to the Playtesting Update carrying it
 function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
-    const navigate = useNavigate();
     const canReadUpdates = usePermission(Permission.READ_PLAYTESTING_UPDATES);
     const { data: updatesData } = useGetPlaytestingUpdatesQuery(
         { filter: { project: card.project } },
@@ -354,6 +391,14 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
     if (!note) {
         return null;
     }
+
+    const badgeClassName = "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70";
+    const badgeIcon = (
+        <FontAwesomeIcon
+            icon={noteTypeIcon[note.type]}
+            className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
+        />
+    );
 
     return (
         <TouchTooltip
@@ -380,24 +425,19 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
             }
             placement="right-start"
         >
-            <div
-                className={classNames(
-                    "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70",
-                    update ? "cursor-pointer" : "cursor-help",
-                    className
-                )}
-                style={style}
-                onClick={
-                    update
-                        ? () => navigate(`/project/${card.project}/update/${update.version}?card=${card.number}`)
-                        : undefined
-                }
-            >
-                <FontAwesomeIcon
-                    icon={noteTypeIcon[note.type]}
-                    className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
-                />
-            </div>
+            {update ? (
+                <Link
+                    to={`/project/${card.project}/update/${update.version}?card=${card.number}`}
+                    className={classNames(badgeClassName, "cursor-pointer", className)}
+                    style={style}
+                >
+                    {badgeIcon}
+                </Link>
+            ) : (
+                <div className={classNames(badgeClassName, "cursor-help", className)} style={style}>
+                    {badgeIcon}
+                </div>
+            )}
         </TouchTooltip>
     );
 }
@@ -414,16 +454,14 @@ type CardVersionsProps = Omit<BaseElementProps, "children"> & {
 
 // Header row: the card-state icons plus Release Checks and Submit Review. On mobile the state icons
 // fold into the actions dropdown, above its divider. Draft actions live over the card stack instead.
-function ButtonSection({ className, style, project: projectNumber, number }: ButtonSectionProps) {
+function ButtonSection({ className, style, project: projectNumber, number, entryReleaseCheck }: ButtonSectionProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
-    const navigate = useNavigate();
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
     const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
     const { data: project } = useGetProjectQuery({ number: projectNumber }, { skip: !canReadFeedback });
     // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
-    const { releaseCheck } = useConsumableParams(CARD_PARAMS);
-    const [feedbackOpen, setFeedbackOpen] = useState(releaseCheck === "1");
+    const [feedbackOpen, setFeedbackOpen] = useState(entryReleaseCheck === "1");
 
     // Feeds the modal's read-only mode - checks close with the card's design, or with its release
     const release = project?.releases.find((entry) => entry.code === slot?.release?.code);
@@ -472,7 +510,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                             title: "Submit Review",
                             icon: <FontAwesomeIcon icon={faScroll} size="xl" />,
                             color: "primary",
-                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
+                            to: `/review/submit?project=${projectNumber}&number=${number}`
                         }
                 ]}
             />
@@ -489,6 +527,8 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
 type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
+    /** "1" when arriving from a release-check deep link, which opens the modal on mount */
+    entryReleaseCheck?: string;
 };
 
 // New/Edit/Delete Draft, sat to the left of the version tabs behind their own divider

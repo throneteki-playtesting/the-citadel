@@ -18,6 +18,7 @@ import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequest
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { notifyStaleChecks } from "@/discord/announcements/staleChecks";
+import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
 import { clearDiscordMetadata } from "@/discord/forums/cardForum";
 
 const router = express.Router();
@@ -257,6 +258,44 @@ router.get(
         ]);
 
         res.status(StatusCodes.OK).json(cards);
+    })
+);
+
+// Sync discord announcement
+router.post(
+    "/:project/:version/sync/discord",
+    validateRequest(Permission.SYNC_PLAYTESTINGUPDATE_DISCORD),
+    celebrate({
+        [Segments.PARAMS]: { project: Joi.number().required(), version: Joi.number().required() },
+        [Segments.QUERY]: { forced: Joi.boolean() }
+    }),
+    loadProjectByParam,
+    asyncHandler<{ project: number; version: number }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
+        const { version } = req.params;
+        const { forced } = req.query;
+        const project = res.locals.project as IProject;
+
+        const [existing] = await dataService.playtestingUpdates.read({ project: project.number, version });
+        if (!existing) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_FOUND,
+                "Invalid Number",
+                "Playtesting Update with that number & version does not exist"
+            );
+        }
+
+        const [synced] = await syncPlaytestingUpdateAnnouncements(forced, { project: project.number, version });
+
+        if (forced) {
+            await logActivity(
+                LogCategory.PLAYTESTING_UPDATE,
+                "playtestingUpdate.synced",
+                `<principal> forced a discord sync for playtesting update v${version} of <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
+        }
+
+        res.status(StatusCodes.OK).json(synced ?? existing);
     })
 );
 

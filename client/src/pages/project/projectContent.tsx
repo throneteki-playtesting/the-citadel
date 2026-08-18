@@ -14,8 +14,9 @@ import { HighlightTarget } from "../../components/highlightTarget";
 import classNames from "classnames";
 import ThronesIcon from "../../components/thronesIcon";
 import SectionTitle from "../../components/sectionTitle";
+import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { highlightTarget, watermarkClasses } from "../../constants";
+import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
 import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -96,12 +97,15 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     const canReadSlots = usePermission(Permission.READ_SLOTS);
     const canReadProgress = usePermission(Permission.READ_STATS_SLOT) && canReadSlots;
     const availableSortOptions = useMemo(
-        () => Object.entries(sortOptions).filter(([key]) => key !== "progress" || canReadProgress),
+        () =>
+            Object.fromEntries(
+                Object.entries(sortOptions).filter(([key]) => key !== "progress" || canReadProgress)
+            ) as Partial<Record<SortOption, string>>,
         [canReadProgress]
     );
 
     // An entry can outlive the permission which allowed its sort, so what it holds is only a request
-    const sortBy = availableSortOptions.some(([key]) => key === storedSort) ? storedSort : "number";
+    const sortBy = storedSort in availableSortOptions ? storedSort : "number";
     const setSortBy = (sort: SortOption) => startSorting(() => setStoredSort(sort));
 
     const cardStats = useMemo(() => {
@@ -249,22 +253,13 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         releases={project.releases}
                         isDisabled={isLoading}
                     />
-                    <Select
-                        label="Sort by..."
-                        selectedKeys={[sortBy]}
-                        onSelectionChange={(keys) => setSortBy([...keys][0] as SortOption)}
-                        className="w-40 sm:w-full sm:max-w-64"
-                        classNames={{ value: "font-cinzel" }}
-                        size="sm"
-                        disallowEmptySelection
+                    <SortSelect
+                        options={availableSortOptions}
+                        value={sortBy}
                         isDisabled={isLoading}
-                    >
-                        {availableSortOptions.map(([key, label]) => (
-                            <SelectItem key={key} className="font-cinzel">
-                                {label}
-                            </SelectItem>
-                        ))}
-                    </Select>
+                        className="w-full sm:max-w-44"
+                        onChange={setSortBy}
+                    />
                 </div>
             </div>
             {isLoading ? (
@@ -425,7 +420,7 @@ function FactionCarousel({
                         <motion.div
                             key={parseCardCode(false, card.project, card.number)}
                             layout
-                            transition={REORDER_TRANSITION}
+                            transition={reorderTransition}
                             className={classNames(
                                 "snap-start",
                                 card.type === "plot"
@@ -516,9 +511,21 @@ const ProjectContentCard = memo(function ProjectContentCard({
         }
         event.preventDefault();
         event.stopPropagation();
-        navigate(`/project/${card.project}?tab=releases`, {
-            state: { highlight: highlightTarget.release(card.project, release.code) }
-        });
+        const path = `/project/${card.project}?tab=releases`;
+        if (event.ctrlKey || event.metaKey) {
+            window.open(path, "_blank");
+            return;
+        }
+        navigate(path, { state: { highlight: highlightTarget.release(card.project, release.code) } });
+    };
+
+    const openReleaseInNewTab = (event: React.MouseEvent) => {
+        if (!release || event.button !== 1) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        window.open(`/project/${card.project}?tab=releases`, "_blank");
     };
 
     const renderCard = useMemo(() => renderPlaytestingCard(card), [card]);
@@ -568,6 +575,7 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     >
                         <div
                             onClick={goToRelease}
+                            onAuxClick={openReleaseInNewTab}
                             className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 cursor-pointer"
                         >
                             <FontAwesomeIcon

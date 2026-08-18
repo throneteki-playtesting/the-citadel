@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, Ref, useRef, useState } from "react";
 import classNames from "classnames";
 import { useSortable } from "@dnd-kit/sortable";
 import { IPlaytestCard } from "common/models/cards";
@@ -23,11 +23,12 @@ function CapsuleVisual({
     card,
     className,
     style,
-    forwardRef,
+    ref,
     listeners,
     attributes,
     draggable = true,
     onClick,
+    onAuxClick,
     flipSlot,
     showProgress = false,
     showReleaseCheck = false,
@@ -66,28 +67,41 @@ function CapsuleVisual({
             listeners?.onPointerDown?.(e);
         }
     };
+
+    const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (e.button === 1) {
+            e.preventDefault();
+        }
+        if (draggable) {
+            listeners?.onMouseDown?.(e);
+        }
+    };
     const onCapsuleClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const origin = pressOrigin.current;
         pressOrigin.current = undefined;
         if (origin && Math.hypot(e.clientX - origin.x, e.clientY - origin.y) > TAP_MOVE_THRESHOLD) {
             return;
         }
-        onClick?.();
+        onClick?.(e);
     };
+
+    const dragCursorClass = hideExtras ? "cursor-grabbing" : "cursor-grab active:cursor-grabbing";
 
     return (
         <>
             <div
-                ref={forwardRef}
+                ref={ref}
                 style={style}
                 data-flip-slot={flipSlot}
                 {...(draggable ? listeners : undefined)}
                 {...(draggable ? attributes : undefined)}
                 onPointerDown={onPointerDown}
+                onMouseDown={isClickable ? onMouseDown : undefined}
                 onClick={isClickable ? onCapsuleClick : undefined}
+                onAuxClick={isClickable ? onAuxClick : undefined}
                 className={classNames(
                     "flex items-center gap-1 px-1.5 rounded-md border-2 border-solid select-none touch-manipulation z-10 transition-[filter]",
-                    draggable ? "cursor-grab" : isClickable ? "cursor-pointer" : "cursor-default",
+                    draggable ? dragCursorClass : isClickable ? "cursor-pointer" : "cursor-default",
                     { "hover:brightness-90": isClickable },
                     factionBorderClasses[card.faction],
                     factionBgClasses[card.faction],
@@ -150,11 +164,13 @@ type CapsuleVisualProps = {
     card: IPlaytestCard;
     className?: string;
     style?: React.CSSProperties;
-    forwardRef?: (node: HTMLElement | null) => void;
+    ref?: Ref<HTMLDivElement>;
     listeners?: ReturnType<typeof useSortable>["listeners"];
     attributes?: ReturnType<typeof useSortable>["attributes"];
     draggable?: boolean;
-    onClick?: () => void;
+    onClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
+    /** Middle-click - the capsule can't be a real anchor (drag listeners, nested button), so open-in-new-tab is manual */
+    onAuxClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     // Marks this capsule as a FLIP target (see useCapsuleFlip); omit on DragOverlay copies
     flipSlot?: number;
     showProgress?: boolean;

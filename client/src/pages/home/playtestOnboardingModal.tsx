@@ -3,9 +3,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button, Link, Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { BaseElementProps } from "../../types";
-
-const THRONESDB_URL = "https://thronesdb.com";
-const PLAYTESTING_URL = "https://playtesting.theironthrone.net";
+import { THRONESDB_URL, PLAYTESTING_TIT_URL } from "common/utils";
 
 const steps: { icon: IconDefinition; title: string; description: React.ReactNode }[] = [
     {
@@ -27,7 +25,7 @@ const steps: { icon: IconDefinition; title: string; description: React.ReactNode
         description: (
             <>
                 Play{" "}
-                <Link href={PLAYTESTING_URL} target="_blank" rel="noreferrer" className="text-[length:inherit]">
+                <Link href={PLAYTESTING_TIT_URL} target="_blank" rel="noreferrer" className="text-[length:inherit]">
                     online
                 </Link>
                 , or print-and-play physically with friends.

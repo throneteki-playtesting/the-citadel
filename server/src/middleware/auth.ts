@@ -62,7 +62,11 @@ async function fetchInternalIntegration() {
     const rawToken = dataService.integrations.fetchInternalToken();
     const integration = await dataService.integrations.findByToken(rawToken);
     if (!integration) {
-        throw new ApiErrorResponse(StatusCodes.UNAUTHORIZED, "Invalid Authentication", "Internal integration not found");
+        throw new ApiErrorResponse(
+            StatusCodes.UNAUTHORIZED,
+            "Invalid Authentication",
+            "Internal integration not found"
+        );
     }
 
     return integration;
