@@ -2,8 +2,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUpRightFromSquare } from "@fortawesome/free-solid-svg-icons";
 
 /**
- * The way out to whatever a link actually points at, sat at the trailing edge of the field holding it.
- * Renders nothing until there is a link, so an empty field carries no affordance to follow.
+ * The way out to whatever a link actually points at. Renders nothing until there is a link, so an
+ * empty field carries no affordance to follow.
  */
 export default function ExternalLinkButton({ url, label }: ExternalLinkButtonProps) {
     if (!url) {
@@ -25,6 +25,6 @@ export default function ExternalLinkButton({ url, label }: ExternalLinkButtonPro
 
 type ExternalLinkButtonProps = {
     url?: string;
-    /** What is being opened, eg. "Open artwork in a new tab" */
+    /** What is being opened, eg. "Open in a new tab" */
     label: string;
 };

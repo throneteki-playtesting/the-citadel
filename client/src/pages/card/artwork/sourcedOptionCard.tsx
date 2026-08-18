@@ -14,7 +14,7 @@ import { UIColor } from "../../../types";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ArtworkImage from "../../../components/artwork/artworkImage";
 import ArtistSelect from "../../../components/artwork/artistSelect";
-import ExternalLinkButton from "../../../components/artwork/externalLinkButton";
+import ExternalLinkButton from "../../../components/externalLinkButton";
 
 // The literal step order - denied/implied are states an option can be in, not steps on this run, so
 // they're never in this list rather than filtered back out of it. See ContactPicker.

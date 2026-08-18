@@ -3,7 +3,7 @@ import { CalendarDate, parseDate } from "@internationalized/date";
 import { ICommissionedArtwork } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
 import ArtworkReveal from "../../../components/artwork/artworkReveal";
-import ExternalLinkButton from "../../../components/artwork/externalLinkButton";
+import ExternalLinkButton from "../../../components/externalLinkButton";
 import ArtistSelect from "../../../components/artwork/artistSelect";
 import CostInput from "../../../components/artwork/costInput";
 

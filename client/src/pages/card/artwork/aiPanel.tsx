@@ -2,7 +2,7 @@ import { Input, Textarea } from "@heroui/react";
 import { IAiArtwork } from "common/models/artwork";
 import UserAutocomplete from "../../../components/data/userAutocomplete";
 import ArtworkReveal from "../../../components/artwork/artworkReveal";
-import ExternalLinkButton from "../../../components/artwork/externalLinkButton";
+import ExternalLinkButton from "../../../components/externalLinkButton";
 
 const EMPTY: IAiArtwork = {};
 

@@ -34,7 +34,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     return (
         <div
             ref={ref}
-            className={classNames("relative w-full overflow-hidden transition-height", className)}
+            className={classNames("relative size-full overflow-hidden transition-height", className)}
             style={{ ...style, height: measuredHeight ? `${measuredHeight}px` : undefined }}
         >
             <div
@@ -54,7 +54,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
                             ref={isActive ? activeWrapperRef : null}
                             aria-hidden={!isActive}
                             inert={!isActive}
-                            className={classNames("flex-shrink-0 w-full", !isActive && "overflow-clip")}
+                            className={classNames("flex-shrink-0 w-full", { "overflow-clip": !isActive })}
                             {...pageProps?.(pageNo)}
                         >
                             <PageActiveContext.Provider value={isActive}>{page}</PageActiveContext.Provider>
