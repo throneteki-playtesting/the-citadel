@@ -21,7 +21,12 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from "@dnd-kit/utilities";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGripVertical, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
-import { IProject, IProjectRelease, ReleaseSlotAllocation } from "common/models/projects";
+import {
+    IProject,
+    IProjectRelease,
+    ReleaseSlotAllocation,
+    releaseStatuses as releaseStatusOrder
+} from "common/models/projects";
 import { factions } from "common/models/cards";
 import { ReleaseDate } from "common/models/shared";
 import { DeepPartial } from "common/types";
@@ -89,6 +94,11 @@ export default function EditReleaseModal({
 
     const isNew = !initial?.code;
 
+    const isLocked =
+        !isNew &&
+        !!initial?.status &&
+        releaseStatusOrder.indexOf(initial.status) >= releaseStatusOrder.indexOf("confirming");
+
     const onSelectTemplate = (key: ReleaseTemplate) => {
         setTemplate(key);
         const preset = releaseTemplates[key].slots;
@@ -122,10 +132,16 @@ export default function EditReleaseModal({
                         <ModalBody>
                             <WizardPages>
                                 <WizardPage controlledData={release}>
+                                    {isLocked && (
+                                        <div className="text-sm text-warning">
+                                            Some options are locked while status is {initial?.status}.
+                                        </div>
+                                    )}
                                     <Input
                                         name="name"
                                         label="Name"
                                         value={release.name ?? ""}
+                                        isDisabled={isLocked}
                                         onValueChange={(name) => setRelease((prev) => ({ ...prev, name }))}
                                     />
                                     <div
@@ -139,7 +155,7 @@ export default function EditReleaseModal({
                                             label="Code"
                                             description="Short pack code, eg. WoW"
                                             value={release.code ?? ""}
-                                            isDisabled={!isNew && !isExpansion}
+                                            isDisabled={isLocked}
                                             onValueChange={(code) => setRelease((prev) => ({ ...prev, code }))}
                                         />
                                         {!isExpansion && (
@@ -148,6 +164,7 @@ export default function EditReleaseModal({
                                                 description="Determines each faction's slots in this pack"
                                                 disallowEmptySelection
                                                 selectedKeys={[template]}
+                                                isDisabled={isLocked}
                                                 onSelectionChange={(keys) =>
                                                     onSelectTemplate([...keys][0] as ReleaseTemplate)
                                                 }
@@ -344,7 +361,7 @@ function FactionSlotRow({ allocation, lockCount, onCountChange }: FactionSlotRow
             )}
         >
             <span
-                className="px-1 text-foreground/40 cursor-grab touch-manipulation select-none"
+                className="px-1 text-foreground/40 cursor-grab active:cursor-grabbing touch-manipulation select-none"
                 {...listeners}
                 {...attributes}
             >

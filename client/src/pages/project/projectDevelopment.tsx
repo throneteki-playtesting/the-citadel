@@ -3,7 +3,7 @@ import { IProject } from "common/models/projects";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useGetProjectStatsQuery } from "../../api";
 import StatsGrid from "../../components/statsGrid";
 import ProjectPlaytestingUpdates from "./playtestingUpdate/projectPlaytestingUpdates";
@@ -13,7 +13,6 @@ import { BaseElementProps } from "../../types";
 import { highlightTarget, releaseStatusColors } from "../../constants";
 import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
-import classNames from "classnames";
 
 export default function ProjectDevelopment({ className, style, project }: ProjectDevelopmentProps) {
     useTagManagerOverrides({ autoRefresh: true });
@@ -95,7 +94,6 @@ function ActiveDecksStat({ project }: ProjectStatProps) {
 }
 
 function PacksStat({ project }: ProjectStatProps) {
-    const navigate = useNavigate();
     const { release, filled, isLoading } = useNextReleaseStatus(project);
 
     if (isLoading) {
@@ -122,11 +120,8 @@ function PacksStat({ project }: ProjectStatProps) {
             label={label}
             value={`${filled}/${release.capacity}`}
             footer={footer}
-            onClick={() =>
-                navigate(`/project/${project.number}?tab=releases`, {
-                    state: { highlight: highlightTarget.release(project.number, release.code) }
-                })
-            }
+            to={`/project/${project.number}?tab=releases`}
+            state={{ highlight: highlightTarget.release(project.number, release.code) }}
         />
     );
 }
@@ -134,7 +129,7 @@ type ProjectStatProps = {
     project: IProject;
 };
 
-function StatCard({ label, value, footer, isLoading = false, onClick }: StatCardProps) {
+function StatCard({ label, value, footer, isLoading = false, to, state }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="bg-content2/50 px-5 py-5 border-b-2 space-y-2">
@@ -144,17 +139,24 @@ function StatCard({ label, value, footer, isLoading = false, onClick }: StatCard
             </div>
         );
     }
-    return (
-        <div
-            className={classNames("bg-content2/50 px-5 py-5", {
-                "cursor-pointer hover:bg-content2 transition-colors": !!onClick
-            })}
-            onClick={onClick}
-        >
+    const content = (
+        <>
             <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">{label}</div>
             <div className="text-4xl font-sans text-foreground mt-2 leading-none">{value ?? "-"}</div>
             {footer && <div className="text-sm font-serif italic text-foreground/50 mt-2">{footer}</div>}
-        </div>
+        </>
+    );
+    if (!to) {
+        return <div className="bg-content2/50 px-5 py-5">{content}</div>;
+    }
+    return (
+        <Link
+            to={to}
+            state={state}
+            className="block bg-content2/50 px-5 py-5 cursor-pointer hover:bg-content2 transition-colors"
+        >
+            {content}
+        </Link>
     );
 }
 type StatCardProps = {
@@ -162,5 +164,6 @@ type StatCardProps = {
     value?: ReactNode;
     footer?: ReactNode;
     isLoading?: boolean;
-    onClick?: () => void;
+    to?: string;
+    state?: unknown;
 };

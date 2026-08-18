@@ -124,7 +124,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                 <span
                     className={classNames(
                         "px-1 text-foreground/40 touch-manipulation select-none",
-                        canEditReleases ? "cursor-grab" : "cursor-default"
+                        canEditReleases ? "cursor-grab active:cursor-grabbing" : "cursor-default"
                     )}
                     onClick={(e) => e.stopPropagation()}
                     {...dragHandleListeners}
@@ -508,11 +508,30 @@ export function ReleasePositionSlot({
     const { active } = useDndContext();
     const navigate = useNavigate();
 
-    const onCapsuleClick = useCallback(() => {
-        if (card) {
-            navigate(`/project/${card.project}/${card.number}`);
-        }
-    }, [navigate, card]);
+    // The capsule can't be a real <a> (drag listeners, nested button), so ctrl/cmd-click is handled by hand
+    const onCapsuleClick = useCallback(
+        (event: React.MouseEvent) => {
+            if (!card) {
+                return;
+            }
+            const path = `/project/${card.project}/${card.number}`;
+            if (event.ctrlKey || event.metaKey) {
+                window.open(path, "_blank");
+                return;
+            }
+            navigate(path);
+        },
+        [navigate, card]
+    );
+    const onCapsuleAuxClick = useCallback(
+        (event: React.MouseEvent) => {
+            if (!card || event.button !== 1) {
+                return;
+            }
+            window.open(`/project/${card.project}/${card.number}`, "_blank");
+        },
+        [card]
+    );
     const showBackground = !card || isDragging;
     // Slots are faction-locked; while a card is dragged, slots of other factions dim and never highlight
     const activeFaction = active?.data.current?.faction as Faction | undefined;
@@ -546,6 +565,7 @@ export function ReleasePositionSlot({
                     attributes={attributes}
                     draggable={!disabled}
                     onClick={onCapsuleClick}
+                    onAuxClick={onCapsuleAuxClick}
                     flipSlot={card.number}
                     showProgress
                     showReleaseCheck={showReleaseCheck}

@@ -797,7 +797,8 @@ const api = createApi({
                 const body = review;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => generateFor(result, "review")
+            // Submitting a review can also create/update deck records server-side (syncReviewDecks)
+            invalidatesTags: (result) => [...generateFor(result, "review"), { type: "deck", id: "LIST" }]
         }),
         updateReview: builder.mutation<IPlaytestReview, IPlaytestReview>({
             query: (review) => {
@@ -805,7 +806,8 @@ const api = createApi({
                 const body = review;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => generateFor(result, "review")
+            // Editing a review can also create/update deck records server-side (syncReviewDecks)
+            invalidatesTags: (result) => [...generateFor(result, "review"), { type: "deck", id: "LIST" }]
         }),
         deleteReview: builder.mutation<
             IPlaytestReview,

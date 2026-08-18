@@ -44,7 +44,7 @@ import ThronesIcon from "../../components/thronesIcon";
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
-import { useNavigate } from "react-router-dom";
+import { Link as RouterLink } from "react-router-dom";
 import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery, useGetUserQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -88,8 +88,6 @@ export default function FeedbackStatistics({ className, style, project, number }
 
     const isLoading = isLoadingReviews || isLoadingCards;
 
-    const navigate = useNavigate();
-
     if (isLoading) {
         return (
             <div className={classNames("flex flex-col md:flex-row gap-2", className)} style={style}>
@@ -118,8 +116,9 @@ export default function FeedbackStatistics({ className, style, project, number }
                         </div>
                         <div className="pt-2 flex justify-center w-full">
                             <Button
+                                as={RouterLink}
+                                to={`/review/submit?project=${project}&number=${number}`}
                                 color="primary"
-                                onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}
                             >
                                 Render your verdict!
                             </Button>
@@ -277,22 +276,21 @@ type ReviewGraphProps = Omit<BaseElementProps, "children"> & {
 
 function ReviewSummaries({ className, style, project, number, dataSet }: ReviewSummariesProps) {
     const [isOutdatedModalOpen, setIsOutdatedModalOpen] = useState(false);
-    const navigate = useNavigate();
     const { user } = useAuth();
 
-    const onEdit = useCallback(
+    // Pure - lets the edit button render as a real link wherever there's somewhere to send it,
+    // falling back to the outdated-review modal only when there truly isn't one
+    const getEditTarget = useCallback(
         (review: IPlaytestReview, isLatest: boolean) => {
             if (isLatest) {
-                navigate(`/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}`);
-            } else if (hasPermission(user, Permission.EDIT_REVIEWS)) {
-                navigate(
-                    `/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}&version=${review.version}`
-                );
-            } else {
-                setIsOutdatedModalOpen(true);
+                return `/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}`;
             }
+            if (hasPermission(user, Permission.EDIT_REVIEWS)) {
+                return `/review/submit?project=${project}&number=${number}&reviewer=${review.reviewer}&version=${review.version}`;
+            }
+            return undefined;
         },
-        [navigate, number, project, user]
+        [number, project, user]
     );
 
     return (
@@ -301,9 +299,10 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                 <PermissionGate requires={Permission.MAKE_REVIEWS}>
                     <div className="pt-2 flex justify-center md:justify-end">
                         <Button
+                            as={RouterLink}
+                            to={`/review/submit?project=${project}&number=${number}`}
                             className="text-lg"
                             color="primary"
-                            onPress={() => navigate(`/review/submit?project=${project}&number=${number}`)}
                         >
                             Submit a review
                         </Button>
@@ -315,7 +314,8 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                             <ReviewSummary
                                 key={`${review.reviewer}|${review.version}`}
                                 review={review}
-                                onEdit={onEdit}
+                                getEditTarget={getEditTarget}
+                                onOutdated={() => setIsOutdatedModalOpen(true)}
                             />
                         ))}
                     </div>
@@ -341,11 +341,10 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                                     Return
                                 </Button>
                                 <Button
+                                    as={RouterLink}
+                                    to={`/review/submit?project=${project}&number=${number}`}
+                                    onClick={onClose}
                                     color="primary"
-                                    onPress={() => {
-                                        onClose();
-                                        navigate(`/review/submit?project=${project}&number=${number}`);
-                                    }}
                                 >
                                     Submit a new review
                                 </Button>
@@ -364,7 +363,7 @@ type ReviewSummariesProps = Omit<BaseElementProps, "children"> & {
     dataSet?: IPlaytestReview[];
 };
 
-function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps) {
+function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: ReviewSummaryProps) {
     const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
     const { data: card, isLoading: isCardLoading } = useGetCardQuery({
         project: review.project,
@@ -426,6 +425,7 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
     }
 
     const isAmended = new Date(review.updated).getTime() > new Date(review.created).getTime();
+    const editTarget = getEditTarget(review, card.latest);
     const chips = (
         <div className="flex flex-wrap gap-1">
             <SummaryChip
@@ -492,9 +492,15 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
                                     </div>
                                 }
                             >
-                                <Button isIconOnly onPress={() => onEdit(review, card.latest)} color="primary">
-                                    <FontAwesomeIcon icon={faPencil} />
-                                </Button>
+                                {editTarget ? (
+                                    <Button isIconOnly as={RouterLink} to={editTarget} color="primary">
+                                        <FontAwesomeIcon icon={faPencil} />
+                                    </Button>
+                                ) : (
+                                    <Button isIconOnly onPress={onOutdated} color="primary">
+                                        <FontAwesomeIcon icon={faPencil} />
+                                    </Button>
+                                )}
                             </TouchTooltip>
                         </PermissionGate>
                         <PermissionGate requires={Permission.READ_DISCORD_REVIEW_FORUM}>
@@ -603,7 +609,8 @@ function ReviewSummary({ className, style, review, onEdit }: ReviewSummaryProps)
 
 type ReviewSummaryProps = Omit<BaseElementProps, "children"> & {
     review: IPlaytestReview;
-    onEdit: (review: IPlaytestReview, isLatest: boolean) => void;
+    getEditTarget: (review: IPlaytestReview, isLatest: boolean) => string | undefined;
+    onOutdated: () => void;
 };
 
 function ReviewSummaryDeck({ className, style, url }: ReviewSummaryDeckProps) {

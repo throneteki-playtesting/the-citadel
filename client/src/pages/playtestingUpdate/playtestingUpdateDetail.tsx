@@ -43,7 +43,7 @@ import usePageTitle from "../../hooks/usePageTitle";
 import useConsumableParams from "../../hooks/useConsumableParams";
 import { HighlightTarget } from "../../components/highlightTarget";
 import useTimezone from "../../hooks/useTimezone";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import PermissionedLink from "../../components/permissionedLink";
 import Permission from "common/models/permissions";
 import Watermark from "../../components/watermark";
@@ -58,7 +58,6 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
     });
     const { data: project, isLoading: isProjectLoading } = useGetProjectQuery({ number: projectNumber });
     usePageTitle(project ? `${project.code} #${version}` : undefined);
-    const navigate = useNavigate();
     // Arriving from a card's change badge, which points at the one card it wants shown
     useConsumableParams(UPDATE_PARAMS, ({ card }) =>
         card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
@@ -124,18 +123,20 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                 <div className="flex gap-2">
                     {playtestingUpdate.version > 1 && (
                         <Button
+                            as={Link}
+                            to={`/project/${projectNumber}/update/${version - 1}`}
                             variant="bordered"
                             startContent={<FontAwesomeIcon icon={faChevronLeft} />}
-                            onPress={() => navigate(`/project/${projectNumber}/update/${version - 1}`)}
                         >
                             Previous Update
                         </Button>
                     )}
                     {playtestingUpdate.version < project.version && (
                         <Button
+                            as={Link}
+                            to={`/project/${projectNumber}/update/${version + 1}`}
                             variant="bordered"
                             endContent={<FontAwesomeIcon icon={faChevronRight} />}
-                            onPress={() => navigate(`/project/${projectNumber}/update/${version + 1}`)}
                             className="ml-auto"
                         >
                             Next Update

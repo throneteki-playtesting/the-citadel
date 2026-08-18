@@ -3,7 +3,7 @@ import { Chip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAngleLeft, faFlag } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { getFinalCardNumber, parseCardCode } from "common/utils";
 import { IProject } from "common/models/projects";
 import Permission from "common/models/permissions";
@@ -46,7 +46,6 @@ type CardHeaderProps = Omit<BaseElementProps, "children"> & { project: number; n
 // Continues the breadcrumb: which release this card sits in, coloured by how far that release has
 // got. Absent until the card is placed in one; the pack name & print number live in the tooltip.
 function ReleaseChip({ className, style, project, number }: ReleaseChipProps) {
-    const navigate = useNavigate();
     const canReadReleases = usePermission(Permission.READ_RELEASES);
     const { data: slot } = useGetSlotQuery(
         { project: project?.number ?? 0, number },
@@ -83,17 +82,15 @@ function ReleaseChip({ className, style, project, number }: ReleaseChipProps) {
             }
         >
             <Chip
+                as={Link}
+                to={`/project/${project.number}?tab=releases`}
+                state={{ highlight: highlightTarget.release(project.number, release.code) }}
                 size="sm"
                 variant="flat"
                 color={releaseStatusColors[displayStatus]}
                 className={classNames("cursor-pointer", className)}
                 style={style}
                 startContent={<FontAwesomeIcon icon={faFlag} className="ml-1" />}
-                onClick={() =>
-                    navigate(`/project/${project.number}?tab=releases`, {
-                        state: { highlight: highlightTarget.release(project.number, release.code) }
-                    })
-                }
             >
                 {release.code}
             </Chip>

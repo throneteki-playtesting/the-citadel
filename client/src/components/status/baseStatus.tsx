@@ -1,4 +1,5 @@
 import { Alert, Button, Listbox, ListboxItem, Popover, PopoverContent, Spinner } from "@heroui/react";
+import { Link, useNavigate } from "react-router-dom";
 import classNames from "classnames";
 import { ReactNode, RefObject, useRef, useState } from "react";
 import { BaseElementProps } from "../../types";
@@ -53,6 +54,7 @@ export function BaseStatus({
     style,
     traceClassName
 }: BaseStatusProps) {
+    const navigate = useNavigate();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const lpRef = useRef({ triggered: false, timer: null as ReturnType<typeof setTimeout> | null });
 
@@ -203,32 +205,58 @@ export function BaseStatus({
         const handleButtonPress = () => {
             clearTimer();
             if (!lpRef.current.triggered) {
-                if (data.href) window.open(data.href, "_blank", "noreferrer");
-                else data.onPress?.();
+                if (data.to) {
+                    navigate(data.to, { state: data.state });
+                } else if (data.href) {
+                    window.open(data.href, "_blank", "noreferrer");
+                } else {
+                    data.onPress?.();
+                }
             }
             lpRef.current.triggered = false;
         };
 
-        const button = (
-            <Button
-                isLoading={isLoading}
-                isIconOnly
-                size={size}
-                color={data.color}
-                style={style}
-                onPressStart={hasLongPress ? startTimer : undefined}
-                onPressEnd={hasLongPress ? clearTimer : undefined}
-                onPress={hasLongPress ? handleButtonPress : data.onPress}
-                as={hasLongPress ? undefined : data.href ? "a" : undefined}
-                href={hasLongPress ? undefined : data.href}
-                target={!hasLongPress && data.href ? "_blank" : undefined}
-                rel={!hasLongPress && data.href ? "noreferrer" : undefined}
-                disableAnimation={!data.onPress && !data.href}
-                className={classNames("font-sans", { [interactiveClass]: !!(data.onPress || data.href) }, elementClass)}
-            >
-                {data.icon}
-            </Button>
-        );
+        // `to` gets a real anchor (unlike opaque `href`), so middle/ctrl-click work - only while
+        // there's no long-press dropdown to arbitrate between a tap and a hold
+        const button =
+            !hasLongPress && data.to ? (
+                <Button
+                    as={Link}
+                    to={data.to}
+                    state={data.state}
+                    isLoading={isLoading}
+                    isIconOnly
+                    size={size}
+                    color={data.color}
+                    style={style}
+                    className={classNames("font-sans", interactiveClass, elementClass)}
+                >
+                    {data.icon}
+                </Button>
+            ) : (
+                <Button
+                    isLoading={isLoading}
+                    isIconOnly
+                    size={size}
+                    color={data.color}
+                    style={style}
+                    onPressStart={hasLongPress ? startTimer : undefined}
+                    onPressEnd={hasLongPress ? clearTimer : undefined}
+                    onPress={hasLongPress ? handleButtonPress : data.onPress}
+                    as={hasLongPress ? undefined : data.href ? "a" : undefined}
+                    href={hasLongPress ? undefined : data.href}
+                    target={!hasLongPress && data.href ? "_blank" : undefined}
+                    rel={!hasLongPress && data.href ? "noreferrer" : undefined}
+                    disableAnimation={!data.onPress && !data.href}
+                    className={classNames(
+                        "font-sans",
+                        { [interactiveClass]: !!(data.onPress || data.href) },
+                        elementClass
+                    )}
+                >
+                    {data.icon}
+                </Button>
+            );
 
         const withTooltip = (
             <TouchTooltip content={tooltipContent} keepOpen={keepTooltipOpen}>
@@ -249,6 +277,32 @@ export function BaseStatus({
             description={isLoading ? "Loading..." : data.description}
         />
     );
+
+    if (data.to) {
+        const el = (
+            <Link
+                to={data.to}
+                state={data.state}
+                className={classNames("font-sans", interactiveClass, elementClass)}
+                style={style}
+                onClick={
+                    hasLongPress
+                        ? (e) => {
+                              if (lpRef.current.triggered) {
+                                  e.preventDefault();
+                                  lpRef.current.triggered = false;
+                              }
+                          }
+                        : undefined
+                }
+                {...(hasLongPress ? lpDomHandlers : {})}
+            >
+                {alert}
+            </Link>
+        );
+
+        return hasLongPress ? wrapWithDropdown(el) : el;
+    }
 
     if (data.onPress) {
         const handleClick = () => {

@@ -366,9 +366,21 @@ const ProjectContentCard = memo(function ProjectContentCard({
         }
         event.preventDefault();
         event.stopPropagation();
-        navigate(`/project/${card.project}?tab=releases`, {
-            state: { highlight: highlightTarget.release(card.project, release.code) }
-        });
+        const path = `/project/${card.project}?tab=releases`;
+        if (event.ctrlKey || event.metaKey) {
+            window.open(path, "_blank");
+            return;
+        }
+        navigate(path, { state: { highlight: highlightTarget.release(card.project, release.code) } });
+    };
+
+    const openReleaseInNewTab = (event: React.MouseEvent) => {
+        if (!release || event.button !== 1) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        window.open(`/project/${card.project}?tab=releases`, "_blank");
     };
 
     const renderCard = useMemo(() => renderPlaytestingCard(card), [card]);
@@ -418,6 +430,7 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     >
                         <div
                             onClick={goToRelease}
+                            onAuxClick={openReleaseInNewTab}
                             className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 cursor-pointer"
                         >
                             <FontAwesomeIcon

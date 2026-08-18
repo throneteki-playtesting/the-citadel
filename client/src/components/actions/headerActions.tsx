@@ -11,6 +11,7 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import { useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
@@ -54,6 +55,7 @@ function renderDropdownItem(item: ActionItem) {
 }
 
 export default function HeaderActions({ items, className }: HeaderActionsProps) {
+    const navigate = useNavigate();
     const resolvedItems = useMemo(() => items.filter((item): item is ActionItem => !!item), [items]);
     const buttonItems = useMemo(() => resolvedItems.filter((item) => !item.isDropdownOnly), [resolvedItems]);
     // Statuses read as state rather than as things to do, so the dropdown keeps them in their own section
@@ -67,35 +69,60 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
     return (
         <div className={className}>
             <ButtonGroup className={classNames("hidden", { "sm:flex": buttonItems.length > 0 })}>
-                {buttonItems.map((item) => (
-                    <TouchTooltip
-                        key={item.key}
-                        content={
-                            <div className="flex flex-col">
-                                <div className="font-bold">{item.title}</div>
-                                {item.description && <div>{item.description}</div>}
-                            </div>
-                        }
-                    >
-                        <Button
-                            isIconOnly
-                            color={item.color}
-                            isDisabled={item.isDisabled}
-                            isLoading={item.isLoading}
-                            // The badge sits inside the button (ButtonGroup rounds its direct children),
-                            // and z-10 lifts it out of the base z-0 the next button would paint over
-                            className={classNames("overflow-visible", item.badge && "z-10")}
-                            onPress={() => openItem(item)}
-                        >
+                {buttonItems.map((item) => {
+                    // The badge sits inside the button (ButtonGroup rounds its direct children), and
+                    // z-10 lifts it out of the base z-0 the next button would paint over
+                    const buttonClassName = classNames("overflow-visible", item.badge && "z-10");
+                    const buttonChildren = (
+                        <>
                             {item.icon}
                             {!!item.badge && (
                                 <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-secondary text-secondary-foreground text-tiny font-medium flex items-center justify-center">
                                     {item.badge}
                                 </span>
                             )}
-                        </Button>
-                    </TouchTooltip>
-                ))}
+                        </>
+                    );
+
+                    return (
+                        <TouchTooltip
+                            key={item.key}
+                            content={
+                                <div className="flex flex-col">
+                                    <div className="font-bold">{item.title}</div>
+                                    {item.description && <div>{item.description}</div>}
+                                </div>
+                            }
+                        >
+                            {item.to ? (
+                                // Internal route: a real anchor, so middle/ctrl-click open a new tab
+                                <Button
+                                    as={Link}
+                                    to={item.to}
+                                    state={item.state}
+                                    isIconOnly
+                                    color={item.color}
+                                    isDisabled={item.isDisabled}
+                                    isLoading={item.isLoading}
+                                    className={buttonClassName}
+                                >
+                                    {buttonChildren}
+                                </Button>
+                            ) : (
+                                <Button
+                                    isIconOnly
+                                    color={item.color}
+                                    isDisabled={item.isDisabled}
+                                    isLoading={item.isLoading}
+                                    className={buttonClassName}
+                                    onPress={() => openItem(item)}
+                                >
+                                    {buttonChildren}
+                                </Button>
+                            )}
+                        </TouchTooltip>
+                    );
+                })}
             </ButtonGroup>
             <div className="sm:hidden fixed bottom-6 right-4 z-20">
                 <Dropdown placement="top-end">
@@ -109,7 +136,12 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                         disabledKeys={resolvedItems.filter((item) => item.isDisabled).map((item) => item.key)}
                         onAction={(key) => {
                             const item = resolvedItems.find((item) => item.key === key);
-                            if (item) {
+                            if (!item) {
+                                return;
+                            }
+                            if (item.to) {
+                                navigate(item.to, { state: item.state });
+                            } else {
                                 openItem(item);
                             }
                         }}

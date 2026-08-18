@@ -1,8 +1,7 @@
 import { IProject } from "common/models/projects";
 import { ReactNode, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Chip, Skeleton } from "@heroui/react";
-import classNames from "classnames";
 import { useGetProjectProgressQuery, useGetProjectsQuery, useGetProjectStatsQuery } from "../../api";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../components/permissionGate";
@@ -66,7 +65,6 @@ export const ProjectsSummary = () => {
 };
 
 function ProjectCard({ project }: ProjectCardProps) {
-    const navigate = useNavigate();
     const canReadStats = usePermission(Permission.READ_STATS_PROJECT);
     // The same figure the project page's meter shows, so the two always agree
     const { data: progressData } = useGetProjectProgressQuery({ project: project.number }, { skip: !canReadStats });
@@ -102,32 +100,31 @@ function ProjectCard({ project }: ProjectCardProps) {
     }, [progress, project.active, project.draft]);
 
     return (
-        <div
-            onClick={() => navigate(`/project/${project.number}`)}
-            className="bg-content1 border border-content3 cursor-pointer hover:border-content4 transition-colors drop-shadow-lg"
-        >
-            <Watermark
-                position="left"
-                icon={<span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>}
-            >
-                <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
-                    <div className="flex-1">
-                        <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
-                            #{project.number} ·{" "}
-                            <span className="uppercase">
-                                {project.type} · Version {project.version}
-                            </span>
+        <div className="bg-content1 border border-content3 hover:border-content4 transition-colors drop-shadow-lg">
+            <Link to={`/project/${project.number}`} className="block cursor-pointer">
+                <Watermark
+                    position="left"
+                    icon={<span className="ml-16 text-9xl opacity-10">{project.emoji && dismoji[project.emoji]}</span>}
+                >
+                    <div className="flex flex-col sm:flex-row px-6 py-5 border-b border-content3 bg-content2">
+                        <div className="flex-1">
+                            <div className="text-xxs font-crimson tracking-widest uppercase text-foreground/40">
+                                #{project.number} ·{" "}
+                                <span className="uppercase">
+                                    {project.type} · Version {project.version}
+                                </span>
+                            </div>
+                            <h2 className="text-xl sm:text-2xl tracking-widest font-cinzel text-foreground">
+                                {project.name}
+                            </h2>
                         </div>
-                        <h2 className="text-xl sm:text-2xl tracking-widest font-cinzel text-foreground">
-                            {project.name}
-                        </h2>
+                        <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
+                            {statusChip}
+                            <ProjectProgressMeter project={project.number} size="sm" />
+                        </div>
                     </div>
-                    <div className="flex font-sans items-center sm:flex-col sm:items-end gap-3 pt-1 min-w-64">
-                        {statusChip}
-                        <ProjectProgressMeter project={project.number} size="sm" />
-                    </div>
-                </div>
-            </Watermark>
+                </Watermark>
+            </Link>
             <StatsGrid>
                 <PermissionGate requires={Permission.READ_STATS_PROJECT}>
                     <CardChangesStat project={project} />
@@ -192,8 +189,7 @@ function ActiveDecksStat({ project }: ProjectStatProps) {
 }
 
 function ReleasesStat({ project }: ProjectStatProps) {
-    const navigate = useNavigate();
-    const goToReleases = () => navigate(`/project/${project.number}?tab=releases`);
+    const releasesPath = `/project/${project.number}?tab=releases`;
 
     if (project.type === "expansion") {
         const isReleased = project.releases[0]?.status === "released";
@@ -201,11 +197,13 @@ function ReleasesStat({ project }: ProjectStatProps) {
             <StatCard
                 label="Released"
                 value={isReleased ? "Yes" : "No"}
-                onClick={project.releases.length > 0 ? goToReleases : undefined}
+                to={project.releases.length > 0 ? releasesPath : undefined}
             />
         );
     }
 
+    // Each chip links to its own release - the tile itself isn't a link here, since a chip's <Link>
+    // can't sit inside another one
     const packChips =
         project.releases.length > 0 ? (
             <div className="flex flex-wrap gap-1">
@@ -214,16 +212,13 @@ function ReleasesStat({ project }: ProjectStatProps) {
                     return (
                         <Chip
                             key={release.code}
+                            as={Link}
+                            to={releasesPath}
+                            state={{ highlight: highlightTarget.release(project.number, release.code) }}
                             size="sm"
                             variant="flat"
                             color={releaseStatusColors[displayStatus]}
                             className="cursor-pointer"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/project/${project.number}?tab=releases`, {
-                                    state: { highlight: highlightTarget.release(project.number, release.code) }
-                                });
-                            }}
                         >
                             {release.code}
                         </Chip>
@@ -234,15 +229,13 @@ function ReleasesStat({ project }: ProjectStatProps) {
             <span className="text-lg font-crimson tracking-wider">None</span>
         );
 
-    return (
-        <StatCard label="Releases" value={packChips} onClick={project.releases.length > 0 ? goToReleases : undefined} />
-    );
+    return <StatCard label="Releases" value={packChips} />;
 }
 type ProjectStatProps = {
     project: IProject;
 };
 
-function StatCard({ label, value, footer, isLoading = false, onClick }: StatCardProps) {
+function StatCard({ label, value, footer, isLoading = false, to, state }: StatCardProps) {
     if (isLoading) {
         return (
             <div className="px-6 py-4 space-y-1">
@@ -252,22 +245,20 @@ function StatCard({ label, value, footer, isLoading = false, onClick }: StatCard
             </div>
         );
     }
-    return (
-        <div
-            className={classNames("px-6 py-4", { "cursor-pointer hover:bg-content2 transition-colors": !!onClick })}
-            onClick={
-                onClick
-                    ? (e) => {
-                          e.stopPropagation();
-                          onClick();
-                      }
-                    : undefined
-            }
-        >
+    const content = (
+        <>
             <div className="text-xxs font-cinzel tracking-wide uppercase text-foreground/40">{label}</div>
             <div className="text-3xl font-sans text-foreground leading-none">{value ?? "-"}</div>
             {footer && <div className="text-xs font-serif italic text-foreground/40 mt-1.5">{footer}</div>}
-        </div>
+        </>
+    );
+    if (!to) {
+        return <div className="px-6 py-4">{content}</div>;
+    }
+    return (
+        <Link to={to} state={state} className="block px-6 py-4 cursor-pointer hover:bg-content2 transition-colors">
+            {content}
+        </Link>
     );
 }
 type StatCardProps = {
@@ -275,5 +266,6 @@ type StatCardProps = {
     value?: ReactNode;
     footer?: ReactNode;
     isLoading?: boolean;
-    onClick?: () => void;
+    to?: string;
+    state?: unknown;
 };
