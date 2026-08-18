@@ -102,6 +102,9 @@ export interface GithubPRMeta {
     lastSynced?: Date;
 }
 
+export const playtestingUpdateStates = ["pending", "partial", "playable"] as const;
+export type PlaytestingUpdateState = (typeof playtestingUpdateStates)[number];
+
 export interface IPlaytestingUpdate extends IAuditable {
     project: number;
     version: number;
@@ -111,6 +114,11 @@ export interface IPlaytestingUpdate extends IAuditable {
         github?: {
             code?: GithubPRMeta;
             data?: GithubPRMeta;
+        };
+        /** Strictly only tracks the design & playtesting announcement, not the operations webhook post */
+        discord?: {
+            messageUrl?: string;
+            lastSynced?: Date;
         };
     };
 }

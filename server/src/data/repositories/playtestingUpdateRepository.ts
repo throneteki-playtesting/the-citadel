@@ -4,6 +4,7 @@ import { MongoClient } from "mongodb";
 import { IPlaytestCard } from "common/models/cards";
 import { BasicAuditableRepository } from "./shared";
 import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
+import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 
@@ -62,19 +63,16 @@ export default class PlaytestingUpdateRepository extends BasicAuditableRepositor
 
     public async sync(syncing: SingleOrArray<IPlaytestingUpdate>) {
         let data = asArray(syncing);
+        const applyResult = (result: IPlaytestingUpdate[]) => {
+            data = data.map(
+                (item) => result.find((r) => r.project === item.project && r.version === item.version) ?? item
+            );
+        };
+
         const syncs = [
-            () =>
-                syncCodePullRequests().then((result) => {
-                    data = data.map(
-                        (item) => result.find((r) => r.project === item.project && r.version === item.version) ?? item
-                    );
-                }),
-            () =>
-                syncDataPullRequests().then((result) => {
-                    data = data.map(
-                        (item) => result.find((r) => r.project === item.project && r.version === item.version) ?? item
-                    );
-                })
+            { priority: 0, func: () => syncCodePullRequests().then(applyResult) },
+            { priority: 0, func: () => syncDataPullRequests().then(applyResult) },
+            { priority: 1, func: () => syncPlaytestingUpdateAnnouncements().then(applyResult) }
         ];
 
         await this.internalSync(syncs);

@@ -1,4 +1,13 @@
-import { Client, FetchedThreadsMore, ForumChannel, GatewayIntentBits, GuildMember, Guild } from "discord.js";
+import {
+    Client,
+    FetchedThreadsMore,
+    ForumChannel,
+    GatewayIntentBits,
+    GuildMember,
+    Guild,
+    Message,
+    TextChannel
+} from "discord.js";
 import { log } from "./logger";
 
 let client: Client | null = null;
@@ -7,7 +16,9 @@ let membersCache: GuildMember[] | null = null;
 export async function getDiscordClient(): Promise<Client> {
     if (client?.isReady()) return client;
 
-    client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
+    client = new Client({
+        intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent]
+    });
 
     await new Promise<void>((resolve, reject) => {
         client!.once("ready", () => {
@@ -157,4 +168,50 @@ export async function fetchForumThreads(forumName: string): Promise<Map<string, 
 
 export async function fetchCardForumThreads(): Promise<Map<string, ForumThread>> {
     return fetchForumThreads("card-forum");
+}
+
+export interface ChannelMessage {
+    firstLine: string;
+    url: string;
+}
+
+// Components V2 posts carry no content, so the embed is used as a fallback for the searchable line
+function firstLineOf(message: Message): string {
+    const text = message.content || message.embeds[0]?.title || message.embeds[0]?.description || "";
+    return (
+        text
+            .split("\n")
+            .find((line) => line.trim().length > 0)
+            ?.trim() ?? ""
+    );
+}
+
+// Reads the full history of a named text channel; read-only, as the migration never posts or edits
+export async function fetchChannelMessages(channelName: string): Promise<ChannelMessage[]> {
+    const discord = await getDiscordClient();
+    const guild = await getGuild(discord);
+
+    const channels = await guild.channels.fetch();
+    const channel = channels.find((c) => c?.isTextBased() && !c.isThread() && c.name.includes(channelName));
+    if (!channel) {
+        log.warn(`Text channel "${channelName}" not found in guild "${guild.name}"`);
+        return [];
+    }
+
+    const messages: ChannelMessage[] = [];
+    let before: string | undefined;
+
+    for (;;) {
+        const batch = await (channel as TextChannel).messages.fetch({ limit: 100, before });
+        if (batch.size === 0) {
+            break;
+        }
+        for (const message of batch.values()) {
+            messages.push({ firstLine: firstLineOf(message), url: message.url });
+        }
+        before = batch.last()?.id;
+    }
+
+    log.verbose(`${messages.length} message(s) loaded from "${channelName}"`);
+    return messages;
 }

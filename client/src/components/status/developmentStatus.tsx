@@ -1,6 +1,6 @@
 import { faCrosshairs, faFeather } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { isPreview, parseCardCode, SemanticVersion } from "common/utils";
+import { isPreview, parseCardCode, SemanticVersion, THRONESDB_URL } from "common/utils";
 import { useMemo } from "react";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
@@ -34,7 +34,7 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
         const latest = cardsData?.items.find((card) => card.latest);
         if (latest) {
             if (latest.released) {
-                const href = `https://thronesdb.com/card/${parseCardCode(true, latest.project, latest.released.number)}`;
+                const href = `${THRONESDB_URL}/card/${parseCardCode(true, latest.project, latest.released.number)}`;
                 return {
                     title,
                     description: `Released (${latest.released.code})`,

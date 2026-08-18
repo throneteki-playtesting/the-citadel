@@ -165,7 +165,7 @@ function CreateCard({ project, draftCards = [] }: CreateCardProps) {
                 <div className="flex-1 px-5 flex flex-col justify-between">
                     <div className="text-sm md:text-base font-sans">
                         {draftCards.length} draft card{draftCards.length > 1 ? "s are" : " is"} ready for the field, and
-                        must be published via a Playtesting Update below.
+                        must be confirmed via a Playtesting Update below - this will also announce it to playtesters.
                     </div>
                     <div className="mx-auto">
                         <Button
@@ -173,7 +173,7 @@ function CreateCard({ project, draftCards = [] }: CreateCardProps) {
                             color="primary"
                             onPress={() => setIsModalOpen((prev) => !prev)}
                         >
-                            Publish Update <FontAwesomeIcon icon={faArrowRightFromBracket} />
+                            Confirm Update <FontAwesomeIcon icon={faArrowRightFromBracket} />
                         </Button>
                     </div>
                 </div>
@@ -184,9 +184,9 @@ function CreateCard({ project, draftCards = [] }: CreateCardProps) {
                 onClose={() => setIsModalOpen(false)}
                 onSave={(playtestingUpdate) =>
                     addToast({
-                        title: "Successfully submitted",
+                        title: "Successfully confirmed",
                         color: "success",
-                        description: `${project.code} Playtesting Update #${playtestingUpdate.version} has been submitted`
+                        description: `${project.code} Playtesting Update #${playtestingUpdate.version} has been confirmed & announced`
                     })
                 }
             />

@@ -119,6 +119,15 @@ export const stepperColorClasses: Record<UIColor, { node: string; fill: string; 
     }
 };
 
+export const textUIColor: Record<UIColor, string> = {
+    default: "text-default-500",
+    primary: "text-primary",
+    secondary: "text-secondary",
+    success: "text-success",
+    warning: "text-warning",
+    danger: "text-danger"
+};
+
 export const factionBorderClasses: Record<Faction, string> = {
     baratheon: "border-baratheon/30",
     greyjoy: "border-greyjoy/30",

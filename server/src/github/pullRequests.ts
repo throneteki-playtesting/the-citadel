@@ -4,7 +4,8 @@ import { GithubContext } from ".";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { syncImage } from "@/rendering/hosting";
 import { DEVELOPMENT_BRANCH, emojis, PLAYTESTING_BRANCH, STAGING_BRANCH } from "./utils";
-import { parseCardCode, toJSONExportCard } from "common/utils";
+import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
+import { parseCardCode, PLAYTESTING_TIT_URL, toJSONExportCard } from "common/utils";
 import { sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter } from "@/services/sseService";
@@ -21,6 +22,7 @@ const syncDataPullRequestMutex = new Mutex();
 export async function syncCodePullRequests(forced?: boolean) {
     const release = await syncCodePullRequestMutex.acquire();
     let playtestingUpdates: IPlaytestingUpdate[] = [];
+    let implementedCards: IPlaytestCard[] = [];
     try {
         playtestingUpdates = await readSyncingUpdates();
         const newlyImplemented = await dataService.cards.read({
@@ -53,6 +55,7 @@ export async function syncCodePullRequests(forced?: boolean) {
 
                 // Closed cards are live once development reaches playtesting; syncing would deadlock on this mutex
                 await markCardsImplemented(newlyImplemented, false);
+                implementedCards = newlyImplemented;
             } else {
                 emitters.forEach((e) => e.progress("Searching"));
                 const existingPR = await findOpenPullRequest(context, branches);
@@ -97,6 +100,11 @@ export async function syncCodePullRequests(forced?: boolean) {
         }
     } finally {
         release();
+    }
+
+    // Announced out here, as the cards above were implemented without their own sync
+    if (implementedCards.length > 0) {
+        await syncPlaytestingUpdateAnnouncements();
     }
 
     return playtestingUpdates;
@@ -525,7 +533,7 @@ const pullRequests = {
         const title = `Website Update ${version}`;
         const body =
             `# ${emojis.announcement} Playtesting Website Update ${version}` +
-            "\nApplies the latest updates to [playtesting.theironthrone.net](https://playtesting.theironthrone.net), which may contain new playtesting content, updated playtesting content and/or bug fixes. Not all changes are documented in this PR, and adjustments should be considered unstable." +
+            `\nApplies the latest updates to [playtesting.theironthrone.net](${PLAYTESTING_TIT_URL}), which may contain new playtesting content, updated playtesting content and/or bug fixes. Not all changes are documented in this PR, and adjustments should be considered unstable.` +
             "\n\n> [!WARNING]" +
             "\n> Code implemented for playtesting should always be treated as unstable. Expect bugs, and kindly report them to the [discord bugs forum](https://discord.com/channels/698308957822779462/1343356199244005466) with as much detail as possible." +
             "\n\n" +

@@ -31,6 +31,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { useCodeUpdateStatus } from "../../components/status/useCodeUpdateStatus";
 import { useDataUpdateStatus } from "../../components/status/useDataUpdateStatus";
+import { useDiscordUpdateStatus } from "../../components/status/useDiscordUpdateStatus";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
 import { BaseStatus } from "../../components/status/baseStatus";
@@ -165,6 +166,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
         playtestingUpdate.project,
         playtestingUpdate.version
     );
+    const { data: discordStatus, isLoading: isDiscordStatusLoading } = useDiscordUpdateStatus(
+        playtestingUpdate.project,
+        playtestingUpdate.version
+    );
 
     const onExportPNG = async () => {
         try {
@@ -199,6 +204,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                         <div className="hidden sm:flex items-center gap-1.5">
                             <BaseStatus isIconOnly data={codeStatus} isLoading={isCodeStatusLoading} />
                             <BaseStatus isIconOnly data={dataStatus} isLoading={isDataStatusLoading} />
+                            <BaseStatus isIconOnly data={discordStatus} isLoading={isDiscordStatusLoading} />
                         </div>
                         <HeaderActions
                             items={[
@@ -209,6 +215,10 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
                                 statusActionItem("data-status", dataStatus, {
                                     isDropdownOnly: true,
                                     isLoading: isDataStatusLoading
+                                }),
+                                statusActionItem("discord-status", discordStatus, {
+                                    isDropdownOnly: true,
+                                    isLoading: isDiscordStatusLoading
                                 }),
                                 {
                                     key: "print",

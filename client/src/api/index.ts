@@ -788,6 +788,16 @@ const api = createApi({
                 ];
             }
         }),
+        syncPlaytestingUpdateDiscord: builder.mutation<
+            IPlaytestingUpdate,
+            { project: number; version: number; forced?: boolean }
+        >({
+            query: ({ project, version, forced }) => {
+                const url = buildUrl(`playtesting-updates/${project}/${version}/sync/discord`, { forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "playtestingUpdate")
+        }),
         syncReviewDiscord: builder.mutation<
             IPlaytestReview,
             { project: number; number: number; version: SemanticVersion; reviewer: string; forced?: boolean }
@@ -974,6 +984,7 @@ export const {
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,
     useSyncPlaytestingUpdateGithubMutation,
+    useSyncPlaytestingUpdateDiscordMutation,
     useSyncReviewDiscordMutation,
 
     useGetReviewQuery,

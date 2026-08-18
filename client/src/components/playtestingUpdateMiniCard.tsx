@@ -1,19 +1,19 @@
 import { useGetPlaytestingUpdateCardsQuery, useGetProjectQuery, useGetReviewsQuery } from "../api";
 import { useMemo } from "react";
 import { Alert, Skeleton } from "@heroui/react";
-import { faCheckSquare } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import Permission from "common/models/permissions";
 import { IPlaytestingUpdate } from "common/models/projects";
+import { summarisePlaytestingUpdate } from "common/utils";
 import PermissionedLink from "./permissionedLink";
 import Timestamp from "./timestamp";
 import { BaseElementProps } from "../types";
-import { Faction, NoteType } from "common/models/cards";
-import { changeTypeClasses, factionBarClasses } from "../constants";
+import { Faction } from "common/models/cards";
+import { changeTypeClasses, factionBarClasses, textUIColor } from "../constants";
 import { TouchTooltip } from "./touchTooltip";
 import { ChangeType } from "common/types";
 import ThronesIcon from "./thronesIcon";
+import { useCodeUpdateStatus } from "./status/useCodeUpdateStatus";
 
 export default function PlaytestingUpdateMiniCard({
     className,
@@ -28,25 +28,11 @@ export default function PlaytestingUpdateMiniCard({
         version: playtestingUpdate.version
     });
 
-    const { factionCounts, total, noteMap } = useMemo(() => {
-        let total = 0;
-        const factionCounts =
-            cards?.reduce<Partial<Record<Faction, number>>>((map, card) => {
-                total++;
-                map[card.faction] = (map[card.faction] ?? 0) + 1;
-                return map;
-            }, {}) ?? {};
-
-        const noteMap =
-            cards?.reduce<Record<NoteType, number>>(
-                (map, card) => {
-                    if (card.note) map[card.note.type]++;
-                    return map;
-                },
-                { updated: 0, reworked: 0, replaced: 0, wording: 0 }
-            ) ?? {};
-        return { factionCounts, total, noteMap };
-    }, [cards]);
+    const { factions, notes, total } = useMemo(() => summarisePlaytestingUpdate(cards ?? []), [cards]);
+    const { data: codeStatus, isLoading: isCodeStatusLoading } = useCodeUpdateStatus(
+        playtestingUpdate.project,
+        playtestingUpdate.version
+    );
 
     if (isProjectLoading || isCardsLoading) {
         return (
@@ -71,10 +57,6 @@ export default function PlaytestingUpdateMiniCard({
         );
     }
 
-    const isImplemented =
-        playtestingUpdate._metadata?.github?.code?.status === "closed" &&
-        !!playtestingUpdate._metadata?.github?.code?.mergedAt;
-
     return (
         <div className="h-full">
             <PermissionedLink
@@ -95,7 +77,16 @@ export default function PlaytestingUpdateMiniCard({
                                         <span className="font-semibold">#{playtestingUpdate.version}</span>
                                     </span>
                                 </div>
-                                {isImplemented && <FontAwesomeIcon icon={faCheckSquare} className="text-success/80" />}
+                                {codeStatus && !isCodeStatusLoading && (
+                                    <div
+                                        className={classNames(
+                                            "text-xxs font-sans uppercase tracking-wide",
+                                            textUIColor[codeStatus.color]
+                                        )}
+                                    >
+                                        <ThronesIcon name="power" /> {codeStatus.description}
+                                    </div>
+                                )}
                             </div>
                             {detailed && playtestingUpdate.description && (
                                 <p className="text-xs italic text-foreground/40 leading-snug truncate">
@@ -110,7 +101,7 @@ export default function PlaytestingUpdateMiniCard({
                     </div>
                     <div className={classNames("flex flex-col gap-2", { "px-5": pinched })}>
                         <div className="flex gap-0.5 flex-wrap">
-                            {Object.entries(noteMap)
+                            {Object.entries(notes)
                                 .filter(([, count]) => Number(count) > 0)
                                 .map(([type, count]) => (
                                     <div
@@ -125,7 +116,7 @@ export default function PlaytestingUpdateMiniCard({
                                 ))}
                         </div>
                         <div className="flex w-full h-3 overflow-hidden rounded-sm border border-content3">
-                            {Object.entries(factionCounts)
+                            {Object.entries(factions)
                                 .filter(([, count]) => Number(count) > 0)
                                 .map(([faction, count]) => (
                                     <TouchTooltip
