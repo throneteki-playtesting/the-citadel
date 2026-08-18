@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
+import { Button, Image, Link, Skeleton } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUpRightFromSquare, faXmark } from "@fortawesome/free-solid-svg-icons";
+import { faLinkSlash, faUpRightFromSquare, faXmark } from "@fortawesome/free-solid-svg-icons";
+import classNames from "classnames";
 import { displayableUrls } from "common/models/artwork";
 
 const BACKDROP_TRANSITION = { duration: 0.2, ease: "easeOut" } as const;
@@ -18,8 +20,24 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
 
     const candidates = src ? [src, ...displayableUrls(url).filter((entry) => entry !== src)] : displayableUrls(url);
     const [attempt, setAttempt] = useState(0);
+    const [state, setState] = useState<"loading" | "loaded" | "failed">("loading");
 
-    useEffect(() => setAttempt(0), [src, url]);
+    useEffect(() => {
+        setAttempt(0);
+        setState(candidates.length > 0 ? "loading" : "failed");
+    }, [src, url, candidates.length]);
+
+    const onError = () => {
+        setAttempt((previous) => {
+            const next = previous + 1;
+            if (next < candidates.length) {
+                setState("loading");
+                return next;
+            }
+            setState("failed");
+            return previous;
+        });
+    };
 
     const focused = {
         top: EDGE_PADDING,
@@ -53,13 +71,28 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                         exit={resting}
                         transition={PIECE_TRANSITION}
                     >
-                        <img
-                            src={candidates[attempt]}
-                            alt={alt}
-                            className="max-w-full max-h-full pointer-events-auto"
-                            onError={() => setAttempt((previous) => Math.min(previous + 1, candidates.length - 1))}
-                            onClick={(event) => event.stopPropagation()}
-                        />
+                        {state === "failed" ? (
+                            <div className="flex flex-col items-center gap-2 text-white/40">
+                                <FontAwesomeIcon icon={faLinkSlash} className="text-3xl" />
+                                <span className="text-sm">Image unavailable</span>
+                            </div>
+                        ) : (
+                            <>
+                                {state === "loading" && <Skeleton className="absolute inset-0 rounded-none" />}
+                                <Image
+                                    removeWrapper
+                                    src={candidates[attempt]}
+                                    alt={alt}
+                                    className={classNames(
+                                        "max-w-full max-h-full pointer-events-auto transition-opacity duration-200",
+                                        state === "loading" ? "opacity-0" : "opacity-100"
+                                    )}
+                                    onLoad={() => setState("loaded")}
+                                    onError={onError}
+                                    onClick={(event) => event.stopPropagation()}
+                                />
+                            </>
+                        )}
                     </motion.div>
                     <motion.div
                         className="fixed inset-x-0 bottom-0 pointer-events-none flex items-center justify-center gap-3 px-4 h-11 text-sm text-white/70"
@@ -70,26 +103,29 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                     >
                         <span className="min-w-0 truncate">{alt}</span>
                         {url && (
-                            <a
+                            <Link
                                 href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="shrink-0 pointer-events-auto flex items-center gap-1.5 whitespace-nowrap hover:text-white"
+                                isExternal
+                                showAnchorIcon
+                                anchorIcon={<FontAwesomeIcon icon={faUpRightFromSquare} className="ml-1.5" />}
+                                color="foreground"
+                                className="shrink-0 pointer-events-auto text-white/70 text-sm data-[hover=true]:text-white"
                                 onClick={(event) => event.stopPropagation()}
                             >
-                                <FontAwesomeIcon icon={faUpRightFromSquare} />
                                 Open original
-                            </a>
+                            </Link>
                         )}
                     </motion.div>
-                    <button
-                        type="button"
+                    <Button
+                        isIconOnly
+                        radius="full"
+                        variant="light"
                         aria-label="Close the focused artwork"
-                        className="fixed top-3 right-3 grid place-items-center size-10 rounded-full text-white/70 hover:text-white hover:bg-white/10"
-                        onClick={onClose}
+                        className="fixed top-3 right-3 text-white/70 data-[hover=true]:text-white data-[hover=true]:bg-white/10"
+                        onPress={onClose}
                     >
                         <FontAwesomeIcon icon={faXmark} className="text-xl" />
-                    </button>
+                    </Button>
                 </motion.div>
             )}
         </AnimatePresence>,
