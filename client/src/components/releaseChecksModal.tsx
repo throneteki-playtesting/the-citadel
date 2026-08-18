@@ -24,7 +24,7 @@ import {
 } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faClockRotateLeft, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { isEqual } from "lodash-es";
 import {
     checksClosedBy,
@@ -83,7 +83,6 @@ export default function ReleaseChecksModal({
     const { data: card } = useGetCardQuery({ project, number, version: "latest" });
     const { data: draftData } = useGetCardsQuery({ filter: { project, number, draft: true } });
     const { user } = useAuth();
-    const navigate = useNavigate();
 
     const canSubmitCheck = usePermission(Permission.SUBMIT_RELEASE_CHECK);
     const canReadReleases = usePermission(Permission.READ_RELEASES);
@@ -91,20 +90,16 @@ export default function ReleaseChecksModal({
 
     const releaseCode = slot?.release?.code;
     const canView = viewTarget === "card" ? canReadCards : canReadReleases && !!releaseCode;
-    const goToTarget = () => {
-        if (viewTarget === "card") {
-            onClose();
-            navigate(`/project/${project}/${number}`);
-            return;
-        }
-        if (!releaseCode) {
-            return;
-        }
-        onClose();
-        navigate(`/project/${project}?tab=releases`, {
-            state: { highlight: highlightTarget.release(project, releaseCode) }
-        });
-    };
+    const viewTargetPath =
+        viewTarget === "card"
+            ? `/project/${project}/${number}`
+            : releaseCode
+              ? `/project/${project}?tab=releases`
+              : undefined;
+    const viewTargetState =
+        viewTarget === "release" && releaseCode
+            ? { highlight: highlightTarget.release(project, releaseCode) }
+            : undefined;
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
     useEffect(() => {
@@ -288,8 +283,15 @@ export default function ReleaseChecksModal({
                     )}
                 </ModalBody>
                 <ModalFooter>
-                    {canView && (
-                        <Button color="primary" variant="ghost" onPress={goToTarget}>
+                    {canView && viewTargetPath && (
+                        <Button
+                            as={Link}
+                            to={viewTargetPath}
+                            state={viewTargetState}
+                            onClick={onClose}
+                            color="primary"
+                            variant="ghost"
+                        >
                             {viewTarget === "card" ? "View Card" : "View Release"}
                         </Button>
                     )}

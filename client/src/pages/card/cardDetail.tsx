@@ -31,7 +31,7 @@ import LoadingCard from "../../components/loadingCard";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import ImageStatus from "../../components/status/imageStatus";
 import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
@@ -338,7 +338,6 @@ type VersionArrowProps = {
 
 // Marks a version that arrived with a change note, and leads back to the Playtesting Update carrying it
 function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
-    const navigate = useNavigate();
     const canReadUpdates = usePermission(Permission.READ_PLAYTESTING_UPDATES);
     const { data: updatesData } = useGetPlaytestingUpdatesQuery(
         { filter: { project: card.project } },
@@ -354,6 +353,14 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
     if (!note) {
         return null;
     }
+
+    const badgeClassName = "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70";
+    const badgeIcon = (
+        <FontAwesomeIcon
+            icon={noteTypeIcon[note.type]}
+            className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
+        />
+    );
 
     return (
         <TouchTooltip
@@ -380,24 +387,19 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
             }
             placement="right-start"
         >
-            <div
-                className={classNames(
-                    "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70",
-                    update ? "cursor-pointer" : "cursor-help",
-                    className
-                )}
-                style={style}
-                onClick={
-                    update
-                        ? () => navigate(`/project/${card.project}/update/${update.version}?card=${card.number}`)
-                        : undefined
-                }
-            >
-                <FontAwesomeIcon
-                    icon={noteTypeIcon[note.type]}
-                    className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
-                />
-            </div>
+            {update ? (
+                <Link
+                    to={`/project/${card.project}/update/${update.version}?card=${card.number}`}
+                    className={classNames(badgeClassName, "cursor-pointer", className)}
+                    style={style}
+                >
+                    {badgeIcon}
+                </Link>
+            ) : (
+                <div className={classNames(badgeClassName, "cursor-help", className)} style={style}>
+                    {badgeIcon}
+                </div>
+            )}
         </TouchTooltip>
     );
 }
@@ -416,7 +418,6 @@ type CardVersionsProps = Omit<BaseElementProps, "children"> & {
 // fold into the actions dropdown, above its divider. Draft actions live over the card stack instead.
 function ButtonSection({ className, style, project: projectNumber, number }: ButtonSectionProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
-    const navigate = useNavigate();
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
     const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
@@ -472,7 +473,7 @@ function ButtonSection({ className, style, project: projectNumber, number }: But
                             title: "Submit Review",
                             icon: <FontAwesomeIcon icon={faScroll} size="xl" />,
                             color: "primary",
-                            onPress: () => navigate(`/review/submit?project=${projectNumber}&number=${number}`)
+                            to: `/review/submit?project=${projectNumber}&number=${number}`
                         }
                 ]}
             />

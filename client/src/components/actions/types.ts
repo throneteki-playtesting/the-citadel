@@ -11,6 +11,10 @@ export type ActionItem = {
     href?: string;
     /** Whether an href action opens in a new tab. Defaults to true; set false for custom-protocol/deep-link hrefs (eg. discord://), which browsers often refuse to open in a new tab. */
     openInNewTab?: boolean;
+    /** An internal app route - unlike `href`, rendered as a real react-router anchor, so middle/ctrl-click work. */
+    to?: string;
+    /** react-router location state to carry alongside `to` (eg. a highlight target). */
+    state?: unknown;
     isDisabled?: boolean;
     isLoading?: boolean;
     keepOpen?: boolean;

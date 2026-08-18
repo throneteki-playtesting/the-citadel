@@ -2,14 +2,12 @@ import { faCrosshairs, faFeather } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { isPreview, parseCardCode, SemanticVersion } from "common/utils";
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { BaseStatus, StatusData } from "./baseStatus";
 import { BaseElementProps } from "../../types";
 import { useGetCardsQuery, useGetProjectQuery, useGetSlotQuery } from "../../api";
 import { highlightTarget } from "../../constants";
 
 const DevelopmentStatus = ({ className, style, project, number, version, isIconOnly }: DevelopmentStatusProps) => {
-    const navigate = useNavigate();
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number, version } });
     const { data: projectData } = useGetProjectQuery({ number: project });
     const { data: slotData } = useGetSlotQuery({ project, number });
@@ -49,10 +47,8 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
                     icon: <FontAwesomeIcon icon={faCrosshairs} size="xl" />,
                     description: `Slotted for ${nextRelease.code}`,
                     color: "success",
-                    onPress: () =>
-                        navigate(`/project/${project}?tab=releases`, {
-                            state: { highlight: highlightTarget.release(project, nextRelease.code) }
-                        })
+                    to: `/project/${project}?tab=releases`,
+                    state: { highlight: highlightTarget.release(project, nextRelease.code) }
                 };
             } else {
                 return {
@@ -67,7 +63,7 @@ const DevelopmentStatus = ({ className, style, project, number, version, isIconO
             description: "Unknown",
             color: "default"
         };
-    }, [cardsData?.items, isNextRelease, nextRelease, navigate, project]);
+    }, [cardsData?.items, isNextRelease, nextRelease, project]);
 
     return <BaseStatus className={className} style={style} isIconOnly={isIconOnly} data={data} isLoading={isLoading} />;
 };

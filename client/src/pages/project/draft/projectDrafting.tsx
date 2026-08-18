@@ -476,7 +476,9 @@ function DraggableTopCard({
             ref={setNodeRef}
             {...listeners}
             {...attributes}
-            className={classNames("size-full touch-manipulation cursor-grab", { "opacity-0": isDragging })}
+            className={classNames("size-full touch-manipulation cursor-grab active:cursor-grabbing", {
+                "opacity-0": isDragging
+            })}
         >
             <div className="size-full">{children}</div>
         </div>
