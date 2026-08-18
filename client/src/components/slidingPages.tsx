@@ -1,4 +1,4 @@
-import React, { Children, HTMLAttributes, ReactNode, useLayoutEffect, useRef, useState } from "react";
+import React, { Children, HTMLAttributes, ReactNode, Ref, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { PageActiveContext } from "../hooks/useIsPageActive";
 import { BaseElementProps } from "../types";
@@ -7,7 +7,7 @@ import { BaseElementProps } from "../types";
  * Lays its children out side by side and slides between them, keeping only the active one's height so
  * the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling.
  */
-export default function SlidingPages({ className, style, currentPage, pageProps, children }: SlidingPagesProps) {
+export default function SlidingPages({ className, style, currentPage, pageProps, children, ref }: SlidingPagesProps) {
     const activeWrapperRef = useRef<HTMLDivElement>(null);
     const [measuredHeight, setMeasuredHeight] = useState<number>();
     // Counted rather than compared - children are a fresh array every render, and rebuilding the observer
@@ -33,6 +33,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
 
     return (
         <div
+            ref={ref}
             className={classNames("relative w-full overflow-hidden transition-height", className)}
             style={{ ...style, height: measuredHeight ? `${measuredHeight}px` : undefined }}
         >
@@ -71,4 +72,5 @@ type SlidingPagesProps = Omit<BaseElementProps, "children"> & {
     /** Extra props for each page's wrapper, eg. the Wizard's page marker attribute */
     pageProps?: (pageNo: number) => HTMLAttributes<HTMLDivElement>;
     children: ReactNode;
+    ref?: Ref<HTMLDivElement>;
 };

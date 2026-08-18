@@ -287,16 +287,15 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
 
     // The sliding itself is generic; only the page marker the field scan reads above is wizard-specific
     return (
-        <div ref={containerRef}>
-            <SlidingPages
-                currentPage={currentPage}
-                className={className}
-                style={style}
-                pageProps={(pageNo) => ({ "data-wizard-page": pageNo }) as HTMLAttributes<HTMLDivElement>}
-            >
-                {pageElements}
-            </SlidingPages>
-        </div>
+        <SlidingPages
+            ref={containerRef}
+            currentPage={currentPage}
+            className={className}
+            style={style}
+            pageProps={(pageNo) => ({ "data-wizard-page": pageNo }) as HTMLAttributes<HTMLDivElement>}
+        >
+            {pageElements}
+        </SlidingPages>
     );
 }
 

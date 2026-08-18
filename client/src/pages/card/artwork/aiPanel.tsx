@@ -2,7 +2,7 @@ import { Input, Textarea } from "@heroui/react";
 import { IAiArtwork } from "common/models/artwork";
 import UserAutocomplete from "../../../components/data/userAutocomplete";
 import ArtworkReveal from "../../../components/artwork/artworkReveal";
-import OpenLink from "../../../components/artwork/openLink";
+import ExternalLinkButton from "../../../components/artwork/externalLinkButton";
 
 const EMPTY: IAiArtwork = {};
 
@@ -32,7 +32,7 @@ export default function AiPanel({ ai = EMPTY, isDisabled, onChange }: AiPanelPro
                     isDisabled={isDisabled}
                     value={ai.url ?? ""}
                     onValueChange={(value) => set("url", value || undefined)}
-                    endContent={<OpenLink url={ai.url} label="Open artwork in a new tab" />}
+                    endContent={<ExternalLinkButton url={ai.url} label="Open artwork in a new tab" />}
                 />
                 <Textarea
                     label="Notes"

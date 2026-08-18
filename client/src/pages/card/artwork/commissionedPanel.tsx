@@ -3,7 +3,7 @@ import { CalendarDate, parseDate } from "@internationalized/date";
 import { ICommissionedArtwork } from "common/models/artwork";
 import { ISlotRef } from "common/models/slots";
 import ArtworkReveal from "../../../components/artwork/artworkReveal";
-import OpenLink from "../../../components/artwork/openLink";
+import ExternalLinkButton from "../../../components/artwork/externalLinkButton";
 import ArtistSelect from "../../../components/artwork/artistSelect";
 import CostInput from "../../../components/artwork/costInput";
 
@@ -66,7 +66,7 @@ export default function CommissionedPanel({
                     isDisabled={isDisabled}
                     value={commissioned.url ?? ""}
                     onValueChange={(value) => set("url", value || undefined)}
-                    endContent={<OpenLink url={commissioned.url} label="Open artwork in a new tab" />}
+                    endContent={<ExternalLinkButton url={commissioned.url} label="Open artwork in a new tab" />}
                 />
                 <Textarea
                     label="Notes"
