@@ -1,6 +1,6 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, renderPlaytestingCard, typeNames } from "common/utils";
-import { Select, SelectItem, Skeleton } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
@@ -43,7 +43,6 @@ const sortOptions: Record<SortOption, string> = {
     progress: "Progress"
 };
 
-const REORDER_TRANSITION = { duration: 0.4, ease: [0.65, 0, 0.35, 1] } as const;
 const FADE_TRANSITION = { duration: 0.12 } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
