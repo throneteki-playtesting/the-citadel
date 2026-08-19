@@ -592,8 +592,10 @@ async function buildImplementedCards(cards: IPlaytestCard[]) {
 }
 
 async function buildProjectChanges(playtestingUpdates: IPlaytestingUpdate[]) {
+    const pending = playtestingUpdates.filter((pu) => pu._metadata?.github?.code?.status !== "closed");
+
     const projectChanges: string[] = [];
-    for (const playtestingUpdate of playtestingUpdates) {
+    for (const playtestingUpdate of pending) {
         const [project] = await dataService.projects.read({ number: playtestingUpdate.project });
         const title = `:${project.emoji}: ${project.name} - Playtesting Update ${playtestingUpdate.version}`;
         const summary = await buildCardChangeSummary(playtestingUpdate);
@@ -615,7 +617,8 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
         replaced: 0
     };
 
-    let implementedCount = 0;
+    let recentlyImplementedCount = 0;
+    let unimplementedCount = 0;
 
     const cards = await dataService.cards.forUpdate(playtestingUpdate);
 
@@ -623,10 +626,11 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
         if (card.note?.type in typeCounts) {
             typeCounts[card.note.type]++;
         }
-        // Recently implemented cards will be closed, but not marked as implemented yet
-        // Implemented is set to true on successful merge
-        if (card._metadata?.github?.status === "closed" && card.implemented === false) {
-            implementedCount++;
+        if (!card.implemented) {
+            unimplementedCount++;
+            if (card._metadata?.github?.status === "closed") {
+                recentlyImplementedCount++;
+            }
         }
     }
     const typeLines = types
@@ -637,7 +641,11 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
             return `${emojis[type]} ${count} ${label} ${type}`;
         });
 
-    const implementedLine = `${emojis.implemented} ${implementedCount}/${cards.length} cards in this update were implemented.`;
+    if (unimplementedCount === 0) {
+        return typeLines.join("\n");
+    }
+
+    const implementedLine = `${emojis.implemented} ${recentlyImplementedCount}/${unimplementedCount} cards in this update were implemented.`;
 
     return [...typeLines, "", implementedLine].join("\n");
 }
