@@ -9,7 +9,7 @@ import { NoteType, noteTypes } from "common/models/cards";
 
 const router = express.Router();
 
-const CARD_CHANGE_DAY_RANGE = 7;
+const CARD_CHANGE_DAY_RANGE = 14;
 const ACTIVE_USER_DAY_RANGE = 14;
 
 function daysAgo(days: number): Date {

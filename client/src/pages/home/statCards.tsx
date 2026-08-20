@@ -9,7 +9,7 @@ import PermissionGate from "../../components/permissionGate";
 import StatsGrid from "../../components/statsGrid";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 
-const CARD_CHANGE_DAY_RANGE = 7;
+const CARD_CHANGE_DAY_RANGE = 14;
 const ACTIVE_USER_DAY_RANGE = 14;
 
 export default function StatCards() {
