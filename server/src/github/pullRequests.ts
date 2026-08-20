@@ -130,6 +130,9 @@ export async function syncDataPullRequests(forced?: boolean) {
         const existingPR = await findOpenPullRequest(context, branches);
 
         const hasSyncedFile: IPlaytestingUpdate[] = [];
+        // Updates with unreleased data currently outstanding - narrower than hasSyncedFile, which also
+        // covers updates whose only action this round was pruning a now-stale staging file (see below)
+        const pendingUpdates: IPlaytestingUpdate[] = [];
         const lastSynced = new Date();
 
         let mergedPR: PullRequest | null = null;
@@ -244,6 +247,7 @@ export async function syncDataPullRequests(forced?: boolean) {
                 }
 
                 hasSyncedFile.push(playtestingUpdate);
+                pendingUpdates.push(playtestingUpdate);
             } catch (err) {
                 emitters.get(playtestingUpdate).error("Failure");
                 emitters.delete(playtestingUpdate);
@@ -251,9 +255,22 @@ export async function syncDataPullRequests(forced?: boolean) {
             }
         }
         emitters.forEach((e) => e.progress("Syncing"));
-        // Only creates Pull Request if one or more files have synced
+        // Only touches the Pull Request if something changed this round (a real sync, or pruning a stale file)
         if (hasSyncedFile.length > 0) {
-            const state = await internalDataSync(existingPR, hasSyncedFile, context);
+            let state: PullRequestState | null | undefined;
+            if (pendingUpdates.length > 0) {
+                state = await internalDataSync(existingPR, pendingUpdates, context);
+            } else if (existingPR) {
+                // Every project that had outstanding data has since been fully released - nothing left to review
+                logger.info(`[Github] Closing pull request #${existingPR.number} as no unreleased project data remains`);
+                await context.client.rest.pulls.update({
+                    owner: context.owner,
+                    repo: context.repo,
+                    pull_number: existingPR.number,
+                    state: "closed"
+                });
+                state = null;
+            }
             for (const playtestingUpdate of hasSyncedFile) {
                 applyPullRequestState(playtestingUpdate, "data", lastSynced, state);
             }
