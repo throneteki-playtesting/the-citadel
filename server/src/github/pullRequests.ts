@@ -166,7 +166,24 @@ export async function syncDataPullRequests(forced?: boolean) {
                     released: { $exists: false }
                 });
                 if (unreleased.length === 0) {
-                    applyPullRequestState(playtestingUpdate, "data", lastSynced);
+                    // A file may still linger on staging from before this project's cards were all released - prune it,
+                    // otherwise it sits there forever, silently resurfacing in the diff of any other project's data PR
+                    const filePath = `packs/${project.code}.json`;
+                    const staleFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
+                    if (staleFile) {
+                        logger.info(`[Github] Removing stale ${filePath} from ${STAGING_BRANCH} (no unreleased cards remain)`);
+                        await context.client.rest.repos.deleteFile({
+                            owner: context.owner,
+                            repo: context.repo,
+                            path: filePath,
+                            message: `Automatic removal of ${project.code} development pack (fully released)`,
+                            sha: staleFile.sha,
+                            branch: STAGING_BRANCH
+                        });
+                        hasSyncedFile.push(playtestingUpdate);
+                    } else {
+                        applyPullRequestState(playtestingUpdate, "data", lastSynced);
+                    }
                     continue;
                 }
 
@@ -236,7 +253,7 @@ export async function syncDataPullRequests(forced?: boolean) {
         emitters.forEach((e) => e.progress("Syncing"));
         // Only creates Pull Request if one or more files have synced
         if (hasSyncedFile.length > 0) {
-            const state = await internalDataSync(existingPR, playtestingUpdates, context);
+            const state = await internalDataSync(existingPR, hasSyncedFile, context);
             for (const playtestingUpdate of hasSyncedFile) {
                 applyPullRequestState(playtestingUpdate, "data", lastSynced, state);
             }
