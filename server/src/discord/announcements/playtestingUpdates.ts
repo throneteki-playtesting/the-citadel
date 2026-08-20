@@ -21,7 +21,7 @@ import { announceToOperations } from "./operations";
 import { dataService, discordService, logger } from "@/services";
 import { createSyncEmitter } from "@/services/sseService";
 
-const PLAYTESTING_ANNOUNCEMENTS_CHANNEL_NAME = "playtesting-announcements";
+const PLAYTESTING_ANNOUNCEMENTS_CHANNEL_NAME = "playtest-announcements";
 
 const syncAnnouncementsMutex = new Mutex();
 
