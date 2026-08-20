@@ -1,9 +1,12 @@
-let connectionId: string | undefined;
+const STORAGE_KEY = "clientId";
 
-export function setConnectionId(id: string) {
-    connectionId = id;
-}
+let clientId: string | undefined;
 
+// Persists per-tab across reloads and SSE reconnects.
 export function getConnectionId() {
-    return connectionId;
+    if (!clientId) {
+        clientId = sessionStorage.getItem(STORAGE_KEY) ?? crypto.randomUUID();
+        sessionStorage.setItem(STORAGE_KEY, clientId);
+    }
+    return clientId;
 }

@@ -15,6 +15,8 @@ type RequestContext =
           timestamp: Date;
           traceId: string;
           clientId?: string;
+          // True once running detached from the request/response cycle.
+          detached?: boolean;
       }
     | { source: "anonymous"; principal: Anonymous; timestamp: Date; traceId: string }
     | {

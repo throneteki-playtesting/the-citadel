@@ -98,5 +98,6 @@ export function broadcastResourceChange<K extends ResourceType>(
     }));
     const context = requestContext.getStore();
     const originId = context?.source === "client" ? context.clientId : undefined;
-    sseService.broadcast({ type, status, items, originId });
+    const deferred = context?.source === "client" && context.detached === true;
+    sseService.broadcast({ type, status, items, originId, deferred });
 }

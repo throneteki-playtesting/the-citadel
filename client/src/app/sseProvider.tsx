@@ -5,7 +5,7 @@ import { ResourceDataMap, ResourceType, resourceIdFuncs } from "common/resources
 import { DeepPartial } from "common/types";
 import api from "../api";
 import { store } from "../api/store";
-import { setConnectionId } from "../api/connectionId";
+import { getConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
 import { useProactiveRefresh } from "../hooks/useProactiveRefresh";
@@ -75,7 +75,6 @@ const reconnectTags = tagTypes.map((type) => ({ type }));
 export function SSEProvider({ children }: { children: React.ReactNode }) {
     const esRef = useRef<EventSource | null>(null);
     const hasConnected = useRef(false);
-    const myConnectionId = useRef<string | undefined>(undefined);
     const { pathname } = useLocation();
     const isFirstRender = useRef(true);
 
@@ -137,8 +136,6 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             const event = JSON.parse(e.data) as SSEEvent;
 
             if (event.status === "connected") {
-                myConnectionId.current = event.id;
-                setConnectionId(event.id);
                 return;
             }
 
@@ -152,8 +149,15 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
             if (
                 (event.status === "create" || event.status === "update" || event.status === "delete") &&
                 event.originId !== undefined &&
-                event.originId === myConnectionId.current
+                event.originId === getConnectionId()
             ) {
+                if (!event.deferred) {
+                    return;
+                }
+                const type = event.type as ResourceType;
+                event.items.forEach(({ data }) =>
+                    invalidateFor(type, data as ResourceDataMap[typeof type], { immediate: true })
+                );
                 return;
             }
 

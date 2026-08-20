@@ -143,6 +143,8 @@ export interface ResourceUpdateEvent<K extends ResourceType = ResourceType> {
     status: "create" | "update" | "delete";
     items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[];
     originId?: string;
+    // True if broadcast from execution detached from its triggering request.
+    deferred?: boolean;
 }
 
 export interface ConnectedEvent {

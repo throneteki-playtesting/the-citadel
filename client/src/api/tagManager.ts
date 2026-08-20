@@ -209,11 +209,15 @@ function getTagManagerOverrides(): Required<TagManagerOverrides> {
     };
 }
 
-// Queues for user-confirmed refresh if subscribed, otherwise invalidates immediately (always immediate under autoRefresh).
-export function invalidateFor<K extends ResourceType>(type: K, resource: ResourceDataMap[K]): void {
+// Queues for user-confirmed refresh if subscribed, otherwise invalidates immediately.
+export function invalidateFor<K extends ResourceType>(
+    type: K,
+    resource: ResourceDataMap[K],
+    options?: { immediate?: boolean }
+): void {
     const tags = tagsForResource(type, resource);
 
-    if (!getTagManagerOverrides().autoRefresh && hasActiveSubscriber(tags)) {
+    if (!options?.immediate && !getTagManagerOverrides().autoRefresh && hasActiveSubscriber(tags)) {
         queuePending(tags);
     } else {
         store.dispatch(api.util.invalidateTags(tags));

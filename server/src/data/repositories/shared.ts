@@ -4,7 +4,7 @@ import { Filter, SingleOrArray, Sort } from "common/types";
 import { asArray } from "common/utils";
 import { flatten } from "flat";
 import { Sort as MongoSort } from "mongodb";
-import { getContext } from "@/middleware/context";
+import { getContext, requestContext } from "@/middleware/context";
 import { IRepository } from "@/types";
 import { logger } from "@/services";
 import { groupBy, isEqual } from "lodash-es";
@@ -22,23 +22,13 @@ export class Database<T> {
 
     protected async internalSync(tasks: SyncTask[]) {
         if (tasks.length === 0) return;
-        const { source } = getContext();
+        const context = getContext();
 
         const syncs = tasks.map((task) =>
             typeof task === "function" ? { priority: 9999, func: task as () => Promise<unknown> } : task
         );
-        if (source === "client") {
-            const priorityGroups = groupBy(syncs, "priority");
-            const sortedPriorities = Object.keys(priorityGroups)
-                .map(Number)
-                .sort((a, b) => a - b);
-            void sortedPriorities.reduce(
-                (chain, priority) =>
-                    chain.then(() =>
-                        Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))))
-                    ),
-                Promise.resolve() as Promise<unknown>
-            );
+        if (context.source === "client") {
+            void requestContext.run({ ...context, detached: true }, () => runSyncsByPriority(syncs));
         } else {
             for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
                 try {
@@ -52,6 +42,17 @@ export class Database<T> {
 }
 
 type SyncTask = (() => Promise<unknown>) | { priority: number; func: () => Promise<unknown> };
+
+async function runSyncsByPriority(syncs: { priority: number; func: () => Promise<unknown> }[]) {
+    const priorityGroups = groupBy(syncs, "priority");
+    const sortedPriorities = Object.keys(priorityGroups)
+        .map(Number)
+        .sort((a, b) => a - b);
+
+    for (const priority of sortedPriorities) {
+        await Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))));
+    }
+}
 
 const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
 const stripAudit = (obj: object) => Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
