@@ -8,12 +8,12 @@ import {
     ModalHeader,
     NumberInput,
     Select,
-    SelectItem,
-    Textarea
+    SelectItem
 } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import RichTextArea from "../../components/richTextArea";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import { Project } from "common/models/schemas";
 import {
@@ -93,10 +93,14 @@ export default function EditProjectModal({
                                         <ProjectCodeInput code={project.code} />
                                         <EmojiSelect label="Discord Emoji" defaultValue={project.emoji} />
                                     </div>
-                                    <Textarea
+                                    <RichTextArea
                                         name="description"
                                         label="Description"
-                                        defaultValue={project.description}
+                                        features={[]}
+                                        value={project.description}
+                                        onValueChange={(description) =>
+                                            setProject((prev) => ({ ...prev, description }))
+                                        }
                                     />
                                 </WizardPage>
                                 <WizardPage>

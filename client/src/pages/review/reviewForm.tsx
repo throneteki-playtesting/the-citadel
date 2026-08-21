@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { IPlaytestCard } from "common/models/cards";
 import { CardPreview } from "@agot/card-preview";
 import { renderPlaytestingCard } from "common/utils";
-import { addToast, Alert, Button, ButtonGroup, NumberInput, Textarea } from "@heroui/react";
+import { addToast, Alert, Button, ButtonGroup, NumberInput } from "@heroui/react";
+import RichTextArea from "../../components/richTextArea";
 import { IPlaytestReview } from "common/models/reviews";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeepPartial } from "common/types";
@@ -325,16 +326,12 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                                 </div>
                                 <div className="flex flex-col gap-1 p-2 w-full">
                                     <SectionTitle>Additional Comments</SectionTitle>
-                                    <Textarea
+                                    <RichTextArea
                                         name="additional"
                                         placeholder="Provide comments here..."
-                                        value={review.additional ?? ""}
+                                        value={review.additional}
                                         onValueChange={(additional) => setReview((prev) => ({ ...prev, additional }))}
-                                        classNames={{
-                                            input: "text-sm md:text-base"
-                                        }}
                                         minRows={10}
-                                        maxRows={30}
                                     />
                                 </div>
                             </>

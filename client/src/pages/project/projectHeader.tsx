@@ -1,3 +1,4 @@
+import RichText from "../../components/richText";
 import { BaseElementProps } from "../../types";
 import { Link } from "@heroui/react";
 import { IProject } from "common/models/projects";
@@ -111,7 +112,11 @@ const ProjectHeader = ({
                     </div>
                 </div>
             </div>
-            {project.description && <div className="text-sm lg:text-medium py-1">{project.description}</div>}
+            {project.description && (
+                <div className="text-sm lg:text-medium py-1">
+                    <RichText html={project.description} />
+                </div>
+            )}
             <div className="md:hidden">
                 <ProjectProgressMeter project={project.number} />
             </div>

@@ -17,6 +17,7 @@ import {
     SharedSelection,
     Skeleton
 } from "@heroui/react";
+import RichText from "../../components/richText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
 import { extractDeckIdentifier, hasPermission, SemanticVersion } from "common/utils";
@@ -568,10 +569,10 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                     <div className="relative">
                         <div
                             ref={additionalRef}
-                            className="text-sm leading-tight whitespace-pre-wrap break-words overflow-hidden transition-all duration-300"
+                            className="text-sm leading-tight break-words overflow-hidden transition-all duration-300"
                             style={{ maxHeight: isExpanded ? additionalRef.current?.scrollHeight : "8rem" }}
                         >
-                            {review.additional ?? "No comments provided."}
+                            {review.additional ? <RichText html={review.additional} /> : "No comments provided."}
                         </div>
                         {!isExpanded && isOverflowing && (
                             <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-content1 to-transparent pointer-events-none" />

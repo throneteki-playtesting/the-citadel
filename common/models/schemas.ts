@@ -7,10 +7,18 @@ import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
 import { logCategories, logSeverities } from "./logs";
+import { sanitiseHtml } from "../richText/sanitise";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
 const Joi = BaseJoi.defaults((schema) => schema.options({ abortEarly: false }));
+
+// Prose from the rich text editor. Sanitising here is what makes it unskippable: celebrate replaces the
+// body with the validated value, so nothing outside the format survives whichever route it arrived through
+
+// Blank is a value of its own - a field cleared rather than never filled - so most fields take it
+const NonEmptyRichText = Joi.string().custom((value: string) => sanitiseHtml(value));
+const RichText = NonEmptyRichText.allow("");
 
 const DiscordMetadata = Joi.object({
     messageUrl: Joi.string().uri(),
@@ -133,7 +141,7 @@ export const PlaytestingCard = {
             type: Joi.string()
                 .required()
                 .valid(...Cards.noteTypes),
-            text: Joi.string().when("type", {
+            text: NonEmptyRichText.when("type", {
                 is: Joi.not("implemented"),
                 then: Joi.required()
             })
@@ -163,7 +171,7 @@ export const PlaytestingCard = {
         draft: Joi.boolean(),
         note: Joi.object({
             type: Joi.string().valid(...Cards.noteTypes),
-            text: Joi.string()
+            text: RichText
         }),
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean(),
@@ -192,7 +200,7 @@ export const PlaytestingCard = {
             type: Joi.string()
                 .required()
                 .valid(...Cards.noteTypes),
-            text: Joi.string().when("type", {
+            text: NonEmptyRichText.when("type", {
                 is: Joi.not("implemented"),
                 then: Joi.required()
             })
@@ -681,7 +689,7 @@ export const Project = {
         code: Joi.string().required(),
         active: Joi.boolean().required(),
         draft: Joi.boolean().required(),
-        description: Joi.string().allow(""),
+        description: RichText,
         script: Joi.string(),
         type: Joi.string()
             .required()
@@ -714,7 +722,7 @@ export const Project = {
         code: Joi.string(),
         active: Joi.boolean(),
         draft: Joi.boolean(),
-        description: Joi.string().allow(""),
+        description: RichText,
         script: Joi.string(),
         type: Joi.string().valid(...Projects.types),
         cardCount: Joi.object({
@@ -745,7 +753,7 @@ export const Project = {
         code: Joi.string().required(),
         active: Joi.boolean().required(),
         draft: Joi.boolean().required(),
-        description: Joi.string(),
+        description: RichText,
         script: Joi.string(),
         type: Joi.string()
             .required()
@@ -778,7 +786,7 @@ export const PlaytestingUpdate = {
     Full: Joi.object({
         project: Joi.number().required(),
         version: Joi.number().required(),
-        description: Joi.string(),
+        description: RichText,
         cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)).required(),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
@@ -793,7 +801,7 @@ export const PlaytestingUpdate = {
     Partial: Joi.object({
         project: Joi.number(),
         version: Joi.number(),
-        description: Joi.string(),
+        description: RichText,
         cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)),
         pullRequest: Joi.string(),
         _metadata: Joi.object({
@@ -807,7 +815,7 @@ export const PlaytestingUpdate = {
     }),
     Draft: Joi.object({
         project: Joi.number().required(),
-        description: Joi.string(),
+        description: RichText,
         cardChanges: Joi.object().pattern(Joi.number(), Joi.string().regex(Regex.SemanticVersion)).required(),
         _metadata: Joi.object({
             github: GithubPRMetadata
@@ -855,7 +863,7 @@ export const PlaytestingReview = {
                 .required()
                 .valid(...statementAnswers)
         }).required(),
-        additional: Joi.string(),
+        additional: RichText,
         _metadata: Joi.object({
             discord: DiscordMetadata
         }),
@@ -878,7 +886,7 @@ export const PlaytestingReview = {
             balanced: Joi.string().valid(...statementAnswers),
             releasable: Joi.string().valid(...statementAnswers)
         }),
-        additional: Joi.string(),
+        additional: RichText,
         _metadata: Joi.object({
             discord: DiscordMetadata
         }),
@@ -917,7 +925,7 @@ export const PlaytestingReview = {
                 .required()
                 .valid(...statementAnswers)
         }).required(),
-        additional: Joi.string(),
+        additional: RichText,
         _metadata: Joi.object({
             discord: DiscordMetadata
         }),

@@ -266,7 +266,19 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
 
         scan();
 
-        const observer = new MutationObserver(scan);
+        // A rich text editor rewrites its own DOM on every keystroke, and none of that can add or rename a
+        // field. Rescanning the whole page for each character is what made typing inside a wizard stutter
+        const isEditorContent = (node: Node) => {
+            const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+            return !!element?.closest("[contenteditable='true']");
+        };
+
+        const observer = new MutationObserver((records) => {
+            if (records.every((record) => isEditorContent(record.target))) {
+                return;
+            }
+            scan();
+        });
         observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ["name"] });
 
         return () => observer.disconnect();
