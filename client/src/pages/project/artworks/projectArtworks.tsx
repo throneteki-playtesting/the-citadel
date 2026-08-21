@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch, Tooltip } from "@heroui/react";
+import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faEye,
@@ -574,7 +574,6 @@ type ArtworkRowProps = {
     onEdit: () => void;
 };
 
-// A plain Tooltip, not TouchTooltip, so a tap goes straight to opening the piece instead of the preview
 function FinalArtwork({ url, name }: { url: string; name: string }) {
     const [origin, setOrigin] = useState<DOMRect>();
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -582,23 +581,28 @@ function FinalArtwork({ url, name }: { url: string; name: string }) {
 
     return (
         <>
-            <Tooltip
+            <TouchTooltip
                 content={
-                    <div className="w-56 p-1">
+                    <div className="w-56 p-1 pointer-events-none">
                         <ArtworkImage url={url} alt={alt} ratio="square" />
                     </div>
                 }
+                closeDelay={0}
             >
-                <button
-                    ref={triggerRef}
-                    type="button"
-                    aria-label={`View ${alt}`}
-                    className="size-6 flex items-center justify-center text-success cursor-zoom-in"
-                    onClick={() => setOrigin(triggerRef.current?.getBoundingClientRect())}
-                >
-                    <FontAwesomeIcon icon={faImage} />
-                </button>
-            </Tooltip>
+                <span className="inline-flex">
+                    <motion.button
+                        ref={triggerRef}
+                        type="button"
+                        aria-label={`View ${alt}`}
+                        className="size-6 flex items-center justify-center text-success cursor-zoom-in"
+                        whileHover={{ scale: 0.97 }}
+                        whileTap={{ scale: 0.94 }}
+                        onClick={() => setOrigin(triggerRef.current?.getBoundingClientRect())}
+                    >
+                        <FontAwesomeIcon icon={faImage} />
+                    </motion.button>
+                </span>
+            </TouchTooltip>
             <ArtworkFocus origin={origin} url={url} alt={alt} onClose={() => setOrigin(undefined)} />
         </>
     );
