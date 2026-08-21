@@ -73,6 +73,32 @@ export function distinct<T>(values: T[]) {
     return values.filter((value, index, array) => array.indexOf(value) === index);
 }
 
+// Strips blanks (empty string/array/object, false, null) so a draft that only re-set a field back
+// to blank compares equal to one that never touched it at all.
+export function pruneEmpty(value: unknown): unknown {
+    if (value instanceof Date) {
+        return value.toISOString();
+    }
+    if (Array.isArray(value)) {
+        const items = value.map(pruneEmpty);
+        return items.length > 0 ? items : undefined;
+    }
+    if (value && typeof value === "object") {
+        const entries = Object.entries(value)
+            .map(([key, entry]) => [key, pruneEmpty(entry)] as const)
+            .filter(([, entry]) => entry !== undefined);
+        return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+    }
+    if (value === "" || value === false || value === null) {
+        return undefined;
+    }
+    return value;
+}
+
+export function isDirty<T>(committed: T | undefined, draft: T | undefined): boolean {
+    return !!committed && !!draft && !isEqual(pruneEmpty(draft), pruneEmpty(committed));
+}
+
 export function pushSorted<T>(arr: T[], item: T, compareFn: (a: T, b: T) => number) {
     let low = 0,
         high = arr.length;

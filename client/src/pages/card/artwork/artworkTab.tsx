@@ -12,13 +12,11 @@ import {
 import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { isEqual } from "lodash-es";
 import { Slot } from "common/models/schemas";
 import { ArtworkStatus } from "common/models/slots";
 import {
     artworkPrepFlags,
     artworkTypes,
-    comparableArtwork,
     IArtworkProgress,
     isChecklistDone,
     statusReason,
@@ -26,6 +24,7 @@ import {
     withInferredStatus
 } from "common/models/artwork";
 import Permission from "common/models/permissions";
+import { isDirty } from "common/utils";
 import {
     useGetArtistsQuery,
     useGetCardsQuery,
@@ -84,7 +83,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
 
     const isLockedByProduction = !!slotArtwork?.isLockedByProduction;
     const isEditable = canEdit && !isLockedByProduction;
-    const isDirty = !!committed && !!draft && !isEqual(comparableArtwork(draft), comparableArtwork(committed));
+    const draftIsDirty = isDirty(committed, draft);
 
     if (isLoading || !slotArtwork || !draft) {
         return <ArtworkTabSkeleton showTrack={showTrack} />;
@@ -143,7 +142,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
             : draft.type
               ? [`${draft.type}.url`]
               : [];
-    const canSave = isDirty && !isSaving;
+    const canSave = draftIsDirty && !isSaving;
     // Complete is never awarded by automation - offered here once the checklist, prep included, is clear
     const canComplete =
         isEditable && canReadArtists && committed?.status === "confirming" && isChecklistDone(draft, artists);
@@ -166,7 +165,7 @@ export default function ArtworkTab({ project, number, showTrack, onBack }: Artwo
                 key: "discard",
                 label: "Discard",
                 icon: faRotateLeft,
-                isDisabled: !isDirty || isSaving,
+                isDisabled: !draftIsDirty || isSaving,
                 onPress: () => setDraft({ ...slotArtwork.artwork })
             },
             {

@@ -15,7 +15,8 @@ import {
     Select,
     SelectItem,
     SharedSelection,
-    Skeleton
+    Skeleton,
+    Tooltip
 } from "@heroui/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
@@ -482,7 +483,7 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                                 (hasPermission(user, Permission.MAKE_REVIEWS) && user.discordId === review.reviewer)
                             }
                         >
-                            <TouchTooltip
+                            <Tooltip
                                 content={
                                     <div className="max-w-64">
                                         <div className="text-sm">Amend your verdict</div>
@@ -501,10 +502,10 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                                         <FontAwesomeIcon icon={faPencil} />
                                     </Button>
                                 )}
-                            </TouchTooltip>
+                            </Tooltip>
                         </PermissionGate>
                         <PermissionGate requires={Permission.READ_DISCORD_REVIEW_FORUM}>
-                            <TouchTooltip
+                            <Tooltip
                                 content={
                                     <div className="max-w-64">
                                         <div className="text-sm">Join the discussion</div>
@@ -519,7 +520,7 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                                     reviewer={review.reviewer}
                                     isIconOnly
                                 />
-                            </TouchTooltip>
+                            </Tooltip>
                         </PermissionGate>
                         <div className="md:hidden">{chips}</div>
                     </div>

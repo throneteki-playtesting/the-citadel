@@ -102,31 +102,6 @@ export interface IArtworkProgress {
     prep?: IArtworkPrep[];
 }
 
-// Reduced to what it actually states, so a draft that only re-set a field back to blank isn't dirty
-export function comparableArtwork(artwork: IArtworkProgress): unknown {
-    return pruneEmpty(artwork);
-}
-
-function pruneEmpty(value: unknown): unknown {
-    if (value instanceof Date) {
-        return value.toISOString();
-    }
-    if (Array.isArray(value)) {
-        const items = value.map(pruneEmpty);
-        return items.length > 0 ? items : undefined;
-    }
-    if (value && typeof value === "object") {
-        const entries = Object.entries(value)
-            .map(([key, entry]) => [key, pruneEmpty(entry)] as const)
-            .filter(([, entry]) => entry !== undefined);
-        return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-    }
-    if (value === "" || value === false || value === null) {
-        return undefined;
-    }
-    return value;
-}
-
 // What is wrong with a link, or undefined when nothing is (blank is always fine). For deciding whether a
 // link is worth pointing an <img> at; validating one on the way in is the schema's job.
 export function artworkUrlIssue(url?: string): string | undefined {
