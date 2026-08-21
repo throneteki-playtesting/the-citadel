@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { IPlaytestCard } from "common/models/cards";
 import { CardPreview } from "@agot/card-preview";
-import { renderPlaytestingCard } from "common/utils";
 import { addToast, Alert, Button, ButtonGroup, NumberInput } from "@heroui/react";
 import RichTextArea from "../../components/richTextArea";
+import { hasPermission, isDirty, renderPlaytestingCard } from "common/utils";
 import { IPlaytestReview } from "common/models/reviews";
+import Permission from "common/models/permissions";
 import StatementAnswerIcon from "../../components/statementAnswerIcon";
 import { DeepPartial } from "common/types";
 import { PlaytestingReview } from "common/models/schemas";
-import { useCreateReviewMutation, useLazyGetReviewQuery, useUpdateReviewMutation } from "../../api";
+import {
+    useCreateReviewMutation,
+    useDeleteReviewMutation,
+    useLazyGetReviewQuery,
+    useUpdateReviewMutation
+} from "../../api";
 import { useAuth } from "../../hooks/useAuth";
-import { useNavigate } from "react-router-dom";
 import { Wizard, WizardBack, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
+import { useWizard } from "../../components/wizard/context";
 import SubmitDecks from "./submittedDeck";
 import StatementQuestion from "./statementQuestion";
 import SectionTitle from "../../components/sectionTitle";
@@ -21,6 +27,8 @@ import { merge } from "lodash-es";
 import CardSelection from "./cardSelection";
 import classNames from "classnames";
 import { UserChip } from "../admin/logs/chips";
+import { showApiErrorToast } from "../../api/errors";
+import ConfirmDeleteReviewModal from "./confirmDeleteReviewModal";
 
 const defaultData: DeepPartial<IPlaytestReview> = {
     played: 1,
@@ -34,21 +42,28 @@ const defaultData: DeepPartial<IPlaytestReview> = {
     }
 };
 export default function ReviewForm({ card: initialCard, reviewer: targetReviewer }: ReviewFormProps) {
-    const navigate = useNavigate();
     const [readReview] = useLazyGetReviewQuery();
     const [createReview, { isLoading: isCreating }] = useCreateReviewMutation();
     const [updateReview, { isLoading: isUpdating }] = useUpdateReviewMutation();
+    const [deleteReview, { isLoading: isDeleting }] = useDeleteReviewMutation();
 
     const { user } = useAuth();
     const reviewer = targetReviewer ?? user?.discordId;
     const isOwnReview = !targetReviewer || targetReviewer === user?.discordId;
+    const canDelete =
+        hasPermission(user, Permission.DELETE_REVIEWS) || (hasPermission(user, Permission.MAKE_REVIEWS) && isOwnReview);
 
     const [review, setReview] = useState<DeepPartial<IPlaytestReview>>(defaultData);
+    // What the update button compares the draft against, so an untouched review can't be re-saved for nothing
+    const [committedReview, setCommittedReview] = useState<DeepPartial<IPlaytestReview>>();
     const [isNew, setIsNew] = useState(true);
     const [hasPlaytested, setHasPlaytested] = useState(true);
     const [card, setCard] = useState<IPlaytestCard>();
     // Changing the card would break the reviewer/version binding when editing someone else's or an outdated review
     const canChangeCard = isOwnReview && (!card || card.latest);
+    // Only meaningful on the initial render - the Wizard owns page navigation from here on
+    const [wizardPage] = useState(initialCard ? 2 : 1);
+    const [searchValue, setSearchValue] = useState(initialCard?.name);
 
     useEffect(() => {
         setReview((prev) => ({ ...prev, reviewer }));
@@ -67,6 +82,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                     // If review already exists, save it. Otherwise, set to default values + card values
                     if (existingReview) {
                         setReview(existingReview);
+                        setCommittedReview(existingReview);
                         setIsNew(false);
                         setHasPlaytested((existingReview.played ?? 0) > 0);
                         return;
@@ -83,11 +99,15 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                     version: card?.version
                 })
             );
+            setCommittedReview(undefined);
             setIsNew(true);
             setHasPlaytested(true);
         };
         checkCardUpdate();
     }, [card, readReview, reviewer]);
+
+    // A fresh review has nothing to be dirty against - only an existing one can be untouched
+    const isReviewDirty = isNew || isDirty(committedReview, review);
 
     const onSubmit = useCallback(
         async (validReview: IPlaytestReview) => {
@@ -98,19 +118,46 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                 ? await createReview(validReview).unwrap()
                 : await updateReview(validReview).unwrap();
             setReview(newReview);
-            navigate(`/project/${newReview.project}/${newReview.number}`);
+            setCommittedReview(newReview);
+            setIsNew(false);
             addToast({
                 title: "Successfully saved",
                 color: "success",
                 description: `Review for "${card?.name}" has been ${isNew ? "submitted" : "updated"}`
             });
         },
-        [card?.name, createReview, hasPlaytested, isNew, navigate, updateReview]
+        [card?.name, createReview, hasPlaytested, isNew, updateReview]
     );
+
+    // Returns whether the delete went through, so the caller knows whether it's safe to move on
+    const onDelete = useCallback(async (): Promise<boolean> => {
+        if (!committedReview?.project || !committedReview?.number || !committedReview?.version || !reviewer) {
+            return false;
+        }
+        try {
+            await deleteReview({
+                project: committedReview.project,
+                number: committedReview.number,
+                version: committedReview.version,
+                reviewer
+            }).unwrap();
+            addToast({
+                title: "Review deleted",
+                color: "success",
+                description: `Review for "${card?.name}" has been deleted`
+            });
+            setCard(undefined);
+            setSearchValue("");
+            return true;
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to delete review" });
+            return false;
+        }
+    }, [card?.name, committedReview, deleteReview, reviewer]);
 
     return (
         <div className="space-y-2">
-            <Wizard schema={PlaytestingReview.Draft} onSubmit={onSubmit} data={review} page={initialCard ? 2 : 1}>
+            <Wizard schema={PlaytestingReview.Draft} onSubmit={onSubmit} data={review} page={wizardPage}>
                 <ValidationSummary />
                 <WizardPages>
                     <WizardPage>
@@ -118,7 +165,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                         <div className="font-crimson text-lg">
                             Search for and select a card from the archives, then proceed to render your verdict.
                         </div>
-                        <CardSelection value={card} onSelect={setCard} searchValue={initialCard?.name} />
+                        <CardSelection value={card} onSelect={setCard} searchValue={searchValue} />
                     </WizardPage>
                     <WizardPage controlledData={review}>
                         <div className="font-cinzel text-3xl">
@@ -336,15 +383,16 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                                 </div>
                             </>
                         )}
-                        <Button
-                            type="submit"
-                            color="primary"
-                            isLoading={isCreating || isUpdating}
-                            className="ml-auto"
-                            size="lg"
-                        >
-                            {isNew ? "Submit Review" : "Update Review"}
-                        </Button>
+                        <ReviewFormActions
+                            isNew={isNew}
+                            canDelete={canDelete}
+                            isCreating={isCreating}
+                            isUpdating={isUpdating}
+                            isDeleting={isDeleting}
+                            isReviewDirty={isReviewDirty}
+                            cardName={card?.name ?? "this card"}
+                            onDelete={onDelete}
+                        />
                     </WizardPage>
                 </WizardPages>
             </Wizard>
@@ -356,4 +404,72 @@ type ReviewFormProps = {
     review?: DeepPartial<IPlaytestReview>;
     card?: IPlaytestCard;
     reviewer?: string;
+};
+
+// Rendered inside the Wizard, so it can reach onPageBack from context directly - a delete needs to
+// animate the wizard back to page 1, which only a descendant of <Wizard> can drive
+function ReviewFormActions({
+    isNew,
+    canDelete,
+    isCreating,
+    isUpdating,
+    isDeleting,
+    isReviewDirty,
+    cardName,
+    onDelete
+}: ReviewFormActionsProps) {
+    const { onPageBack } = useWizard();
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
+    const handleDelete = async () => {
+        if (await onDelete()) {
+            setIsDeleteModalOpen(false);
+            onPageBack();
+        }
+    };
+
+    return (
+        <>
+            <div className="flex gap-2 justify-end w-full">
+                {!isNew && canDelete && (
+                    <Button
+                        color="danger"
+                        variant="flat"
+                        isDisabled={isCreating || isUpdating || isDeleting}
+                        onPress={() => setIsDeleteModalOpen(true)}
+                    >
+                        Delete Review
+                    </Button>
+                )}
+                <Button
+                    type="submit"
+                    color="primary"
+                    isLoading={isCreating || isUpdating}
+                    isDisabled={isDeleting || !isReviewDirty}
+                >
+                    {isNew ? "Submit Review" : "Update Review"}
+                </Button>
+            </div>
+            {!isNew && (
+                <ConfirmDeleteReviewModal
+                    isOpen={isDeleteModalOpen}
+                    cardName={cardName}
+                    isDeleting={isDeleting}
+                    onConfirm={handleDelete}
+                    onCancel={() => setIsDeleteModalOpen(false)}
+                />
+            )}
+        </>
+    );
+}
+
+type ReviewFormActionsProps = {
+    isNew: boolean;
+    canDelete: boolean;
+    isCreating: boolean;
+    isUpdating: boolean;
+    isDeleting: boolean;
+    isReviewDirty: boolean;
+    cardName: string;
+    onDelete: () => Promise<boolean>;
 };
