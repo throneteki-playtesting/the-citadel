@@ -8,6 +8,7 @@ import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { IArtist, creditedArtistId } from "common/models/artwork";
 import { getFinalCardNumber, parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
+import { stripUrlProtocol } from "../../utils";
 import { factionAccentClasses, reorderTransition } from "../../constants";
 import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
@@ -105,9 +106,9 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     </span>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="sm:w-56 shrink-0 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
+                    <div className="w-full sm:w-56 md:w-64 lg:w-72 shrink-0 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
                         {showsCost && renderField("Cost", card.cost ?? ABSENT)}
-                        {showsStrengthAndIcons && renderField("Strength", card.strength ?? ABSENT)}
+                        {showsStrengthAndIcons && renderField("STR", card.strength ?? ABSENT)}
                         {showsStrengthAndIcons &&
                             renderField(
                                 "Icons",
@@ -116,14 +117,14 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                                         <ThronesIcon
                                             key={icon}
                                             name={icon}
-                                            className={card.icons?.[icon] ? "text-primary" : "text-foreground/20"}
+                                            className={classNames({ "text-foreground/20": !card.icons?.[icon] })}
                                         />
                                     ))}
                                 </span>
                             )}
                         {showsPlotStats &&
                             plotStats.map((stat) =>
-                                renderField(plotStatLabels[stat], card.plotStats?.[stat] ?? ABSENT, stat)
+                                renderField(plotStatLabels[stat], card.plotStats?.[stat] ?? ABSENT)
                             )}
                         {showsLoyalty &&
                             renderField(
@@ -140,31 +141,31 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                                 "-"
                             )
                         )}
+                        {showsPlacement &&
+                            entry.releaseNumber !== undefined &&
+                            renderField("Release #", entry.releaseNumber)}
+                        {showsPlacement && entry.packCode && renderField("Pack Code", entry.packCode)}
                         {renderField(
                             "Illustrator",
-                            <div className="flex flex-col gap-0.5">
+                            <div className="flex flex-wrap items-baseline gap-x-1.5">
                                 <span>{entry.illustrator || ABSENT}</span>
                                 {entry.portfolio && (
-                                    <a
-                                        href={entry.portfolio}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-primary hover:underline break-all"
-                                    >
-                                        {entry.portfolio}
-                                    </a>
+                                    <>
+                                        <span className="text-foreground/30 select-none">&middot;</span>
+                                        <a
+                                            href={entry.portfolio}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="hover:underline break-all"
+                                        >
+                                            {stripUrlProtocol(entry.portfolio)}
+                                        </a>
+                                    </>
                                 )}
-                            </div>,
-                            "illustrator",
-                            "basis-full"
-                        )}
-                        {showsPlacement && (
-                            <div className="flex gap-4">
-                                {entry.releaseNumber !== undefined && renderField("Release #", entry.releaseNumber)}
-                                {entry.packCode && renderField("Pack Code", entry.packCode)}
                             </div>
                         )}
                     </div>
+                    <Divider className="sm:hidden" />
                     <Divider orientation="vertical" className="hidden sm:block h-auto self-stretch" />
                     <div className="flex-1 min-w-0 text-xs">
                         {renderField(
@@ -232,9 +233,9 @@ function renderCardText(text?: string): ReactNode {
     );
 }
 
-function renderField(label: string, children: ReactNode, key?: string, className?: string): ReactNode {
+function renderField(label: string, children: ReactNode): ReactNode {
     return (
-        <div key={key ?? label} className={classNames("flex flex-col gap-0.5 min-w-0", className)}>
+        <div key={label} className="flex flex-col gap-0.5 min-w-0">
             <span className="text-[0.6rem] uppercase tracking-widest text-foreground/40">{label}</span>
             <span className="select-text">{children}</span>
         </div>

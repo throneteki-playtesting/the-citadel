@@ -4,6 +4,11 @@ import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 
+/** Strips a leading http(s):// for display. */
+export function stripUrlProtocol(url: string): string {
+    return url.replace(/^https?:\/\//i, "");
+}
+
 export function downloadBlob(blob: Blob, fallbackFilename?: string): void {
     const filename = fallbackFilename ?? crypto.randomUUID();
     const url = URL.createObjectURL(blob);
