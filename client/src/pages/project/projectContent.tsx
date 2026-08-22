@@ -141,7 +141,11 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     );
 
     const [storedSort, setStoredSort] = useHistoryState<SortOption>("sortBy", "number");
-    const [isSorting, startSorting] = useTransition();
+    // Sort/view/filter changes all re-render the whole card list (gallery previews or the full
+    // detail table), which is expensive enough to starve a button's own ripple animation of a
+    // frame if done as an urgent update - deferred here, one flag for all three so their dimming
+    // can't stack into a double opacity when two land close together.
+    const [isContentPending, startContentTransition] = useTransition();
 
     // Search term, advanced filter and active view are shareable via the URL - seeded once from it on
     // mount (lazy initializers), then kept in sync on change. sortBy stays on useHistoryState, untouched.
@@ -191,7 +195,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     // An entry can outlive the permission which allowed its sort, so what it holds is only a request
     const sortBy = storedSort in availableSortOptions ? storedSort : "number";
-    const setSortBy = (sort: SortOption) => startSorting(() => setStoredSort(sort));
+    const setSortBy = (sort: SortOption) => startContentTransition(() => setStoredSort(sort));
 
     const cardStats = useMemo(() => {
         const cardsByNumber = new Map(data?.items.map((card) => [card.number, card]) ?? []);
@@ -348,7 +352,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         search={search}
                         onSearchChange={setSearch}
                         filter={cardFilter}
-                        onFilterChange={setCardFilter}
+                        onFilterChange={(next) => startContentTransition(() => setCardFilter(next))}
                         traits={distinctTraits}
                         releases={project.releases}
                         isDisabled={isLoading}
@@ -366,7 +370,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             variant="flat"
                             isDisabled={isLoading}
                             aria-label={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}
-                            onPress={() => setView(view === "grid" ? "detail" : "grid")}
+                            onPress={() => startContentTransition(() => setView(view === "grid" ? "detail" : "grid"))}
                         >
                             <FontAwesomeIcon icon={view === "grid" ? faTableList : faTableCells} />
                         </Button>
@@ -381,93 +385,105 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             <FactionCarouselSkeleton key={faction} count={count} />
                         ))}
                 </div>
-            ) : view === "detail" ? (
-                detailRows.length === 0 ? (
-                    <NoResultsMessage search={effectiveSearch} />
-                ) : (
-                    <div className="flex flex-col gap-1.5">{detailRows}</div>
-                )
             ) : (
-                <div className="grid grid-cols-1">
-                    <AnimatePresence initial={false}>
-                        {isFiltering ? (
-                            <motion.div
-                                key="search-results"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={FADE_TRANSITION}
-                                className="col-start-1 row-start-1 min-w-0"
-                            >
-                                {filteredCards.length === 0 ? (
-                                    <NoResultsMessage search={effectiveSearch} />
-                                ) : (
-                                    <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
-                                        {(card) => (
-                                            <div
-                                                key={parseCardCode(false, card.project, card.number)}
-                                                className={classNames(
-                                                    "w-full",
-                                                    card.type === "plot" ? "aspect-[333/240]" : "aspect-[240/333]"
-                                                )}
-                                            >
-                                                <PermissionedLink
-                                                    to={`/project/${card.project}/${card.number}`}
-                                                    requires={Permission.READ_LATEST_CARDS}
-                                                    className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
-                                                >
-                                                    <ProjectContentCard
-                                                        card={card}
-                                                        stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
-                                                        release={cardReleases.get(card.number)}
-                                                        progress={cardProgress.get(card.number)}
-                                                        isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
-                                                        isNextRelease={
-                                                            !!nextReleaseCode &&
-                                                            cardReleases.get(card.number)?.code === nextReleaseCode
-                                                        }
-                                                        showReviewBadge={sortBy === "reviews"}
-                                                        showProgressBadge={sortBy === "progress"}
-                                                    />
-                                                </PermissionedLink>
-                                            </div>
-                                        )}
-                                    </CardGrid>
-                                )}
-                            </motion.div>
+                <div
+                    className={classNames("transition-opacity", {
+                        "opacity-50 pointer-events-none": isContentPending
+                    })}
+                >
+                    {view === "detail" ? (
+                        detailRows.length === 0 ? (
+                            <NoResultsMessage search={effectiveSearch} />
                         ) : (
-                            <motion.div
-                                key="carousels"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={FADE_TRANSITION}
-                                className={classNames(
-                                    "col-start-1 row-start-1 min-w-0 flex flex-col gap-2 transition-opacity",
-                                    {
-                                        "opacity-50 pointer-events-none": isSorting
-                                    }
+                            <div className="flex flex-col gap-1.5">{detailRows}</div>
+                        )
+                    ) : (
+                        <div className="grid grid-cols-1">
+                            <AnimatePresence initial={false}>
+                                {isFiltering ? (
+                                    <motion.div
+                                        key="search-results"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={FADE_TRANSITION}
+                                        className="col-start-1 row-start-1 min-w-0"
+                                    >
+                                        {filteredCards.length === 0 ? (
+                                            <NoResultsMessage search={effectiveSearch} />
+                                        ) : (
+                                            <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
+                                                {(card) => (
+                                                    <div
+                                                        key={parseCardCode(false, card.project, card.number)}
+                                                        className={classNames(
+                                                            "w-full",
+                                                            card.type === "plot"
+                                                                ? "aspect-[333/240]"
+                                                                : "aspect-[240/333]"
+                                                        )}
+                                                    >
+                                                        <PermissionedLink
+                                                            to={`/project/${card.project}/${card.number}`}
+                                                            requires={Permission.READ_LATEST_CARDS}
+                                                            className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                                        >
+                                                            <ProjectContentCard
+                                                                card={card}
+                                                                stats={
+                                                                    isLoadingReviews
+                                                                        ? undefined
+                                                                        : cardStats.get(card.number)
+                                                                }
+                                                                release={cardReleases.get(card.number)}
+                                                                progress={cardProgress.get(card.number)}
+                                                                isReleaseBound={
+                                                                    cardIsReleaseBound.get(card.number) ?? false
+                                                                }
+                                                                isNextRelease={
+                                                                    !!nextReleaseCode &&
+                                                                    cardReleases.get(card.number)?.code ===
+                                                                        nextReleaseCode
+                                                                }
+                                                                showReviewBadge={sortBy === "reviews"}
+                                                                showProgressBadge={sortBy === "progress"}
+                                                            />
+                                                        </PermissionedLink>
+                                                    </div>
+                                                )}
+                                            </CardGrid>
+                                        )}
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        key="carousels"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={FADE_TRANSITION}
+                                        className="col-start-1 row-start-1 min-w-0 flex flex-col gap-2"
+                                    >
+                                        {[...cardsByFaction.entries()].map(([faction, cards]) => (
+                                            <FactionCarousel
+                                                key={faction}
+                                                faction={faction}
+                                                cards={cards}
+                                                cardStats={cardStats}
+                                                cardReleases={cardReleases}
+                                                cardProgress={cardProgress}
+                                                cardIsReleaseBound={cardIsReleaseBound}
+                                                nextReleaseCode={nextReleaseCode}
+                                                sortBy={sortBy}
+                                                showReviewBadge={sortBy === "reviews"}
+                                                showProgressBadge={sortBy === "progress"}
+                                                isLoadingReviews={isLoadingReviews || !reviewsData}
+                                            />
+                                        ))}
+                                    </motion.div>
                                 )}
-                            >
-                                {[...cardsByFaction.entries()].map(([faction, cards]) => (
-                                    <FactionCarousel
-                                        key={faction}
-                                        faction={faction}
-                                        cards={cards}
-                                        cardStats={cardStats}
-                                        cardReleases={cardReleases}
-                                        cardProgress={cardProgress}
-                                        cardIsReleaseBound={cardIsReleaseBound}
-                                        nextReleaseCode={nextReleaseCode}
-                                        sortBy={sortBy}
-                                        showReviewBadge={sortBy === "reviews"}
-                                        showProgressBadge={sortBy === "progress"}
-                                        isLoadingReviews={isLoadingReviews || !reviewsData}
-                                    />
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
+                            </AnimatePresence>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
