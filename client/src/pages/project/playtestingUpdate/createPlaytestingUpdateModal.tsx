@@ -35,6 +35,7 @@ import GithubCardStatus from "../../../components/status/githubCardStatus";
 import { changeTypeClasses } from "../../../constants";
 import CardStack from "../../../components/cardStack";
 import LoadingCard from "../../../components/loadingCard";
+import RichTextArea from "../../../components/richTextArea";
 
 export default function CreatePlaytestingUpdateModal({
     isOpen,
