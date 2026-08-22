@@ -81,7 +81,7 @@ export interface ICommissionedArtwork {
 }
 
 export interface IAiArtwork {
-    /** Discord id of whoever is generating it */
+    /** Free text, since whoever generated it may not match any Discord account */
     generatedBy?: string;
     /** Whatever they are generating with, eg. Midjourney */
     resource?: string;

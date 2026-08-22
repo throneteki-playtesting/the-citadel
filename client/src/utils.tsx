@@ -4,9 +4,9 @@ import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 
-/** Strips a leading http(s):// for display. */
+/** Strips a leading http(s):// (or protocol-relative //) and any leading/trailing slashes, for display. */
 export function stripUrlProtocol(url: string): string {
-    return url.replace(/^https?:\/\//i, "");
+    return url.replace(/^(?:https?:)?\/\/+/i, "").replace(/\/+$/, "");
 }
 
 export function downloadBlob(blob: Blob, fallbackFilename?: string): void {
