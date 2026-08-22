@@ -1,9 +1,9 @@
 import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
 import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import EditProjectModal from "./editProjectModal";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
@@ -17,10 +17,13 @@ import usePageTitle from "../../hooks/usePageTitle";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import useConsumableParams from "../../hooks/useConsumableParams";
-import useHistoryState from "../../hooks/useHistoryState";
+import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
+import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
 import Watermark from "../../components/watermark";
+import { IProject } from "common/models/projects";
 
-const PROJECT_PARAMS = ["tab", "release"] as const;
+// "tab" is durable, shareable state kept in sync via its own search-param scope, not consumed here
+const PROJECT_PARAMS = ["release"] as const;
 type ProjectTab = "development" | "artworks" | "releases";
 
 // A release code implies the releases tab even without one named, so it wins over an absent tab param
@@ -37,14 +40,11 @@ export default function ProjectDetail({ className, style, project: number }: Pro
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     // A release code implies the releases tab, so a deep link needs the one param
-    const { tab: entryTab, release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release }) =>
+    const { release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release }) =>
         release ? { highlight: highlightTarget.release(number, release) } : null
     );
 
-    const [tab, setTab] = useHistoryState<ProjectTab>("tab", entryProjectTab(entryTab, entryRelease));
     const navigate = useNavigate();
-    const canViewReleases = usePermission(Permission.READ_RELEASES);
-    const canViewArtworks = usePermission(Permission.READ_ARTWORKS);
 
     if (isLoading) {
         return (
@@ -89,32 +89,10 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                 />
                 {project.draft ? (
                     <ProjectDrafting project={project} />
-                ) : canViewReleases || canViewArtworks ? (
-                    <Tabs
-                        selectedKey={tab}
-                        onSelectionChange={(key) => setTab(key as ProjectTab)}
-                        aria-label="Project Sections"
-                        variant="underlined"
-                        color="primary"
-                        size="lg"
-                        destroyInactiveTabPanel={false}
-                    >
-                        <Tab key="development" title="Development">
-                            <ProjectDevelopment project={project} />
-                        </Tab>
-                        {canViewArtworks ? (
-                            <Tab key="artworks" title="Artworks">
-                                <ProjectArtworks project={project} />
-                            </Tab>
-                        ) : null}
-                        {canViewReleases ? (
-                            <Tab key="releases" title="Releases">
-                                <ProjectReleases project={project} isActive={tab === "releases"} />
-                            </Tab>
-                        ) : null}
-                    </Tabs>
                 ) : (
-                    <ProjectDevelopment project={project} />
+                    <ScopedSearchParamsProvider>
+                        <ProjectTabsSection project={project} entryRelease={entryRelease} />
+                    </ScopedSearchParamsProvider>
                 )}
             </div>
             <EditProjectModal
@@ -150,4 +128,52 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
 type ProjectDetailProps = Omit<BaseElementProps, "children"> & {
     project: number;
+};
+
+// Split out so its tab state can sit inside the ScopedSearchParamsProvider ProjectDetail renders around it
+function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) {
+    const [searchParams] = useSearchParams();
+    const [tab, setTab] = useState<ProjectTab>(() =>
+        entryProjectTab(searchParams.get("tab") ?? undefined, entryRelease)
+    );
+    // Lets a link to the artworks/releases tab be copy-pasted; development (the default) leaves no trace
+    const tabParams = useMemo(() => ({ tab: tab === "development" ? undefined : tab }), [tab]);
+    useSearchParamsScope("tab", true, tabParams);
+
+    const canViewReleases = usePermission(Permission.READ_RELEASES);
+    const canViewArtworks = usePermission(Permission.READ_ARTWORKS);
+
+    if (!(canViewReleases || canViewArtworks)) {
+        return <ProjectDevelopment project={project} isActive />;
+    }
+
+    return (
+        <Tabs
+            selectedKey={tab}
+            onSelectionChange={(key) => setTab(key as ProjectTab)}
+            aria-label="Project Sections"
+            variant="underlined"
+            color="primary"
+            size="lg"
+            destroyInactiveTabPanel={false}
+        >
+            <Tab key="development" title="Development">
+                <ProjectDevelopment project={project} isActive={tab === "development"} />
+            </Tab>
+            {canViewArtworks ? (
+                <Tab key="artworks" title="Artworks">
+                    <ProjectArtworks project={project} isActive={tab === "artworks"} />
+                </Tab>
+            ) : null}
+            {canViewReleases ? (
+                <Tab key="releases" title="Releases">
+                    <ProjectReleases project={project} isActive={tab === "releases"} />
+                </Tab>
+            ) : null}
+        </Tabs>
+    );
+}
+type ProjectTabsSectionProps = {
+    project: IProject;
+    entryRelease?: string;
 };

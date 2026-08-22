@@ -6,7 +6,7 @@ import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetArtistsQuery, useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
@@ -41,6 +41,7 @@ import {
 } from "../../components/data/cardFilter";
 import { buildDetailRows } from "./cardDetailRows";
 import { cardFilterFromParams, cardFilterToParams } from "./cardFilterUrl";
+import { ScopeParams, useSearchParamsScope } from "../../hooks/useSearchParamsScope";
 
 type CardView = "grid" | "detail";
 
@@ -53,8 +54,7 @@ function NoResultsMessage({ search }: { search: string }) {
     );
 }
 
-// The URL query params this page owns - cleared and rebuilt on every sync so a removed filter value
-// doesn't linger in the URL, while any other param (eg. one added by another page's link) survives untouched
+// The URL query params this tab's search-param scope owns - see the useSearchParamsScope call below
 const URL_OWNED_KEYS = [
     "q",
     "view",
@@ -75,7 +75,7 @@ const URL_OWNED_KEYS = [
     "flavor",
     "designer",
     "traits",
-    "releaseCodes"
+    "releases"
 ];
 
 const sortOptions: Record<SortOption, string> = {
@@ -117,7 +117,7 @@ function matchesSearch(card: IPlaytestCard, term: string) {
     return false;
 }
 
-export default function ProjectContent({ project }: ProjectContentProps) {
+export default function ProjectContent({ project, isActive }: ProjectContentProps) {
     const { data, isLoading } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
     const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({
         filter: { project: project.number }
@@ -148,9 +148,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     // Search term, advanced filter, sort and active view are all shareable via the URL - seeded
     // once from it on mount (lazy initializers), then kept in sync on change.
-    const [searchParams, setSearchParams] = useSearchParams();
-    const searchParamsRef = useRef(searchParams);
-    searchParamsRef.current = searchParams;
+    const [searchParams] = useSearchParams();
 
     const [view, setView] = useState<CardView>(() => (searchParams.get("view") === "detail" ? "detail" : "grid"));
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
@@ -167,25 +165,22 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     const deferredCardFilter = useDeferredValue(cardFilter);
     const isFilterActive = isCardFilterActive(deferredCardFilter);
 
-    useEffect(() => {
-        const next = new URLSearchParams(searchParamsRef.current);
-        for (const key of URL_OWNED_KEYS) {
-            next.delete(key);
-        }
+    // Declares every key this scope might write, so a cleared filter's key is dropped rather than left behind
+    const scopeParams = useMemo((): ScopeParams => {
+        const params: ScopeParams = Object.fromEntries(URL_OWNED_KEYS.map((key) => [key, undefined]));
         if (search.trim()) {
-            next.set("q", search.trim());
+            params.q = search.trim();
         }
         if (view === "detail") {
-            next.set("view", view);
+            params.view = view;
         }
         if (storedSort !== "number") {
-            next.set("sort", storedSort);
+            params.sort = storedSort;
         }
-        for (const [key, value] of Object.entries(cardFilterToParams(cardFilter))) {
-            next.set(key, value);
-        }
-        setSearchParams(next, { replace: true });
-    }, [search, cardFilter, view, storedSort, setSearchParams]);
+        Object.assign(params, cardFilterToParams(cardFilter));
+        return params;
+    }, [search, view, storedSort, cardFilter]);
+    useSearchParamsScope("development", isActive, scopeParams);
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -505,7 +500,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     );
 }
 
-type ProjectContentProps = { project: IProject };
+type ProjectContentProps = { project: IProject; isActive: boolean };
 type SortOption = "number" | "name" | "reviews" | "priority" | "progress";
 type CardStats = { latest: number; total: number };
 

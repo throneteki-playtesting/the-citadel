@@ -140,6 +140,21 @@ export function creditedArtistId(artwork: IArtworkProgress): string | undefined 
     return undefined;
 }
 
+// Funded with no specific payer, for no cost, and actually paid - not merely unfilled-in
+export function isFreeCommission(commissioned?: ICommissionedArtwork): boolean {
+    return (
+        !!commissioned?.paid && !commissioned?.paidBy?.trim() && (!commissioned?.cost || commissioned.cost.amount === 0)
+    );
+}
+
+/** How a commission's payment reads as one line - shared so it can't be described differently in two places */
+export function commissionPaymentLabel(commissioned?: ICommissionedArtwork): string | undefined {
+    if (isFreeCommission(commissioned)) {
+        return "Free Commission";
+    }
+    return commissioned?.paidBy?.trim() ? `Paid by ${commissioned.paidBy.trim()}` : undefined;
+}
+
 // Blanket permission and implied both stand in for a granted reply
 export function hasArtistPermission(option: ISourcedOption, artists: IArtist[]): boolean {
     if (option.contact === "granted" || option.contact === "implied") {

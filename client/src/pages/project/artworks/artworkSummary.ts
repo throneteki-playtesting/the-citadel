@@ -2,12 +2,14 @@ import { IPlaytestCard } from "common/models/cards";
 import { ISlotArtwork } from "common/models/slots";
 import {
     artworkRequirements,
+    commissionPaymentLabel,
     creditedArtistId,
     finalArtworkUrl,
     hasArtistPermission,
     IArtist,
     IArtworkPrep,
     IArtworkRequirement,
+    isFreeCommission,
     remainingTasks,
     visiblePrep
 } from "common/models/artwork";
@@ -60,11 +62,13 @@ function artworkDetails(slot: ISlotArtwork, artist: IArtist | undefined, artists
             if (due && !isNaN(due.getTime())) {
                 details.push(`Due ${due.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`);
             }
-            if (commissioned?.cost) {
+            // A free commission's cost, if any, is $0 and not worth showing alongside the label
+            if (commissioned?.cost && !isFreeCommission(commissioned)) {
                 details.push(formatCurrency(commissioned.cost.amount, commissioned.cost.currency));
             }
-            if (commissioned?.paidBy?.trim()) {
-                details.push(`Paid by ${commissioned.paidBy.trim()}`);
+            const paymentLabel = commissionPaymentLabel(commissioned);
+            if (paymentLabel) {
+                details.push(paymentLabel);
             }
             return details;
         }

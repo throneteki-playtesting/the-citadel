@@ -75,7 +75,7 @@ export function cardFilterToParams(filter: CardFilterValue): Record<string, stri
     set("flavor", encodeText(filter.flavor));
     set("designer", encodeText(filter.designer));
     set("traits", encodeArray(filter.traits));
-    set("releaseCodes", encodeArray(filter.releaseCodes));
+    set("releases", encodeArray(filter.releases));
     return params;
 }
 
@@ -95,7 +95,7 @@ export function cardFilterFromParams(params: URLSearchParams): CardFilterValue {
     const types = decodeArray(params.get("type")) as Type[];
     const factions = decodeArray(params.get("faction")) as Faction[];
     const traits = decodeArray(params.get("traits"));
-    const releaseCodes = decodeArray(params.get("releaseCodes"));
+    const releases = decodeArray(params.get("releases"));
     const loyalRaw = params.get("loyal");
     const uniqueRaw = params.get("unique");
 
@@ -115,6 +115,6 @@ export function cardFilterFromParams(params: URLSearchParams): CardFilterValue {
         flavor: decodeText(params.get("flavor")),
         designer: decodeText(params.get("designer")),
         traits: traits.length > 0 ? traits : undefined,
-        releaseCodes: releaseCodes.length > 0 ? releaseCodes : undefined
+        releases: releases.length > 0 ? releases : undefined
     };
 }

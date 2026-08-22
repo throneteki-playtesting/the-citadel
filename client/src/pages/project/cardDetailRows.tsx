@@ -6,7 +6,7 @@ import classNames from "classnames";
 import { challengeIcons, Faction, IPlaytestCard, plotStats } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
-import { IArtist, creditedArtistId } from "common/models/artwork";
+import { IArtist, commissionPaymentLabel, creditedArtistId } from "common/models/artwork";
 import { getFinalCardNumber, parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
 import { stripUrlProtocol } from "../../utils";
 import { factionAccentClasses, reorderTransition } from "../../constants";
@@ -14,12 +14,15 @@ import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
 import RichText from "../../components/richText";
 import { formatPlotModifier, PlotModifiers, splitPlotModifiers } from "../../components/cardEditor/components/plotModifiers";
+import { DraftActions } from "../card/cardDetail";
 
 /** One card's raw data for the detail view - only the fields not already on `card`, resolved from its slot */
 interface ICardDetailRow {
     card: IPlaytestCard;
     illustrator?: string;
     portfolio?: string;
+    /** "Free Commission", or who paid for a commissioned piece - undefined for any other artwork type */
+    commissionNote?: string;
     releaseNumber?: number;
     packCode?: string;
 }
@@ -44,12 +47,15 @@ function buildRowData(
     return cards.map((card) => {
         const slot = slotsByNumber.get(card.number);
         // card.illustrator is authoritative once set (see the publish-time backfill in releases.ts)
-        const creditedArtist = slot && artists.find((artist) => artist.id === creditedArtistId(slot.statuses.artwork));
+        const artwork = slot?.statuses.artwork;
+        const creditedArtist = artwork && artists.find((artist) => artist.id === creditedArtistId(artwork));
+        const commissioned = artwork?.type === "commissioned" ? artwork.commissioned : undefined;
 
         return {
             card,
             illustrator: card.illustrator || creditedArtist?.name,
             portfolio: creditedArtist?.portfolio,
+            commissionNote: commissionPaymentLabel(commissioned),
             releaseNumber: slot && getFinalCardNumber(project, slot),
             packCode: slot?.release?.code
         };
@@ -104,6 +110,7 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     <span className="text-xs text-foreground/40">
                         {parseCardCode(false, card.project, card.number)}
                     </span>
+                    <DraftActions project={card.project} number={card.number} showDivider={false} className="ml-auto" />
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
                     <div className="w-full sm:w-56 md:w-64 lg:w-72 shrink-0 flex flex-wrap gap-x-4 gap-y-1.5 text-xs">
@@ -160,6 +167,12 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                                         >
                                             {stripUrlProtocol(entry.portfolio)}
                                         </a>
+                                    </>
+                                )}
+                                {entry.commissionNote && (
+                                    <>
+                                        <span className="text-foreground/30 select-none">&middot;</span>
+                                        <span className="text-foreground/60">{entry.commissionNote}</span>
                                     </>
                                 )}
                             </div>

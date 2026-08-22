@@ -13,7 +13,7 @@ export default function useCardFilterPredicate(
     value: CardFilterValue,
     context?: CardFilterContext
 ): (card: IPlaytestCard) => boolean {
-    const { traits, releaseCodes, ...explodable } = value;
+    const { traits, releases, ...explodable } = value;
 
     const filters = useFilter<IPlaytestCard>(explodable as Explodable<IPlaytestCard>);
 
@@ -25,13 +25,13 @@ export default function useCardFilterPredicate(
             if (traits && traits.length > 0 && !traits.some((trait) => card.traits.includes(trait))) {
                 return false;
             }
-            if (releaseCodes && releaseCodes.length > 0) {
+            if (releases && releases.length > 0) {
                 const code = context?.releaseCodeByCardNumber?.get(card.number);
-                if (!code || !releaseCodes.includes(code)) {
+                if (!code || !releases.includes(code)) {
                     return false;
                 }
             }
             return true;
         };
-    }, [filters, traits, releaseCodes, context]);
+    }, [filters, traits, releases, context]);
 }

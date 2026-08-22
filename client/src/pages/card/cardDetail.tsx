@@ -587,8 +587,15 @@ type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
     entryReleaseCheck?: string;
 };
 
-// New/Edit/Delete Draft, sat to the left of the version tabs behind their own divider
-function DraftActions({ className, style, project: projectNumber, number }: DraftActionsProps) {
+// New/Edit/Delete Draft. Self-contained (own query, permissions and modals), so any page can drop
+// it in against just a project/number - sat to the left of the version tabs behind their own divider here.
+export function DraftActions({
+    className,
+    style,
+    project: projectNumber,
+    number,
+    showDivider = true
+}: DraftActionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const [editing, setEditing] = useState<IPlaytestCard>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
@@ -667,7 +674,7 @@ function DraftActions({ className, style, project: projectNumber, number }: Draf
                     </Button>
                 </TouchTooltip>
             ))}
-            <Divider orientation="vertical" className="h-5 mx-1" />
+            {showDivider && <Divider orientation="vertical" className="h-5 mx-1" />}
             <EditCardModal
                 isOpen={!!editing}
                 card={editing}
@@ -698,4 +705,5 @@ function DraftActions({ className, style, project: projectNumber, number }: Draf
 type DraftActionsProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
+    showDivider?: boolean;
 };
