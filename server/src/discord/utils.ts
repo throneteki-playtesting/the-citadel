@@ -1,20 +1,13 @@
 import { ColorResolvable } from "discord.js";
 import { dataService } from "@/services";
 
-export const emojis = {
-    unique: "<:unique:701045474332770385>",
-    military: "<:military:701045474291089460>",
-    intrigue: "<:intrigue:701045474337226813>",
-    power: "<:power:701045474433564712>",
-    neutral: "<:neutral:701045474370781244>",
-    baratheon: "<:baratheon:701045474332770344>",
-    greyjoy: "<:greyjoy:701045474345353256>",
-    lannister: "<:lannister:701045474290827306>",
-    martell: "<:martell:701045474093826119>",
-    thenightswatch: "<:nightswatch:701045474400141343>",
-    stark: "<:stark:701045474370650112>",
-    targaryen: "<:targaryen:701045474714452058>",
-    tyrell: "<:tyrell:701045474374975528>",
+/** Discord's own caps on how much text a single embed part will carry */
+export const EMBED_DESCRIPTION_MAX = 4096;
+export const EMBED_FIELD_MAX = 1024;
+
+// Emoji standing for a concept rather than an icon - a note's type, a review answer. Discord's own
+// shortcodes, so nothing on the guild to look up; custom emoji are read live via getEmojiMap() instead
+export const labelEmojis = {
     playtesting: ":dart:",
     physicalPlaytesting: ":flower_playing_cards:",
     digitalPlaytesting: ":computer:",
@@ -69,22 +62,4 @@ export function plural(count: number, singular: string, plural = `${singular}s`)
 export function extractFromURL(url: string) {
     const [, guildId, channelId, messageId] = url.match(/(\d+)\/(\d+)\/(\d+)$/) || [];
     return { guildId, channelId, messageId };
-}
-
-export function discordify(text: string) {
-    // Html Converting
-    let result = text
-        .replace(/<i>|<\/i>/g, "*")
-        .replace(/<b>|<\/b>/g, "**")
-        .replace(/<em>|<\/em>/g, "*")
-        .replace(/<s>|<\/s>/g, "~~")
-        .replace(/<cite>/g, "-")
-        .replace(/<\/cite>/g, "")
-        .replace(/<br>/g, "")
-        .replace(/ {2}/g, " &nbsp;");
-    // Replace all potential emojis with their codes
-    for (const [key, emoji] of Object.entries(emojis)) {
-        result = result.replaceAll(`[${key}]`, emoji);
-    }
-    return result;
 }

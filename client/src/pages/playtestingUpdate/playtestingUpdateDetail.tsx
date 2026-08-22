@@ -13,7 +13,8 @@ import { CardPreview } from "@agot/card-preview";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import { renderPlaytestingCard } from "common/utils";
-import { convertToNode, downloadBlob, noteTypeIcon } from "../../utils";
+import { downloadBlob, noteTypeIcon } from "../../utils";
+import RichText from "../../components/richText";
 import { IPlaytestCard } from "common/models/cards";
 import ThronesIcon from "../../components/thronesIcon";
 import { changeTypeClasses, dismoji, factionBorderClasses, highlightTarget, watermarkClasses } from "../../constants";
@@ -244,7 +245,7 @@ function PlaytestingUpdateHeader({ project, playtestingUpdate }: PlaytestingUpda
             </div>
             {playtestingUpdate.description && (
                 <div className="px-4 md:px-0 text-md sm:text-lg font-sans leading-tight">
-                    {playtestingUpdate.description}
+                    <RichText html={playtestingUpdate.description} />
                 </div>
             )}
         </div>
@@ -417,7 +418,7 @@ function PlaytestingUpdateChangeNote({ card }: PlaytestingUpdateChangeNoteProps)
                                         <FontAwesomeIcon icon={noteTypeIcon[card.note.type]} /> {card.note.type}
                                     </div>
                                     <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">
-                                        {convertToNode(card.note.text)}
+                                        <RichText html={card.note.text} />
                                     </div>
                                 </>
                             ) : (

@@ -11,7 +11,9 @@ import {
     ActionRowBuilder,
     ButtonBuilder
 } from "discord.js";
-import { colors, emojis, extractFromURL } from "../utils";
+import { colors, labelEmojis, extractFromURL, EMBED_DESCRIPTION_MAX, EMBED_FIELD_MAX } from "../utils";
+import { toDiscord } from "common/richText/toDiscord";
+import { chunkHtml } from "common/richText/truncate";
 import { capitalize, merge } from "lodash-es";
 import { dataService, discordService, logger } from "@/services";
 import { factionNames, isPreview, parseCardCode } from "common/utils";
@@ -125,7 +127,7 @@ export async function createInitial(
 
         card = await syncImage(card);
 
-        const initialMessage = messages.initial(review, user, card);
+        const initialMessage = await messages.initial(review, user, card);
         const thread = await createThreadFor(review, card, user, initialMessage, context);
 
         // Pin the first message of the newly-created thread
@@ -166,7 +168,7 @@ export async function updateInitial(
         // Update original message on thread
         const thread = await getThreadFor(review);
         let message = await channel.messages.fetch(messageId);
-        const initialMessage = messages.initial(review, user, card);
+        const initialMessage = await messages.initial(review, user, card);
         message = await message.edit(initialMessage);
 
         merge(review, { _metadata: { discord: { messageUrl: message.url, lastSynced: new Date() } } });
@@ -319,7 +321,8 @@ async function getPlaytestingReviewContext(): Promise<PlaytestingReviewContext> 
     return { guild, channel, projectTags, factionTags };
 }
 
-function createReviewEmbeds(review: IPlaytestReview, user: User) {
+async function createReviewEmbeds(review: IPlaytestReview, user: User) {
+    const emojis = await discordService.getEmojiMap();
     const embed = new EmbedBuilder()
         .setAuthor({
             name: user.displayname,
@@ -351,7 +354,7 @@ function createReviewEmbeds(review: IPlaytestReview, user: User) {
                 value: Object.entries(review.statements)
                     .map(
                         ([statement, answer]) =>
-                            `- **${StatementQuestions[statement]}:** _${capitalize(answer)}_ ${emojis[answer]}`
+                            `- **${StatementQuestions[statement]}:** _${capitalize(answer)}_ ${labelEmojis[answer]}`
                     )
                     .join("\n"),
                 inline: false
@@ -359,24 +362,23 @@ function createReviewEmbeds(review: IPlaytestReview, user: User) {
         );
     const embeds = [embed];
     if (review.additional) {
-        const fieldSize = 1024;
-        if (review.additional.length > fieldSize) {
-            const descriptionSize = 4096;
-            for (let i = 0; i < review.additional.length; i += descriptionSize) {
-                const chunk = review.additional.slice(i, i + descriptionSize);
-                const embed = new EmbedBuilder()
-                    .setAuthor({ name: `✦ Additional Comments${i > 0 ? " (extended)" : ""}` })
-                    .setColor(colors.review)
-                    .setDescription(chunk);
-                embeds.push(embed);
-            }
+        // Measured as what Discord will receive, markers and emoji included, rather than as readable text
+        const asDiscord = (html: string) => toDiscord(html, { emojis });
+        const measure = (html: string) => asDiscord(html).length;
+
+        if (measure(review.additional) <= EMBED_FIELD_MAX) {
+            embed.addFields([{ name: "✦ Additional Comments", value: asDiscord(review.additional) }]);
         } else {
-            embed.addFields([
-                {
-                    name: "✦ Additional Comments",
-                    value: review.additional
-                }
-            ]);
+            // Cut between blocks rather than at a character count, or a marker is split in half and
+            // everything after it renders as the text of a style nothing ever closes
+            chunkHtml(review.additional, EMBED_DESCRIPTION_MAX, measure).forEach((chunk, index) => {
+                embeds.push(
+                    new EmbedBuilder()
+                        .setAuthor({ name: `✦ Additional Comments${index > 0 ? " (extended)" : ""}` })
+                        .setColor(colors.review)
+                        .setDescription(asDiscord(chunk))
+                );
+            });
         }
     }
     // Put timestamp on last embed
@@ -386,10 +388,10 @@ function createReviewEmbeds(review: IPlaytestReview, user: User) {
 }
 
 const messages = {
-    initial(review: IPlaytestReview, user: User, card: IPlaytestCard): BaseMessageOptions {
+    async initial(review: IPlaytestReview, user: User, card: IPlaytestCard): Promise<BaseMessageOptions> {
         const content = `<@${user.discordId}> has submitted a new review for **${card.name} (${card.version})**`;
 
-        const embeds = createReviewEmbeds(review, user);
+        const embeds = await createReviewEmbeds(review, user);
 
         const file = new AttachmentBuilder(card._metadata?.imageUrl as string, {
             name: `${card.code}_${card.version}.png`,

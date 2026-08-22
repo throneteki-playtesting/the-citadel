@@ -7,7 +7,8 @@ import {
     GuildMember,
     APIUser,
     User,
-    Role
+    Role,
+    Guild
 } from "discord.js";
 import { dataService, logger } from "@/services";
 import { discordEventMiddleware } from "@/middleware/auth";
@@ -17,8 +18,15 @@ import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
+type SyncEmojisFn = (guild: Guild) => Promise<unknown>;
 
-export function registerEvents(client: Client, guildId: string, syncUser: SyncUserFn, syncRole: SyncRoleFn) {
+export function registerEvents(
+    client: Client,
+    guildId: string,
+    syncUser: SyncUserFn,
+    syncRole: SyncRoleFn,
+    syncEmojis: SyncEmojisFn
+) {
     function on<E extends keyof ClientEvents>(event: E, handler: (...args: ClientEvents[E]) => Promise<void>) {
         client.on(event, async (...args) => {
             await discordEventMiddleware(undefined, () => handler(...args));
@@ -89,6 +97,17 @@ export function registerEvents(client: Client, guildId: string, syncUser: SyncUs
         logger.info(`[Discord] Role deleted: ${role.name}`);
         await dataService.roles.update({ ...existing, active: false });
     });
+
+    // Re-reads the whole set rather than patching one entry, which can never drift from the guild
+    const onEmojiChanged = async (guild: Guild) => {
+        if (guild.id !== guildId) {
+            return;
+        }
+        await syncEmojis(guild);
+    };
+    on(Events.GuildEmojiCreate, (emoji) => onEmojiChanged(emoji.guild));
+    on(Events.GuildEmojiUpdate, (_oldEmoji, newEmoji) => onEmojiChanged(newEmoji.guild));
+    on(Events.GuildEmojiDelete, (emoji) => onEmojiChanged(emoji.guild));
 
     // Clears discord metadata from any card or review whose forum thread or message was deleted.
     on(Events.ThreadDelete, async (thread) => {

@@ -8,6 +8,7 @@ import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
+import { toThronetekiText } from "./richText/toThroneteki";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -490,7 +491,8 @@ export function toJSONExportCard(card: Cards.IPlaytestCard, release?: { short: s
         strength: card.strength,
         plotStats: card.plotStats,
         traits: card.traits,
-        text: card.text,
+        // The pack format spells bold-italic <i>, which is the one place that convention still applies
+        text: toThronetekiText(card.text),
         flavor: card.flavor,
         deckLimit: card.deckLimit,
         illustrator: card.illustrator ?? "?",
@@ -512,6 +514,10 @@ export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>, wa
         "Unknown Code";
     return {
         ...getBaseCardValues(card),
+        // The renderer draws the pack dialect, where bold-italic is a single <i>. Converting here rather
+        // than inside getBaseCardValues, which also supplies the editor its form values - those must stay
+        // in the stored format, or opening a card would rewrite its text on the way in
+        text: card.text ? toThronetekiText(card.text) : card.text,
         key: `${card.code}@${card.version}`,
         watermark: {
             top: watermark?.top ?? codeText,
@@ -526,6 +532,7 @@ export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggesti
 export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggestion>) {
     return {
         ...(suggestion.card ? getBaseCardValues(suggestion.card) : {}),
+        text: suggestion.card?.text ? toThronetekiText(suggestion.card.text) : suggestion.card?.text,
         key: suggestion.id,
         watermark: {
             top: suggestion.user?.displayname,
