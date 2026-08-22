@@ -176,7 +176,7 @@ export function updateUrl(playtestingUpdate: IPlaytestingUpdate) {
     return `${process.env.CLIENT_HOST}/project/${playtestingUpdate.project}/update/${playtestingUpdate.version}`;
 }
 
-const NOTE_ORDER: NoteType[] = ["updated", "reworked", "replaced", "wording"];
+const NOTE_ORDER: NoteType[] = ["updated", "reworked", "replaced", "refinement"];
 
 function changeSummary(notes: Partial<Record<NoteType, number>>) {
     return NOTE_ORDER.filter((type) => notes[type] > 0)

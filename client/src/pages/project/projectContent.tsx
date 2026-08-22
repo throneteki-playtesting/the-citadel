@@ -1,13 +1,13 @@
 import { CardPreview } from "@agot/card-preview";
-import { factionNames, parseCardCode, renderPlaytestingCard, typeNames } from "common/utils";
-import { Skeleton } from "@heroui/react";
+import { factionNames, parseCardCode, releaseBoundByNumber, renderPlaytestingCard, typeNames } from "common/utils";
+import { Button, Skeleton } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useNavigate } from "react-router-dom";
+import { useGetArtistsQuery, useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
+import { memo, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
 import { HighlightTarget } from "../../components/highlightTarget";
@@ -18,7 +18,14 @@ import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
 import Error from "../../components/error";
-import { faCrosshairs, faFeather, faScroll } from "@fortawesome/free-solid-svg-icons";
+import {
+    faCrosshairs,
+    faFeather,
+    faFlagCheckered,
+    faScroll,
+    faTableCells,
+    faTableList
+} from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
 import Watermark from "../../components/watermark";
 import ProgressRing from "../../components/progressRing";
@@ -30,10 +37,46 @@ import CardGrid from "../../components/cardGrid";
 import {
     CardFilterSearchBar,
     CardFilterValue,
-    EMPTY_CARD_FILTER,
     isCardFilterActive,
     useCardFilterPredicate
 } from "../../components/data/cardFilter";
+import { buildDetailRows } from "./cardDetailRows";
+import { cardFilterFromParams, cardFilterToParams } from "./cardFilterUrl";
+
+type CardView = "grid" | "detail";
+
+// Shared by the grid and detail views - each has its own empty state once a search/filter yields nothing
+function NoResultsMessage({ search }: { search: string }) {
+    return (
+        <div className="p-8 text-center text-default-400">
+            {search ? <>No cards match &ldquo;{search}&rdquo;.</> : "No cards match the current filters."}
+        </div>
+    );
+}
+
+// The URL query params this page owns - cleared and rebuilt on every sync so a removed filter value
+// doesn't linger in the URL, while any other param (eg. one added by another page's link) survives untouched
+const URL_OWNED_KEYS = [
+    "q",
+    "view",
+    "type",
+    "faction",
+    "loyal",
+    "unique",
+    "icons",
+    "cost",
+    "strength",
+    "income",
+    "initiative",
+    "claim",
+    "reserve",
+    "name",
+    "text",
+    "flavor",
+    "designer",
+    "traits",
+    "releaseCodes"
+];
 
 const sortOptions: Record<SortOption, string> = {
     number: "Card Number",
@@ -81,16 +124,59 @@ export default function ProjectContent({ project }: ProjectContentProps) {
     });
     const { data: slotsData } = useGetSlotsQuery({ project: project.number });
 
+    // Drafts are only ever visible to READ_CARDS holders - a READ_LATEST_CARDS-only viewer sees latest only
+    const canReadDrafts = usePermission(Permission.READ_CARDS);
+    const { data: draftsData } = useGetCardsQuery(
+        { filter: { project: project.number, draft: true } },
+        { skip: !canReadDrafts }
+    );
+    const draftByNumber = useMemo(
+        () => new Map(draftsData?.items.map((card) => [card.number, card]) ?? []),
+        [draftsData?.items]
+    );
+    // The newest version each viewer is entitled to see - a draft, where one exists and is visible, else latest
+    const visibleCards = useMemo(
+        () => (data?.items ?? []).map((card) => draftByNumber.get(card.number) ?? card),
+        [data?.items, draftByNumber]
+    );
+
     const [storedSort, setStoredSort] = useHistoryState<SortOption>("sortBy", "number");
     const [isSorting, startSorting] = useTransition();
 
-    const [search, setSearch] = useState("");
-    const [cardFilter, setCardFilter] = useState<CardFilterValue>(EMPTY_CARD_FILTER);
+    // Search term, advanced filter and active view are shareable via the URL - seeded once from it on
+    // mount (lazy initializers), then kept in sync on change. sortBy stays on useHistoryState, untouched.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const searchParamsRef = useRef(searchParams);
+    searchParamsRef.current = searchParams;
+
+    const [view, setView] = useState<CardView>(() => (searchParams.get("view") === "detail" ? "detail" : "grid"));
+    const canReadArtists = usePermission(Permission.READ_ARTISTS);
+    const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists || view !== "detail" });
+
+    const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+    const [cardFilter, setCardFilter] = useState<CardFilterValue>(() => cardFilterFromParams(searchParams));
     // Deferred so the input's own re-render (and the character it shows) is never blocked by
     // mounting the — potentially large — search-results grid.
     const deferredSearch = useDeferredValue(search.trim());
     const deferredCardFilter = useDeferredValue(cardFilter);
     const isFilterActive = isCardFilterActive(deferredCardFilter);
+
+    useEffect(() => {
+        const next = new URLSearchParams(searchParamsRef.current);
+        for (const key of URL_OWNED_KEYS) {
+            next.delete(key);
+        }
+        if (search.trim()) {
+            next.set("q", search.trim());
+        }
+        if (view === "detail") {
+            next.set("view", view);
+        }
+        for (const [key, value] of Object.entries(cardFilterToParams(cardFilter))) {
+            next.set(key, value);
+        }
+        setSearchParams(next, { replace: true });
+    }, [search, cardFilter, view, setSearchParams]);
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -163,9 +249,14 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         () => new Map([...cardReleases].map(([number, release]) => [number, release.code])),
         [cardReleases]
     );
+    // Whether the top version is locked to its printed form - drives the "Release" vs "Draft" tile badge
+    const cardIsReleaseBound = useMemo(
+        () => releaseBoundByNumber(slotsData?.items ?? [], project),
+        [slotsData?.items, project]
+    );
     const distinctTraits = useMemo(
-        () => [...new Set((data?.items ?? []).flatMap((card) => card.traits))].sort(),
-        [data?.items]
+        () => [...new Set(visibleCards.flatMap((card) => card.traits))].sort(),
+        [visibleCards]
     );
     const matchesCardFilter = useCardFilterPredicate(deferredCardFilter, { releaseCodeByCardNumber });
 
@@ -197,7 +288,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     const cardsByFaction = useMemo(() => {
         const map = new Map<Faction, IPlaytestCard[]>();
-        for (const card of data?.items ?? []) {
+        for (const card of visibleCards) {
             const array = map.get(card.faction) ?? [];
             array.push(card);
             map.set(card.faction, array);
@@ -206,7 +297,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
             cards.sort(comparators[sortBy]);
         }
         return map;
-    }, [data?.items, comparators, sortBy]);
+    }, [visibleCards, comparators, sortBy]);
 
     // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
     // search text stays visible in the (now tucked-away) search box but no longer applies
@@ -217,16 +308,26 @@ export default function ProjectContent({ project }: ProjectContentProps) {
             return [];
         }
         const term = effectiveSearch.toLowerCase();
-        return (data?.items ?? [])
+        return visibleCards
             .filter((card) => (!term || matchesSearch(card, term)) && matchesCardFilter(card))
             .sort(comparators[sortBy]);
-    }, [data?.items, isFiltering, effectiveSearch, matchesCardFilter, comparators, sortBy]);
+    }, [visibleCards, isFiltering, effectiveSearch, matchesCardFilter, comparators, sortBy]);
 
     // Plots are landscape — laid out at the same column count as upright cards they'd look
     // cramped, so when every result is a plot, switch to the wider preset built for them.
     const allFilteredArePlots = useMemo(
         () => filteredCards.length > 0 && filteredCards.every((card) => card.type === "plot"),
         [filteredCards]
+    );
+
+    // The detail view has no per-faction carousels of its own - one flat, sorted list either way
+    const detailCards = useMemo(
+        () => (isFiltering ? filteredCards : [...visibleCards].sort(comparators[sortBy])),
+        [isFiltering, filteredCards, visibleCards, comparators, sortBy]
+    );
+    const detailRows = useMemo(
+        () => buildDetailRows(detailCards, slotsData?.items ?? [], project, artistsData?.items ?? []),
+        [detailCards, slotsData?.items, project, artistsData?.items]
     );
 
     if (!isLoading && !data) {
@@ -259,6 +360,17 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         className="w-full sm:max-w-44"
                         onChange={setSortBy}
                     />
+                    <TouchTooltip content={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}>
+                        <Button
+                            isIconOnly
+                            variant="flat"
+                            isDisabled={isLoading}
+                            aria-label={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}
+                            onPress={() => setView(view === "grid" ? "detail" : "grid")}
+                        >
+                            <FontAwesomeIcon icon={view === "grid" ? faTableList : faTableCells} />
+                        </Button>
+                    </TouchTooltip>
                 </div>
             </div>
             {isLoading ? (
@@ -269,6 +381,12 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             <FactionCarouselSkeleton key={faction} count={count} />
                         ))}
                 </div>
+            ) : view === "detail" ? (
+                detailRows.length === 0 ? (
+                    <NoResultsMessage search={effectiveSearch} />
+                ) : (
+                    <div className="flex flex-col gap-1.5">{detailRows}</div>
+                )
             ) : (
                 <div className="grid grid-cols-1">
                     <AnimatePresence initial={false}>
@@ -282,11 +400,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                                 className="col-start-1 row-start-1 min-w-0"
                             >
                                 {filteredCards.length === 0 ? (
-                                    <div className="p-8 text-center text-default-400">
-                                        {effectiveSearch
-                                            ? <>No cards match &ldquo;{effectiveSearch}&rdquo;.</>
-                                            : "No cards match the current filters."}
-                                    </div>
+                                    <NoResultsMessage search={effectiveSearch} />
                                 ) : (
                                     <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
                                         {(card) => (
@@ -299,7 +413,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                                             >
                                                 <PermissionedLink
                                                     to={`/project/${card.project}/${card.number}`}
-                                                    requires={Permission.READ_CARDS}
+                                                    requires={Permission.READ_LATEST_CARDS}
                                                     className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
                                                 >
                                                     <ProjectContentCard
@@ -307,6 +421,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                                                         stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
                                                         release={cardReleases.get(card.number)}
                                                         progress={cardProgress.get(card.number)}
+                                                        isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
                                                         isNextRelease={
                                                             !!nextReleaseCode &&
                                                             cardReleases.get(card.number)?.code === nextReleaseCode
@@ -342,6 +457,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                                         cardStats={cardStats}
                                         cardReleases={cardReleases}
                                         cardProgress={cardProgress}
+                                        cardIsReleaseBound={cardIsReleaseBound}
                                         nextReleaseCode={nextReleaseCode}
                                         sortBy={sortBy}
                                         showReviewBadge={sortBy === "reviews"}
@@ -368,6 +484,7 @@ function FactionCarousel({
     cardStats,
     cardReleases,
     cardProgress,
+    cardIsReleaseBound,
     nextReleaseCode,
     sortBy,
     showReviewBadge,
@@ -429,7 +546,7 @@ function FactionCarousel({
                         >
                             <PermissionedLink
                                 to={`/project/${card.project}/${card.number}`}
-                                requires={Permission.READ_CARDS}
+                                requires={Permission.READ_LATEST_CARDS}
                                 className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
                             >
                                 <ProjectContentCard
@@ -437,6 +554,7 @@ function FactionCarousel({
                                     stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
                                     release={cardReleases.get(card.number)}
                                     progress={cardProgress.get(card.number)}
+                                    isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
                                     isNextRelease={
                                         !!nextReleaseCode && cardReleases.get(card.number)?.code === nextReleaseCode
                                     }
@@ -457,6 +575,7 @@ type FactionCarouselProps = {
     cardStats: Map<number, CardStats>;
     cardReleases: Map<number, IProjectRelease>;
     cardProgress: Map<number, CardLaneBreakdown>;
+    cardIsReleaseBound: Map<number, boolean>;
     nextReleaseCode?: string;
     sortBy: SortOption;
     showReviewBadge: boolean;
@@ -494,15 +613,12 @@ const ProjectContentCard = memo(function ProjectContentCard({
     stats,
     release,
     progress,
+    isReleaseBound,
     isNextRelease,
     showReviewBadge,
     showProgressBadge
 }: ProjectContentCardProps) {
     const navigate = useNavigate();
-    const { data: draftData } = useGetCardsQuery({
-        filter: { project: card.project, number: card.number, draft: true }
-    });
-    const hasDraft = useMemo(() => draftData && draftData.total > 0, [draftData]);
 
     const goToRelease = (event: React.MouseEvent) => {
         if (!release) {
@@ -542,7 +658,26 @@ const ProjectContentCard = memo(function ProjectContentCard({
                 )}
             </div>
             <div className="absolute top-0 right-0 m-2 z-10 flex items-center gap-1 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100">
-                {hasDraft && (
+                {card.draft && isReleaseBound && (
+                    <TouchTooltip
+                        content={
+                            <div className="max-w-64 px-1 py-0.5">
+                                <div className="text-sm font-cinzel">
+                                    <FontAwesomeIcon icon={faFlagCheckered} /> Marked For Release
+                                </div>
+                                <div className="text-xs">
+                                    This pack is out of planning, so this draft is refinement in progress — it won't
+                                    trigger a playtesting update.
+                                </div>
+                            </div>
+                        }
+                    >
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
+                            <FontAwesomeIcon icon={faFlagCheckered} className="text-lg text-primary" />
+                        </div>
+                    </TouchTooltip>
+                )}
+                {card.draft && !isReleaseBound && (
                     <TouchTooltip
                         content={
                             <div className="max-w-64 px-1 py-0.5">
@@ -550,8 +685,8 @@ const ProjectContentCard = memo(function ProjectContentCard({
                                     <FontAwesomeIcon icon={faFeather} /> New Version Being Drafted
                                 </div>
                                 <div className="text-xs">
-                                    The maesters are penning a revised version of this card — it will not enter the
-                                    field until published with the next Playtesting Update.
+                                    The maesters are penning a revised version of this card — not yet in playtesting,
+                                    it will not enter the field until published with the next Playtesting Update.
                                 </div>
                             </div>
                         }
@@ -637,6 +772,7 @@ type ProjectContentCardProps = {
     stats?: CardStats;
     release?: IProjectRelease;
     progress?: CardLaneBreakdown;
+    isReleaseBound: boolean;
     isNextRelease?: boolean;
     showReviewBadge: boolean;
     showProgressBadge: boolean;

@@ -63,7 +63,7 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                         </span>
                     </div>
                 );
-            case "wording":
+            case "refinement":
                 return (
                     <div className="flex flex-col gap-1 p-1">
                         <span className="text-sm">

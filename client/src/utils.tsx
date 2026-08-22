@@ -1,5 +1,5 @@
 import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
-import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faSpellCheck } from "@fortawesome/free-solid-svg-icons";
+import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faGem } from "@fortawesome/free-solid-svg-icons";
 import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
@@ -39,7 +39,7 @@ export const noteTypeIcon: Record<NoteType, IconDefinition> = {
     updated: faAnglesUp,
     reworked: faArrowRotateLeft,
     replaced: faArrowRightArrowLeft,
-    wording: faSpellCheck
+    refinement: faGem
 };
 
 export function daysFromNow(days: number): Date {

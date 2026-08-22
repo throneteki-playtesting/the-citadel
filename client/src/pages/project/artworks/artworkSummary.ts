@@ -2,13 +2,13 @@ import { IPlaytestCard } from "common/models/cards";
 import { ISlotArtwork } from "common/models/slots";
 import {
     artworkRequirements,
+    creditedArtistId,
     finalArtworkUrl,
     hasArtistPermission,
     IArtist,
     IArtworkPrep,
     IArtworkRequirement,
     remainingTasks,
-    selectedOption,
     visiblePrep
 } from "common/models/artwork";
 import { artworkStagePct } from "common/progress/calc";
@@ -78,12 +78,8 @@ function artworkDetails(slot: ISlotArtwork, artist: IArtist | undefined, artists
 }
 
 /** The artist credited for the artwork, whichever way it is being obtained */
-function creditedArtist(slot: ISlotArtwork, artists: IArtist[]): IArtist | undefined {
-    const { artwork } = slot;
-    const id =
-        artwork.type === "commissioned"
-            ? artwork.commissioned?.artist
-            : (selectedOption(artwork.sourced)?.artist ?? artwork.sourced?.options[0]?.artist);
+export function creditedArtist(slot: ISlotArtwork, artists: IArtist[]): IArtist | undefined {
+    const id = creditedArtistId(slot.artwork);
     return artists.find((artist) => artist.id === id);
 }
 

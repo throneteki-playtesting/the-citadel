@@ -271,7 +271,10 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "card", { args })
         }),
-        getCard: builder.query<IPlaytestCard, { project: number; number: number; version: SemanticVersion | "latest" }>(
+        getCard: builder.query<
+            IPlaytestCard,
+            { project: number; number: number; version: SemanticVersion | "latest" | "visible" }
+        >(
             {
                 query: (options) => {
                     const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);

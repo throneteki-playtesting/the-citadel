@@ -385,7 +385,7 @@ export const changeTypeClasses: Record<ChangeType, string> = {
     updated: "border-secondary-300 bg-secondary-100 text-secondary-700",
     reworked: "border-warning-300 bg-warning-100 text-warning-700",
     replaced: "border-danger-300 bg-danger-100 text-danger-700",
-    wording: "border-primary-300 bg-primary-100 text-primary-700"
+    refinement: "border-primary-300 bg-primary-100 text-primary-700"
 };
 
 export const dismoji: { [emoji: string]: string } = {};
@@ -408,7 +408,7 @@ export const emojis = {
     replaced: "twisted_rightwards_arrows",
     reworked: "arrows_clockwise",
     updated: "arrow_double_up",
-    wording: "pencil2",
+    refinement: "pencil2",
     bugfixed: "wrench",
     other: "eight_spoked_asterisk"
 } as { [emoji: string]: string };

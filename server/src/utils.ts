@@ -16,7 +16,7 @@ export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefin
     replaced: "major",
     reworked: "minor",
     updated: "patch",
-    wording: "patch"
+    refinement: "patch"
 };
 
 /**

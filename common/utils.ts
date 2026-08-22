@@ -7,6 +7,7 @@ import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
+import { isReleaseBound } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
@@ -464,6 +465,20 @@ export function getFinalCardNumber(
         return undefined;
     }
     return getReleaseOffset(project, slot.release.code) + slot.release.position;
+}
+
+/** Every slot's isReleaseBound, keyed by card number - the one join every caller needing it in bulk shares */
+export function releaseBoundByNumber(
+    slots: Pick<ISlot, "number" | "release" | "statuses">[],
+    project: Pick<IProject, "releases">
+): Map<number, boolean> {
+    const releasesByCode = new Map(project.releases.map((release) => [release.code, release]));
+    return new Map(
+        slots.map((slot) => {
+            const release = slot.release ? releasesByCode.get(slot.release.code) : undefined;
+            return [slot.number, isReleaseBound(slot.statuses.design.status, release?.status)];
+        })
+    );
 }
 
 /** A slot is only truly released once its pack has been published */

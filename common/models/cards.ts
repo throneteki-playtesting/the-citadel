@@ -14,7 +14,7 @@ export const factions = [
     "neutral"
 ] as const;
 export const types = ["character", "location", "attachment", "event", "plot", "agenda"] as const;
-export const noteTypes = ["updated", "reworked", "replaced", "wording"] as const;
+export const noteTypes = ["updated", "reworked", "replaced", "refinement"] as const;
 export const githubStatuses = ["open", "closed"] as const;
 export const challengeIcons = ["military", "intrigue", "power"] as const;
 export const plotStats = ["income", "initiative", "claim", "reserve"] as const;

@@ -129,6 +129,17 @@ export function selectedOption(sourced?: ISourcedArtwork): ISourcedOption | unde
     return sourced?.options.find((option) => option.id === sourced.selectedId);
 }
 
+/** Id of the artist credited for this artwork, if any - one resolution shared by every caller. AI artwork has none */
+export function creditedArtistId(artwork: IArtworkProgress): string | undefined {
+    if (artwork.type === "commissioned") {
+        return artwork.commissioned?.artist;
+    }
+    if (artwork.type === "sourced") {
+        return selectedOption(artwork.sourced)?.artist ?? artwork.sourced?.options[0]?.artist;
+    }
+    return undefined;
+}
+
 // Blanket permission and implied both stand in for a granted reply
 export function hasArtistPermission(option: ISourcedOption, artists: IArtist[]): boolean {
     if (option.contact === "granted" || option.contact === "implied") {
