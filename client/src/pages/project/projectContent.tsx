@@ -350,9 +350,9 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     return (
         <div className="flex flex-col gap-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <SectionTitle className="sm:flex-1">Project Cards</SectionTitle>
-                <div className="flex items-center gap-2 sm:contents">
+            <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <SectionTitle className="md:flex-1">Project Cards</SectionTitle>
+                <div className="flex flex-wrap justify-end items-center gap-2">
                     <CardFilterSearchBar
                         search={search}
                         onSearchChange={setSearch}
@@ -361,25 +361,31 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         traits={distinctTraits}
                         releases={project.releases}
                         isDisabled={isLoading}
+                        className="min-w-40"
                     />
-                    <SortSelect
-                        options={availableSortOptions}
-                        value={sortBy}
-                        isDisabled={isLoading}
-                        className="w-full sm:max-w-44"
-                        onChange={setSortBy}
-                    />
-                    <TouchTooltip content={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}>
-                        <Button
-                            isIconOnly
-                            variant="flat"
+                    <div className="flex shrink-0 items-center gap-2">
+                        <SortSelect
+                            options={availableSortOptions}
+                            value={sortBy}
                             isDisabled={isLoading}
-                            aria-label={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}
-                            onPress={() => startContentTransition(() => setView(view === "grid" ? "detail" : "grid"))}
-                        >
-                            <FontAwesomeIcon icon={view === "grid" ? faTableList : faTableCells} />
-                        </Button>
-                    </TouchTooltip>
+                            className="w-44"
+                            onChange={setSortBy}
+                        />
+                        <TouchTooltip content={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}>
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                isDisabled={isLoading}
+                                aria-label={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}
+                                onPress={() =>
+                                    startContentTransition(() => setView(view === "grid" ? "detail" : "grid"))
+                                }
+                            >
+                                <FontAwesomeIcon icon={view === "grid" ? faTableList : faTableCells} />
+                            </Button>
+                        </TouchTooltip>
+                    </div>
                 </div>
             </div>
             {isLoading ? (
