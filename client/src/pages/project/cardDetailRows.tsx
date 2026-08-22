@@ -7,10 +7,10 @@ import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { IArtist, creditedArtistId } from "common/models/artwork";
 import { getFinalCardNumber, parseCardCode, typeNames } from "common/utils";
-import { convertToNode } from "../../utils";
 import { factionAccentClasses } from "../../constants";
 import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
+import RichText from "../../components/richText";
 
 /** One card's raw data for the detail view - only the fields not already on `card`, resolved from its slot */
 interface ICardDetailRow {
@@ -162,15 +162,15 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                         {renderField(
                             "Text Area",
                             <div className="flex flex-col gap-2">
-                                <div className="leading-relaxed whitespace-pre-line break-words">
-                                    {card.text ? convertToNode(card.text) : ABSENT}
+                                <div className="leading-relaxed break-words">
+                                    {card.text ? <RichText html={card.text} /> : ABSENT}
                                 </div>
                                 {card.designer && (
                                     <div className="font-bold text-foreground/60 break-words">{card.designer}</div>
                                 )}
                                 {card.flavor && (
-                                    <div className="italic leading-relaxed whitespace-pre-line break-words text-foreground/60">
-                                        {convertToNode(card.flavor)}
+                                    <div className="italic leading-relaxed break-words text-foreground/60">
+                                        <RichText html={card.flavor} />
                                     </div>
                                 )}
                             </div>
