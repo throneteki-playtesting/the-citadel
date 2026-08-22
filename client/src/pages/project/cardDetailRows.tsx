@@ -161,7 +161,7 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     <div className="flex-1 min-w-0 text-xs">
                         {renderField(
                             "Text Area",
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-col gap-2 whitespace-pre-wrap">
                                 <div className="leading-relaxed break-words">
                                     {card.text ? <RichText html={card.text} /> : ABSENT}
                                 </div>
