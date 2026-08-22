@@ -398,16 +398,16 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                 >
                     {view === "detail" ? (
                         detailRows.length === 0 ? (
-                            <NoResultsMessage search={effectiveSearch} />
+                            <NoResultsMessage key="detail" search={effectiveSearch} />
                         ) : (
-                            <div className="flex flex-col gap-1.5">
+                            <div key="detail" className="flex flex-col gap-1.5">
                                 <AnimatePresence initial={false} mode="popLayout">
                                     {detailRows}
                                 </AnimatePresence>
                             </div>
                         )
                     ) : (
-                        <div className="grid grid-cols-1">
+                        <div key="grid" className="grid grid-cols-1">
                             <AnimatePresence initial={false}>
                                 {isFiltering ? (
                                     <motion.div
