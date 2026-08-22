@@ -5,6 +5,7 @@ import { inc } from "semver";
 import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
+import { isReleaseBound } from "common/models/slots";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
@@ -254,6 +255,17 @@ router.put(
                 "Invalid Data",
                 `Card #${number} has already been released and cannot start a new draft`
             );
+        }
+
+        if (req.body.note?.type === "refinement") {
+            const release = slot?.release && project.releases.find((entry) => entry.code === slot.release!.code);
+            if (!slot || !isReleaseBound(slot.statuses.design.status, release?.status)) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    "Refinement notes are only valid while the draft is release-bound"
+                );
+            }
         }
 
         res.locals.project = project;

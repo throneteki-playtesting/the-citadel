@@ -68,8 +68,8 @@ export default function EditCardModal({
                                 <StatusNotice
                                     icon={faFlagCheckered}
                                     color="warning"
-                                    label="Release-bound"
-                                    detail="Pack is out of planning — this draft won't trigger a playtesting update."
+                                    label="Marked for release"
+                                    detail="This card is locked to its printed form — this draft won't trigger a playtesting update."
                                 />
                             )}
                             <div className="flex flex-col md:flex-row gap-2">
@@ -89,6 +89,7 @@ export default function EditCardModal({
                                         <WizardPage controlledData={{ note: card.note ?? {} }}>
                                             <NoteEditor
                                                 note={card.note}
+                                                isReleaseBound={isDraftReleaseBound}
                                                 onChange={(note) => setCard((prev) => ({ ...prev, note }))}
                                             />
                                         </WizardPage>

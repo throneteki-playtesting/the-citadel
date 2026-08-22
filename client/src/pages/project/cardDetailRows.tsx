@@ -6,11 +6,12 @@ import { challengeIcons, Faction, IPlaytestCard, plotStats } from "common/models
 import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { IArtist, creditedArtistId } from "common/models/artwork";
-import { getFinalCardNumber, parseCardCode, typeNames } from "common/utils";
+import { getFinalCardNumber, parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
 import { factionAccentClasses } from "../../constants";
 import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
 import RichText from "../../components/richText";
+import { formatPlotModifier, PlotModifiers, splitPlotModifiers } from "../../components/cardEditor/components/plotModifiers";
 
 /** One card's raw data for the detail view - only the fields not already on `card`, resolved from its slot */
 interface ICardDetailRow {
@@ -73,6 +74,7 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
     const showsPlotStats = card.type === "plot";
     const showsLoyalty = card.faction !== "neutral";
     const showsPlacement = entry.releaseNumber !== undefined || entry.packCode;
+    const { body: textBody, modifiers: plotModifiers } = splitPlotModifiers(card.text);
 
     return (
         <div
@@ -161,15 +163,14 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     <div className="flex-1 min-w-0 text-xs">
                         {renderField(
                             "Text Area",
-                            <div className="flex flex-col gap-2 whitespace-pre-wrap">
-                                <div className="leading-relaxed break-words">
-                                    {card.text ? <RichText html={card.text} /> : ABSENT}
-                                </div>
+                            <div className="flex flex-col gap-2">
+                                {renderCardText(textBody)}
+                                {renderPlotModifierChips(plotModifiers)}
                                 {card.designer && (
                                     <div className="font-bold text-foreground/60 break-words">{card.designer}</div>
                                 )}
                                 {card.flavor && (
-                                    <div className="italic leading-relaxed break-words text-foreground/60">
+                                    <div className="italic leading-relaxed whitespace-pre-wrap break-words text-foreground/60">
                                         <RichText html={card.flavor} />
                                     </div>
                                 )}
@@ -178,6 +179,49 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** Read-only render of a card's plot modifiers as chips */
+function renderPlotModifierChips(modifiers: PlotModifiers): ReactNode {
+    const active = plotStats.filter((stat) => modifiers[stat] !== undefined);
+    if (active.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="flex flex-wrap gap-1">
+            {active.map((stat) => (
+                <span
+                    key={stat}
+                    className="flex items-center gap-1 rounded-full border py-0.5 px-2"
+                    style={{ borderColor: thronesColors[stat] }}
+                >
+                    <span className="text-[0.625rem] leading-none font-semibold uppercase tracking-wider opacity-70">
+                        {titleCase(stat)}
+                    </span>
+                    <span className="text-medium leading-none font-bold tabular-nums">
+                        {formatPlotModifier(modifiers[stat]!)}
+                    </span>
+                </span>
+            ))}
+        </div>
+    );
+}
+
+/** Renders card text, treating each blank-separated line as its own paragraph */
+function renderCardText(text?: string): ReactNode {
+    if (!text) {
+        return ABSENT;
+    }
+    return (
+        <div className="flex flex-col gap-1">
+            {text.split("\n").map((line, index) => (
+                <div key={index} className="leading-snug break-words">
+                    {line ? <RichText html={line} /> : " "}
+                </div>
+            ))}
         </div>
     );
 }
