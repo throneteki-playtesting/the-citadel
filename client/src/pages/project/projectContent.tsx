@@ -1,6 +1,6 @@
 import { CardPreview } from "@agot/card-preview";
 import { factionNames, parseCardCode, releaseBoundByNumber, renderPlaytestingCard, typeNames } from "common/utils";
-import { Button, Skeleton } from "@heroui/react";
+import { Button, Skeleton, Tooltip } from "@heroui/react";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
@@ -371,7 +371,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             className="w-44"
                             onChange={setSortBy}
                         />
-                        <TouchTooltip content={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}>
+                        <Tooltip content={view === "grid" ? "Switch to Detail view" : "Switch to Gallery view"}>
                             <Button
                                 isIconOnly
                                 size="sm"
@@ -384,7 +384,7 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                             >
                                 <FontAwesomeIcon icon={view === "grid" ? faTableList : faTableCells} />
                             </Button>
-                        </TouchTooltip>
+                        </Tooltip>
                     </div>
                 </div>
             </div>
