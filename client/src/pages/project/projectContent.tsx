@@ -32,7 +32,6 @@ import ProgressRing from "../../components/progressRing";
 import CardProgressBreakdown from "../../components/cardProgressBreakdown";
 import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
-import useHistoryState from "../../hooks/useHistoryState";
 import CardGrid from "../../components/cardGrid";
 import {
     CardFilterSearchBar,
@@ -59,6 +58,7 @@ function NoResultsMessage({ search }: { search: string }) {
 const URL_OWNED_KEYS = [
     "q",
     "view",
+    "sort",
     "type",
     "faction",
     "loyal",
@@ -140,15 +140,14 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         [data?.items, draftByNumber]
     );
 
-    const [storedSort, setStoredSort] = useHistoryState<SortOption>("sortBy", "number");
     // Sort/view/filter changes all re-render the whole card list (gallery previews or the full
     // detail table), which is expensive enough to starve a button's own ripple animation of a
     // frame if done as an urgent update - deferred here, one flag for all three so their dimming
     // can't stack into a double opacity when two land close together.
     const [isContentPending, startContentTransition] = useTransition();
 
-    // Search term, advanced filter and active view are shareable via the URL - seeded once from it on
-    // mount (lazy initializers), then kept in sync on change. sortBy stays on useHistoryState, untouched.
+    // Search term, advanced filter, sort and active view are all shareable via the URL - seeded
+    // once from it on mount (lazy initializers), then kept in sync on change.
     const [searchParams, setSearchParams] = useSearchParams();
     const searchParamsRef = useRef(searchParams);
     searchParamsRef.current = searchParams;
@@ -159,6 +158,9 @@ export default function ProjectContent({ project }: ProjectContentProps) {
 
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
     const [cardFilter, setCardFilter] = useState<CardFilterValue>(() => cardFilterFromParams(searchParams));
+    const [storedSort, setStoredSort] = useState<SortOption>(
+        () => (searchParams.get("sort") as SortOption | null) ?? "number"
+    );
     // Deferred so the input's own re-render (and the character it shows) is never blocked by
     // mounting the — potentially large — search-results grid.
     const deferredSearch = useDeferredValue(search.trim());
@@ -176,11 +178,14 @@ export default function ProjectContent({ project }: ProjectContentProps) {
         if (view === "detail") {
             next.set("view", view);
         }
+        if (storedSort !== "number") {
+            next.set("sort", storedSort);
+        }
         for (const [key, value] of Object.entries(cardFilterToParams(cardFilter))) {
             next.set(key, value);
         }
         setSearchParams(next, { replace: true });
-    }, [search, cardFilter, view, setSearchParams]);
+    }, [search, cardFilter, view, storedSort, setSearchParams]);
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
@@ -395,7 +400,11 @@ export default function ProjectContent({ project }: ProjectContentProps) {
                         detailRows.length === 0 ? (
                             <NoResultsMessage search={effectiveSearch} />
                         ) : (
-                            <div className="flex flex-col gap-1.5">{detailRows}</div>
+                            <div className="flex flex-col gap-1.5">
+                                <AnimatePresence initial={false} mode="popLayout">
+                                    {detailRows}
+                                </AnimatePresence>
+                            </div>
                         )
                     ) : (
                         <div className="grid grid-cols-1">

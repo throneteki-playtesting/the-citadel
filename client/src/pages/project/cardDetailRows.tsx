@@ -1,13 +1,14 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Divider } from "@heroui/react";
+import { motion } from "framer-motion";
 import classNames from "classnames";
 import { challengeIcons, Faction, IPlaytestCard, plotStats } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { IArtist, creditedArtistId } from "common/models/artwork";
 import { getFinalCardNumber, parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
-import { factionAccentClasses } from "../../constants";
+import { factionAccentClasses, reorderTransition } from "../../constants";
 import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
 import RichText from "../../components/richText";
@@ -77,9 +78,14 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
     const { body: textBody, modifiers: plotModifiers } = splitPlotModifiers(card.text);
 
     return (
-        <div
+        <motion.div
             key={parseCardCode(false, card.project, card.number)}
-            className="flex items-stretch gap-2 sm:gap-3 rounded-md border border-content3 bg-content1 overflow-hidden"
+            layout
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={reorderTransition}
+            className="w-full flex items-stretch gap-2 sm:gap-3 rounded-md border border-content3 bg-content1 overflow-hidden"
         >
             <div className={classNames("w-1.5 shrink-0", factionAccentClasses[card.faction as Faction])} />
             <div className="flex-1 min-w-0 py-2 pr-2 sm:pr-3 flex flex-col gap-2">
@@ -179,7 +185,7 @@ function renderCardDetailRow(entry: ICardDetailRow): ReactNode {
                     </div>
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 }
 
