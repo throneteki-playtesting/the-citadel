@@ -17,9 +17,13 @@ import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSumm
 import { PlaytestingUpdate } from "common/models/schemas";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import RichTextArea from "../../../components/richTextArea";
-import { useCreatePlaytestingUpdateMutation, useGetCardsQuery, useGetPreviousCardQuery } from "../../../api";
-import { renderPlaytestingCard, SemanticVersion, thronesColors } from "common/utils";
+import {
+    useCreatePlaytestingUpdateMutation,
+    useGetCardsQuery,
+    useGetPreviousCardQuery,
+    useGetSlotsQuery
+} from "../../../api";
+import { releaseBoundByNumber, renderPlaytestingCard, SemanticVersion, thronesColors } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -31,6 +35,7 @@ import GithubCardStatus from "../../../components/status/githubCardStatus";
 import { changeTypeClasses } from "../../../constants";
 import CardStack from "../../../components/cardStack";
 import LoadingCard from "../../../components/loadingCard";
+import RichTextArea from "../../../components/richTextArea";
 
 export default function CreatePlaytestingUpdateModal({
     isOpen,
@@ -41,6 +46,7 @@ export default function CreatePlaytestingUpdateModal({
     const { data: draftsData, isLoading: isDraftsLoading } = useGetCardsQuery({
         filter: { project: project?.number, draft: true }
     });
+    const { data: slotsData, isLoading: isSlotsLoading } = useGetSlotsQuery({ project: project?.number });
     const [createPlaytestingUpdate, { isLoading }] = useCreatePlaytestingUpdateMutation();
     const [playtestingUpdate, setPlaytestingUpdate] = useState<DeepPartial<IPlaytestingUpdate>>({
         project: project.number
@@ -48,12 +54,22 @@ export default function CreatePlaytestingUpdateModal({
 
     const [selectedCards, setSelectedCards] = useState<IPlaytestCard[]>([]);
 
-    useEffect(() => {
-        // Initially selects all draft cards
-        if (draftsData) {
-            setSelectedCards(draftsData.items);
+    // A release-bound draft is a correction to a card already locked to its printed form - it can never
+    // trigger a playtesting update, so it isn't offered as a candidate at all, not just left deselected
+    const eligibleDrafts = useMemo(() => {
+        if (!draftsData) {
+            return undefined;
         }
-    }, [draftsData]);
+        const isReleaseBound = releaseBoundByNumber(slotsData?.items ?? [], project);
+        return draftsData.items.filter((card) => !isReleaseBound.get(card.number));
+    }, [draftsData, slotsData?.items, project]);
+
+    useEffect(() => {
+        // Initially selects every eligible draft
+        if (eligibleDrafts) {
+            setSelectedCards(eligibleDrafts);
+        }
+    }, [eligibleDrafts]);
 
     useEffect(() => {
         const cardChanges = selectedCards.reduce<Record<number, SemanticVersion>>((updates, card) => {
@@ -95,15 +111,15 @@ export default function CreatePlaytestingUpdateModal({
     );
 
     const draftCardSelectors = useMemo(() => {
-        if (isDraftsLoading) {
+        if (isDraftsLoading || isSlotsLoading) {
             return <Skeleton className="w-full h-44 rounded-xl" />;
         }
 
-        if (!draftsData?.items) {
+        if (!eligibleDrafts) {
             return null;
         }
 
-        return sortBy(draftsData?.items, ["faction", "type"]).map((card) => {
+        return sortBy(eligibleDrafts, ["faction", "type"]).map((card) => {
             const isSelected = selectedCards.some(
                 (selected) => selected.number === card.number && selected.version === card.version
             );
@@ -116,7 +132,7 @@ export default function CreatePlaytestingUpdateModal({
                 />
             );
         });
-    }, [draftsData?.items, isDraftsLoading, selectedCards, toggleCard]);
+    }, [eligibleDrafts, isDraftsLoading, isSlotsLoading, selectedCards, toggleCard]);
 
     return (
         <Modal

@@ -67,6 +67,11 @@ export function isCheckStale(entry: IReleaseCheck, latest?: SemanticVersion) {
     return !!latest && entry.version !== latest;
 }
 
+/** Design at refinement+ in a pack past planning is locked to print - a draft on it won't trigger a playtesting update */
+export function isReleaseBound(design: DesignStatus, release?: ReleaseStatus): boolean {
+    return designPhase[design] === "finalising" && !!release && release !== "planning";
+}
+
 export interface IDesignProgress {
     status: DesignStatus;
     /** One entry per submitter, upserted by createdBy */

@@ -5,6 +5,7 @@ import { inc } from "semver";
 import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
+import { isReleaseBound } from "common/models/slots";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
@@ -12,6 +13,7 @@ import { StatusCodes } from "http-status-codes";
 import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
 import { applyToFilter, generateGetResponse, loadProjectByParam, NoteVersion } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
+import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
 import { syncIssues } from "@/github/issues";
@@ -39,7 +41,9 @@ const CardVersionParams = {
 
 const CardVersionOrLatestParams = {
     ...CardParams,
-    version: Joi.alternatives().try(Joi.string().regex(Regex.SemanticVersion), Joi.string().valid("latest")).required()
+    version: Joi.alternatives()
+        .try(Joi.string().regex(Regex.SemanticVersion), Joi.string().valid("latest", "visible"))
+        .required()
 };
 
 // Core data-fetching logic, shared across GET routes
@@ -130,28 +134,54 @@ router.get(
     )
 );
 
-// Read specific version of a card, or "latest"
+// Read specific version of a card, "latest", or "visible" - the newest version the caller is entitled to see
 router.get(
     "/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
     loadProjectByParam,
     validateProjectAccess,
-    validateRequest<{ version: SemanticVersion | "latest" }, unknown, unknown, unknown>((principal, req) => {
-        if (hasPermission(principal, Permission.READ_CARDS)) {
-            return true;
+    validateRequest<{ version: SemanticVersion | "latest" | "visible" }, unknown, unknown, unknown>(
+        (principal, req) => {
+            if (hasPermission(principal, Permission.READ_CARDS)) {
+                return true;
+            }
+            if (
+                hasPermission(principal, Permission.READ_LATEST_CARDS) &&
+                (req.params.version === "latest" || req.params.version === "visible")
+            ) {
+                return true;
+            }
+            return false;
         }
-        if (hasPermission(principal, Permission.READ_LATEST_CARDS) && req.params.version === "latest") {
-            return true;
-        }
-        return false;
-    }),
+    ),
     asyncHandler<
-        { project: number; number: number; version: SemanticVersion | "latest" },
+        { project: number; number: number; version: SemanticVersion | "latest" | "visible" },
         unknown,
         unknown,
         IPlaytestCard
     >(async (req, res) => {
         const { project, number, version } = req.params;
+
+        if (version === "visible") {
+            const { principal } = getContext();
+            const canReadDrafts = hasPermission(principal, Permission.READ_CARDS);
+            // Released & current, then (if allowed) the in-progress draft, then plain latest - the same
+            // rank CardVersions.rank() uses client-side, but stopping at whatever this caller may see
+            const candidates: IGetRequest<IPlaytestCard>["filter"][] = [
+                { project, number, latest: true, released: { $exists: true } },
+                ...(canReadDrafts ? [{ project, number, draft: true }] : []),
+                { project, number, latest: true }
+            ];
+            let response: IPlaytestCard | undefined;
+            for (const filter of candidates) {
+                [response] = await dataService.cards.read(filter);
+                if (response) {
+                    break;
+                }
+            }
+            res.status(StatusCodes.OK).json(response);
+            return;
+        }
 
         const filter = version === "latest" ? { project, number, latest: true } : { project, number, version };
         const [response] = await dataService.cards.read(filter);
@@ -225,6 +255,17 @@ router.put(
                 "Invalid Data",
                 `Card #${number} has already been released and cannot start a new draft`
             );
+        }
+
+        if (req.body.note?.type === "refinement") {
+            const release = slot?.release && project.releases.find((entry) => entry.code === slot.release!.code);
+            if (!slot || !isReleaseBound(slot.statuses.design.status, release?.status)) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    "Refinement notes are only valid while the draft is release-bound"
+                );
+            }
         }
 
         res.locals.project = project;

@@ -24,6 +24,7 @@
         "@heroui/react": "^2.8.2",
         "@heroui/use-infinite-scroll": "^2.2.12",
         "@internationalized/date": "^3.8.2",
+        "@react-stately/form": "^3.2.0",
         "@reduxjs/toolkit": "^2.8.2",
         "@sentry/react": "^10.63.0",
         "@tailwindcss/postcss": "^4.1.11",

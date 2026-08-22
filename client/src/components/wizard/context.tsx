@@ -57,6 +57,8 @@ export type WizardContextProps<T> = {
     fieldErrors: Record<string, WizardFieldError>;
     setError: (path: string, message: string) => void;
     clearError: (path: string) => void;
+    /** Retires the errors of fields whose value has since changed, so nothing outlives what it described */
+    clearAnsweredErrors: (paths: string[]) => void;
     isValidationError: (err: unknown) => boolean;
     fieldMeta: Record<string, WizardFieldMeta>;
     setFieldMeta: React.Dispatch<React.SetStateAction<Record<string, WizardFieldMeta>>>;
