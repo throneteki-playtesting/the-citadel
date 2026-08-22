@@ -9,7 +9,9 @@ import {
     GuildForumTag,
     Role
 } from "discord.js";
-import { emojis, colors, discordify, extractFromURL } from "../utils";
+import { labelEmojis, colors, extractFromURL, EMBED_DESCRIPTION_MAX } from "../utils";
+import { toDiscord } from "common/richText/toDiscord";
+import { truncateHtml } from "common/richText/truncate";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
@@ -445,9 +447,14 @@ async function createCardEmbeds(card: IPlaytestCard, user: User | undefined) {
         });
     }
     if (card.note) {
+        const emojis = await discordService.getEmojiMap();
+        // Measured as what Discord will receive, markers and emoji included, rather than as readable text
+        const asDiscord = (html: string) => toDiscord(html, { emojis });
         imageEmbed = imageEmbed
-            .setTitle(`${emojis[card.note.type]} ${capitalize(card.note.type)}`)
-            .setDescription(discordify(card.note.text));
+            .setTitle(`${labelEmojis[card.note.type]} ${capitalize(card.note.type)}`)
+            .setDescription(
+                asDiscord(truncateHtml(card.note.text, EMBED_DESCRIPTION_MAX, (html) => asDiscord(html).length))
+            );
     }
     return [imageEmbed];
 }

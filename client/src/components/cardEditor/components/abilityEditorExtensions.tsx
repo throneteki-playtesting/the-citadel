@@ -2,6 +2,7 @@ import { Extension, Mark, Node } from "@tiptap/core";
 import HardBreak from "@tiptap/extension-hard-break";
 import { abilityIcons } from "common/utils";
 import { isPlotModifierLine, parsePlotModifiers, plotModifierCaptureKey, PlotModifiers } from "./plotModifiers";
+import { ICON_REGEX } from "./iconHtml";
 import { Fragment, MarkType, Node as ProseMirrorNode, Schema, Slice } from "prosemirror-model";
 import { Plugin, PluginKey, Transaction } from "prosemirror-state";
 
@@ -42,7 +43,6 @@ const ABILITY_TEXT_REGEX = new RegExp(`^(${ABILITY_TEXT_SOURCE})`);
 // Markdown bolding arriving by paste; the lookarounds keep it off a ***trait*** wrapper's inner asterisks
 const BOLD_ABILITY_TEXT_REGEX = new RegExp(`(?<!\\*)\\*\\*(${ABILITY_TEXT_SOURCE})\\*\\*(?!\\*)`);
 const TRAIT_HIGHLIGHT_REGEX = /\*\*\*(.+?)\*\*\*/;
-const ICON_REGEX = /(?::([a-zA-Z0-9_]+):|\[([a-zA-Z0-9_]+)\])/;
 
 const autoConvertKey = new PluginKey("autoTextConversions");
 const markRemovedKey = new PluginKey("markRemoved");

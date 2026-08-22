@@ -10,8 +10,7 @@ import {
     ModalContent,
     ModalFooter,
     ModalHeader,
-    Skeleton,
-    Textarea
+    Skeleton
 } from "@heroui/react";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
@@ -29,7 +28,8 @@ import { IPlaytestCard } from "common/models/cards";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faInfoCircle } from "@fortawesome/free-solid-svg-icons";
-import { convertToNode, noteTypeIcon } from "../../../utils";
+import { noteTypeIcon } from "../../../utils";
+import RichText from "../../../components/richText";
 import { sortBy } from "lodash-es";
 import GithubCardStatus from "../../../components/status/githubCardStatus";
 import { changeTypeClasses } from "../../../constants";
@@ -168,7 +168,14 @@ export default function CreatePlaytestingUpdateModal({
                                             This is optional, but helps tell playtesters any broad details about this
                                             update.
                                         </div>
-                                        <Textarea label="Description" name="description" />
+                                        <RichTextArea
+                                            label="Description"
+                                            name="description"
+                                            value={playtestingUpdate.description}
+                                            onValueChange={(description) =>
+                                                setPlaytestingUpdate((prev) => ({ ...prev, description }))
+                                            }
+                                        />
                                         <Alert color="warning" className="text-sm" title="Confirming is immediate">
                                             These cards go live for playtesters and the update is announced on Discord
                                             straight away. Cards which aren't implemented yet can still be tested in
@@ -261,7 +268,7 @@ function SelectableDraftCard({ card, isSelected, onToggle }: SelectableDraftCard
                                 <FontAwesomeIcon icon={noteTypeIcon[card.note.type]} /> {card.note.type}
                             </div>
                             <div className="text-sm tracking-wide text-foreground font-sans px-4 py-2">
-                                {convertToNode(card.note.text)}
+                                <RichText html={card.note.text} />
                             </div>
                         </>
                     ) : (

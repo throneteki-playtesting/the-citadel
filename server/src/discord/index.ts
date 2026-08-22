@@ -23,16 +23,34 @@ import { discordCommandMiddleware, internalContextMiddleware } from "@/middlewar
 import cron from "node-cron";
 import { isEnvironment } from "@/env";
 
+/** Emoji are stored per guild, as the same name carries a different id in each */
+function emojiKey(guildId: string) {
+    return `discord:emojis:${guildId}`;
+}
+
+// Redis is the record; this only saves re-reading it for every line of a message being built
+const EMOJI_CACHE_MS = 60_000;
+
 class DiscordService {
     private client: Client;
     private guildId: string;
+    private emojiCache = new Map<string, { emojis: Record<string, string>; at: number }>();
     constructor() {
         this.guildId = process.env.DISCORD_GUILD_ID;
         const token = process.env.DISCORD_TOKEN;
         const clientId = process.env.DISCORD_CLIENT_ID;
 
         this.client = new Client({
-            intents: ["Guilds", "GuildMessages", "DirectMessages", "GuildPresences", "GuildMembers"],
+            // GuildExpressions is what keeps the emoji cache live; without it emojis are only ever
+            // as current as the last full sync
+            intents: [
+                "Guilds",
+                "GuildMessages",
+                "DirectMessages",
+                "GuildPresences",
+                "GuildMembers",
+                "GuildExpressions"
+            ],
             partials: [Partials.Message, Partials.Channel],
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
@@ -66,7 +84,9 @@ class DiscordService {
             });
         });
 
-        registerEvents(this.client, this.guildId, DiscordService.syncUser, DiscordService.syncRole);
+        registerEvents(this.client, this.guildId, DiscordService.syncUser, DiscordService.syncRole, (guild) =>
+            this.syncEmojis(guild)
+        );
 
         // Routes slash commands and autocomplete interactions to the appropriate command handler.
         this.client.on(Events.InteractionCreate, async (interaction) => {
@@ -95,6 +115,43 @@ class DiscordService {
 
     public async getGuild() {
         return await this.client.guilds.fetch(this.guildId);
+    }
+
+    // Records every custom emoji the guild owns, so no id is hardcoded. Stored per guild, as the same
+    // emoji in two guilds carries two ids and a flat map would serve one guild the other's
+    public async syncEmojis(guild: Guild) {
+        const emojis = await guild.emojis.fetch();
+        const stored: Record<string, string> = {};
+        for (const emoji of emojis.values()) {
+            if (emoji.name) {
+                stored[emoji.name.toLowerCase()] = emoji.toString();
+            }
+        }
+
+        await dataService.redis.set(emojiKey(guild.id), JSON.stringify(stored));
+        this.emojiCache.delete(guild.id);
+        logger.info(`[Discord] Loaded ${Object.keys(stored).length} emojis from ${guild.name} (${guild.id})`);
+        return stored;
+    }
+
+    // The guild's emoji by name - an icon and its emoji match by name alone, so a mismatch is fixed by
+    // renaming in Discord. An unsynced guild returns nothing, which every caller falls back from
+    public async getEmojiMap(guildId: string = this.guildId): Promise<Record<string, string>> {
+        const cached = this.emojiCache.get(guildId);
+        if (cached && Date.now() - cached.at < EMOJI_CACHE_MS) {
+            return cached.emojis;
+        }
+
+        let emojis: Record<string, string> = {};
+        try {
+            const raw = await dataService.redis.get(emojiKey(guildId));
+            emojis = raw ? JSON.parse(String(raw)) : {};
+        } catch (err) {
+            logger.warn(new Error(`[Discord] Failed to read emojis for guild ${guildId}`, { cause: err }));
+        }
+
+        this.emojiCache.set(guildId, { emojis, at: Date.now() });
+        return emojis;
     }
 
     private isGuild(guild: Guild) {
@@ -354,6 +411,7 @@ class DiscordService {
                 const [members, roles] = await Promise.all([guild.members.fetch(), guild.roles.fetch()]);
                 await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
                 await Promise.all(members.map((m) => DiscordService.syncUser(m)));
+                await this.syncEmojis(guild);
             });
 
             logger.info("[Discord] Daily sync complete");

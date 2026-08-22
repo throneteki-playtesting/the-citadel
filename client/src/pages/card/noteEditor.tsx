@@ -1,5 +1,6 @@
 import { NoteDetails, NoteType, noteTypes } from "common/models/cards";
-import { Select, SelectItem, Textarea } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
+import RichTextArea from "../../components/richTextArea";
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { DeepPartial } from "common/types";
@@ -113,16 +114,16 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                     )}
                 </Select>
             </div>
-            <Textarea
+            <RichTextArea
                 name="note.text"
                 className="flex-grow"
-                classNames={{ inputWrapper: "flex-grow" }}
                 label="Details"
                 onValueChange={(value) => {
                     setText(value);
                     onChange({ type, text: value });
                 }}
                 value={text}
+                minRows={5}
                 placeholder="Include what has changed, and the reasoning behind those changes..."
             />
         </div>

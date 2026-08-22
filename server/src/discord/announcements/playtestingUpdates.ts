@@ -16,7 +16,10 @@ import { IPlaytestingUpdate, IProject, PlaytestingUpdateState } from "common/mod
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { PLAYTESTING_TEAM_ROLE_NAME } from "common/models/auth";
 import { isAnnouncementStale, PLAYTESTING_TIT_URL, summarisePlaytestingUpdate } from "common/utils";
-import { emojis, plural } from "../utils";
+import { labelEmojis, plural, EMBED_DESCRIPTION_MAX } from "../utils";
+import { iconNames } from "common/richText/format";
+import { toDiscord } from "common/richText/toDiscord";
+import { truncateHtml } from "common/richText/truncate";
 import { announceToOperations } from "./operations";
 import { dataService, discordService, logger } from "@/services";
 import { createSyncEmitter } from "@/services/sseService";
@@ -120,7 +123,8 @@ async function findStale(forced?: boolean, only?: { project: number; version: nu
 async function postOrEdit(project: IProject, playtestingUpdate: IPlaytestingUpdate, context: AnnouncementContext) {
     const cards = await dataService.cards.forUpdate(playtestingUpdate);
     const existing = playtestingUpdate._metadata?.discord?.messageUrl;
-    const announcement = messages.announcement(project, playtestingUpdate, cards, context.taggedRole);
+    const emojis = await discordService.getEmojiMap();
+    const announcement = messages.announcement(project, playtestingUpdate, cards, context.taggedRole, emojis);
 
     if (existing) {
         const message = await fetchMessage(context, existing);
@@ -180,13 +184,14 @@ const NOTE_ORDER: NoteType[] = ["updated", "reworked", "replaced", "refinement"]
 
 function changeSummary(notes: Partial<Record<NoteType, number>>) {
     return NOTE_ORDER.filter((type) => notes[type] > 0)
-        .map((type) => `${emojis[type]} **${notes[type]}** ${type}`)
+        .map((type) => `${labelEmojis[type]} **${notes[type]}** ${type}`)
         .join("  ");
 }
 
-function factionSummary(factions: Partial<Record<string, number>>) {
+// A faction's emoji belongs to the guild, so an unsynced guild reads the faction's name instead
+function factionSummary(factions: Partial<Record<string, number>>, emojis: Record<string, string>) {
     return Object.entries(factions)
-        .map(([faction, count]) => `${emojis[faction]} **${count}**`)
+        .map(([faction, count]) => `${emojis[faction] ?? iconNames[faction] ?? faction} **${count}**`)
         .join("  ");
 }
 
@@ -212,8 +217,17 @@ function stateSummary(state: PlaytestingUpdateState, implemented: number, total:
 }
 
 const messages = {
-    announcement(project: IProject, playtestingUpdate: IPlaytestingUpdate, cards: IPlaytestCard[], taggedRole: Role) {
+    announcement(
+        project: IProject,
+        playtestingUpdate: IPlaytestingUpdate,
+        cards: IPlaytestCard[],
+        taggedRole: Role,
+        emojis: Record<string, string>
+    ) {
         const { factions, notes, implemented, total, state } = summarisePlaytestingUpdate(cards);
+        const description = playtestingUpdate.description
+            ? toDiscord(truncateHtml(playtestingUpdate.description, EMBED_DESCRIPTION_MAX), { emojis })
+            : "";
 
         const container = new ContainerBuilder().addTextDisplayComponents(
             // Components V2 forbids message content, so the role mention lives in the body itself
@@ -221,12 +235,12 @@ const messages = {
                 `## :${project.emoji}: ${project.name} - Playtesting Update #${playtestingUpdate.version}` +
                     `\n<@&${taggedRole.id}> **${total}** ${plural(total, "card change")} ${total === 1 ? "has" : "have"}` +
                     " been confirmed and are ready for playtesting." +
-                    (playtestingUpdate.description ? `\n\n${playtestingUpdate.description}` : "")
+                    (description ? `\n\n${description}` : "")
             )
         );
 
         // Discord rejects empty text components, so a summary with nothing to say is left out entirely
-        for (const summary of [changeSummary(notes), factionSummary(factions)].filter(Boolean)) {
+        for (const summary of [changeSummary(notes), factionSummary(factions, emojis)].filter(Boolean)) {
             container
                 .addSeparatorComponents(new SeparatorBuilder())
                 .addTextDisplayComponents(new TextDisplayBuilder().setContent(summary));

@@ -38,7 +38,8 @@ import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
+import { noteTypeIcon, parseParamSemanticVersion } from "../../utils";
+import RichText from "../../components/richText";
 import { changeTypeClasses } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
 import { ActionItem } from "../../components/actions/types";
@@ -467,7 +468,9 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
                         <FontAwesomeIcon icon={noteTypeIcon[note.type]} /> {note.type}
                     </div>
                     <div className="px-4 py-3 space-y-2">
-                        <div className="text-xs font-sans normal-case leading-snug">{convertToNode(note.text)}</div>
+                        <div className="text-xs font-sans normal-case leading-snug">
+                            <RichText html={note.text} />
+                        </div>
                         {update && (
                             <div className="text-[.65rem] font-sans normal-case text-foreground/60 leading-snug">
                                 Click the badge to view the Playtesting Update this was part of.
