@@ -8,5 +8,5 @@ export const emojis = {
     replaced: ":twisted_rightwards_arrows:",
     reworked: ":arrows_clockwise:",
     updated: ":arrow_double_up:",
-    refinement: ":pencil2:"
+    refinement: ":gem:"
 };

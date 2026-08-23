@@ -18,7 +18,7 @@ export const labelEmojis = {
     replaced: ":twisted_rightwards_arrows:",
     reworked: ":arrows_clockwise:",
     updated: ":arrow_double_up:",
-    refinement: ":pencil2:",
+    refinement: ":gem:",
     bugfixed: ":wrench:",
     other: ":eight_spoked_asterisk:",
     "strongly agree": ":thumbsup::thumbsup:",
