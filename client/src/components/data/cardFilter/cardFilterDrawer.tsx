@@ -25,7 +25,7 @@ type InternalState = {
     flavor: string;
     designer: string;
     traits: string[];
-    releaseCodes: string[];
+    releases: string[];
 };
 
 function decodeText(value: unknown): string {
@@ -61,7 +61,7 @@ function decode(value: CardFilterValue): InternalState {
         flavor: decodeText(value.flavor),
         designer: decodeText(value.designer),
         traits: value.traits ?? [],
-        releaseCodes: value.releaseCodes ?? []
+        releases: value.releases ?? []
     };
 }
 
@@ -102,7 +102,7 @@ function compose(state: InternalState): CardFilterValue {
         flavor: textFilter(state.flavor),
         designer: textFilter(state.designer),
         traits: state.traits.length > 0 ? state.traits : undefined,
-        releaseCodes: state.releaseCodes.length > 0 ? state.releaseCodes : undefined
+        releases: state.releases.length > 0 ? state.releases : undefined
     };
 }
 
@@ -163,6 +163,7 @@ function MultiSelectField({ label, placeholder, options, value, onChange }: Mult
                 </div>
             )}
             <SearchableMultiSelect
+                size="sm"
                 placeholder={placeholder}
                 items={items}
                 getKey={(item) => item.key}
@@ -301,8 +302,8 @@ const CardFilterDrawer = ({ value, onChange, traits, releases, onClose }: CardFi
                     <MultiSelectField
                         placeholder="Search release codes..."
                         options={releaseCodes}
-                        value={internal.releaseCodes}
-                        onChange={(releaseCodes) => update({ releaseCodes })}
+                        value={internal.releases}
+                        onChange={(releases) => update({ releases })}
                     />
                 )}
             </DrawerBody>

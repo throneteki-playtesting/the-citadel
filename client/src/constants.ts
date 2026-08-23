@@ -194,17 +194,13 @@ export const releaseStatusColors: Record<ReleaseStatus, "default" | "warning" | 
     planning: "default",
     confirming: "warning",
     approved: "secondary",
-    assembling: "primary",
-    proofing: "primary",
     released: "success"
 };
 
 export const releaseStatusDescriptions: Record<ReleaseStatus, string> = {
     planning: "Cards are still being chosen for this release",
     confirming: "Cards are unlikely to change, and their final details are being polished",
-    approved: "Contents & final card details are locked in; the print sheet has not yet been assembled",
-    assembling: "The final print sheet is being produced from the release's completed cards",
-    proofing: "The print sheet is being reviewed by the team for mistakes before release",
+    approved: "Contents & final card details are locked in; the print sheet is being assembled and proofed by the design team",
     released: "Officially released to the public for physical & digital play"
 };
 
@@ -385,7 +381,7 @@ export const changeTypeClasses: Record<ChangeType, string> = {
     updated: "border-secondary-300 bg-secondary-100 text-secondary-700",
     reworked: "border-warning-300 bg-warning-100 text-warning-700",
     replaced: "border-danger-300 bg-danger-100 text-danger-700",
-    wording: "border-primary-300 bg-primary-100 text-primary-700"
+    refinement: "border-primary-300 bg-primary-100 text-primary-700"
 };
 
 export const dismoji: { [emoji: string]: string } = {};
@@ -408,7 +404,7 @@ export const emojis = {
     replaced: "twisted_rightwards_arrows",
     reworked: "arrows_clockwise",
     updated: "arrow_double_up",
-    wording: "pencil2",
+    refinement: "pencil2",
     bugfixed: "wrench",
     other: "eight_spoked_asterisk"
 } as { [emoji: string]: string };

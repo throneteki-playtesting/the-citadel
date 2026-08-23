@@ -2,13 +2,15 @@ import { IPlaytestCard } from "common/models/cards";
 import { ISlotArtwork } from "common/models/slots";
 import {
     artworkRequirements,
+    commissionPaymentLabel,
+    creditedArtistId,
     finalArtworkUrl,
     hasArtistPermission,
     IArtist,
     IArtworkPrep,
     IArtworkRequirement,
+    isFreeCommission,
     remainingTasks,
-    selectedOption,
     visiblePrep
 } from "common/models/artwork";
 import { artworkStagePct } from "common/progress/calc";
@@ -60,11 +62,13 @@ function artworkDetails(slot: ISlotArtwork, artist: IArtist | undefined, artists
             if (due && !isNaN(due.getTime())) {
                 details.push(`Due ${due.toLocaleDateString(undefined, { day: "numeric", month: "short" })}`);
             }
-            if (commissioned?.cost) {
+            // A free commission's cost, if any, is $0 and not worth showing alongside the label
+            if (commissioned?.cost && !isFreeCommission(commissioned)) {
                 details.push(formatCurrency(commissioned.cost.amount, commissioned.cost.currency));
             }
-            if (commissioned?.paidBy?.trim()) {
-                details.push(`Paid by ${commissioned.paidBy.trim()}`);
+            const paymentLabel = commissionPaymentLabel(commissioned);
+            if (paymentLabel) {
+                details.push(paymentLabel);
             }
             return details;
         }
@@ -78,12 +82,8 @@ function artworkDetails(slot: ISlotArtwork, artist: IArtist | undefined, artists
 }
 
 /** The artist credited for the artwork, whichever way it is being obtained */
-function creditedArtist(slot: ISlotArtwork, artists: IArtist[]): IArtist | undefined {
-    const { artwork } = slot;
-    const id =
-        artwork.type === "commissioned"
-            ? artwork.commissioned?.artist
-            : (selectedOption(artwork.sourced)?.artist ?? artwork.sourced?.options[0]?.artist);
+export function creditedArtist(slot: ISlotArtwork, artists: IArtist[]): IArtist | undefined {
+    const id = creditedArtistId(slot.artwork);
     return artists.find((artist) => artist.id === id);
 }
 

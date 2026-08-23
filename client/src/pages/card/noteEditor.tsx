@@ -1,13 +1,16 @@
 import { NoteDetails, NoteType, noteTypes } from "common/models/cards";
-import { Select, SelectItem, Textarea } from "@heroui/react";
+import { Select, SelectItem } from "@heroui/react";
+import RichTextArea from "../../components/richTextArea";
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { DeepPartial } from "common/types";
 import { noteTypeIcon } from "../../utils";
 
-const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
+const NoteEditor = ({ note: initial, isReleaseBound, onChange }: NoteEditorProps) => {
     const [type, setType] = useState<NoteType>();
     const [text, setText] = useState<string>();
+
+    const availableTypes = isReleaseBound ? noteTypes : noteTypes.filter((type) => type !== "refinement");
 
     useEffect(() => {
         setType(initial?.type);
@@ -63,7 +66,7 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                         </span>
                     </div>
                 );
-            case "wording":
+            case "refinement":
                 return (
                     <div className="flex flex-col gap-1 p-1">
                         <span className="text-sm">
@@ -86,7 +89,7 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                     name="note.type"
                     label="Type"
                     isMultiline
-                    items={noteTypes.map((type) => ({ type })) ?? []}
+                    items={availableTypes.map((type) => ({ type }))}
                     onSelectionChange={(keys) => {
                         const newType = keys.currentKey as NoteType;
                         setType(newType);
@@ -113,22 +116,26 @@ const NoteEditor = ({ note: initial, onChange }: NoteEditorProps) => {
                     )}
                 </Select>
             </div>
-            <Textarea
+            <RichTextArea
                 name="note.text"
                 className="flex-grow"
-                classNames={{ inputWrapper: "flex-grow" }}
                 label="Details"
                 onValueChange={(value) => {
                     setText(value);
                     onChange({ type, text: value });
                 }}
                 value={text}
+                minRows={5}
                 placeholder="Include what has changed, and the reasoning behind those changes..."
             />
         </div>
     );
 };
 
-type NoteEditorProps = { note?: DeepPartial<NoteDetails>; onChange: (data: DeepPartial<NoteDetails>) => void };
+type NoteEditorProps = {
+    note?: DeepPartial<NoteDetails>;
+    isReleaseBound?: boolean;
+    onChange: (data: DeepPartial<NoteDetails>) => void;
+};
 
 export default NoteEditor;

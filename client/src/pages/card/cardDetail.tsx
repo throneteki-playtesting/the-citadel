@@ -31,13 +31,15 @@ import LoadingCard from "../../components/loadingCard";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
+import { useIsReleaseBound } from "../../hooks/useIsReleaseBound";
 import { Link, useSearchParams } from "react-router-dom";
 import ImageStatus from "../../components/status/imageStatus";
 import GithubCardStatus from "../../components/status/githubCardStatus";
 import DiscordCardStatus from "../../components/status/discordCardStatus";
 import CardStack from "../../components/cardStack";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { convertToNode, noteTypeIcon, parseParamSemanticVersion } from "../../utils";
+import { noteTypeIcon, parseParamSemanticVersion } from "../../utils";
+import RichText from "../../components/richText";
 import { changeTypeClasses } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
 import { ActionItem } from "../../components/actions/types";
@@ -66,7 +68,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const { data: card, isLoading: isLoadingCard } = useGetCardQuery({
         project: projectNumber,
         number,
-        version: "latest"
+        version: "visible"
     });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     // Consumed once here for the whole page - two callers would each strip their own keys and race
@@ -149,13 +151,70 @@ function DevelopmentSection({ project, number }: { project: number; number: numb
 
 type CardDetailProps = Omit<BaseElementProps, "children"> & { project: number; number: number };
 
-function CardVersions({ className, style, project, number }: CardVersionsProps) {
+function versionLabel(card: IPlaytestCard, topIsReleaseBound: boolean): string {
+    if (card.latest && card.released) {
+        return "Release";
+    }
+    if ((card.latest || card.draft) && topIsReleaseBound) {
+        return "Release";
+    }
+    if (card.latest) {
+        return "Latest";
+    }
+    if (card.draft) {
+        return "Draft";
+    }
+    return card.version;
+}
+
+// The full version stack needs READ_CARDS (it reads every historical version); a READ_LATEST_CARDS-only
+// viewer instead gets just the one card they're entitled to see, with no stack/tabs to navigate between.
+function CardVersions(props: CardVersionsProps) {
+    const canReadCards = usePermission(Permission.READ_CARDS);
+    return canReadCards ? <FullCardVersions {...props} /> : <LimitedCardVersion {...props} />;
+}
+
+function LimitedCardVersion({ className, style, project, number }: CardVersionsProps) {
+    const { data: card, isLoading } = useGetCardQuery({ project, number, version: "visible" });
+    const isPlot = card?.type === "plot";
+    const topIsReleaseBound = useIsReleaseBound(project, number);
+
+    if (isLoading) {
+        return (
+            <div className={classNames("flex flex-col", isPlot ? "md:w-98" : "md:w-72", className)} style={style}>
+                <Skeleton className="h-8 rounded-lg" />
+                <LoadingCard className="m-2" />
+            </div>
+        );
+    }
+    if (!card) {
+        return null;
+    }
+
+    return (
+        <div
+            className={classNames("flex flex-col min-w-0", isPlot ? "md:w-98" : "md:w-72", className)}
+            style={style}
+        >
+            <div className="text-center text-base font-sans px-4">{versionLabel(card, topIsReleaseBound)}</div>
+            <div className="flex justify-center py-4">
+                <div className={classNames("max-w-full", isPlot ? "w-98" : "w-64")}>
+                    <StackedVersion card={card} isSelected />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function FullCardVersions({ className, style, project, number }: CardVersionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
     const [selectedIndex, setSelectedIndex] = useState<number | undefined>();
     const [searchParams] = useSearchParams();
     // Allows auto-selecting of specific version (eg. ?version=1.0.0)
     const version = searchParams.get("version") ?? undefined;
     const preselectedVersion = parseParamSemanticVersion(version);
+
+    const topIsReleaseBound = useIsReleaseBound(project, number);
 
     const sortedCards = useMemo(() => {
         if (!cardsData) {
@@ -208,19 +267,14 @@ function CardVersions({ className, style, project, number }: CardVersionsProps) 
     const tabs = useMemo(
         () =>
             sortedCards
-                .map((card, index) => {
-                    let label: string = card.version;
-                    if (card.latest && card.released) {
-                        label = "Release";
-                    } else if (card.latest) {
-                        label = "Latest";
-                    } else if (card.draft) {
-                        label = "Draft";
-                    }
-                    return <Tab key={index} title={<span className="text-base font-sans">{label}</span>} />;
-                })
+                .map((card, index) => (
+                    <Tab
+                        key={index}
+                        title={<span className="text-base font-sans">{versionLabel(card, topIsReleaseBound)}</span>}
+                    />
+                ))
                 .reverse(),
-        [sortedCards]
+        [sortedCards, topIsReleaseBound]
     );
 
     // Tabs render right-to-left over a reversed list, so stepping left moves up the list. The arrows
@@ -414,7 +468,9 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
                         <FontAwesomeIcon icon={noteTypeIcon[note.type]} /> {note.type}
                     </div>
                     <div className="px-4 py-3 space-y-2">
-                        <div className="text-xs font-sans normal-case leading-snug">{convertToNode(note.text)}</div>
+                        <div className="text-xs font-sans normal-case leading-snug">
+                            <RichText html={note.text} />
+                        </div>
                         {update && (
                             <div className="text-[.65rem] font-sans normal-case text-foreground/60 leading-snug">
                                 Click the badge to view the Playtesting Update this was part of.
@@ -531,8 +587,15 @@ type ButtonSectionProps = Omit<BaseElementProps, "children"> & {
     entryReleaseCheck?: string;
 };
 
-// New/Edit/Delete Draft, sat to the left of the version tabs behind their own divider
-function DraftActions({ className, style, project: projectNumber, number }: DraftActionsProps) {
+// New/Edit/Delete Draft. Self-contained (own query, permissions and modals), so any page can drop
+// it in against just a project/number - sat to the left of the version tabs behind their own divider here.
+export function DraftActions({
+    className,
+    style,
+    project: projectNumber,
+    number,
+    showDivider = true
+}: DraftActionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const [editing, setEditing] = useState<IPlaytestCard>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
@@ -611,7 +674,7 @@ function DraftActions({ className, style, project: projectNumber, number }: Draf
                     </Button>
                 </TouchTooltip>
             ))}
-            <Divider orientation="vertical" className="h-5 mx-1" />
+            {showDivider && <Divider orientation="vertical" className="h-5 mx-1" />}
             <EditCardModal
                 isOpen={!!editing}
                 card={editing}
@@ -642,4 +705,5 @@ function DraftActions({ className, style, project: projectNumber, number }: Draf
 type DraftActionsProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
+    showDivider?: boolean;
 };

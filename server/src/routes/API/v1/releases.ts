@@ -14,6 +14,7 @@ import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, clearRelease } from "@/utils";
 import { ISlot } from "common/models/slots";
+import { creditedArtistId } from "common/models/artwork";
 import { getContext } from "@/middleware/context";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
@@ -370,13 +371,25 @@ router.post(
             const updatedSlots = slots.map((slot) => ({ ...slot, release: { ...slot.release!, released: true } }));
             await dataService.slots.update(updatedSlots);
 
-            const cards = await dataService.cards.read(
-                slots.map((slot) => ({ project: project.number, number: slot.number, latest: true }))
-            );
-            const updatedCards = cards.map((card) => ({
-                ...card,
-                released: { code, number: offset + slots.find((s) => s.number === card.number)!.release!.position }
-            }));
+            const [cards, artists] = await Promise.all([
+                dataService.cards.read(
+                    slots.map((slot) => ({ project: project.number, number: slot.number, latest: true }))
+                ),
+                dataService.artists.read()
+            ]);
+            const slotsByNumber = new Map(slots.map((slot) => [slot.number, slot]));
+            const updatedCards = cards.map((card) => {
+                const slot = slotsByNumber.get(card.number)!;
+                // A published card's illustrator is fixed on record now, in case the artwork lane's own
+                // credit changes later - only backfilled when the card doesn't already carry one
+                const creditedName = artists.find((artist) => artist.id === creditedArtistId(slot.statuses.artwork))
+                    ?.name;
+                return {
+                    ...card,
+                    illustrator: card.illustrator || creditedName || "",
+                    released: { code, number: offset + slot.release!.position }
+                };
+            });
             if (updatedCards.length > 0) {
                 await dataService.cards.update(updatedCards);
             }

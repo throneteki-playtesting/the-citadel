@@ -1,10 +1,16 @@
-import { ICard, DefaultDeckLimit } from "common/models/cards";
-import { useCallback, useEffect, useState } from "react";
+import { DefaultDeckLimit, ICard } from "common/models/cards";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import {
     ChallengeIconButtons,
     CostInput,
+    DeckLimitStepper,
+    DesignerInput,
     FactionSelect,
+    FlavorInput,
     LoyalButton,
+    NameInput,
     PlotStatInputs,
     StrengthInput,
     TraitsInput,
@@ -12,11 +18,13 @@ import {
     UniqueButton
 } from "./components/editorComponents";
 import AbilityTextEditor from "./components/abilityEditor";
-import { Accordion, AccordionItem, Input, NumberInput, Textarea } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { DeepPartial } from "common/types";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
-import { FieldPrefixContext, useFieldName } from "./fieldPrefixContext";
+import { FieldPrefixContext } from "./fieldPrefixContext";
+
+type OptionalField = "flavor" | "designer";
 
 const defaultVisibility: VisibilityOptions = { type: true, faction: true };
 
@@ -37,13 +45,24 @@ const CardEditor = ({
         [inputOptions, visibility]
     );
 
-    const nameFieldName = useFieldName("name");
-    const flavorFieldName = useFieldName("flavor");
-    const designerFieldName = useFieldName("designer");
-    const deckLimitFieldName = useFieldName("deckLimit");
+    // Which optional fields are showing their input rather than an "Add" button - kept apart from the
+    // card's own values, since an added-but-not-yet-typed field is still empty but must stay visible
+    const [addedFields, setAddedFields] = useState<Set<OptionalField>>(new Set());
+
+    // What we last handed to onUpdate - callers echo this same reference back as `card` next render.
+    // Without this guard that reads as "a different card loaded", closing a field the instant it empties
+    const lastEmitted = useRef<DeepPartial<ICard> | undefined>(undefined);
 
     useEffect(() => {
+        if (initial === lastEmitted.current) {
+            return;
+        }
+        lastEmitted.current = initial;
         setCard(initial ?? {});
+        const data = initial ?? {};
+        setAddedFields(
+            new Set((["flavor", "designer"] as OptionalField[]).filter((field) => data[field] !== undefined))
+        );
     }, [initial]);
 
     const applyDefaults = (card: DeepPartial<ICard>) => {
@@ -71,6 +90,24 @@ const CardEditor = ({
             delete card.loyal;
         }
 
+        // An added-but-emptied field saves as absent, not as "" - the Add/Remove toggle is a display
+        // concern only, tracked separately in addedFields
+        if (!card.flavor?.trim()) {
+            delete card.flavor;
+        }
+        if (!card.designer?.trim()) {
+            delete card.designer;
+        }
+
+        // Always present once a type is chosen - clamped rather than reset, so a still-valid custom
+        // value survives a type change and only an out-of-range one gets pulled back down
+        if (card.type) {
+            const maxLimit = DefaultDeckLimit[card.type];
+            defaults.deckLimit = Math.min(card.deckLimit ?? maxLimit, maxLimit);
+        } else {
+            delete card.deckLimit;
+        }
+
         return { ...card, ...defaults };
     };
 
@@ -78,9 +115,26 @@ const CardEditor = ({
         (field: keyof ICard, value: unknown) => {
             const updated = applyDefaults({ ...card, [field]: value });
             setCard(updated);
+            lastEmitted.current = updated;
             onUpdate(updated);
         },
         [card, onUpdate]
+    );
+
+    const addField = useCallback((field: OptionalField) => {
+        setAddedFields((prev) => new Set(prev).add(field));
+    }, []);
+
+    const removeField = useCallback(
+        (field: OptionalField) => {
+            setAddedFields((prev) => {
+                const next = new Set(prev);
+                next.delete(field);
+                return next;
+            });
+            handleChange(field, undefined);
+        },
+        [handleChange]
     );
 
     // Update visibility
@@ -162,18 +216,13 @@ const CardEditor = ({
                             />
                         )}
                         {isVisible("name") && (
-                            <Input
-                                name={nameFieldName}
+                            <NameInput
                                 className="grow"
-                                classNames={{ inputWrapper: isVisible("unique") ? "rounded-r-xl" : "rounded-xl" }}
-                                radius="none"
-                                label="Name"
-                                value={card.name ?? ""}
-                                onValueChange={(value) => handleChange("name", value)}
+                                value={card.name}
+                                setValue={(value) => handleChange("name", value)}
                                 isDisabled={isDisabled("name")}
-                            >
-                                {card.name}
-                            </Input>
+                                hasUniqueButton={isVisible("unique")}
+                            />
                         )}
                     </div>
                 </div>
@@ -221,45 +270,56 @@ const CardEditor = ({
                     </div>
                 )}
                 {isVisible("flavor", "designer", "deckLimit") && (
-                    <Accordion isCompact={true}>
-                        <AccordionItem key="additional" title="Additional Options">
-                            <div className="space-y-2">
-                                {isVisible("flavor") && (
-                                    <Textarea
-                                        name={flavorFieldName}
-                                        label="Flavor Text"
-                                        value={card.flavor ?? ""}
-                                        onValueChange={(value) => handleChange("flavor", value)}
-                                        isDisabled={isDisabled("flavor")}
-                                    >
-                                        {card.flavor}
-                                    </Textarea>
-                                )}
-                                {isVisible("designer") && (
-                                    <Textarea
-                                        name={designerFieldName}
-                                        label="Designer"
-                                        value={card.designer ?? ""}
-                                        onValueChange={(value) => handleChange("designer", value)}
-                                        isDisabled={isDisabled("designer")}
-                                    >
-                                        {card.designer}
-                                    </Textarea>
-                                )}
-                                {isVisible("deckLimit") && (
-                                    <NumberInput
-                                        name={deckLimitFieldName}
-                                        label="Deck Limit"
-                                        value={card.deckLimit ?? DefaultDeckLimit[card.type!]}
-                                        onValueChange={(value) => handleChange("deckLimit", value)}
-                                        minValue={1}
-                                        maxValue={DefaultDeckLimit[card.type!]}
-                                        isDisabled={isDisabled("deckLimit")}
-                                    />
-                                )}
-                            </div>
-                        </AccordionItem>
-                    </Accordion>
+                    <div className="flex flex-col gap-2">
+                        {isVisible("flavor") && addedFields.has("flavor") && (
+                            <FlavorInput
+                                value={card.flavor}
+                                setValue={(value) => handleChange("flavor", value)}
+                                cardType={card.type}
+                                isUnique={card.unique}
+                                isDisabled={isDisabled("flavor")}
+                                onRemove={() => removeField("flavor")}
+                            />
+                        )}
+                        {isVisible("designer") && addedFields.has("designer") && (
+                            <DesignerInput
+                                value={card.designer}
+                                setValue={(value) => handleChange("designer", value)}
+                                isDisabled={isDisabled("designer")}
+                                onRemove={() => removeField("designer")}
+                            />
+                        )}
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {isVisible("deckLimit") && !isDisabled("deckLimit") && (
+                                <DeckLimitStepper
+                                    value={card.deckLimit}
+                                    setValue={(value) => handleChange("deckLimit", value)}
+                                    cardType={card.type}
+                                    isDisabled={isDisabled("deckLimit")}
+                                />
+                            )}
+                            {isVisible("flavor") && !addedFields.has("flavor") && !isDisabled("flavor") && (
+                                <Button
+                                    variant="flat"
+                                    size="sm"
+                                    startContent={<FontAwesomeIcon icon={faPlus} />}
+                                    onPress={() => addField("flavor")}
+                                >
+                                    Add Flavor Text
+                                </Button>
+                            )}
+                            {isVisible("designer") && !addedFields.has("designer") && !isDisabled("designer") && (
+                                <Button
+                                    variant="flat"
+                                    size="sm"
+                                    startContent={<FontAwesomeIcon icon={faPlus} />}
+                                    onPress={() => addField("designer")}
+                                >
+                                    Add Designer
+                                </Button>
+                            )}
+                        </div>
+                    </div>
                 )}
             </div>
         </FieldPrefixContext.Provider>

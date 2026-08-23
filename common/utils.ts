@@ -7,7 +7,9 @@ import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
+import { isReleaseBound } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
+import { toThronetekiText } from "./richText/toThroneteki";
 
 export type SemanticVersion = `${number}.${number}.${number}`;
 
@@ -466,6 +468,36 @@ export function getFinalCardNumber(
     return getReleaseOffset(project, slot.release.code) + slot.release.position;
 }
 
+/** Tab-separated `devCode\treleaseCode` lines, one per card, for pasting into a spreadsheet */
+export function getReleaseCodeMappings(
+    project: Pick<IProject, "releases">,
+    release: { code: string },
+    assignedCards: { position: number; card: Pick<Cards.IPlaytestCard, "project" | "number"> }[]
+): string {
+    const offset = getReleaseOffset(project, release.code);
+    return assignedCards
+        .map(({ position, card }) => {
+            const devCode = parseCardCode(false, card.project, card.number);
+            const releaseCode = parseCardCode(true, card.project, offset + position);
+            return `${devCode}\t${releaseCode}`;
+        })
+        .join("\n");
+}
+
+/** Every slot's isReleaseBound, keyed by card number - the one join every caller needing it in bulk shares */
+export function releaseBoundByNumber(
+    slots: Pick<ISlot, "number" | "release" | "statuses">[],
+    project: Pick<IProject, "releases">
+): Map<number, boolean> {
+    const releasesByCode = new Map(project.releases.map((release) => [release.code, release]));
+    return new Map(
+        slots.map((slot) => {
+            const release = slot.release ? releasesByCode.get(slot.release.code) : undefined;
+            return [slot.number, isReleaseBound(slot.statuses.design.status, release?.status)];
+        })
+    );
+}
+
 /** A slot is only truly released once its pack has been published */
 export function isReleased(slot: Pick<ISlot, "release">): boolean {
     return !!slot.release?.released;
@@ -490,7 +522,8 @@ export function toJSONExportCard(card: Cards.IPlaytestCard, release?: { short: s
         strength: card.strength,
         plotStats: card.plotStats,
         traits: card.traits,
-        text: card.text,
+        // The pack format spells bold-italic <i>, which is the one place that convention still applies
+        text: toThronetekiText(card.text),
         flavor: card.flavor,
         deckLimit: card.deckLimit,
         illustrator: card.illustrator ?? "?",
@@ -512,6 +545,10 @@ export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>, wa
         "Unknown Code";
     return {
         ...getBaseCardValues(card),
+        // The renderer draws the pack dialect, where bold-italic is a single <i>. Converting here rather
+        // than inside getBaseCardValues, which also supplies the editor its form values - those must stay
+        // in the stored format, or opening a card would rewrite its text on the way in
+        text: card.text ? toThronetekiText(card.text) : card.text,
         key: `${card.code}@${card.version}`,
         watermark: {
             top: watermark?.top ?? codeText,
@@ -526,6 +563,7 @@ export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggesti
 export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggestion>) {
     return {
         ...(suggestion.card ? getBaseCardValues(suggestion.card) : {}),
+        text: suggestion.card?.text ? toThronetekiText(suggestion.card.text) : suggestion.card?.text,
         key: suggestion.id,
         watermark: {
             top: suggestion.user?.displayname,

@@ -1,11 +1,11 @@
 import { challengeIcons, IPlaytestCard } from "common/models/cards";
 import { Explodable } from "common/types";
 
-// traits/releaseCodes extend Explodable<IPlaytestCard> rather than fitting inside it - traits is
-// an array field (needs "contains any of", not per-element filters) and releaseCodes isn't a card field at all.
+// traits/releases extend Explodable<IPlaytestCard> rather than fitting inside it - traits is
+// an array field (needs "contains any of", not per-element filters) and releases isn't a card field at all.
 export type CardFilterValue = Omit<Explodable<IPlaytestCard>, "traits"> & {
     traits?: string[];
-    releaseCodes?: string[];
+    releases?: string[];
 };
 
 export const EMPTY_CARD_FILTER: CardFilterValue = {};
@@ -32,6 +32,6 @@ export function countActiveCardFilters(value: CardFilterValue): number {
     if (value.flavor !== undefined) count++;
     if (value.designer !== undefined) count++;
     if (value.traits && value.traits.length > 0) count++;
-    if (value.releaseCodes && value.releaseCodes.length > 0) count++;
+    if (value.releases && value.releases.length > 0) count++;
     return count;
 }

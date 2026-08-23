@@ -4,7 +4,7 @@ import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
 export const githubStatuses = ["open", "closed"] as const;
-export const releaseStatuses = ["planning", "confirming", "approved", "assembling", "proofing", "released"] as const;
+export const releaseStatuses = ["planning", "confirming", "approved", "released"] as const;
 export const articleStatuses = ["pending", "drafted", "published"] as const;
 export type Type = (typeof types)[number];
 export type Code = `${number}`;

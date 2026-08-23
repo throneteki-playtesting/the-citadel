@@ -39,7 +39,7 @@ const CardFilterSearchBar = ({
             className={classNames(
                 "grid items-stretch justify-end transition-[grid-template-columns] duration-200 ease-in-out flex-1 sm:flex-none sm:w-auto",
                 isFiltering
-                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto]"
+                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto] !min-w-0"
                     : "grid-cols-[1fr_auto] sm:grid-cols-[14rem_auto]",
                 className
             )}
@@ -76,9 +76,13 @@ const CardFilterSearchBar = ({
                     variant="flat"
                     onPress={() => setIsOpen(true)}
                     isDisabled={isDisabled}
-                    className={classNames("shrink-0 gap-1 transition-all duration-200 ease-in-out", {
-                        "rounded-l-none": !isFiltering
-                    })}
+                    className={classNames(
+                        "shrink-0 gap-1 transition-all duration-200 ease-in-out",
+                        !isFiltering && "max-sm:w-8 max-sm:min-w-8 max-sm:!gap-0 max-sm:px-0",
+                        {
+                            "rounded-l-none": !isFiltering
+                        }
+                    )}
                 >
                     <FontAwesomeIcon icon={faFilter} />
                     <span className={isFiltering ? "inline" : "hidden sm:inline"}>Advanced</span>

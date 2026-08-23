@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -40,8 +41,13 @@ import ArtworkTab from "../../card/artwork/artworkTab";
 import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
 import SlidingPages from "../../../components/slidingPages";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
+import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
 
 const UNASSIGNED = "unassigned";
+
+// Freely reuses Development's own url param names - each tab is its own search-param scope, so only
+// the active one's values reach the url even with both registered at once (see ScopedSearchParamsProvider)
+const URL_OWNED_KEYS = ["status", "type", "releases", "attention", "mine", "sort", "q", "editing"];
 
 const ARTWORKS_DESCRIPTION =
     "Every card's artwork at a glance - how it is being obtained, who it is coming from, and what is still holding it up. Open one to record options, permission and preparation.";
@@ -64,29 +70,75 @@ type ListEntry =
     | { kind: "header"; key: string; label: string; count: number }
     | { kind: "row"; key: string; row: IArtworkRow; release?: IProjectRelease };
 
-export default function ProjectArtworks({ project }: ProjectArtworksProps) {
+export default function ProjectArtworks({ project, isActive }: ProjectArtworksProps) {
     const { data: slotsData, isLoading } = useGetSlotArtworksQuery({ project: project.number });
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, latest: true } });
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists });
     const { user } = useAuth();
 
-    const [status, setStatus] = useState<ArtworkStatus | "all">("all");
-    const [type, setType] = useState<ArtworkType | "all">("all");
-    const [releases, setReleases] = useState<string[]>([]);
-    const [attentionOnly, setAttentionOnly] = useState(false);
-    const [assignedToMe, setAssignedToMe] = useState(false);
-    const [sortBy, setSortBy] = useState<SortOption>("number");
-    const [search, setSearch] = useState("");
-    // Which card the editor holds, kept apart from whether the editor is the page on show. Clearing it on
-    // the way back would empty the page mid-slide, so you would watch it vanish rather than leave
-    const [editing, setEditing] = useState<IArtworkRow>();
-    const [isEditing, setIsEditing] = useState(false);
+    // Filters/sort/search are shareable via the url - seeded once on mount, mirroring Development
+    const [searchParams] = useSearchParams();
+
+    const [status, setStatus] = useState<ArtworkStatus | "all">(() => {
+        const raw = searchParams.get("status");
+        return raw && artworkStatuses.includes(raw as ArtworkStatus) ? (raw as ArtworkStatus) : "all";
+    });
+    const [type, setType] = useState<ArtworkType | "all">(() => {
+        const raw = searchParams.get("type");
+        return raw && artworkTypes.includes(raw as ArtworkType) ? (raw as ArtworkType) : "all";
+    });
+    const [releases, setReleases] = useState<string[]>(
+        () => searchParams.get("releases")?.split(",").filter(Boolean) ?? []
+    );
+    const [attentionOnly, setAttentionOnly] = useState(() => searchParams.get("attention") === "true");
+    const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get("mine") === "true");
+    const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
+    const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+    // Kept apart from whether the editor is on show, so leaving doesn't empty the page mid-slide.
+    // Shareable via the url, so a link with ?editing=<number> opens straight to that card.
+    const [editingNumber, setEditingNumber] = useState<number | undefined>(() => {
+        const raw = Number(searchParams.get("editing"));
+        return Number.isInteger(raw) && raw > 0 ? raw : undefined;
+    });
+    const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Declares every key this scope might write, so a cleared filter's key is dropped rather than left behind
+    const scopeParams = useMemo((): ScopeParams => {
+        const params: ScopeParams = Object.fromEntries(URL_OWNED_KEYS.map((key) => [key, undefined]));
+        if (status !== "all") {
+            params.status = status;
+        }
+        if (type !== "all") {
+            params.type = type;
+        }
+        if (releases.length > 0) {
+            params.releases = releases.join(",");
+        }
+        if (attentionOnly) {
+            params.attention = "true";
+        }
+        if (assignedToMe) {
+            params.mine = "true";
+        }
+        if (sortBy !== "number") {
+            params.sort = sortBy;
+        }
+        if (search.trim()) {
+            params.q = search.trim();
+        }
+        // Only while the editor is actually on show, so the list doesn't keep pointing at a stale card
+        if (isEditing && editingNumber !== undefined) {
+            params.editing = String(editingNumber);
+        }
+        return params;
+    }, [status, type, releases, attentionOnly, assignedToMe, sortBy, search, isEditing, editingNumber]);
+    useSearchParamsScope("artworks", isActive, scopeParams);
+
     const onEdit = (row: IArtworkRow) => {
-        setEditing(row);
+        setEditingNumber(row.slot.number);
         setIsEditing(true);
         // Editing something near the foot of a long list would otherwise slide the editor in below the
         // fold, leaving whoever opened it looking at the bottom of a form they have not seen the top of
@@ -243,11 +295,11 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
             <SlidingPages currentPage={isEditing ? 2 : 1}>
                 {renderList()}
                 <div>
-                    {editing && (
+                    {editingNumber !== undefined && (
                         <ArtworkTab
-                            key={editing.slot.number}
+                            key={editingNumber}
                             project={project.number}
-                            number={editing.slot.number}
+                            number={editingNumber}
                             showTrack
                             onBack={() => setIsEditing(false)}
                         />
@@ -386,7 +438,7 @@ export default function ProjectArtworks({ project }: ProjectArtworksProps) {
     }
 }
 
-type ProjectArtworksProps = { project: IProject };
+type ProjectArtworksProps = { project: IProject; isActive: boolean };
 
 // The page's own shape while the slots load, sized from the project's cached slot tally so the list
 // settles into the space it was already holding rather than shoving the page down as it arrives

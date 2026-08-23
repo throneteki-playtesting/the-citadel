@@ -14,7 +14,7 @@ import { highlightTarget, releaseStatusColors } from "../../constants";
 import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 
-export default function ProjectDevelopment({ className, style, project }: ProjectDevelopmentProps) {
+export default function ProjectDevelopment({ className, style, project, isActive }: ProjectDevelopmentProps) {
     useTagManagerOverrides({ autoRefresh: true });
 
     return (
@@ -42,7 +42,7 @@ export default function ProjectDevelopment({ className, style, project }: Projec
                 </PermissionGate>
             </div>
             <div className="mt-2">
-                <ProjectContent project={project} />
+                <ProjectContent project={project} isActive={isActive} />
             </div>
         </div>
     );
@@ -50,6 +50,7 @@ export default function ProjectDevelopment({ className, style, project }: Projec
 
 type ProjectDevelopmentProps = Omit<BaseElementProps, "children"> & {
     project: IProject;
+    isActive: boolean;
 };
 
 function CardChangesStat({ project }: ProjectStatProps) {

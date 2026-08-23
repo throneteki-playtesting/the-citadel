@@ -81,7 +81,7 @@ export interface ICommissionedArtwork {
 }
 
 export interface IAiArtwork {
-    /** Discord id of whoever is generating it */
+    /** Free text, since whoever generated it may not match any Discord account */
     generatedBy?: string;
     /** Whatever they are generating with, eg. Midjourney */
     resource?: string;
@@ -127,6 +127,32 @@ export function withAddedOption(sourced: ISourcedArtwork = { options: [] }): ISo
 /** The chosen option of a sourced artwork, if one has been picked */
 export function selectedOption(sourced?: ISourcedArtwork): ISourcedOption | undefined {
     return sourced?.options.find((option) => option.id === sourced.selectedId);
+}
+
+/** Id of the artist credited for this artwork, if any - one resolution shared by every caller. AI artwork has none */
+export function creditedArtistId(artwork: IArtworkProgress): string | undefined {
+    if (artwork.type === "commissioned") {
+        return artwork.commissioned?.artist;
+    }
+    if (artwork.type === "sourced") {
+        return selectedOption(artwork.sourced)?.artist ?? artwork.sourced?.options[0]?.artist;
+    }
+    return undefined;
+}
+
+// Funded with no specific payer, for no cost, and actually paid - not merely unfilled-in
+export function isFreeCommission(commissioned?: ICommissionedArtwork): boolean {
+    return (
+        !!commissioned?.paid && !commissioned?.paidBy?.trim() && (!commissioned?.cost || commissioned.cost.amount === 0)
+    );
+}
+
+/** How a commission's payment reads as one line - shared so it can't be described differently in two places */
+export function commissionPaymentLabel(commissioned?: ICommissionedArtwork): string | undefined {
+    if (isFreeCommission(commissioned)) {
+        return "Free Commission";
+    }
+    return commissioned?.paidBy?.trim() ? `Paid by ${commissioned.paidBy.trim()}` : undefined;
 }
 
 // Blanket permission and implied both stand in for a granted reply

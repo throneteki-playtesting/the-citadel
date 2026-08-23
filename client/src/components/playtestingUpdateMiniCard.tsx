@@ -1,3 +1,4 @@
+import { toPlain } from "common/richText/toPlain";
 import { useGetPlaytestingUpdateCardsQuery, useGetProjectQuery, useGetReviewsQuery } from "../api";
 import { useMemo } from "react";
 import { Alert, Skeleton } from "@heroui/react";
@@ -90,7 +91,7 @@ export default function PlaytestingUpdateMiniCard({
                             </div>
                             {detailed && playtestingUpdate.description && (
                                 <p className="text-xs italic text-foreground/40 leading-snug truncate">
-                                    {playtestingUpdate.description}
+                                    {toPlain(playtestingUpdate.description)}
                                 </p>
                             )}
                         </div>

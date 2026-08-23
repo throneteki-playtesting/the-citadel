@@ -134,20 +134,24 @@ TipTap rich-text editor for card ability text.
 
 #### Text Format (storage ↔ editor)
 
-| Storage (`card.text`)        | Editor HTML                                     |
-| ---------------------------- | ----------------------------------------------- |
-| `\n`                         | `<br>`                                          |
-| `[military]` (icon)          | `<span data-thrones-icon="military">` atom node |
-| Plain text                   | Plain text                                      |
-| `***trait text***`           | Converts to `<i style="font-weight:700">` mark  |
-| `Action:` / `Reaction:` etc. | Converts to `<b>` mark                          |
+| Storage (`card.text`)   | Editor HTML                                     |
+| ----------------------- | ----------------------------------------------- |
+| `\n`                    | `<br>`                                          |
+| `[military]` (icon)     | `<span data-thrones-icon="military">` atom node |
+| Plain text              | Plain text                                      |
+| `<b><em>trait</em></b>` | `<i>` (the Trait mark)                          |
+| `<b>` (`Action:` etc.)  | `<b>` (the TriggeredAbility mark)               |
 
-- **Incoming** (`convertIncomingText`): replaces `\n` → `<br>`, passes to `setContent`
-- **Outgoing** (`convertOutgoingHtml`): replaces `<br>` → `\n`, then strips icon spans (`<span data-thrones-icon="name">[name]</span>`, attributes and all) → `[name]`
+- **Incoming** (`convertIncomingText`): `<b><em>…</em></b>` → `<i>`, `\n` → `<br>`, tokens → icon spans
+- **Outgoing** (`convertOutgoingHtml`): `<br>` → `\n`, icon spans → `[name]`, `<i>` → `<b><em>…</em></b>`
+
+**This editor holds a second vocabulary, and the translation is what contains it.** Everywhere else `<b>` and `<i>`/`<em>` are styling that combines freely; here they are two mutually exclusive _meanings_ — an ability keyword and a trait — which is why the Trait mark is a single `<i>` inside the document. Storage doesn't get to keep that: bold-italic is `<b><em>` in every field, so the pack export needs exactly one conversion (`toThronetekiText`) rather than one per source. Records written before the format arrived already hold `<i>`, so they read in unchanged.
 
 #### External sync (`useEffect` in `AbilityEditor`)
 
-Syncs external `value` into the editor when NOT focused, comparing `convertOutgoingHtml(editor.getHTML())` against `text` — same `[iconname]` representation on both sides, so a synced value doesn't get reset out from under an untouched editor.
+Syncs external `value` into the editor when NOT focused, comparing `convertOutgoingHtml(editor.getHTML())` against `text` — same representation on both sides, so a synced value doesn't get reset out from under an untouched editor.
+
+**An editor reports a change, never its own contents.** Mounting dispatches transactions of its own — twice over under `StrictMode` — and `onUpdate` fires for them, so an emit which isn't compared against what was last sent upward hands the field an empty document in place of the value it is still waiting to receive. That wiped `card.note` before the note ever reached the editor. Both editors compare first, and `RichTextArea` additionally ties that record to the editor instance it describes, since a change of `features` tier rebuilds the editor and the replacement takes its content from the render which created it.
 
 ---
 
@@ -233,3 +237,53 @@ Maps icon name → ThronesDB font Unicode character. Valid icon names (used in b
 - `Cost`: `number | "X" | "-"`
 - `Strength`: `number | "X"`
 - `PlotValue`: `number | "X"`
+
+---
+
+## Rich Text (`common/richText/`)
+
+**One stored format, converted per destination.** Prose is html — `<b>`, `<em>`, `<s>`, `<u>`, `<code>`, `<cite>` for marks; `<p>`, `<h1>`–`<h3>`, `<ul>`/`<ol>`/`<li>`, `<blockquote>`, `<pre>` for blocks; `<br>`; and `[military]` for icons, the spelling the pack data already uses. **Bold-italic is `<b><em>`, never `<i>`.** `<i>` is accepted on the way in (legacy records, and the pack dialect) but never written.
+
+`format.ts` is the one statement of that vocabulary, and `walk()` the one parser: a single pass handing **generated markup and user text to separate handlers**. That split is the whole point — only the text handler escapes, so a marker a converter emits can never be escaped by mistake, and a `*` somebody typed can never become emphasis. An AST was considered and rejected as far more machinery than string→string converters need.
+
+| Target    | Converter                       | Icons                             |
+| --------- | ------------------------------- | --------------------------------- |
+| Discord   | `toDiscord(html, { emojis })`   | guild emoji, else `House Martell` |
+| Github    | `toGithub(html)`                | `House Martell`                   |
+| Pack json | `toThronetekiText(html)`        | `[martell]` (untouched)           |
+| React     | `components/richText.tsx`       | `<ThronesIcon>`                   |
+| Plain     | `toPlain(html)` / `plainLength` | readable name                     |
+
+- **Discord emoji are fetched, never hardcoded** — `discordService.syncEmojis(guild)` writes them to Redis **keyed by guild id** (the same emoji may exist in two guilds with different ids) on every sync, initial or cron, and on `GuildEmojiCreate/Update/Delete`. One log line per guild says how many were loaded. `getEmojiMap()` reads that back through a 60s cache. There are deliberately **no aliases**: a name that doesn't match is a naming inconsistency to fix in Discord, not to paper over in code.
+- **`toThronetekiText` is deliberately not built on `walk`**, which expands `<i>` into `<b><em>` — the exact opposite of what the pack format wants. It runs the conversion the other way as a short sequence of replaces.
+- **Two boundaries speak the pack dialect**: `toJSONExportCard` (the data PR) and `renderPlaytestingCard`/`renderCardSuggestion` (the card image, whose renderer reads `<i>` as bold-italic). Converting inside `getBaseCardValues` would be wrong — the card editor takes its form values from there, and they must stay in the stored format or opening a card would rewrite its text on the way in.
+- **`sanitiseHtml` runs at the boundary, not on read** — a Joi `.custom()` on the shared `richText()` rule in `schemas.ts`, which celebrate then writes back over `req.body`. Nothing outside the format is ever persisted, so a reader which forgets to sanitise has nothing to be caught out by. It rebuilds from a whitelist rather than stripping, so a tag outside the format loses the tag and keeps its text — which is also how the stored `<a>` elements were removed, needing no step of their own.
+- **`truncateHtml`/`chunkHtml` take a `measure`**, defaulting to readable length. A target which adds markers of its own charges for those too, so the Discord sinks pass `(html) => toDiscord(html, { emojis }).length` and the limit means what Discord actually counts. Cuts land on block boundaries and reopened marks are closed, so a fragment can never leave a marker half-written.
+- **`fromLegacy` upgrades what came before**, telling the two old shapes apart by whether they carry a tag: card text was already html (just `<i>`-spelled), prose was plain text using the old renderer's conventions (`***bold-italic***`, `**bold**`, `- ` bullets, bare newlines). Migration `010_richText` applies it across `cards.text`, `cards.note.text`, `suggestions.card.text`, `projects.description`, `playtestingUpdates.description` and `reviews.additional`.
+    - It **verifies every card before writing anything**: `toThronetekiText(fromLegacy(text)) === text`, aborting with the offending codes if not. `syncDataPullRequests` byte-compares generated pack json against the development branch to decide whether to commit, so text which doesn't convert back exactly would rewrite every pack file on the next sync.
+    - The migration package is CommonJS on ts-node while `common/` is ESM, so it reaches the real converters through a **`ts-node.moduleTypes`** override in `migration/tsconfig.json` rather than copying them. Duplicating the converter the verification pass exists to check would defeat the check. Two more entries there are load-bearing for the same reason and nothing else: `rootDir: ".."`, since a compiler cannot emit a file above its own root (which is also why `start` points into `dist/migration/src`), and a `common/*` path mapping, since `common`'s files import each other through that alias. What is deliberately **not** there is `common/**/*` in `include` — tsc follows the imports on its own, and listing the directory only forces files nothing reaches to compile too.
+    - It assumes **data which has never been converted**. The repair pass which unwound an earlier, buggy run of this same migration (double-encoded entities, an escaped `<nl/>`) has been taken back out now that no stored document carries the signature — a migration reading its own past output is a workaround, not a shape the code should keep carrying. `<nl/>` itself is still handled, since that one is genuine legacy content rather than damage.
+- **`RichTextArea` names its features individually** — `headings`, `lists`, `quote`, `code`, over and above the marks and icons every field has. Not a tier, because what suits a field is not a point on a scale: a release note wants lists without wanting headings, and a project description is a sentence where either would be a mistake. A feature works by leaving extensions out rather than hiding buttons, so a field offering no way to make a heading registers no keymap for one and cannot be pasted one either. Nothing currently asks for `headings`; it is there for a field which one day will. The list is compared **by contents, not identity** — a caller writing it inline hands over a new array on every render, and rebuilding the editor for that would drop the document.
+- **`RichTextArea` finds its own errors.** It calls `useFormValidationState` from `@react-stately/form` with its `name`, which is the same `FormValidationContext` HeroUI's `Form` fills from `validationErrors` — so a field is wired up by being named, exactly as a `Textarea` is, and nothing is threaded through props. `isInvalid`/`errorMessage` remain as overrides, with react-aria's own precedence (a controlled verdict beats the form's). The error clears on the next real edit, mirroring the `change` event `@react-aria/form` listens for on a native input. `@react-stately/form` is declared as a direct dependency rather than borrowed from HeroUI's tree: the context is a module-level instance, so a second copy would silently read nothing.
+- **Links are deliberately not part of the format.** They were built and then taken back out: the anchor never survived contact with the places prose is actually read — a card note's tooltip closes before the click lands, and a link in a review was not clickable at all — so the mark, its modal, its `Ctrl+K` chord and its `<a>` handling in every converter are gone. Stored ones unwrap to their text on the way through the sanitiser, and their address is lost with them.
+- **Discord italics are `_`, not `*`.** Marks combine, and `*__~~x~~__*` leaves the italics unrendered where `___~~x~~___` is read as the underline-italic Discord already understands. The cost is that `_` only opens on a word boundary, so italics starting mid-word do not render — rarer than the combination above, and the marker Github uses anyway.
+- **An empty editor emits `undefined`, not `""`** — a cleared field is stored as absent rather than as a value which happens to be empty.
+
+---
+
+## Testing — deliberately absent, for now
+
+**No package in this repository has a test framework.** That is a standing decision, not an oversight: nothing here is set up to run tests, and a feature branch is the wrong place to introduce one, since the first package to adopt a runner sets the pattern every other package copies. When testing arrives it should arrive as its own piece of work, covering the repo rather than whichever feature happened to want it first.
+
+Two things are worth carrying into that work.
+
+**Vitest is the runner to reach for.** The client already builds on Vite, so vitest shares its config and transform pipeline — including `vite-tsconfig-paths`, which is what resolves the `common/*` and `@/*` aliases. The repo is also ESM throughout (`"type": "module"` in the root and in `common/`), which jest still only supports experimentally. Adoption is per-package: a runner in `common/` obliges nothing of `client/` or `server/`, and touches neither `build` nor `lint`.
+
+**`common/richText/` is the first thing that should get tests.** Its converters are pure string→string functions with no I/O, so they are the cheapest thing in the repo to cover and among the easiest to break silently — an escaping rule can be subtly wrong for months, and the only symptom is a Discord message rendering badly in a channel nobody is watching. Worth covering:
+
+- **Escaping** — `2*3*4` must survive as text, `snake_case` must not italicise, and text inside `<code>` must not be escaped at all (a backslash renders literally there). Block markers (`#`, `>`, `-`, `1.`) escape only at the head of a line, so `issue #42` has to stay intact.
+- **Icon spelling per target** — `[martell]` becomes the guild emoji on Discord, `House Martell` on Github and on a webhook that cannot render custom emoji, and stays `[martell]` in the pack JSON.
+- **`truncateHtml` / `chunkHtml`** — a cut lands on a block boundary and closes whatever mark it interrupted, so a fragment can never leave a marker half-written.
+- **The card text round trip** — `toThronetekiText(fromLegacy(text)) === text` for existing content. This one is load-bearing: `syncDataPullRequests` byte-compares generated pack JSON against the development branch to decide whether to commit, so any conversion drift rewrites every pack file on the next sync.
+
+That last check wants real stored cards rather than fixtures, so it belongs as a verification pass inside the migration that converts them — a unit test cannot prove the absence of markup nobody anticipated.

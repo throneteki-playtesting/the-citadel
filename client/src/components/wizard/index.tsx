@@ -77,6 +77,18 @@ export function Wizard<T>({
         });
     }, []);
 
+    const clearAnsweredErrors = useCallback((paths: string[]) => {
+        setFieldErrors((prev) => {
+            const answered = paths.filter((path) => prev[path] && prev[path].source !== "external");
+            if (answered.length === 0) {
+                return prev;
+            }
+            const next = { ...prev };
+            answered.forEach((path) => delete next[path]);
+            return next;
+        });
+    }, []);
+
     const setServerErrors = useCallback((fields: { path: string; message: string }[]) => {
         setFieldErrors((prev) => {
             const next = { ...prev };
@@ -186,6 +198,7 @@ export function Wizard<T>({
             fieldErrors,
             setError,
             clearError,
+            clearAnsweredErrors,
             isValidationError,
             fieldMeta,
             setFieldMeta,
@@ -202,6 +215,7 @@ export function Wizard<T>({
             fieldErrors,
             setError,
             clearError,
+            clearAnsweredErrors,
             isValidationError,
             fieldMeta,
             onPageSubmit,
@@ -266,7 +280,19 @@ export function WizardPages({ className, style, children: pages }: WizardPagesPr
 
         scan();
 
-        const observer = new MutationObserver(scan);
+        // A rich text editor rewrites its own DOM on every keystroke, and none of that can add or rename a
+        // field. Rescanning the whole page for each character is what made typing inside a wizard stutter
+        const isEditorContent = (node: Node) => {
+            const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
+            return !!element?.closest("[contenteditable='true']");
+        };
+
+        const observer = new MutationObserver((records) => {
+            if (records.every((record) => isEditorContent(record.target))) {
+                return;
+            }
+            scan();
+        });
         observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ["name"] });
 
         return () => observer.disconnect();
@@ -305,7 +331,26 @@ type WizardPagesProps = Omit<BaseElementProps, "children"> & {
 };
 
 export function WizardPage({ className, style, children, controlledData, pageNo }: WizardPageProps) {
-    const { id, validationErrors, onPageSubmit } = useWizard();
+    const { id, validationErrors, onPageSubmit, clearAnsweredErrors } = useWizard();
+
+    const values = useRef<Record<string, unknown> | undefined>(undefined);
+    const hasErrors = Object.keys(validationErrors).length > 0;
+    useEffect(() => {
+        if (controlledData === undefined || !hasErrors) {
+            values.current = undefined;
+            return;
+        }
+        const flat = flatten(controlledData) as Record<string, unknown>;
+        const previous = values.current;
+        values.current = flat;
+        if (!previous) {
+            return;
+        }
+        const answered = Object.keys({ ...previous, ...flat }).filter((path) => !isEqual(previous[path], flat[path]));
+        if (answered.length > 0) {
+            clearAnsweredErrors(answered);
+        }
+    }, [controlledData, hasErrors, clearAnsweredErrors]);
 
     const onSubmit = useCallback(
         (e: FormEvent<HTMLFormElement>) => {

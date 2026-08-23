@@ -15,6 +15,7 @@ import { IReleaseCheck, isCheckStale, ISlot } from "common/models/slots";
 import { parseCardCode, SemanticVersion } from "common/utils";
 import { dataService, discordService, logger } from "@/services";
 import { extractFromURL } from "../utils";
+import { toDiscord } from "common/richText/toDiscord";
 import { getThreadFor } from "./cardForum";
 
 const syncChecksMutex = new Mutex();
@@ -141,7 +142,7 @@ async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
         const target = await fetchMessage(existing);
         // Anything deleted from Discord leaves nothing to amend, so it is posted afresh below
         if (target) {
-            await target.edit(checkMessage(slot, entry, true));
+            await target.edit(await checkMessage(slot, entry, true));
             merge(entry, { _metadata: { discord: { lastSynced: new Date() } } });
             logger.verbose(`[Discord] Updated release check for ${label(slot)} by ${entry.createdBy}`);
             return;
@@ -150,7 +151,7 @@ async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
 
     logger.info(`[Discord] Posting release check for ${label(slot)} by ${entry.createdBy}`);
     const thread = await threadFor(slot, entry);
-    const posted = await thread.send(checkMessage(slot, entry, false));
+    const posted = await thread.send(await checkMessage(slot, entry, false));
     merge(entry, { _metadata: { discord: { messageUrl: posted.url, lastSynced: new Date() } } });
 }
 
@@ -235,22 +236,26 @@ function strike(text: string, withdrawn: boolean) {
         .join("\n");
 }
 
-function reasoning(entry: IReleaseCheck, withdrawn: boolean) {
+// The note has no editor behind it, so converting is about escaping: a typed `*` stays a `*`. Striking
+// through comes afterwards and per line, as Discord will not carry `~~` across a newline
+function reasoning(entry: IReleaseCheck, withdrawn: boolean, emojis: Record<string, string>) {
     const categories = (entry.categories ?? []).map((category) => `\`${category}\``).join(" ");
-    const body = [categories, entry.note].filter(Boolean).join("\n");
+    const note = entry.note ? toDiscord(entry.note, { emojis }) : "";
+    const body = [categories, note].filter(Boolean).join("\n");
     return strike(body, withdrawn);
 }
 
 /**
  * @param amending Whether this replaces the same version's earlier verdict rather than opening a new one
  */
-function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
+async function checkMessage(slot: ISlot, entry: IReleaseCheck, amending: boolean) {
+    const emojis = await discordService.getEmojiMap();
     // Reasoning only ever accompanies an objection, so amending one into a "ready" verdict withdraws it
-    const withdrawn = amending && entry.ready && !!reasoning(entry, false);
+    const withdrawn = amending && entry.ready && !!reasoning(entry, false, emojis);
     if (entry.ready && !withdrawn) {
         return readyMessage(slot, entry);
     }
-    return objectionMessage(slot, entry, withdrawn);
+    return objectionMessage(slot, entry, withdrawn, emojis);
 }
 
 // A sign-off has no reasoning to read, so it stays a single glanceable line
@@ -272,7 +277,7 @@ function readyMessage(slot: ISlot, entry: IReleaseCheck) {
 }
 
 // A withdrawn objection keeps its original wording, so whatever it prompted stays readable
-function objectionMessage(slot: ISlot, entry: IReleaseCheck, withdrawn: boolean) {
+function objectionMessage(slot: ISlot, entry: IReleaseCheck, withdrawn: boolean, emojis: Record<string, string>) {
     const notice = withdrawn ? "*This check has been withdrawn - now a :thumbsup: to release.*\n" : "";
     // The heading marker stays outside the strikethrough, or Discord stops reading the line as a heading
     const heading = `### ${strike(":thumbsdown: Not Ready for Release", withdrawn)}`;
@@ -282,7 +287,7 @@ function objectionMessage(slot: ISlot, entry: IReleaseCheck, withdrawn: boolean)
         .setAccentColor(withdrawn ? READY_COLOR : OBJECTION_COLOR)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`${notice}${heading}\n${verdict}`));
 
-    const body = reasoning(entry, withdrawn);
+    const body = reasoning(entry, withdrawn, emojis);
     if (body) {
         container
             .addSeparatorComponents(new SeparatorBuilder())

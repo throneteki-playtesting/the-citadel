@@ -10,6 +10,9 @@ import { CardPreview } from "@agot/card-preview";
 import { PlaytestingCard } from "common/models/schemas";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import NoteEditor from "./noteEditor";
+import { useIsReleaseBound } from "../../hooks/useIsReleaseBound";
+import StatusNotice from "../../components/statusNotice";
+import { faFlagCheckered } from "@fortawesome/free-solid-svg-icons";
 
 export default function EditCardModal({
     title = "Card Editor",
@@ -25,6 +28,16 @@ export default function EditCardModal({
         const data: DeepPartial<IPlaytestCard> = !initial ? {} : initial;
         setCard(data);
     }, [initial]);
+
+    const isDraftReleaseBound = useIsReleaseBound(card.project, card.number);
+
+    // Release-bound drafts are almost always a refinement - preselected once there's nothing chosen yet,
+    // but only a starting point: picking any type here (including refinement itself) stops this from firing again
+    useEffect(() => {
+        if (isDraftReleaseBound && !card.note?.type) {
+            setCard((prev) => ({ ...prev, note: { ...prev.note, type: "refinement" } }));
+        }
+    }, [isDraftReleaseBound, card.note?.type]);
 
     const onSubmit = useCallback(
         async (validCard: IPlaytestCard) => {
@@ -51,6 +64,14 @@ export default function EditCardModal({
                         <ModalHeader>{title}</ModalHeader>
                         <ModalBody>
                             <ValidationSummary />
+                            {isDraftReleaseBound && (
+                                <StatusNotice
+                                    icon={faFlagCheckered}
+                                    color="warning"
+                                    label="Marked for release"
+                                    detail="This card is locked to its printed form — this draft won't trigger a playtesting update."
+                                />
+                            )}
                             <div className="flex flex-col md:flex-row gap-2">
                                 <CardPreview
                                     card={renderDraftCard}
@@ -61,13 +82,14 @@ export default function EditCardModal({
                                         <CardEditor
                                             card={card}
                                             onUpdate={setCard}
-                                            inputOptions={{ faction: "disabled", designer: "hidden" }}
+                                            inputOptions={{ faction: "disabled" }}
                                         />
                                     </WizardPage>
                                     {!isPreview(card) && (
                                         <WizardPage controlledData={{ note: card.note ?? {} }}>
                                             <NoteEditor
                                                 note={card.note}
+                                                isReleaseBound={isDraftReleaseBound}
                                                 onChange={(note) => setCard((prev) => ({ ...prev, note }))}
                                             />
                                         </WizardPage>

@@ -6,6 +6,7 @@ import { isInitial, parseCardCode } from "common/utils";
 import { GithubContext } from ".";
 import { getTimeLockedImageUrl, syncImage } from "@/rendering/hosting";
 import { emojis } from "./utils";
+import { toGithub } from "common/richText/toGithub";
 import { pascalCase } from "@/utils";
 import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
@@ -334,7 +335,7 @@ const issues = {
             "\n:-------------------------:|:-------------------------:" +
             `\n![image](${previousImageUrl}) |![image](${imageUrl})` +
             "\n\n### Change Notes" +
-            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}` +
+            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}**\n\n${toGithub(card.note!.text)}` +
             "\n\n---" +
             "\n\n### Implementation Steps" +
             "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)." +
@@ -371,7 +372,7 @@ const issues = {
             "\n:-------------------------:|:-------------------------:" +
             `\n![image](${previousImageUrl}) |![image](${imageUrl})` +
             "\n\n### Change Notes" +
-            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}** - ${card.note!.text}` +
+            `\n${emojis[card.note!.type]} **${pascalCase(card.note!.type)}**\n\n${toGithub(card.note!.text)}` +
             "\n\n---" +
             "\n\n### Implementation Steps" +
             "\n1. Create a branch from `development` (you may use a single branch for multiple implementations/updates)." +
