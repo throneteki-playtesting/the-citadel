@@ -82,7 +82,7 @@ export default function EditCardModal({
                                         <CardEditor
                                             card={card}
                                             onUpdate={setCard}
-                                            inputOptions={{ faction: "disabled", designer: "hidden" }}
+                                            inputOptions={{ faction: "disabled" }}
                                         />
                                     </WizardPage>
                                     {!isPreview(card) && (

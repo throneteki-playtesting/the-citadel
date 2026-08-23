@@ -137,7 +137,14 @@ const ComboBox = ({
                 tabIndex={-1}
                 onClick={() => inputRef.current?.focus()}
                 endContent={
-                    <Button as="div" isIconOnly variant="ghost" tabIndex={-1} onPress={() => addItem(inputValue)}>
+                    <Button
+                        as="div"
+                        isIconOnly
+                        variant="ghost"
+                        tabIndex={-1}
+                        isDisabled={!inputValue.trim()}
+                        onPress={() => addItem(inputValue)}
+                    >
                         <FontAwesomeIcon icon={faPlus} />
                     </Button>
                 }
