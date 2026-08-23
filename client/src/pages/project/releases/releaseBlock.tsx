@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { addToast, Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
@@ -10,14 +10,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCheck,
     faChevronRight,
+    faCopy,
     faEllipsisVertical,
     faGripVertical,
     faPencil,
     faTrash
 } from "@fortawesome/free-solid-svg-icons";
-import { IProject, IProjectRelease } from "common/models/projects";
+import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { Faction, IPlaytestCard } from "common/models/cards";
-import { getPositionFaction } from "common/utils";
+import { getPositionFaction, getReleaseCodeMappings } from "common/utils";
 import { useDeleteReleaseMutation } from "../../../api";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
@@ -108,12 +109,14 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     onEdit,
     onPublish,
     onDelete,
+    onCopyCodes,
     showDragHandle,
     dragHandleListeners,
     dragHandleAttributes
 }: ReleaseBlockHeaderProps) {
     const isLocked = !!release.releasedDate;
     const displayStatus = isLocked ? "released" : release.status;
+    const canCopyCodes = canEditReleases && areReleaseChecksClosed(release.status);
 
     return (
         <div
@@ -193,7 +196,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                     )}
                 </div>
             </div>
-            {!isLocked && (canEditReleases || canDeleteReleases) && (
+            {(canCopyCodes || (!isLocked && (canEditReleases || canDeleteReleases))) && (
                 <div
                     className={classNames(
                         "flex gap-1 transition-opacity duration-200",
@@ -211,7 +214,9 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                             aria-label="Release actions"
                             disabledKeys={isPublishDisabled ? ["publish"] : []}
                             onAction={(key) => {
-                                if (key === "edit") {
+                                if (key === "copy") {
+                                    onCopyCodes?.();
+                                } else if (key === "edit") {
                                     onEdit?.();
                                 } else if (key === "publish") {
                                     onPublish?.();
@@ -221,7 +226,14 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                             }}
                         >
                             {[
-                                ...(canEditReleases
+                                ...(canCopyCodes
+                                    ? [
+                                          <DropdownItem key="copy" startContent={<FontAwesomeIcon icon={faCopy} />}>
+                                              Copy Codes
+                                          </DropdownItem>
+                                      ]
+                                    : []),
+                                ...(!isLocked && canEditReleases
                                     ? [
                                           <DropdownItem key="edit" startContent={<FontAwesomeIcon icon={faPencil} />}>
                                               Edit
@@ -236,7 +248,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                           </DropdownItem>
                                       ]
                                     : []),
-                                ...(canDeleteReleases
+                                ...(!isLocked && canDeleteReleases
                                     ? [
                                           <DropdownItem
                                               key="delete"
@@ -251,14 +263,21 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                         </DropdownMenu>
                     </Dropdown>
                     <div className="hidden sm:flex gap-1">
-                        {canEditReleases && (
+                        {canCopyCodes && (
+                            <Tooltip content="Copy Code Mappings">
+                                <Button isIconOnly size="sm" variant="flat" onPress={onCopyCodes}>
+                                    <FontAwesomeIcon icon={faCopy} />
+                                </Button>
+                            </Tooltip>
+                        )}
+                        {!isLocked && canEditReleases && (
                             <Tooltip content="Edit Release">
                                 <Button isIconOnly size="sm" variant="flat" onPress={onEdit}>
                                     <FontAwesomeIcon icon={faPencil} />
                                 </Button>
                             </Tooltip>
                         )}
-                        {canEditReleases && (
+                        {!isLocked && canEditReleases && (
                             <Tooltip content={publishTooltip}>
                                 <span tabIndex={0} className="inline-block">
                                     <Button
@@ -274,7 +293,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                 </span>
                             </Tooltip>
                         )}
-                        {canDeleteReleases && (
+                        {!isLocked && canDeleteReleases && (
                             <Tooltip content="Delete Release">
                                 <Button isIconOnly size="sm" variant="flat" color="danger" onPress={onDelete}>
                                     <FontAwesomeIcon icon={faTrash} />
@@ -301,6 +320,7 @@ type ReleaseBlockHeaderProps = {
     onEdit?: () => void;
     onPublish?: () => void;
     onDelete?: () => void;
+    onCopyCodes?: () => void;
     showDragHandle?: boolean;
     dragHandleListeners?: ReturnType<typeof useSortable>["listeners"];
     dragHandleAttributes?: ReturnType<typeof useSortable>["attributes"];
@@ -359,13 +379,28 @@ export function ReleaseBlock({
           ? `Release "${publishBlockedBy}" must be published first - releases can only be published in sequence`
           : "Publish Release";
 
-    const assignedCards = itemIds
-        .map((id, index) => {
-            const slotNumber = slotNumberFromItemId(id);
-            const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
-            return card ? { position: index + 1, card } : undefined;
-        })
-        .filter((entry): entry is { position: number; card: IPlaytestCard } => !!entry);
+    // Memoised so the header's onCopyCodes handler (below) stays stable across dnd-kit context changes
+    const assignedCards = useMemo(
+        () =>
+            itemIds
+                .map((id, index) => {
+                    const slotNumber = slotNumberFromItemId(id);
+                    const card = slotNumber !== undefined ? cardsByNumber.get(slotNumber) : undefined;
+                    return card ? { position: index + 1, card } : undefined;
+                })
+                .filter((entry): entry is { position: number; card: IPlaytestCard } => !!entry),
+        [itemIds, cardsByNumber]
+    );
+
+    const copyCodeMappings = useCallback(async () => {
+        const mappings = getReleaseCodeMappings(project, release, assignedCards);
+        try {
+            await navigator.clipboard.writeText(mappings);
+            addToast({ title: "Copied", color: "success", description: "Code mappings copied to clipboard" });
+        } catch {
+            addToast({ title: "Failed to copy", color: "danger", description: "Could not access the clipboard" });
+        }
+    }, [project, release, assignedCards]);
 
     const onDelete = async () => {
         try {
@@ -404,6 +439,7 @@ export function ReleaseBlock({
                     onEdit={editRelease}
                     onPublish={openPublishModal}
                     onDelete={openDeleteConfirm}
+                    onCopyCodes={copyCodeMappings}
                     showDragHandle={!!dragHandleListeners}
                     dragHandleListeners={dragHandleListeners}
                     dragHandleAttributes={dragHandleAttributes}

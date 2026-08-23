@@ -37,7 +37,7 @@ const NumericFilterInput = ({ className, style, label, value, onChange, isDisabl
     return (
         <div
             className={classNames(
-                "flex items-stretch h-8 rounded-medium bg-default-100 overflow-hidden",
+                "flex items-stretch h-8 rounded-small bg-default-100 overflow-hidden",
                 "focus-within:ring-2 focus-within:ring-primary/50",
                 { "opacity-50 pointer-events-none": isDisabled },
                 className

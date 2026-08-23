@@ -468,6 +468,22 @@ export function getFinalCardNumber(
     return getReleaseOffset(project, slot.release.code) + slot.release.position;
 }
 
+/** Tab-separated `devCode\treleaseCode` lines, one per card, for pasting into a spreadsheet */
+export function getReleaseCodeMappings(
+    project: Pick<IProject, "releases">,
+    release: { code: string },
+    assignedCards: { position: number; card: Pick<Cards.IPlaytestCard, "project" | "number"> }[]
+): string {
+    const offset = getReleaseOffset(project, release.code);
+    return assignedCards
+        .map(({ position, card }) => {
+            const devCode = parseCardCode(false, card.project, card.number);
+            const releaseCode = parseCardCode(true, card.project, offset + position);
+            return `${devCode}\t${releaseCode}`;
+        })
+        .join("\n");
+}
+
 /** Every slot's isReleaseBound, keyed by card number - the one join every caller needing it in bulk shares */
 export function releaseBoundByNumber(
     slots: Pick<ISlot, "number" | "release" | "statuses">[],

@@ -204,7 +204,10 @@ export default function EditReleaseModal({
                                         {releaseStatuses.map(({ status, description }) => (
                                             <SelectItem
                                                 key={status}
-                                                classNames={{ title: "capitalize" }}
+                                                classNames={{
+                                                    title: "capitalize",
+                                                    description: "whitespace-normal overflow-visible text-clip"
+                                                }}
                                                 description={description}
                                             >
                                                 {status}

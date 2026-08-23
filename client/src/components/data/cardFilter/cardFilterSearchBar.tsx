@@ -39,7 +39,7 @@ const CardFilterSearchBar = ({
             className={classNames(
                 "grid items-stretch justify-end transition-[grid-template-columns] duration-200 ease-in-out flex-1 sm:flex-none sm:w-auto",
                 isFiltering
-                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto]"
+                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto] !min-w-0"
                     : "grid-cols-[1fr_auto] sm:grid-cols-[14rem_auto]",
                 className
             )}

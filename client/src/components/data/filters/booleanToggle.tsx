@@ -16,7 +16,7 @@ const BooleanToggle = ({ className, style, trueLabel, falseLabel, value, onChang
     const press = (next: boolean) => onChange(value === next ? undefined : next);
     return (
         <ButtonGroup
-            size="md"
+            size="sm"
             isDisabled={isDisabled}
             className={classNames("flex justify-start", className)}
             style={style}

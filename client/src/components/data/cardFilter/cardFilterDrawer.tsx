@@ -163,6 +163,7 @@ function MultiSelectField({ label, placeholder, options, value, onChange }: Mult
                 </div>
             )}
             <SearchableMultiSelect
+                size="sm"
                 placeholder={placeholder}
                 items={items}
                 getKey={(item) => item.key}

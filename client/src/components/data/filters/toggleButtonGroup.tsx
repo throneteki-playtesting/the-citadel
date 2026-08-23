@@ -39,7 +39,7 @@ const ToggleButtonGroup = <T extends string>({
                     "flex-1": !!label
                 })}
             >
-                <ButtonGroup size="md" isDisabled={isDisabled} className="flex-nowrap">
+                <ButtonGroup size="sm" isDisabled={isDisabled} className="flex-nowrap">
                     {options.map((option) => {
                         const isSelected = value.includes(option.key);
                         return (
