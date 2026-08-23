@@ -41,8 +41,6 @@ export const releaseWeights = {
 export const releaseStageWeights: Record<ReleaseStatus, number> = {
     planning: 0,
     confirming: 4,
-    approved: 2,
-    assembling: 2,
-    proofing: 4,
+    approved: 6,
     released: 2
 };
