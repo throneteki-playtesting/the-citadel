@@ -615,9 +615,11 @@ const messages = {
         previousUrl: string,
         context: CardForumContext
     ): Promise<BaseMessageOptions> {
-        const content =
-            "## Draft Card Pending" +
-            `\n<@&${context.taggedRole.id}> New draft version of this card has been proposed, and will be confirmed in the next playtesting update.`;
+        const isRefinement = card.note?.type === "refinement";
+        const content = isRefinement
+            ? "### Refinement Added\nA refinement has been made for this card's release."
+            : "## Draft Card Pending" +
+              `\n<@&${context.taggedRole.id}> New draft version of this card has been proposed, and will be confirmed in the next playtesting update.`;
 
         const embeds = await createCardEmbeds(card, user);
 
@@ -625,7 +627,7 @@ const messages = {
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
         return {
             content,
-            allowedMentions: { parse: ["roles"] },
+            allowedMentions: { parse: isRefinement ? [] : ["roles"] },
             embeds,
             components: [buttonRow]
         };
