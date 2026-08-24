@@ -14,6 +14,7 @@ import {
     IReleaseProgress
 } from "common/models/projects";
 import { ReleaseDate, UUID } from "common/models/shared";
+import { IPack } from "common/models/pack";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
@@ -662,6 +663,12 @@ const api = createApi({
                 ...generateFor(result?.evictedSlots, "slot")
             ]
         }),
+        getReleasePack: builder.mutation<IPack, { project: number; code: string }>({
+            queryFn: async ({ project, code }, _api, _extraOptions, baseQuery) => {
+                const result = await baseQuery({ url: `packs/${project}/release/${code}`, method: "GET" });
+                return result.error ? { error: result.error } : { data: result.data as IPack };
+            }
+        }),
         // Playtesting Update API
         getPlaytestingUpdates: builder.query<IGetResponse<IPlaytestingUpdate>, IGetRequest<IPlaytestingUpdate> | void>({
             query: (options) => {
@@ -974,6 +981,7 @@ export const {
     useReorderReleasesMutation,
     usePublishReleaseMutation,
     useDeleteReleaseMutation,
+    useGetReleasePackMutation,
 
     useGetPlaytestingUpdatesQuery,
     useGetPlaytestingUpdateQuery,

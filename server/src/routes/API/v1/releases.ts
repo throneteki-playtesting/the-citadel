@@ -6,19 +6,21 @@ import * as Schemas from "common/models/schemas";
 import { IProject, IProjectRelease, releaseStatuses } from "common/models/projects";
 import { factions } from "common/models/cards";
 import { ReleaseDate } from "common/models/shared";
-import { getReleaseCapacity, getReleaseOffset, Regex } from "common/utils";
+import { generateReleaseImageUrl, getReleaseCapacity, getReleaseOffset, Regex } from "common/utils";
 import { isEqual } from "lodash-es";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, clearRelease } from "@/utils";
-import { ISlot } from "common/models/slots";
-import { creditedArtistId } from "common/models/artwork";
+import { designPhase, ISlot, resolveFinalCard } from "common/models/slots";
+import { artworkBlocker, creditedArtistId } from "common/models/artwork";
 import { getContext } from "@/middleware/context";
-import { logActivity, projectSnapshot } from "@/services/activityLogService";
+import { logActivity, cardSnapshot, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { computeReleasesProgress } from "@/services/progressService";
+import { clearDiscordMetadata } from "@/discord/forums/cardForum";
+import { IPlaytestCard } from "common/models/cards";
 
 const router = express.Router({ mergeParams: true });
 
@@ -359,47 +361,177 @@ router.post(
                 );
             }
 
-            const { principal } = getContext();
-            const now = new Date();
-
-            project.releases = project.releases.map((r) =>
-                r.code === code ? { ...r, status: "released", releasedDate, updated: now, updatedBy: principal.id } : r
-            );
-            const updated = await dataService.projects.update(project);
-
-            const offset = getReleaseOffset(updated, code);
-            const updatedSlots = slots.map((slot) => ({ ...slot, release: { ...slot.release!, released: true } }));
-            await dataService.slots.update(updatedSlots);
-
-            const [cards, artists] = await Promise.all([
+            // (a) Resolve the card each slot will actually ship with - draft if release-bound, else latest
+            const [draftCards, latestCards, artists] = await Promise.all([
+                dataService.cards.read(
+                    slots.map((slot) => ({ project: project.number, number: slot.number, draft: true }))
+                ),
                 dataService.cards.read(
                     slots.map((slot) => ({ project: project.number, number: slot.number, latest: true }))
                 ),
                 dataService.artists.read()
             ]);
-            const slotsByNumber = new Map(slots.map((slot) => [slot.number, slot]));
-            const updatedCards = cards.map((card) => {
-                const slot = slotsByNumber.get(card.number)!;
-                // A published card's illustrator is fixed on record now, in case the artwork lane's own
-                // credit changes later - only backfilled when the card doesn't already carry one
-                const creditedName = artists.find((artist) => artist.id === creditedArtistId(slot.statuses.artwork))
-                    ?.name;
-                return {
-                    ...card,
-                    illustrator: card.illustrator || creditedName || "",
-                    released: { code, number: offset + slot.release!.position }
-                };
+            const draftByNumber = new Map(draftCards.map((card) => [card.number, card]));
+            const latestByNumber = new Map(latestCards.map((card) => [card.number, card]));
+            const finalCards = slots.map((slot) => {
+                const draftCard = draftByNumber.get(slot.number);
+                const finalCard = resolveFinalCard(
+                    slot.statuses.design.status,
+                    release.status,
+                    draftCard,
+                    latestByNumber.get(slot.number)
+                );
+                return { slot, finalCard, isPromoted: !!finalCard && finalCard === draftCard };
             });
-            if (updatedCards.length > 0) {
-                await dataService.cards.update(updatedCards);
+
+            const offset = getReleaseOffset(project, code);
+
+            // (b) Validate everything up front, so one publish attempt surfaces every blocker at once
+            const missingCards: number[] = [];
+            const missingImages: { number: number; url: string }[] = [];
+            const artworkIssues: { number: number; reason: string }[] = [];
+            await Promise.all(
+                finalCards.map(async ({ slot, finalCard }) => {
+                    if (!finalCard) {
+                        missingCards.push(slot.number);
+                        return;
+                    }
+                    const finalNumber = offset + slot.release!.position;
+                    const imageUrl = generateReleaseImageUrl(code, finalNumber, finalCard.name);
+                    const response = await fetch(imageUrl, { method: "HEAD" });
+                    if (!response.ok) {
+                        missingImages.push({ number: slot.number, url: imageUrl });
+                    }
+                    if (slot.statuses.artwork.status !== "complete") {
+                        const blocker = artworkBlocker(slot.statuses.artwork, "complete", artists);
+                        if (blocker) {
+                            artworkIssues.push({ number: slot.number, reason: blocker });
+                        }
+                    }
+                })
+            );
+
+            const errorParts: string[] = [];
+            if (missingCards.length > 0) {
+                errorParts.push(`No card exists to publish for slot(s): ${missingCards.join(", ")}`);
+            }
+            if (missingImages.length > 0) {
+                errorParts.push(
+                    `Release image(s) could not be found for card(s): ${missingImages
+                        .map((entry) => `#${entry.number} (${entry.url})`)
+                        .join(", ")}`
+                );
+            }
+            if (artworkIssues.length > 0) {
+                errorParts.push(
+                    `Artwork is not ready for card(s): ${artworkIssues
+                        .map((entry) => `#${entry.number} - ${entry.reason}`)
+                        .join(", ")}`
+                );
+            }
+            if (errorParts.length > 0) {
+                throw new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Release", errorParts.join("; "));
             }
 
+            const { principal } = getContext();
+            const now = new Date();
+
+            // (c) Force design/artwork/production to complete, and stamp the release placement as permanent
+            let crossedIntoFinalising = false;
+            const forcedSlots: ISlot[] = finalCards.map(({ slot }) => {
+                const isCrossing = designPhase[slot.statuses.design.status] === "development";
+                if (isCrossing) {
+                    crossedIntoFinalising = true;
+                }
+                return {
+                    ...slot,
+                    statuses: {
+                        ...slot.statuses,
+                        design: {
+                            ...slot.statuses.design,
+                            status: "complete",
+                            finalApproval: isCrossing
+                                ? { by: principal.id, at: now }
+                                : slot.statuses.design.finalApproval
+                        },
+                        artwork:
+                            slot.statuses.artwork.status === "complete"
+                                ? slot.statuses.artwork
+                                : { ...slot.statuses.artwork, status: "complete" },
+                        production: "complete"
+                    },
+                    release: { ...slot.release!, released: true }
+                };
+            });
+            await dataService.slots.update(forcedSlots);
+            // Crossing into finalising adds/removes a card from the announcement's list
+            if (crossedIntoFinalising) {
+                await dataService.projects.sync(project, true);
+            }
+
+            // (d) Promote release-bound drafts to latest, and stamp the permanent released number
+            const promotedNumbers: number[] = [];
+            const updatedCards: IPlaytestCard[] = finalCards.map(({ slot, finalCard, isPromoted }) => {
+                // Illustrator is fixed on record now, backfilled only when the card doesn't already carry one
+                const creditedName = artists.find((artist) => artist.id === creditedArtistId(slot.statuses.artwork))
+                    ?.name;
+                const released = { code, number: offset + slot.release!.position };
+                if (isPromoted) {
+                    promotedNumbers.push(slot.number);
+                    const promoted: IPlaytestCard = {
+                        ...finalCard!,
+                        draft: false,
+                        illustrator: finalCard!.illustrator || creditedName || "",
+                        released
+                    };
+                    // Forces a fresh thread rather than editing the stale draft message
+                    clearDiscordMetadata([promoted]);
+                    return promoted;
+                }
+                return {
+                    ...finalCard!,
+                    illustrator: finalCard!.illustrator || creditedName || "",
+                    released
+                };
+            });
+            await dataService.cards.update(updatedCards);
+
+            // (e) Flip the release itself to released, now that everything it depends on has landed
+            project.releases = project.releases.map((r) =>
+                r.code === code ? { ...r, status: "released", releasedDate, updated: now, updatedBy: principal.id } : r
+            );
+            const updated = await dataService.projects.update(project);
+
+            // (f) Activity log entries for the release, the forced statuses, and any promoted cards
             await logActivity(
                 LogCategory.RELEASE,
                 "release.published",
                 `<principal> published release "${code}" in <project>`,
                 { context: { project: projectSnapshot(project) }, severity: "warn" }
             );
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.status_forced",
+                `<principal> forced design, artwork & production to complete for ${forcedSlots.length} slot(s) in <project> as part of publishing release "${code}"`,
+                { context: { project: projectSnapshot(project) }, severity: "warn" }
+            );
+
+            for (const number of promotedNumbers) {
+                const promotedCard = updatedCards.find((card) => card.number === number)!;
+                await logActivity(
+                    LogCategory.CARD,
+                    "card.refinement_promoted",
+                    `<principal>'s publish of release "${code}" promoted <card>'s pending refinement directly to latest`,
+                    {
+                        context: {
+                            project: projectSnapshot(project),
+                            card: cardSnapshot(`${project.number}|${number}|${promotedCard.version}`, promotedCard)
+                        },
+                        severity: "warn"
+                    }
+                );
+            }
 
             res.status(StatusCodes.OK).json(updated);
         }

@@ -7,7 +7,7 @@ import { isEqual } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
-import { isReleaseBound } from "./models/slots";
+import { isReleaseBound, resolveFinalCard } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
 import { toThronetekiText } from "./richText/toThroneteki";
 
@@ -496,6 +496,28 @@ export function releaseBoundByNumber(
             return [slot.number, isReleaseBound(slot.statuses.design.status, release?.status)];
         })
     );
+}
+
+/** Each slot's actual final card - its release-bound draft if it has one, else latest - keyed by number */
+export function finalCardsByNumber<C>(
+    slots: Pick<ISlot, "number" | "release" | "statuses">[],
+    project: Pick<IProject, "releases">,
+    draftCardsByNumber: Map<number, C>,
+    latestCardsByNumber: Map<number, C>
+): Map<number, C> {
+    const releasesByCode = new Map(project.releases.map((release) => [release.code, release]));
+    const map = new Map<number, C>();
+    for (const slot of slots) {
+        const release = slot.release ? releasesByCode.get(slot.release.code) : undefined;
+        const card = resolveFinalCard(
+            slot.statuses.design.status,
+            release?.status,
+            draftCardsByNumber.get(slot.number),
+            latestCardsByNumber.get(slot.number)
+        );
+        if (card) map.set(slot.number, card);
+    }
+    return map;
 }
 
 /** A slot is only truly released once its pack has been published */

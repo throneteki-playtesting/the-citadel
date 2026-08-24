@@ -11,6 +11,7 @@ import {
     faCheck,
     faChevronRight,
     faCopy,
+    faFileArrowDown,
     faEllipsisVertical,
     faGripVertical,
     faPencil,
@@ -19,7 +20,7 @@ import {
 import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import { getPositionFaction, getReleaseCodeMappings } from "common/utils";
-import { useDeleteReleaseMutation } from "../../../api";
+import { useDeleteReleaseMutation, useGetReleasePackMutation } from "../../../api";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
@@ -40,6 +41,7 @@ import {
 import { HighlightTarget } from "../../../components/highlightTarget";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ReleaseProgressMeter from "./releaseProgressMeter";
+import { downloadBlob } from "../../../utils";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
 export function SortableReleaseBlock(props: ReleaseBlockProps) {
@@ -110,6 +112,8 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     onPublish,
     onDelete,
     onCopyCodes,
+    onDownloadJson,
+    isDownloadingJson = false,
     showDragHandle,
     dragHandleListeners,
     dragHandleAttributes
@@ -117,6 +121,8 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     const isLocked = !!release.releasedDate;
     const displayStatus = isLocked ? "released" : release.status;
     const canCopyCodes = canEditReleases && areReleaseChecksClosed(release.status);
+    // Published data only - the export is exactly what shipped, so there's nothing to offer before then
+    const canDownloadJson = isLocked;
 
     return (
         <div
@@ -172,12 +178,23 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                             </Chip>
                         </span>
                     </TouchTooltip>
+                    {isLocked ? (
+                        <Chip size="sm" variant="light">
+                            {release.releasedDate}
+                        </Chip>
+                    ) : (
+                        canEditReleases &&
+                        release.plannedDate && (
+                            <Tooltip content="Planned Date">
+                                <Chip size="sm" variant="light">
+                                    {release.plannedDate}
+                                </Chip>
+                            </Tooltip>
+                        )
+                    )}
                     <span className="text-xs text-foreground/50">
                         {filledCount}/{release.capacity}
                     </span>
-                    {canEditReleases && release.plannedDate && (
-                        <span className="text-xs text-foreground/50">{release.plannedDate}</span>
-                    )}
                     {release.article?.url && (
                         <a
                             href={release.article.url}
@@ -196,7 +213,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                     )}
                 </div>
             </div>
-            {(canCopyCodes || (!isLocked && (canEditReleases || canDeleteReleases))) && (
+            {(canCopyCodes || canDownloadJson || (!isLocked && (canEditReleases || canDeleteReleases))) && (
                 <div
                     className={classNames(
                         "flex gap-1 transition-opacity duration-200",
@@ -222,6 +239,8 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                     onPublish?.();
                                 } else if (key === "delete") {
                                     onDelete?.();
+                                } else if (key === "download") {
+                                    onDownloadJson?.();
                                 }
                             }}
                         >
@@ -230,6 +249,16 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                     ? [
                                           <DropdownItem key="copy" startContent={<FontAwesomeIcon icon={faCopy} />}>
                                               Copy Codes
+                                          </DropdownItem>
+                                      ]
+                                    : []),
+                                ...(canDownloadJson
+                                    ? [
+                                          <DropdownItem
+                                              key="download"
+                                              startContent={<FontAwesomeIcon icon={faFileArrowDown} />}
+                                          >
+                                              Download JSON
                                           </DropdownItem>
                                       ]
                                     : []),
@@ -267,6 +296,19 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                             <Tooltip content="Copy Code Mappings">
                                 <Button isIconOnly size="sm" variant="flat" onPress={onCopyCodes}>
                                     <FontAwesomeIcon icon={faCopy} />
+                                </Button>
+                            </Tooltip>
+                        )}
+                        {canDownloadJson && (
+                            <Tooltip content="Download JSON">
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="flat"
+                                    isLoading={isDownloadingJson}
+                                    onPress={onDownloadJson}
+                                >
+                                    <FontAwesomeIcon icon={faFileArrowDown} />
                                 </Button>
                             </Tooltip>
                         )}
@@ -321,6 +363,8 @@ type ReleaseBlockHeaderProps = {
     onPublish?: () => void;
     onDelete?: () => void;
     onCopyCodes?: () => void;
+    onDownloadJson?: () => void;
+    isDownloadingJson?: boolean;
     showDragHandle?: boolean;
     dragHandleListeners?: ReturnType<typeof useSortable>["listeners"];
     dragHandleAttributes?: ReturnType<typeof useSortable>["attributes"];
@@ -342,16 +386,17 @@ export function ReleaseBlock({
     dragHandleListeners,
     dragHandleAttributes
 }: ReleaseBlockProps) {
-    const { setNodeRef } = useDroppable({ id: release.code });
+    const isLocked = !!release.releasedDate;
+    const disabled = isLocked || areReleaseChecksClosed(release.status) || !canMoveCapsules;
+    const { setNodeRef } = useDroppable({ id: release.code, disabled });
     const { measureDroppableContainers, droppableContainers, active, over } = useDndContext();
     const [deleteRelease, { isLoading: isDeleting }] = useDeleteReleaseMutation();
+    const [getReleasePack, { isLoading: isDownloadingJson }] = useGetReleasePackMutation();
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
-    const isLocked = !!release.releasedDate;
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
-    const disabled = isLocked || !canMoveCapsules;
 
     // Bound here rather than by the caller, so the memoised header keeps stable handlers
     const toggleCollapse = useCallback(() => onToggleCollapse(release.code), [onToggleCollapse, release.code]);
@@ -402,6 +447,16 @@ export function ReleaseBlock({
         }
     }, [project, release, assignedCards]);
 
+    const downloadJson = useCallback(async () => {
+        try {
+            const pack = await getReleasePack({ project: project.number, code: release.code }).unwrap();
+            const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+            downloadBlob(blob, `${release.code}.json`);
+        } catch {
+            addToast({ title: "Failed to download", color: "danger", description: "An unknown error has occurred" });
+        }
+    }, [getReleasePack, project.number, release.code]);
+
     const onDelete = async () => {
         try {
             await deleteRelease({ project: project.number, code: release.code }).unwrap();
@@ -440,6 +495,8 @@ export function ReleaseBlock({
                     onPublish={openPublishModal}
                     onDelete={openDeleteConfirm}
                     onCopyCodes={copyCodeMappings}
+                    onDownloadJson={downloadJson}
+                    isDownloadingJson={isDownloadingJson}
                     showDragHandle={!!dragHandleListeners}
                     dragHandleListeners={dragHandleListeners}
                     dragHandleAttributes={dragHandleAttributes}

@@ -70,7 +70,6 @@ export default function ReleaseCheckTally({
                     <Skeleton className="h-4 sm:h-5 w-48 rounded-md" />
                     <Skeleton className="h-4 sm:h-5 w-16 rounded-md" />
                 </div>
-                {/* Empty rather than skeletal - a bar is already its own progress indicator */}
                 {showBar && <Progress aria-label="Ready responses" value={0} color="success" size="sm" />}
                 <div className={STATUS_ROW_CLASSES}>
                     <Skeleton className="h-4 w-16 rounded-md" />

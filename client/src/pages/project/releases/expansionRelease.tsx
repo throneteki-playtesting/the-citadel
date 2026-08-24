@@ -24,9 +24,9 @@ import {
 import { SortableContext } from "@dnd-kit/sortable";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faEllipsisVertical, faPencil } from "@fortawesome/free-solid-svg-icons";
-import { IProject, IProjectRelease } from "common/models/projects";
+import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { IPlaytestCard } from "common/models/cards";
-import { getPositionFaction } from "common/utils";
+import { finalCardsByNumber, getPositionFaction } from "common/utils";
 import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../../hooks/usePermission";
@@ -52,8 +52,14 @@ import { TouchTooltip } from "../../../components/touchTooltip";
 // adding/deleting/reordering releases; only editing, rearranging within factions, and publishing
 export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
+    // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
+    // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
+    // slot will actually ship with
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
-        filter: { project: project.number, latest: true }
+        filter: [
+            { project: project.number, latest: true },
+            { project: project.number, draft: true }
+        ]
     });
 
     const canEditReleases = usePermission(Permission.EDIT_RELEASES);
@@ -75,11 +81,16 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     );
 
     const release = project.releases[0];
-    const cardsByNumber = useMemo(
-        () => new Map((cardsData?.items ?? []).map((card) => [card.number, card])),
-        [cardsData]
-    );
     const slots = useMemo(() => slotsData?.items ?? [], [slotsData]);
+    // Each slot's card to actually show - its release-bound draft if it has one, else latest
+    const cardsByNumber = useMemo(() => {
+        const draftCardsByNumber = new Map<number, IPlaytestCard>();
+        const latestCardsByNumber = new Map<number, IPlaytestCard>();
+        for (const card of cardsData?.items ?? []) {
+            (card.draft ? draftCardsByNumber : latestCardsByNumber).set(card.number, card);
+        }
+        return finalCardsByNumber(slots, project, draftCardsByNumber, latestCardsByNumber);
+    }, [cardsData, slots, project]);
     const itemIds = useMemo(
         () => (release ? buildContainers([], [release], slots)[release.code] : []),
         [release, slots]
@@ -106,7 +117,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     const displayStatus = isLocked ? "released" : release.status;
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
-    const disabled = isLocked || !canMoveCapsules;
+    const disabled = isLocked || areReleaseChecksClosed(release.status) || !canMoveCapsules;
     const publishTooltip = isComplete ? "Publish Release" : "Every position must be filled before publishing";
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;
@@ -195,12 +206,23 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                         {displayStatus}
                                     </Chip>
                                 </TouchTooltip>
+                                {isLocked ? (
+                                    <Chip size="sm" variant="bordered">
+                                        {release.releasedDate}
+                                    </Chip>
+                                ) : (
+                                    canEditReleases &&
+                                    release.plannedDate && (
+                                        <Tooltip content="Planned Date">
+                                            <Chip size="sm" variant="bordered">
+                                                {release.plannedDate}
+                                            </Chip>
+                                        </Tooltip>
+                                    )
+                                )}
                                 <span className="text-xs text-foreground/50">
                                     {filledCount}/{release.capacity}
                                 </span>
-                                {canEditReleases && release.plannedDate && (
-                                    <span className="text-xs text-foreground/50">{release.plannedDate}</span>
-                                )}
                                 {release.article?.url && (
                                     <a
                                         href={release.article.url}

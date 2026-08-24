@@ -93,6 +93,8 @@ async function syncCardThread(
                             card = await createPreview(card, context);
                         } else if (isInitial(card)) {
                             card = await createInitial(card, context);
+                        } else if (card.released) {
+                            card = await createReleased(card, context);
                         } else {
                             card = await createNewLatest(card, context);
                         }
@@ -202,6 +204,39 @@ export async function createNewLatest(card: IPlaytestCard, context?: CardForumCo
         return card;
     } catch (err) {
         throw new Error(`Error creating new latest thread for ${card.name} (${card.version})`, { cause: err });
+    }
+}
+
+export async function createReleased(card: IPlaytestCard, context?: CardForumContext) {
+    try {
+        context = context ?? (await getCardForumContext());
+        if (!card.latest) {
+            throw new Error("Card is not latest");
+        }
+        if (!card.released) {
+            throw new Error("Card is not released");
+        }
+        card = await syncImage(card);
+
+        const [project] = await dataService.projects.read({ number: card.project });
+        const [user] = await dataService.users.read({ discordId: card.updatedBy });
+        const releasedMessage = await messages.released(card, project, user, context);
+        const thread = await createThreadFor(card, releasedMessage, context);
+
+        // Pin the first message of the newly-created thread
+        const starter = await thread.fetchStarterMessage();
+        await starter.pin();
+
+        const previous = await dataService.cards.previous(card);
+        if (previous) {
+            // Close previous thread, if it exists
+            await closeThreadFor(previous, context);
+        }
+
+        merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
+        return card;
+    } catch (err) {
+        throw new Error(`Error creating released thread for ${card.name} (${card.version})`, { cause: err });
     }
 }
 
@@ -601,6 +636,32 @@ const messages = {
             .setURL(`${process.env.CLIENT_HOST}/project/${project.number}/updates/${playtestingUpdate.version}`)
             .setStyle(ButtonStyle.Link);
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons, playtestingButton);
+
+        return {
+            content,
+            allowedMentions: { parse: ["roles"] },
+            embeds,
+            components: [buttonRow]
+        };
+    },
+    async released(
+        card: IPlaytestCard,
+        project: IProject,
+        user: User | undefined,
+        context: CardForumContext
+    ): Promise<BaseMessageOptions> {
+        const content =
+            "## Card Released" +
+            `\n<@&${context.taggedRole.id}> ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has officially been released (${card.released.code} #${card.released.number}).`;
+
+        const embeds = await createCardEmbeds(card, user);
+
+        const buttons = createMessageButtons(card);
+        const releaseButton = new ButtonBuilder()
+            .setLabel("View Release")
+            .setURL(`${process.env.CLIENT_HOST}/project/${project.number}?tab=releases`)
+            .setStyle(ButtonStyle.Link);
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons, releaseButton);
 
         return {
             content,

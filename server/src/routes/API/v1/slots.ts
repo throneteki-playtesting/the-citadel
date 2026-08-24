@@ -21,7 +21,7 @@ import {
 import { artworkBlocker, IArtworkProgress } from "common/models/artwork";
 import { factions } from "common/models/cards";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
-import { IProject } from "common/models/projects";
+import { areReleaseChecksClosed, IProject } from "common/models/projects";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
@@ -721,6 +721,17 @@ router.patch(
                 );
             }
 
+            if (slot.release) {
+                const currentRelease = project.releases.find((r) => r.code === slot.release.code);
+                if (currentRelease && areReleaseChecksClosed(currentRelease.status)) {
+                    throw new ApiErrorResponse(
+                        StatusCodes.NOT_ACCEPTABLE,
+                        "Invalid Release",
+                        `Release "${currentRelease.code}" has been approved and its placements can no longer be modified`
+                    );
+                }
+            }
+
             const updates: ISlot[] = [];
             let occupant: ISlot | undefined;
 
@@ -747,6 +758,13 @@ router.patch(
                         StatusCodes.NOT_ACCEPTABLE,
                         "Invalid Release",
                         `Release "${code}" has already been released and cannot be modified`
+                    );
+                }
+                if (areReleaseChecksClosed(targetRelease.status)) {
+                    throw new ApiErrorResponse(
+                        StatusCodes.NOT_ACCEPTABLE,
+                        "Invalid Release",
+                        `Release "${code}" has been approved and its placements can no longer be modified`
                     );
                 }
                 if (position < 1 || position > targetRelease.capacity) {
