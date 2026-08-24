@@ -6,7 +6,7 @@ import classNames from "classnames";
 import { challengeIcons, Faction, IPlaytestCard, plotStats } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
-import { IArtist, IArtworkProgress, commissionPaymentLabel, creditedArtistId } from "common/models/artwork";
+import { IArtist, commissionPaymentLabel, creditedArtistId, illustratorName } from "common/models/artwork";
 import { getFinalCardNumber, parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
 import { stripUrlProtocol } from "../../utils";
 import { factionAccentClasses, reorderTransition } from "../../constants";
@@ -36,22 +36,6 @@ const plotStatLabels: Record<(typeof plotStats)[number], string> = {
     reserve: "Reserve"
 };
 
-// A credited artist, or, for AI artwork (which has no artist record), whoever generated it plus the tool used
-function getIllustratorName(artwork: IArtworkProgress | undefined, creditedArtist: IArtist | undefined): string | undefined {
-    if (creditedArtist) {
-        return creditedArtist.name;
-    }
-    if (artwork?.type !== "ai") {
-        return undefined;
-    }
-    const generatedBy = artwork.ai?.generatedBy?.trim();
-    const resource = artwork.ai?.resource?.trim();
-    if (generatedBy && resource) {
-        return `${generatedBy} (${resource})`;
-    }
-    return generatedBy || resource;
-}
-
 function buildRowData(
     cards: IPlaytestCard[],
     slots: ISlot[],
@@ -69,7 +53,7 @@ function buildRowData(
 
         return {
             card,
-            illustrator: card.illustrator || getIllustratorName(artwork, creditedArtist),
+            illustrator: card.illustrator || (artwork && illustratorName(artwork, artists)),
             portfolio: creditedArtist?.portfolio,
             commissionNote: commissionPaymentLabel(commissioned),
             releaseNumber: slot && getFinalCardNumber(project, slot),

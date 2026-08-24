@@ -140,6 +140,23 @@ export function creditedArtistId(artwork: IArtworkProgress): string | undefined 
     return undefined;
 }
 
+/** Display name for whoever gets credited for this artwork - the credited artist, or, for AI (which has no artist record), whoever generated it plus the tool used */
+export function illustratorName(artwork: IArtworkProgress, artists: IArtist[] = []): string | undefined {
+    const creditedArtist = artists.find((artist) => artist.id === creditedArtistId(artwork));
+    if (creditedArtist) {
+        return creditedArtist.name;
+    }
+    if (artwork.type !== "ai") {
+        return undefined;
+    }
+    const generatedBy = artwork.ai?.generatedBy?.trim();
+    const resource = artwork.ai?.resource?.trim();
+    if (generatedBy && resource) {
+        return `${generatedBy} (${resource})`;
+    }
+    return generatedBy || resource;
+}
+
 // Funded with no specific payer, for no cost, and actually paid - not merely unfilled-in
 export function isFreeCommission(commissioned?: ICommissionedArtwork): boolean {
     return (

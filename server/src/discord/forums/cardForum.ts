@@ -3,11 +3,18 @@ import {
     BaseMessageOptions,
     ButtonBuilder,
     ButtonStyle,
+    ContainerBuilder,
     EmbedBuilder,
     ForumChannel,
     Guild,
     GuildForumTag,
-    Role
+    GuildForumThreadMessageCreateOptions,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
+    MessageFlags,
+    resolveColor,
+    Role,
+    TextDisplayBuilder
 } from "discord.js";
 import { labelEmojis, colors, extractFromURL, EMBED_DESCRIPTION_MAX } from "../utils";
 import { toDiscord } from "common/richText/toDiscord";
@@ -219,8 +226,7 @@ export async function createReleased(card: IPlaytestCard, context?: CardForumCon
         card = await syncImage(card);
 
         const [project] = await dataService.projects.read({ number: card.project });
-        const [user] = await dataService.users.read({ discordId: card.updatedBy });
-        const releasedMessage = await messages.released(card, project, user, context);
+        const releasedMessage = await messages.released(card, project);
         const thread = await createThreadFor(card, releasedMessage, context);
 
         // Pin the first message of the newly-created thread
@@ -532,7 +538,11 @@ export async function getThreadFor(card: IPlaytestCard) {
     }
     return { thread, threadCard: target };
 }
-async function createThreadFor(card: IPlaytestCard, message: BaseMessageOptions, context: CardForumContext) {
+async function createThreadFor(
+    card: IPlaytestCard,
+    message: GuildForumThreadMessageCreateOptions,
+    context: CardForumContext
+) {
     logger.info(`[Discord] Creating thread for ${card.name} (${card.version})`);
     const name = threadNameFor(card);
     const reason = `Design Team discussion for ${card.code} - ${name}`;
@@ -644,17 +654,19 @@ const messages = {
             components: [buttonRow]
         };
     },
-    async released(
-        card: IPlaytestCard,
-        project: IProject,
-        user: User | undefined,
-        context: CardForumContext
-    ): Promise<BaseMessageOptions> {
-        const content =
-            "## Card Released" +
-            `\n<@&${context.taggedRole.id}> ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has officially been released (${card.released.code} #${card.released.number}).`;
+    async released(card: IPlaytestCard, project: IProject): Promise<GuildForumThreadMessageCreateOptions> {
+        // Add a time component to force discord to see it as a new url/image (as it caches based on url)
+        const imageUrl = await getTimeLockedImageUrl(card);
 
-        const embeds = await createCardEmbeds(card, user);
+        const heading = new TextDisplayBuilder().setContent(
+            "## Card Released" +
+                `\n${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has officially been released (${card.released.code} #${card.released.number}).`
+        );
+        const gallery = new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(imageUrl));
+        const container = new ContainerBuilder()
+            .setAccentColor(resolveColor(colors[card.faction]))
+            .addTextDisplayComponents(heading)
+            .addMediaGalleryComponents(gallery);
 
         const buttons = createMessageButtons(card);
         const releaseButton = new ButtonBuilder()
@@ -664,10 +676,9 @@ const messages = {
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(...buttons, releaseButton);
 
         return {
-            content,
-            allowedMentions: { parse: ["roles"] },
-            embeds,
-            components: [buttonRow]
+            flags: MessageFlags.IsComponentsV2,
+            allowedMentions: { parse: [] },
+            components: [container, buttonRow]
         };
     },
     async newDraft(

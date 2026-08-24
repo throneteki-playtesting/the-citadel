@@ -14,7 +14,7 @@ import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, clearRelease } from "@/utils";
 import { designPhase, ISlot, resolveFinalCard } from "common/models/slots";
-import { artworkBlocker, creditedArtistId } from "common/models/artwork";
+import { artworkBlocker, illustratorName } from "common/models/artwork";
 import { getContext } from "@/middleware/context";
 import { logActivity, cardSnapshot, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
@@ -473,26 +473,20 @@ router.post(
             const promotedNumbers: number[] = [];
             const updatedCards: IPlaytestCard[] = finalCards.map(({ slot, finalCard, isPromoted }) => {
                 // Illustrator is fixed on record now, backfilled only when the card doesn't already carry one
-                const creditedName = artists.find((artist) => artist.id === creditedArtistId(slot.statuses.artwork))
-                    ?.name;
+                const creditedName = illustratorName(slot.statuses.artwork, artists);
                 const released = { code, number: offset + slot.release!.position };
                 if (isPromoted) {
                     promotedNumbers.push(slot.number);
-                    const promoted: IPlaytestCard = {
-                        ...finalCard!,
-                        draft: false,
-                        illustrator: finalCard!.illustrator || creditedName || "",
-                        released
-                    };
-                    // Forces a fresh thread rather than editing the stale draft message
-                    clearDiscordMetadata([promoted]);
-                    return promoted;
                 }
-                return {
+                const updated: IPlaytestCard = {
                     ...finalCard!,
+                    draft: false,
                     illustrator: finalCard!.illustrator || creditedName || "",
                     released
                 };
+                // Forces a fresh "released" thread rather than reusing (or silently ignoring) the card's prior thread
+                clearDiscordMetadata([updated]);
+                return updated;
             });
             await dataService.cards.update(updatedCards);
 
