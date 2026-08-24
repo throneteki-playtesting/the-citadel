@@ -177,7 +177,6 @@ function PackReviewPage({
                     yet found - publishing is blocked until every card&apos;s official print image is live.
                 </div>
             )}
-            {/* Fixed max-height, not a flex-fill share - scrolls itself regardless of the modal around it */}
             <ScrollShadow size={24} className="max-h-[50vh]">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pr-1">
                     {assignedCards.map(({ position, card }) => {

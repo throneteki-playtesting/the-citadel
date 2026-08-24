@@ -577,8 +577,6 @@ export const FlavorInput = ({
                     </div>
                 )}
             </div>
-            {/* Outside the box, not via Textarea's own errorMessage slot, so it doesn't inherit the box's
-                background - same placement AbilityEditor uses for its own error text */}
             {issue && <div className="text-tiny text-danger px-1">{issue}</div>}
         </div>
     );

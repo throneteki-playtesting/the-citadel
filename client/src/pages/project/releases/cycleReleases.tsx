@@ -502,7 +502,6 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
                                     </Button>
                                 </span>
                             </Tooltip>
-                            {/* Floating add button for mobile only */}
                             <Tooltip
                                 content={
                                     isAtSlotCapacity
