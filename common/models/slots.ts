@@ -72,6 +72,16 @@ export function isReleaseBound(design: DesignStatus, release?: ReleaseStatus): b
     return designPhase[design] === "finalising" && !!release && release !== "planning";
 }
 
+/** The card a slot will actually ship with - its release-bound draft if it has one, else latest */
+export function resolveFinalCard<C>(
+    design: DesignStatus,
+    release: ReleaseStatus | undefined,
+    draftCard: C | undefined,
+    latestCard: C | undefined
+): C | undefined {
+    return draftCard && isReleaseBound(design, release) ? draftCard : latestCard;
+}
+
 export interface IDesignProgress {
     status: DesignStatus;
     /** One entry per submitter, upserted by createdBy */
