@@ -1,4 +1,4 @@
-import { Fragment, useMemo } from "react";
+import { Fragment, memo, useMemo } from "react";
 import { SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { factions, IPlaytestCard } from "common/models/cards";
@@ -6,7 +6,7 @@ import CapsuleVisual from "./capsuleVisual";
 import { noReorderPreview, slotNumberFromItemId } from "./releaseDnd";
 
 // Stays mounted at all times so an in-progress drag never loses its sortable source
-export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive, isVisible }: DevelopmentPanelProps) {
+function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive, isVisible }: DevelopmentPanelProps) {
     // Grouped by faction, canonical order - stable sort keeps each faction's existing relative order
     const sortedIds = useMemo(() => {
         const factionOf = (id: string) => cardsByNumber.get(slotNumberFromItemId(id)!)?.faction;
@@ -15,7 +15,7 @@ export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive
 
     return (
         <SortableContext items={sortedIds} strategy={noReorderPreview}>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 min-h-9">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-h-9">
                 {sortedIds.map((id, index) => {
                     const slotNumber = slotNumberFromItemId(id)!;
                     const card = cardsByNumber.get(slotNumber);
@@ -37,6 +37,7 @@ export default function DevelopmentPanel({ itemIds, cardsByNumber, isInteractive
         </SortableContext>
     );
 }
+export default memo(DevelopmentPanel);
 type DevelopmentPanelProps = {
     itemIds: string[];
     cardsByNumber: Map<number, IPlaytestCard>;

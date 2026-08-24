@@ -96,7 +96,7 @@ function CapsuleVisual({
                 {...(draggable ? listeners : undefined)}
                 {...(draggable ? attributes : undefined)}
                 onPointerDown={onPointerDown}
-                onMouseDown={isClickable ? onMouseDown : undefined}
+                onMouseDown={onMouseDown}
                 onClick={isClickable ? onCapsuleClick : undefined}
                 onAuxClick={isClickable ? onAuxClick : undefined}
                 className={classNames(

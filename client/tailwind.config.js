@@ -1,5 +1,17 @@
 import { heroui } from "@heroui/react";
 import { statementColors, thronesColors } from "../common/utils";
+import { factions } from "../common/models/cards";
+
+// Faction colours mixed toward the surface, standard Tailwind steps, so washed-out tints still read at any size
+const factionShades = { 50: 9, 100: 18, 200: 28, 300: 38, 400: 50, 500: 62, 600: 74, 700: 84, 800: 92, 900: 100 };
+const factionShadeColors = Object.fromEntries(
+    factions.flatMap((faction) =>
+        Object.entries(factionShades).map(([shade, percent]) => [
+            `${faction}-${shade}`,
+            `color-mix(in oklab, ${thronesColors[faction]} ${percent}%, hsl(var(--heroui-content2)))`
+        ])
+    )
+);
 
 /** @type {import('tailwindcss').Config} */
 export default {
@@ -16,6 +28,7 @@ export default {
             },
             colors: {
                 ...thronesColors,
+                ...factionShadeColors,
                 ...statementColors,
                 citadel: {
                     gold: {

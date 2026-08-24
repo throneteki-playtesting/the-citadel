@@ -129,27 +129,27 @@ export const textUIColor: Record<UIColor, string> = {
 };
 
 export const factionBorderClasses: Record<Faction, string> = {
-    baratheon: "border-baratheon/30",
-    greyjoy: "border-greyjoy/30",
-    lannister: "border-lannister/30",
-    martell: "border-martell/30",
-    thenightswatch: "border-thenightswatch/30",
-    stark: "border-stark/20",
-    targaryen: "border-targaryen",
-    tyrell: "border-tyrell/30",
-    neutral: "border-neutral/30"
+    baratheon: "border-baratheon-300",
+    greyjoy: "border-greyjoy-300",
+    lannister: "border-lannister-300",
+    martell: "border-martell-300",
+    thenightswatch: "border-thenightswatch-300",
+    stark: "border-stark-300",
+    targaryen: "border-targaryen-300",
+    tyrell: "border-tyrell-300",
+    neutral: "border-neutral-300"
 };
 
 export const factionBgClasses: Record<Faction, string> = {
-    baratheon: "bg-baratheon/10",
-    greyjoy: "bg-greyjoy/10",
-    lannister: "bg-lannister/10",
-    martell: "bg-martell/10",
-    thenightswatch: "bg-thenightswatch/10",
-    stark: "bg-stark/10",
-    targaryen: "bg-targaryen/10",
-    tyrell: "bg-tyrell/10",
-    neutral: "bg-neutral/10"
+    baratheon: "bg-baratheon-50/90",
+    greyjoy: "bg-greyjoy-50/90",
+    lannister: "bg-lannister-50/90",
+    martell: "bg-martell-50/90",
+    thenightswatch: "bg-thenightswatch-50/90",
+    stark: "bg-stark-50/90",
+    targaryen: "bg-targaryen-50/90",
+    tyrell: "bg-tyrell-50/90",
+    neutral: "bg-neutral-50/90"
 };
 
 // Full strength, for a stripe or rule which is the only thing carrying the faction - the faded border and
@@ -167,27 +167,27 @@ export const factionAccentClasses: Record<Faction, string> = {
 };
 
 export const watermarkClasses: Record<string, string> = {
-    baratheon: "text-baratheon opacity-30",
-    greyjoy: "text-greyjoy opacity-30",
-    lannister: "text-lannister opacity-30",
-    martell: "text-martell opacity-30",
-    thenightswatch: "text-thenightswatch opacity-30",
-    stark: "text-stark opacity-20",
-    targaryen: "text-targaryen brightness-200",
-    tyrell: "text-tyrell opacity-30",
-    neutral: "text-neutral opacity-30"
+    baratheon: "text-baratheon-300",
+    greyjoy: "text-greyjoy-300",
+    lannister: "text-lannister-300",
+    martell: "text-martell-300",
+    thenightswatch: "text-thenightswatch-300",
+    stark: "text-stark-300",
+    targaryen: "text-targaryen-300",
+    tyrell: "text-tyrell-300",
+    neutral: "text-neutral-300"
 };
 
 export const factionBarClasses: Record<Faction, string> = {
-    baratheon: "bg-baratheon/50",
-    greyjoy: "bg-greyjoy/50",
-    lannister: "bg-lannister/50",
-    martell: "bg-martell/50",
-    thenightswatch: "bg-thenightswatch/50",
-    stark: "bg-stark/50",
-    targaryen: "bg-targaryen/50",
-    tyrell: "bg-tyrell/50",
-    neutral: "bg-neutral/50"
+    baratheon: "bg-baratheon-300",
+    greyjoy: "bg-greyjoy-300",
+    lannister: "bg-lannister-300",
+    martell: "bg-martell-300",
+    thenightswatch: "bg-thenightswatch-300",
+    stark: "bg-stark-300",
+    targaryen: "bg-targaryen-300",
+    tyrell: "bg-tyrell-300",
+    neutral: "bg-neutral-300"
 };
 
 export const releaseStatusColors: Record<ReleaseStatus, "default" | "warning" | "secondary" | "primary" | "success"> = {

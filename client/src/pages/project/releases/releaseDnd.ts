@@ -103,6 +103,9 @@ function poolAwareCollision(
                 container.id === POOL_MOBILE_TRIGGER_ID ||
                 poolState.poolItemIds.has(String(container.id))
         );
+    } else {
+        // Pool chips stay mounted while closed, so exclude them explicitly rather than trust their own disabled flag
+        droppableContainers = droppableContainers.filter((container) => !poolState.poolItemIds.has(String(container.id)));
     }
     const pointerCollisions = pointerWithin({ ...args, droppableContainers });
     return pointerCollisions.length > 0 ? pointerCollisions : rectIntersection({ ...args, droppableContainers });
