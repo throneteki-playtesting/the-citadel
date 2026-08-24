@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     addToast,
     Input,
@@ -7,11 +7,12 @@ import {
     ModalContent,
     ModalFooter,
     ModalHeader,
-    Spinner,
-    Tooltip
+    ScrollShadow,
+    Spinner
 } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
+import classNames from "classnames";
 import Joi from "joi";
 import { CardPreview } from "@agot/card-preview";
 import { IProject, IProjectRelease } from "common/models/projects";
@@ -21,8 +22,12 @@ import { generateReleaseImageUrl, getReleaseOffset, parseCardCode, Regex, render
 import { BaseElementProps } from "../../../types";
 import { usePublishReleaseMutation } from "../../../api";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../../components/wizard";
+import { TouchTooltip } from "../../../components/touchTooltip";
+import TooltipDetail from "../../../components/tooltipDetail";
 
 const publishSchema = Joi.object({ releasedDate: Joi.string().regex(Regex.ReleaseDate).required() });
+
+type ImageStatus = "loading" | "found" | "notfound";
 
 export default function PublishReleaseModal({
     isOpen,
@@ -33,6 +38,20 @@ export default function PublishReleaseModal({
     onSave
 }: PublishReleaseModalProps) {
     const [publishRelease, { isLoading }] = usePublishReleaseMutation();
+    // Keyed by card number rather than slot position, so a status survives the list re-rendering
+    const [imageStatuses, setImageStatuses] = useState<Map<number, ImageStatus>>(new Map());
+
+    const setImageStatus = useCallback((number: number, status: ImageStatus) => {
+        setImageStatuses((prev) => {
+            const next = new Map(prev);
+            next.set(number, status);
+            return next;
+        });
+    }, []);
+
+    const notFoundCount = assignedCards.filter(({ card }) => imageStatuses.get(card.number) !== "found").length;
+    // Nothing to publish yet counts as "not ready" rather than vacuously satisfied
+    const allImagesFound = assignedCards.length > 0 && notFoundCount === 0;
 
     const onSubmit = async (data: { releasedDate: ReleaseDate }) => {
         try {
@@ -59,7 +78,8 @@ export default function PublishReleaseModal({
             isOpen={isOpen}
             placement="center"
             size="3xl"
-            scrollBehavior="inside"
+            // "inside" fights the Wizard's own auto-height sizing; the grid below scrolls itself instead
+            scrollBehavior="outside"
             onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}
         >
             <ModalContent>
@@ -69,7 +89,14 @@ export default function PublishReleaseModal({
                         <ModalBody>
                             <WizardPages>
                                 <WizardPage controlledData={{}}>
-                                    <PackReviewPage project={project} release={release} assignedCards={assignedCards} />
+                                    <PackReviewPage
+                                        project={project}
+                                        release={release}
+                                        assignedCards={assignedCards}
+                                        imageStatuses={imageStatuses}
+                                        setImageStatus={setImageStatus}
+                                        notFoundCount={notFoundCount}
+                                    />
                                 </WizardPage>
                                 <WizardPage>
                                     <ConfirmDatePage defaultDate={today} />
@@ -78,7 +105,12 @@ export default function PublishReleaseModal({
                         </ModalBody>
                         <ModalFooter>
                             <WizardBack onCancel={onClose} />
-                            <WizardNext isLoading={isLoading} color="primary" submitContent="Publish" />
+                            <WizardNext
+                                isLoading={isLoading}
+                                isDisabled={!allImagesFound}
+                                color="primary"
+                                submitContent="Publish"
+                            />
                         </ModalFooter>
                     </Wizard>
                 )}
@@ -99,11 +131,17 @@ type PublishReleaseModalProps = Omit<BaseElementProps, "children"> & {
 function PackReviewPage({
     project,
     release,
-    assignedCards
+    assignedCards,
+    imageStatuses,
+    setImageStatus,
+    notFoundCount
 }: {
     project: IProject;
     release: IProjectRelease;
     assignedCards: { position: number; card: IPlaytestCard }[];
+    imageStatuses: Map<number, ImageStatus>;
+    setImageStatus: (number: number, status: ImageStatus) => void;
+    notFoundCount: number;
 }) {
     const offset = getReleaseOffset(project, release.code);
 
@@ -133,8 +171,15 @@ function PackReviewPage({
                     />
                 )}
             </div>
-            <div className="max-h-[60vh] overflow-y-auto pr-1">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+            {notFoundCount > 0 && (
+                <div className="text-sm text-warning-600 bg-warning-50 border border-warning-200 rounded-md p-3">
+                    {notFoundCount} of {assignedCards.length} release image{assignedCards.length === 1 ? "" : "s"} not
+                    yet found - publishing is blocked until every card&apos;s official print image is live.
+                </div>
+            )}
+            {/* Fixed max-height, not a flex-fill share - scrolls itself regardless of the modal around it */}
+            <ScrollShadow size={24} className="max-h-[50vh]">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pr-1">
                     {assignedCards.map(({ position, card }) => {
                         const finalNumber = offset + position;
                         const imageUrl = generateReleaseImageUrl(release.code, finalNumber, card.name);
@@ -144,16 +189,17 @@ function PackReviewPage({
                             bottom: `v${card.version}`
                         });
                         return (
-                            <div key={card.number} className="relative">
-                                <div className="absolute top-1 right-1 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-content1/80">
-                                    <ReleaseImageStatus url={imageUrl} />
-                                </div>
-                                <CardPreview card={rendered} className="w-full" />
-                            </div>
+                            <ReleaseImageTile
+                                key={card.number}
+                                url={imageUrl}
+                                rendered={rendered}
+                                status={imageStatuses.get(card.number) ?? "loading"}
+                                onStatusChange={(status) => setImageStatus(card.number, status)}
+                            />
                         );
                     })}
                 </div>
-            </div>
+            </ScrollShadow>
         </div>
     );
 }
@@ -167,28 +213,66 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     );
 }
 
-function ReleaseImageStatus({ url }: { url: string }) {
-    const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+function ReleaseImageTile({
+    url,
+    rendered,
+    status,
+    onStatusChange
+}: {
+    url: string;
+    rendered: ReturnType<typeof renderPlaytestingCard>;
+    status: ImageStatus;
+    onStatusChange: (status: ImageStatus) => void;
+}) {
+    // Kept fresh via ref so the effect below only restarts on url changes, not on every render
+    const onStatusChangeRef = useRef(onStatusChange);
+    onStatusChangeRef.current = onStatusChange;
 
     useEffect(() => {
-        setStatus("loading");
+        onStatusChangeRef.current("loading");
         const img = new Image();
-        img.onload = () => setStatus("ok");
-        img.onerror = () => setStatus("error");
+        img.onload = () => onStatusChangeRef.current("found");
+        img.onerror = () => onStatusChangeRef.current("notfound");
         img.src = url;
     }, [url]);
 
-    if (status === "loading") {
-        return <Spinner size="sm" />;
-    }
+    // A plot's slot is sized to its own (landscape) shape, so the badge sits on its corner, not the empty space around it
+    const isPlot = rendered.type === "plot";
 
     return (
-        <Tooltip content={status === "ok" ? "Release image found" : "Release image could not be found"}>
-            <FontAwesomeIcon
-                icon={status === "ok" ? faCheck : faXmark}
-                className={status === "ok" ? "text-success" : "text-danger"}
-            />
-        </Tooltip>
+        // Centers a plot's shorter slot within the row's full height
+        <div className="h-full flex items-center justify-center">
+            <div
+                className={classNames(
+                    "relative w-full rounded-md bg-content2 overflow-hidden",
+                    isPlot ? "aspect-[333/240]" : "aspect-[240/333]",
+                    status === "loading" && "border-2 border-dashed border-content3 flex items-center justify-center"
+                )}
+            >
+                {status !== "loading" && (
+                    <div className="absolute top-1 right-1 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-content1/80">
+                        <TouchTooltip
+                            content={
+                                <TooltipDetail
+                                    heading={status === "found" ? "Release image found" : "Release image not found"}
+                                >
+                                    <span className="break-all">{url}</span>
+                                </TooltipDetail>
+                            }
+                            size="sm"
+                        >
+                            <FontAwesomeIcon
+                                icon={status === "found" ? faCheck : faXmark}
+                                className={status === "found" ? "text-success" : "text-danger"}
+                            />
+                        </TouchTooltip>
+                    </div>
+                )}
+                {status === "loading" && <Spinner size="lg" />}
+                {status === "found" && <img src={url} alt={rendered.name} className="w-full h-full object-contain" />}
+                {status === "notfound" && <CardPreview card={rendered} className="w-full" />}
+            </div>
+        </div>
     );
 }
 

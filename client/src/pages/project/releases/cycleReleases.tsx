@@ -47,7 +47,7 @@ import {
 import { useCapsuleFlip } from "./releaseFlip";
 import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
-import { getPositionFaction } from "common/utils";
+import { finalCardsByNumber, getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
 import { highlightTarget } from "../../../constants";
 import useHistoryState from "../../../hooks/useHistoryState";
@@ -56,8 +56,14 @@ const isSameCodes = (a: string[], b: string[]) => a.length === b.length && a.eve
 
 export default function CycleReleases({ project, isActive }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
+    // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
+    // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
+    // slot will actually ship with
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
-        filter: { project: project.number, latest: true }
+        filter: [
+            { project: project.number, latest: true },
+            { project: project.number, draft: true }
+        ]
     });
 
     const [reorderReleases] = useReorderReleasesMutation();
@@ -104,11 +110,16 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
         useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
     );
 
-    const cardsByNumber = useMemo(
-        () => new Map((cardsData?.items ?? []).map((card) => [card.number, card])),
-        [cardsData]
-    );
     const slots = useMemo(() => slotsData?.items ?? [], [slotsData]);
+    // Each slot's card to actually show - its release-bound draft if it has one, else latest
+    const cardsByNumber = useMemo(() => {
+        const draftCardsByNumber = new Map<number, IPlaytestCard>();
+        const latestCardsByNumber = new Map<number, IPlaytestCard>();
+        for (const card of cardsData?.items ?? []) {
+            (card.draft ? draftCardsByNumber : latestCardsByNumber).set(card.number, card);
+        }
+        return finalCardsByNumber(slots, project, draftCardsByNumber, latestCardsByNumber);
+    }, [cardsData, slots, project]);
     const pool = useMemo(() => slots.filter((slot) => !slot.release).sort((a, b) => a.number - b.number), [slots]);
     const releases = useMemo(() => [...project.releases].sort((a, b) => a.number - b.number), [project.releases]);
     const unreleasedReleases = useMemo(() => releases.filter((release) => !release.releasedDate), [releases]);
