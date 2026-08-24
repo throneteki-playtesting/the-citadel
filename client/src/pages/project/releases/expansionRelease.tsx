@@ -24,7 +24,7 @@ import {
 import { SortableContext } from "@dnd-kit/sortable";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faEllipsisVertical, faPencil } from "@fortawesome/free-solid-svg-icons";
-import { IProject, IProjectRelease } from "common/models/projects";
+import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { IPlaytestCard } from "common/models/cards";
 import { finalCardsByNumber, getPositionFaction } from "common/utils";
 import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
@@ -117,7 +117,7 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     const displayStatus = isLocked ? "released" : release.status;
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
-    const disabled = isLocked || !canMoveCapsules;
+    const disabled = isLocked || areReleaseChecksClosed(release.status) || !canMoveCapsules;
     const publishTooltip = isComplete ? "Publish Release" : "Every position must be filled before publishing";
 
     const activeSlotNumber = activeId ? slotNumberFromItemId(activeId) : undefined;

@@ -386,17 +386,17 @@ export function ReleaseBlock({
     dragHandleListeners,
     dragHandleAttributes
 }: ReleaseBlockProps) {
-    const { setNodeRef } = useDroppable({ id: release.code });
+    const isLocked = !!release.releasedDate;
+    const disabled = isLocked || areReleaseChecksClosed(release.status) || !canMoveCapsules;
+    const { setNodeRef } = useDroppable({ id: release.code, disabled });
     const { measureDroppableContainers, droppableContainers, active, over } = useDndContext();
     const [deleteRelease, { isLoading: isDeleting }] = useDeleteReleaseMutation();
     const [getReleasePack, { isLoading: isDownloadingJson }] = useGetReleasePackMutation();
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
-    const isLocked = !!release.releasedDate;
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
-    const disabled = isLocked || !canMoveCapsules;
 
     // Bound here rather than by the caller, so the memoised header keeps stable handlers
     const toggleCollapse = useCallback(() => onToggleCollapse(release.code), [onToggleCollapse, release.code]);
