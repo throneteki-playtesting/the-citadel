@@ -2,29 +2,34 @@ import { faCheck, faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
-import { useSyncProjectImagesMutation } from "../../api";
+import { useSyncProjectDiscordMutation } from "../../api";
 import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 import { useVisibleProjectCards } from "./useVisibleProjectCards";
 
-export function useProjectImageStatus(project: number) {
+function isSynced(card: { _metadata?: { discord?: { messageUrl?: string; lastSynced?: Date } }; updated: Date }) {
+    const discord = card._metadata?.discord;
+    return !!discord?.messageUrl && (!discord.lastSynced || discord.lastSynced >= card.updated);
+}
+
+export function useDiscordProjectStatus(project: number) {
     const { cards, isLoading } = useVisibleProjectCards(project);
     const total = cards.length;
-    const synced = useMemo(() => cards.filter((card) => card._metadata?.imageUrl).length, [cards]);
+    const synced = useMemo(() => cards.filter(isSynced).length, [cards]);
     const percent = total > 0 ? Math.round((synced / total) * 100) : 0;
 
-    const [syncProjectImages, { isLoading: isSyncing, isError }] = useSyncProjectImagesMutation();
-    const hasSyncPermission = usePermission(Permission.SYNC_CARD_IMAGES);
+    const [syncProjectDiscord, { isLoading: isSyncing, isError }] = useSyncProjectDiscordMutation();
+    const hasSyncPermission = usePermission(Permission.SYNC_CARD_DISCORD);
 
     const data = useMemo<StatusData | null>(() => {
         if (total === 0) {
             return null;
         }
 
-        const title = "Project Images";
+        const title = "Project Discord Threads";
         const allSynced = synced === total;
-        const syncFn = (forced?: boolean) => syncProjectImages({ project, forced });
+        const syncFn = (forced?: boolean) => syncProjectDiscord({ project, forced });
         const onPress = hasSyncPermission && !isSyncing ? () => syncFn() : undefined;
         const longPressOptions = hasSyncPermission
             ? [
@@ -65,7 +70,7 @@ export function useProjectImageStatus(project: number) {
                 icon: <FontAwesomeIcon icon={faCheck} size="lg" />,
                 longPressOptions,
                 color: "success",
-                description: "All card images are synced"
+                description: "All card threads are synced"
             };
         }
 
@@ -75,9 +80,9 @@ export function useProjectImageStatus(project: number) {
             onPress,
             longPressOptions,
             color: "secondary",
-            description: `${synced}/${total} card images are synced`
+            description: `${synced}/${total} card threads are synced`
         };
-    }, [hasSyncPermission, isError, isSyncing, percent, project, synced, syncProjectImages, total]);
+    }, [hasSyncPermission, isError, isSyncing, percent, project, synced, syncProjectDiscord, total]);
 
     return { data, isLoading, isSyncing };
 }

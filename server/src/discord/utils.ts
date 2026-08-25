@@ -4,6 +4,8 @@ import { dataService } from "@/services";
 /** Discord's own caps on how much text a single embed part will carry */
 export const EMBED_DESCRIPTION_MAX = 4096;
 export const EMBED_FIELD_MAX = 1024;
+/** Discord's cap on a single Components V2 Text Display's content */
+export const TEXT_DISPLAY_MAX = 4000;
 
 // Emoji standing for a concept rather than an icon - a note's type, a review answer. Discord's own
 // shortcodes, so nothing on the guild to look up; custom emoji are read live via getEmojiMap() instead

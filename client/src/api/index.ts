@@ -732,12 +732,23 @@ const api = createApi({
             providesTags: (results) => generateFor(results, "card")
         }),
         // Syncing API
-        syncProjectImages: builder.mutation<
-            IPlaytestCard[],
-            { project: number; number?: number; version?: SemanticVersion; latest?: boolean; forced?: boolean }
-        >({
-            query: ({ project, number, version, latest, forced }) => {
-                const url = buildUrl(`projects/${project}/sync/image`, { number, version, latest, forced });
+        syncProjectImages: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
+            query: ({ project, number, forced }) => {
+                const url = buildUrl(`projects/${project}/sync/image`, { number, forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "card")
+        }),
+        syncProjectDiscord: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
+            query: ({ project, number, forced }) => {
+                const url = buildUrl(`projects/${project}/sync/discord`, { number, forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "card")
+        }),
+        syncProjectGithub: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
+            query: ({ project, number, forced }) => {
+                const url = buildUrl(`projects/${project}/sync/github`, { number, forced });
                 return { url, method: "POST" };
             },
             invalidatesTags: (result) => generateFor(result, "card")
@@ -991,6 +1002,8 @@ export const {
     useGetPlaytestingUpdateImplementedQuery,
 
     useSyncProjectImagesMutation,
+    useSyncProjectDiscordMutation,
+    useSyncProjectGithubMutation,
     useSyncCardImageMutation,
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,

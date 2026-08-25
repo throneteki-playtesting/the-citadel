@@ -2,29 +2,41 @@ import { faCheck, faRotate } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
-import { useSyncProjectImagesMutation } from "../../api";
+import { useSyncProjectGithubMutation } from "../../api";
 import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
 import Permission from "common/models/permissions";
 import { useVisibleProjectCards } from "./useVisibleProjectCards";
 
-export function useProjectImageStatus(project: number) {
+function isSynced(card: {
+    _metadata?: { github?: { issueUrl?: string; lastSynced?: Date } };
+    implemented: boolean;
+    updated: Date;
+}) {
+    if (card.implemented) {
+        return true;
+    }
+    const github = card._metadata?.github;
+    return !!github?.issueUrl && (!github.lastSynced || github.lastSynced >= card.updated);
+}
+
+export function useGithubProjectStatus(project: number) {
     const { cards, isLoading } = useVisibleProjectCards(project);
     const total = cards.length;
-    const synced = useMemo(() => cards.filter((card) => card._metadata?.imageUrl).length, [cards]);
+    const synced = useMemo(() => cards.filter(isSynced).length, [cards]);
     const percent = total > 0 ? Math.round((synced / total) * 100) : 0;
 
-    const [syncProjectImages, { isLoading: isSyncing, isError }] = useSyncProjectImagesMutation();
-    const hasSyncPermission = usePermission(Permission.SYNC_CARD_IMAGES);
+    const [syncProjectGithub, { isLoading: isSyncing, isError }] = useSyncProjectGithubMutation();
+    const hasSyncPermission = usePermission(Permission.SYNC_CARD_GITHUB);
 
     const data = useMemo<StatusData | null>(() => {
         if (total === 0) {
             return null;
         }
 
-        const title = "Project Images";
+        const title = "Project Github Issues";
         const allSynced = synced === total;
-        const syncFn = (forced?: boolean) => syncProjectImages({ project, forced });
+        const syncFn = (forced?: boolean) => syncProjectGithub({ project, forced });
         const onPress = hasSyncPermission && !isSyncing ? () => syncFn() : undefined;
         const longPressOptions = hasSyncPermission
             ? [
@@ -65,7 +77,7 @@ export function useProjectImageStatus(project: number) {
                 icon: <FontAwesomeIcon icon={faCheck} size="lg" />,
                 longPressOptions,
                 color: "success",
-                description: "All card images are synced"
+                description: "All card issues are synced"
             };
         }
 
@@ -75,9 +87,9 @@ export function useProjectImageStatus(project: number) {
             onPress,
             longPressOptions,
             color: "secondary",
-            description: `${synced}/${total} card images are synced`
+            description: `${synced}/${total} card issues are synced`
         };
-    }, [hasSyncPermission, isError, isSyncing, percent, project, synced, syncProjectImages, total]);
+    }, [hasSyncPermission, isError, isSyncing, percent, project, synced, syncProjectGithub, total]);
 
     return { data, isLoading, isSyncing };
 }

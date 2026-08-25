@@ -12,7 +12,10 @@ import ProjectProgressMeter from "../../components/projectProgressMeter";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
+import { BaseStatus } from "../../components/status/baseStatus";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
+import { useDiscordProjectStatus } from "../../components/status/useDiscordProjectStatus";
+import { useGithubProjectStatus } from "../../components/status/useGithubProjectStatus";
 
 const ProjectHeader = ({
     className,
@@ -22,11 +25,15 @@ const ProjectHeader = ({
     onDelete = () => true
 }: ProjectHeaderProps) => {
     const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES);
+    const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD);
+    const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB);
     const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
     const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
     const canArchive = usePermission(Permission.ARCHIVE_PROJECTS) && !project.draft && project.active;
 
     const { data: imageStatus, isLoading: isImageStatusLoading } = useProjectImageStatus(project.number);
+    const { data: discordStatus, isLoading: isDiscordStatusLoading } = useDiscordProjectStatus(project.number);
+    const { data: githubStatus, isLoading: isGithubStatusLoading } = useGithubProjectStatus(project.number);
 
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
@@ -73,35 +80,61 @@ const ProjectHeader = ({
                     <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
                         {headerComponents}
                     </div>
-                    <HeaderActions
-                        items={[
-                            canSyncImages &&
-                                statusActionItem("sync-images", imageStatus, {
-                                    isLoading: isImageStatusLoading,
-                                    keepOpen: true
-                                }),
-                            canEdit && {
-                                key: "edit",
-                                title: "Edit Project",
-                                icon: <FontAwesomeIcon icon={faPencil} />,
-                                onPress: onEdit
-                            },
-                            canDelete && {
-                                key: "delete",
-                                title: "Delete Project",
-                                icon: <FontAwesomeIcon icon={faTrash} />,
-                                color: "danger",
-                                onPress: onDelete
-                            },
-                            canArchive && {
-                                key: "archive",
-                                title: "Archive Project",
-                                icon: <FontAwesomeIcon icon={faBoxArchive} />,
-                                color: "danger",
-                                onPress: onDelete
-                            }
-                        ]}
-                    />
+                    <div className="flex items-center gap-1.5">
+                        <div className="hidden sm:flex items-center gap-1.5">
+                            {canSyncImages && (
+                                <BaseStatus data={imageStatus} isLoading={isImageStatusLoading} isIconOnly />
+                            )}
+                            {canSyncDiscord && (
+                                <BaseStatus data={discordStatus} isLoading={isDiscordStatusLoading} isIconOnly />
+                            )}
+                            {canSyncGithub && (
+                                <BaseStatus data={githubStatus} isLoading={isGithubStatusLoading} isIconOnly />
+                            )}
+                        </div>
+                        <HeaderActions
+                            items={[
+                                canSyncImages &&
+                                    statusActionItem("sync-images", imageStatus, {
+                                        isLoading: isImageStatusLoading,
+                                        keepOpen: true,
+                                        isDropdownOnly: true
+                                    }),
+                                canSyncDiscord &&
+                                    statusActionItem("sync-discord", discordStatus, {
+                                        isLoading: isDiscordStatusLoading,
+                                        keepOpen: true,
+                                        isDropdownOnly: true
+                                    }),
+                                canSyncGithub &&
+                                    statusActionItem("sync-github", githubStatus, {
+                                        isLoading: isGithubStatusLoading,
+                                        keepOpen: true,
+                                        isDropdownOnly: true
+                                    }),
+                                canEdit && {
+                                    key: "edit",
+                                    title: "Edit Project",
+                                    icon: <FontAwesomeIcon icon={faPencil} />,
+                                    onPress: onEdit
+                                },
+                                canDelete && {
+                                    key: "delete",
+                                    title: "Delete Project",
+                                    icon: <FontAwesomeIcon icon={faTrash} />,
+                                    color: "danger",
+                                    onPress: onDelete
+                                },
+                                canArchive && {
+                                    key: "archive",
+                                    title: "Archive Project",
+                                    icon: <FontAwesomeIcon icon={faBoxArchive} />,
+                                    color: "danger",
+                                    onPress: onDelete
+                                }
+                            ]}
+                        />
+                    </div>
                 </div>
                 <div className="flex flex-row items-end justify-between gap-6">
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">

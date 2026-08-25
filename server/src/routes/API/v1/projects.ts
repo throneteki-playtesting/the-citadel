@@ -6,12 +6,12 @@ import * as Schemas from "common/models/schemas";
 import { FactionCardCount, IProject } from "common/models/projects";
 import { validateRequest, validateProjectAccess, PermissionErrorResponse } from "@/middleware/permissions";
 import { getContext } from "@/middleware/context";
-import { hasPermission, Regex, SemanticVersion } from "common/utils";
+import { hasPermission } from "common/utils";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { cloneDeep } from "lodash-es";
-import { factions, IPlaytestCard } from "common/models/cards";
+import { factions, IPlaytestCard, pickVisibleCards } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import { generateGetResponse, applyToFilter, loadProjectByNumber, buildExpansionRelease } from "@/utils";
 import { ProjectStats } from "common/models/stats";
@@ -22,7 +22,8 @@ import slots from "./slots";
 import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { clearDiscordMetadata, closeThreads } from "@/discord/forums/cardForum";
+import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
+import { syncIssues } from "@/github/issues";
 
 const router = express.Router();
 
@@ -370,37 +371,64 @@ router.post(
     })
 );
 
-// Sync project card images
+// Resolves, per card number in scope, the one version to act on - released-latest, then draft, then plain latest
+async function visibleTargets(project: number, number?: number): Promise<IPlaytestCard[]> {
+    const filter = { project, ...(number !== undefined ? { number } : {}) };
+    const candidates = await dataService.cards.read([
+        { ...filter, latest: true },
+        { ...filter, draft: true }
+    ]);
+    return pickVisibleCards(candidates);
+}
+
+type SyncParams = { number: number; type: "image" | "discord" | "github" };
+
+// Sync project cards (images, discord threads, or github issues) in bulk
 router.post(
-    "/:number/sync/image",
-    validateRequest(Permission.SYNC_CARD_IMAGES),
+    "/:number/sync/:type",
     celebrate({
-        [Segments.PARAMS]: numberParams,
+        [Segments.PARAMS]: { ...numberParams, type: Joi.string().valid("image", "discord", "github").required() },
         [Segments.QUERY]: {
             number: Joi.number(),
-            version: Joi.string().regex(Regex.SemanticVersion),
-            latest: Joi.boolean(),
             forced: Joi.boolean()
         }
     }),
+    validateRequest<SyncParams, unknown, unknown, unknown>((principal, req) => {
+        switch (req.params.type) {
+            case "image":
+                return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
+            case "discord":
+                return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
+            case "github":
+                return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
+            default:
+                return false;
+        }
+    }),
     loadProjectByNumber,
-    asyncHandler<
-        { number: number },
-        unknown,
-        unknown,
-        { number?: number; version?: SemanticVersion; latest?: boolean; forced?: boolean }
-    >(async (req, res) => {
+    asyncHandler<SyncParams, unknown, unknown, { number?: number; forced?: boolean }>(async (req, res) => {
         const project = res.locals.project as IProject;
-        const { number, version, latest, forced } = req.query;
-        let cards = await dataService.cards.read({ project: project.number, number, version, latest });
+        const { type } = req.params;
+        const { number, forced } = req.query;
+        let cards = await visibleTargets(project.number, number);
 
-        cards = await syncImage(cards, forced);
+        switch (type) {
+            case "image":
+                cards = await syncImage(cards, forced);
+                break;
+            case "discord":
+                cards = await syncCardForum(cards, forced);
+                break;
+            case "github":
+                cards = await syncIssues(cards, forced);
+                break;
+        }
 
         if (forced) {
             await logActivity(
                 LogCategory.PROJECT,
-                "project.images_synced",
-                "<principal> forced an image sync for <project>",
+                `project.${type}_synced`,
+                `<principal> forced a ${type} sync for <project>`,
                 { context: { project: projectSnapshot(project) } }
             );
         }

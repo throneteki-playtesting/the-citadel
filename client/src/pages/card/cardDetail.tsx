@@ -8,7 +8,7 @@ import {
     useGetProjectQuery,
     useGetSlotQuery
 } from "../../api";
-import { IPlaytestCard } from "common/models/cards";
+import { cardVersionRank, IPlaytestCard } from "common/models/cards";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
@@ -222,15 +222,8 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
         }
         return (
             [...cardsData.items].sort((a, b) => {
-                const rank = (card: IPlaytestCard): number => {
-                    if (card.latest && card.released) return 0;
-                    if (card.draft) return 1;
-                    if (card.latest) return 2;
-                    return 3;
-                };
-
-                const rankA = rank(a);
-                const rankB = rank(b);
+                const rankA = cardVersionRank(a);
+                const rankB = cardVersionRank(b);
 
                 if (rankA !== rankB) return rankB - rankA;
 

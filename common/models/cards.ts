@@ -108,6 +108,32 @@ export interface IPlaytestCard extends ICard, IAuditable {
     };
 }
 
+/** Priority for picking "the" version of a card number to act on - released-latest, then draft, then plain latest. Lower is higher priority. */
+export function cardVersionRank(card: IPlaytestCard): number {
+    if (card.latest && card.released) {
+        return 0;
+    }
+    if (card.draft) {
+        return 1;
+    }
+    if (card.latest) {
+        return 2;
+    }
+    return 3;
+}
+
+/** Reduces a mixed list down to one card per number - whichever has the lowest cardVersionRank */
+export function pickVisibleCards(cards: IPlaytestCard[]): IPlaytestCard[] {
+    const byNumber = new Map<number, IPlaytestCard>();
+    for (const card of cards) {
+        const current = byNumber.get(card.number);
+        if (!current || cardVersionRank(card) < cardVersionRank(current)) {
+            byNumber.set(card.number, card);
+        }
+    }
+    return Array.from(byNumber.values());
+}
+
 export interface NoteDetails {
     type: NoteType;
     text: string;
