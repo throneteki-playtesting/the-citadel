@@ -59,10 +59,11 @@ import useConsumableParams from "../../hooks/useConsumableParams";
 import CardHeader from "./cardHeader";
 import ArtworkTab from "./artwork/artworkTab";
 import RefinementTab from "./refinement/refinementTab";
-import useHistoryState from "../../hooks/useHistoryState";
+import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
+import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
 import Error from "../../components/error";
 
-const CARD_PARAMS = ["releaseCheck", "tab"] as const;
+const CARD_PARAMS = ["releaseCheck"] as const;
 
 export type CardTab = "development" | "artwork" | "refinement";
 
@@ -79,11 +80,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
     });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     // Consumed once here for the whole page - two callers would each strip their own keys and race
-    const { releaseCheck: entryReleaseCheck, tab: entryTab } = useConsumableParams(CARD_PARAMS);
-    const [tab, setTab] = useHistoryState<CardTab>("tab", entryCardTab(entryTab));
-    const sectionTabsRef = useSelectedTabInView(tab);
-    const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
-    const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+    const { releaseCheck: entryReleaseCheck } = useConsumableParams(CARD_PARAMS);
 
     if (isLoadingProject || isLoadingCard) {
         return (
@@ -104,17 +101,38 @@ export default function CardDetail({ className, style, project: projectNumber, n
 
     return (
         <div className={classNames("space-y-2", className)} style={style}>
+            <ScopedSearchParamsProvider>
+                <CardContent project={projectNumber} number={number} entryReleaseCheck={entryReleaseCheck} />
+            </ScopedSearchParamsProvider>
+        </div>
+    );
+}
+
+// Split out so its tab state can sit inside the ScopedSearchParamsProvider CardDetail renders around it
+function CardContent({ project, number, entryReleaseCheck }: CardContentProps) {
+    const [searchParams] = useSearchParams();
+    const [tab, setTab] = useState<CardTab>(() => entryCardTab(searchParams.get("tab") ?? undefined));
+    // Lets a link to the artwork/refinement tab be copy-pasted; development (the default) leaves no trace
+    const tabParams = useMemo(() => ({ tab: tab === "development" ? undefined : tab }), [tab]);
+    useSearchParamsScope("tab", true, tabParams);
+    const sectionTabsRef = useSelectedTabInView(tab);
+
+    const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
+    const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+
+    return (
+        <>
             <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
-                <CardHeader project={projectNumber} number={number} className="flex-1" />
+                <CardHeader project={project} number={number} className="flex-1" />
                 <ButtonSection
-                    project={projectNumber}
+                    project={project}
                     number={number}
                     entryReleaseCheck={entryReleaseCheck}
                     className="self-end sm:self-start"
                 />
             </div>
             <PermissionGate requires={Permission.READ_STATS_SLOT}>
-                <CardProgress project={projectNumber} number={number} />
+                <CardProgress project={project} number={number} onOpenArtwork={() => setTab("artwork")} />
             </PermissionGate>
             {canReadArtwork || canReadRefinement ? (
                 <div ref={sectionTabsRef}>
@@ -129,26 +147,31 @@ export default function CardDetail({ className, style, project: projectNumber, n
                         destroyInactiveTabPanel={false}
                     >
                         <Tab key="development" title="Development">
-                            <DevelopmentSection project={projectNumber} number={number} />
+                            <DevelopmentSection project={project} number={number} />
                         </Tab>
                         {canReadArtwork ? (
                             <Tab key="artwork" title="Artwork">
-                                <ArtworkTab project={projectNumber} number={number} />
+                                <ArtworkTab project={project} number={number} />
                             </Tab>
                         ) : null}
                         {canReadRefinement ? (
                             <Tab key="refinement" title="Refinement">
-                                <RefinementTab project={projectNumber} number={number} />
+                                <RefinementTab project={project} number={number} />
                             </Tab>
                         ) : null}
                     </Tabs>
                 </div>
             ) : (
-                <DevelopmentSection project={projectNumber} number={number} />
+                <DevelopmentSection project={project} number={number} />
             )}
-        </div>
+        </>
     );
 }
+type CardContentProps = {
+    project: number;
+    number: number;
+    entryReleaseCheck?: string;
+};
 
 function DevelopmentSection({ project, number }: { project: number; number: number }) {
     return (

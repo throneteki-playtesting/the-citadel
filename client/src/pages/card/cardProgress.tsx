@@ -12,7 +12,6 @@ import { TouchTooltip } from "../../components/touchTooltip";
 import StatusStepper from "../../components/statusStepper";
 import TooltipDetail from "../../components/tooltipDetail";
 import { useCountUp } from "../../hooks/useCountUp";
-import useHistoryState from "../../hooks/useHistoryState";
 import {
     artworkLane,
     CardLaneKey,
@@ -24,7 +23,6 @@ import {
     statusNodeClass,
     stepperSizeClasses
 } from "../../constants";
-import type { CardTab } from "./cardDetail";
 import DesignProgressModal from "./designProgressModal";
 import ArtworkStatusModal from "./artwork/artworkStatusModal";
 import ProductionProgressModal from "./productionProgressModal";
@@ -47,11 +45,9 @@ function laneStep(lane: CardLaneKey, statuses?: ICardProgress["statuses"]): Stat
     return index >= 0 ? laneTracks[lane][index] : undefined;
 }
 
-export default function CardProgress({ className, style, project, number }: CardProgressProps) {
+export default function CardProgress({ className, style, project, number, onOpenArtwork }: CardProgressProps) {
     const { data, isLoading } = useGetCardProgressQuery({ project, number });
     const [openLane, setOpenLane] = useState<CardLaneKey | null>(null);
-    // Artwork outgrew a modal - its lane opens the card's Artwork tab instead, sharing the tab's own state
-    const [, setTab] = useHistoryState<CardTab>("tab", "development");
     // Mobile only - from sm up the lanes are always on show, whatever this holds
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -107,7 +103,7 @@ export default function CardProgress({ className, style, project, number }: Card
                 onClose={() => setOpenLane(null)}
                 onOpenArtwork={() => {
                     setOpenLane(null);
-                    setTab("artwork");
+                    onOpenArtwork();
                 }}
                 project={project}
                 number={number}
@@ -312,4 +308,5 @@ function OverallValue({ value }: { value?: number }) {
 type CardProgressProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
+    onOpenArtwork: () => void;
 };
