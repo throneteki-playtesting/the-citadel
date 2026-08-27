@@ -27,15 +27,17 @@ export default function StatusNotice({
     return (
         <div
             className={classNames(
-                "flex items-center gap-2.5 rounded-md border border-l-4 py-1.5 px-2.5 text-xs",
+                "flex flex-col gap-2 rounded-md border border-l-4 py-1.5 px-2.5 text-xs sm:flex-row sm:items-center sm:gap-2.5",
                 colorClasses[color],
                 className
             )}
         >
-            {icon && <FontAwesomeIcon icon={icon} className="shrink-0 text-lg" />}
-            <div className="min-w-0 flex-1 flex flex-col sm:gap-2">
-                <span className="font-cinzel uppercase tracking-wide whitespace-nowrap text-sm">{label}</span>
-                {detail && <div className="min-w-0 text-foreground/60">{detail}</div>}
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                {icon && <FontAwesomeIcon icon={icon} className="shrink-0 text-lg" />}
+                <div className="min-w-0 flex-1 flex flex-col sm:gap-2">
+                    <span className="font-cinzel uppercase tracking-wide whitespace-nowrap text-sm">{label}</span>
+                    {detail && <div className="min-w-0 text-foreground/60">{detail}</div>}
+                </div>
             </div>
             {children}
         </div>

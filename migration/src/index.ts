@@ -17,6 +17,7 @@ import { migration as decksMigration } from "./migrations/008_decks";
 import { migration as slotDesignLaneMigration } from "./migrations/009_slotDesignLane";
 import { migration as richTextMigration } from "./migrations/010_richText";
 import { migration as mergeReleaseStatusesMigration } from "./migrations/011_mergeReleaseStatuses";
+import { migration as slotRefinementMigration } from "./migrations/012_slotRefinement";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
@@ -29,7 +30,8 @@ const ALL_MIGRATIONS: Migration[] = [
     decksMigration,
     slotDesignLaneMigration,
     richTextMigration,
-    mergeReleaseStatusesMigration
+    mergeReleaseStatusesMigration,
+    slotRefinementMigration
 ];
 
 const args = process.argv.slice(2);
@@ -50,8 +52,12 @@ async function main() {
     }
 
     log.section("The Citadel — MongoDB Migration");
-    if (dryRun) log.warn("--dry-run: no data will be written");
-    if (resolveUsersOnly) log.info("--resolve-users: only reviews migration will run");
+    if (dryRun) {
+        log.warn("--dry-run: no data will be written");
+    }
+    if (resolveUsersOnly) {
+        log.info("--resolve-users: only reviews migration will run");
+    }
 
     const sourceClient = new MongoClient(sourceUrl);
     const destClient = new MongoClient(destUrl);
@@ -73,7 +79,9 @@ async function main() {
         const ctx: MigrationContext = { sourceDb, destDb, dryRun, resolveUsersOnly };
 
         for (const migration of ALL_MIGRATIONS) {
-            if (resolveUsersOnly && migration.name !== "003_reviews") continue;
+            if (resolveUsersOnly && migration.name !== "003_reviews") {
+                continue;
+            }
 
             const alreadyApplied = applied.has(migration.name);
             if (alreadyApplied) {

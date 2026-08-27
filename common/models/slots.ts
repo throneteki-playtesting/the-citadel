@@ -3,12 +3,18 @@ import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
 import { IAuditable } from "./shared";
 import { IArtworkProgress } from "./artwork";
+import { isCheckStale, IRefinementCheck, IRefinementInquiry } from "./refinement";
 import { SemanticVersion } from "../utils";
 
 // The artwork lane lives in ./artwork, but is re-exported here so a slot's three lanes stay importable together
 export { artworkStatuses, artworkTypes } from "./artwork";
 export type { ArtworkStatus, ArtworkType } from "./artwork";
 export type { IArtworkProgress };
+
+// The refinement step's own records live in ./refinement, re-exported so a slot's design step stays
+// importable as one piece. Staleness comes with them, since both kinds of check are stamped the same way
+export type { IRefinementCheck, IRefinementInquiry };
+export { isCheckStale };
 
 export const designStatuses = ["preview", "forging", "refinement", "complete"] as const;
 export const productionStatuses = ["waiting", "compositing", "complete"] as const;
@@ -62,11 +68,6 @@ export function checksClosedBy(design: DesignStatus, release?: ReleaseStatus): C
     return undefined;
 }
 
-/** A verdict only counts while it matches the slot's latest confirmed card; any version change stales it */
-export function isCheckStale(entry: IReleaseCheck, latest?: SemanticVersion) {
-    return !!latest && entry.version !== latest;
-}
-
 /** Design at refinement+ in a pack past planning is locked to print - a draft on it won't trigger a playtesting update */
 export function isReleaseBound(design: DesignStatus, release?: ReleaseStatus): boolean {
     return designPhase[design] === "finalising" && !!release && release !== "planning";
@@ -82,10 +83,22 @@ export function resolveFinalCard<C>(
     return draftCard && isReleaseBound(design, release) ? draftCard : latestCard;
 }
 
+/**
+ * Both kinds of sign-off a card collects, grouped because they are the same sort of record - one entry
+ * per person, version stamped, upserted by createdBy - taken at complementary points in the lane
+ */
+export interface IDesignChecks {
+    /** Submitted while the card is still in development; closed once its design is locked in */
+    release: IReleaseCheck[];
+    /** Submitted during refinement - somebody asserting they have looked this card over */
+    refinement: IRefinementCheck[];
+}
+
 export interface IDesignProgress {
     status: DesignStatus;
-    /** One entry per submitter, upserted by createdBy */
-    checks: IReleaseCheck[];
+    checks: IDesignChecks;
+    /** Points raised against this card during refinement, numbered from 1 in creation order */
+    inquiries: IRefinementInquiry[];
     /** Set/cleared only by the privileged PATCH /:slot/design/status endpoint */
     finalApproval?: { by: string; at: Date };
 }
@@ -162,6 +175,26 @@ export interface ISlotArtworkDetail {
 /** One row of GET .../slots/artworks - the project's Artworks list, projected down to what it uses */
 export interface ISlotArtwork extends Pick<ISlot, "project" | "number" | "faction" | "release">, ISlotArtworkDetail {}
 
+/**
+ * GET .../slots/:slot/refinement response, gated by READ_REFINEMENT rather than READ_SLOTS. Carries the
+ * card version everything's staleness is measured against, so a reader never has to look it up separately.
+ */
+export interface ISlotRefinementDetail {
+    designStatus: DesignStatus;
+    inquiries: IRefinementInquiry[];
+    /** Only the refinement kind reaches here, so nothing has to distinguish it from a release check */
+    refinementChecks: IRefinementCheck[];
+    /** Absent without READ_FAQ, which is a separate permission from reading the rest of this */
+    faq?: string;
+    /** The slot's final card - a release-bound draft where it has one, otherwise the latest */
+    version?: SemanticVersion;
+}
+
+/** One row of GET .../slots/refinements - the project's Refinements list, projected down to what it uses */
+export interface ISlotRefinement
+    extends Pick<ISlot, "project" | "number" | "faction" | "release">,
+        ISlotRefinementDetail {}
+
 export interface ISlot extends IAuditable {
     project: number;
     /** Permanent key alongside project; matches ICard.number */
@@ -171,12 +204,14 @@ export interface ISlot extends IAuditable {
     /** Recommended card type for this slot; advisory only, never enforced */
     type?: Type;
     notes?: string;
+    /** Rich text. The refinement team's own record of decisions on this card - never exported anywhere */
+    faq?: string;
     statuses: SlotStatuses;
     release?: SlotRelease;
 }
 
 export const DefaultSlotStatuses: SlotStatuses = {
-    design: { status: "preview", checks: [] },
+    design: { status: "preview", checks: { release: [], refinement: [] }, inquiries: [] },
     artwork: { status: "pending" },
     production: "waiting"
 };

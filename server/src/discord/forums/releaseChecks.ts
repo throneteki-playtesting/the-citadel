@@ -30,7 +30,9 @@ const READY_COLOR = 0x43b581;
  */
 export async function syncReleaseChecks(slots: ISlot[]): Promise<ISlot[]> {
     // Outside the lock - a slot with nothing to say shouldn't queue behind a Discord round trip
-    const targets = new Set(slots.filter((slot) => slot.statuses.design.checks.some((entry) => needsSync(entry))));
+    const targets = new Set(
+        slots.filter((slot) => slot.statuses.design.checks.release.some((entry) => needsSync(entry)))
+    );
     if (targets.size === 0) {
         return slots;
     }
@@ -53,7 +55,9 @@ export async function syncReleaseChecks(slots: ISlot[]): Promise<ISlot[]> {
 /** Removes the check messages belonging to slots which no longer exist */
 export async function deleteReleaseChecks(slots: ISlot[]) {
     for (const slot of slots) {
-        for (const entry of slot.statuses.design.checks.filter((check) => check._metadata?.discord?.messageUrl)) {
+        for (const entry of slot.statuses.design.checks.release.filter(
+            (check) => check._metadata?.discord?.messageUrl
+        )) {
             try {
                 const message = await fetchMessage(entry._metadata.discord.messageUrl);
                 await message?.delete();
@@ -72,7 +76,7 @@ export async function deleteReleaseChecks(slots: ISlot[]) {
 /** Clears the stored message of a check deleted from Discord, so a later re-check can post afresh */
 export async function onReleaseCheckMessageDeleted(messageUrl: string) {
     const affected = await dataService.slots.read({
-        "statuses.design.checks._metadata.discord.messageUrl": messageUrl
+        "statuses.design.checks.release._metadata.discord.messageUrl": messageUrl
     } as never);
     if (affected.length === 0) {
         return;
@@ -80,7 +84,7 @@ export async function onReleaseCheckMessageDeleted(messageUrl: string) {
 
     logger.info(`[Discord] Release check message deleted: ${messageUrl}`);
     for (const slot of affected) {
-        for (const entry of slot.statuses.design.checks) {
+        for (const entry of slot.statuses.design.checks.release) {
             if (entry._metadata?.discord?.messageUrl === messageUrl) {
                 delete entry._metadata.discord;
             }
@@ -110,7 +114,7 @@ async function syncSlotChecks(slot: ISlot): Promise<ISlot> {
         return slot;
     }
 
-    const pending = slot.statuses.design.checks.filter((entry) => needsSync(entry, latest.version));
+    const pending = slot.statuses.design.checks.release.filter((entry) => needsSync(entry, latest.version));
     if (pending.length === 0) {
         return slot;
     }
@@ -176,8 +180,8 @@ async function persistMetadata(slot: ISlot): Promise<ISlot> {
         return slot;
     }
 
-    const synced = new Map(slot.statuses.design.checks.map((entry) => [entry.createdBy, entry._metadata]));
-    for (const entry of current.statuses.design.checks) {
+    const synced = new Map(slot.statuses.design.checks.release.map((entry) => [entry.createdBy, entry._metadata]));
+    for (const entry of current.statuses.design.checks.release) {
         const metadata = synced.get(entry.createdBy);
         if (metadata) {
             entry._metadata = metadata;

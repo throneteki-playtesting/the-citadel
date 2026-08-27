@@ -30,8 +30,10 @@ function App() {
             <HeroUIProvider navigate={navigate} useHref={useHref}>
                 <NavigationBar />
                 <ToastProvider placement="top-right" toastOffset={navbarHeight} />
-                <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">
-                    <Outlet />
+                <div className="overflow-x-clip">
+                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">
+                        <Outlet />
+                    </div>
                 </div>
                 <Footer />
             </HeroUIProvider>

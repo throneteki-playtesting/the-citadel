@@ -26,10 +26,13 @@ import {
     ISlotArtwork,
     ISlotArtworkDetail,
     ISlotRef,
+    ISlotRefinement,
+    ISlotRefinementDetail,
     ReleaseCheckCategory,
     SlotStatuses
 } from "common/models/slots";
 import { IArtist, IArtworkProgress } from "common/models/artwork";
+import { InquirySeverity } from "common/models/refinement";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
 import { IDeck } from "common/models/decks";
@@ -275,15 +278,13 @@ const api = createApi({
         getCard: builder.query<
             IPlaytestCard,
             { project: number; number: number; version: SemanticVersion | "latest" | "visible" }
-        >(
-            {
-                query: (options) => {
-                    const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
-                    return { url, method: "GET" };
-                },
-                providesTags: (response, _error, args) => generateFor(response, "card", { includeList: false, args })
-            }
-        ),
+        >({
+            query: (options) => {
+                const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}`);
+                return { url, method: "GET" };
+            },
+            providesTags: (response, _error, args) => generateFor(response, "card", { includeList: false, args })
+        }),
         getPreviousCard: builder.query<IPlaytestCard, { project: number; number: number; version: SemanticVersion }>({
             query: (options) => {
                 const url = buildUrl(`cards/${options.project}/${options.number}/${options.version}/previous`);
@@ -291,20 +292,29 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response, "card", { includeList: false, args })
         }),
-        putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard>({
+        putDraftCard: builder.mutation<IPlaytestCard, IPlaytestCard & { addressedInquiries?: number[] }>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft`);
                 const body = card;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => generateFor(result, "card")
+            // The slot too, since an update can stamp the inquiries it claims to address
+            invalidatesTags: (result, _error, { project, number }) => [
+                ...generateFor(result, "card"),
+                { type: "slot" as const, id: `${project}|${number}` }
+            ]
         }),
         deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft/${card.version}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => generateFor(result, "card")
+            // The slot goes with it: deleting a draft takes back every inquiry claim that version made,
+            // so a refinement view still holding the old one would show a fix by a card that is gone
+            invalidatesTags: (result, _error, card) => [
+                ...generateFor(result, "card"),
+                { type: "slot" as const, id: `${card.project}|${card.number}` }
+            ]
         }),
         moveCard: builder.mutation<
             IPlaytestCard,
@@ -542,6 +552,84 @@ const api = createApi({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}/artwork`);
                 return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        // The refinement view alone - gated by the Refinement permissions rather than READ_SLOTS/EDIT_SLOTS.
+        // Every mutation answers with the whole view, so the tab never has to reconcile a partial response
+        getSlotRefinement: builder.query<ISlotRefinementDetail, ISlotRef>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/refinement`);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        getSlotRefinements: builder.query<IGetResponse<ISlotRefinement>, { project: number } & IGetRequest<ISlot>>({
+            query: ({ project, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/refinements`, options);
+                return { url, method: "GET" };
+            },
+            providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
+        }),
+        createInquiry: builder.mutation<
+            ISlotRefinementDetail,
+            ISlotRef & { severity: InquirySeverity; summary: string; detail?: string }
+        >({
+            query: ({ project, number, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries`);
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        updateInquiry: builder.mutation<
+            ISlotRefinementDetail,
+            ISlotRef & { inquiry: number; severity: InquirySeverity; summary: string; detail?: string }
+        >({
+            query: ({ project, number, inquiry, ...body }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}`);
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        deleteInquiry: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number }>({
+            query: ({ project, number, inquiry }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        resolveInquiry: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number; note?: string }>({
+            query: ({ project, number, inquiry, note }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/resolution`);
+                return { url, method: "PATCH", body: { status: "resolved", note } };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        reopenInquiry: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number }>({
+            query: ({ project, number, inquiry }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/resolution`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        submitRefinementCheck: builder.mutation<ISlotRefinementDetail, ISlotRef>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/refinement/check`);
+                return { url, method: "PATCH" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        withdrawRefinementCheck: builder.mutation<ISlotRefinementDetail, ISlotRef>({
+            query: ({ project, number }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/refinement/check`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        updateSlotFaq: builder.mutation<ISlotRefinementDetail, ISlotRef & { faq: string }>({
+            query: ({ project, number, faq }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/faq`);
+                return { url, method: "PATCH", body: { faq } };
             },
             invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
         }),
@@ -980,6 +1068,16 @@ export const {
     useGetSlotArtworkQuery,
     useGetSlotArtworksQuery,
     useUpdateSlotArtworkMutation,
+    useGetSlotRefinementQuery,
+    useGetSlotRefinementsQuery,
+    useCreateInquiryMutation,
+    useUpdateInquiryMutation,
+    useDeleteInquiryMutation,
+    useResolveInquiryMutation,
+    useReopenInquiryMutation,
+    useSubmitRefinementCheckMutation,
+    useWithdrawRefinementCheckMutation,
+    useUpdateSlotFaqMutation,
     useAssignSlotReleaseMutation,
     useGetCardProgressQuery,
     useSetSlotDesignStatusMutation,

@@ -50,7 +50,7 @@ function CapsuleVisual({
     const slot = useCapsuleSlot(card.project, card.number, !wantsProgress && !canCheck);
     // The same calculation the card's own progress endpoint runs, so the two always agree
     const progress = slot && wantsProgress ? cardLaneBreakdown(slot.statuses) : undefined;
-    const myCheck = slot?.statuses.design.checks.find((entry) => entry.createdBy === user?.discordId);
+    const myCheck = slot?.statuses.design.checks.release.find((entry) => entry.createdBy === user?.discordId);
     // Capsules only show while a release is confirming, so only the card's own design can have closed
     // its checks - once it has, the button is worth keeping solely to read a verdict already given
     const checksClosed = !!slot && !!checksClosedBy(slot.statuses.design.status);
@@ -135,7 +135,6 @@ function CapsuleVisual({
                     <ReleaseCheckButton
                         entry={myCheck}
                         className={extrasClass}
-                        // Capsules are fed from a latest:true query, so this is the confirmed version
                         latestVersion={card.version}
                         onPress={() => {
                             setChecksMounted(true);

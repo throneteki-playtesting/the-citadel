@@ -54,7 +54,9 @@ export async function notifyStaleChecks(project: IProject, cards: IPlaytestCard[
                 continue;
             }
 
-            for (const entry of slot.statuses.design.checks.filter((check) => check.version === previous.version)) {
+            for (const entry of slot.statuses.design.checks.release.filter(
+                (check) => check.version === previous.version
+            )) {
                 const existing = staled.get(entry.createdBy) ?? [];
                 existing.push({
                     number: card.number,

@@ -3,6 +3,7 @@ import * as Cards from "./cards";
 import * as Projects from "./projects";
 import * as Slots from "./slots";
 import * as Artwork from "./artwork";
+import * as Refinement from "./refinement";
 import { statementAnswers } from "./reviews";
 import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
@@ -208,6 +209,8 @@ export const PlaytestingCard = {
         playtesting: Joi.string().regex(Regex.SemanticVersion),
         implemented: Joi.boolean(),
         suggestionId: Joi.string(),
+        // Refinement inquiries this update claims to fix. Read off the body and never stored on the card
+        addressedInquiries: Joi.array().items(Joi.number()),
         released: Joi.forbidden(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
@@ -561,6 +564,76 @@ const ArtworkProgress = Joi.object({
     ...ArtworkDetails
 });
 
+const semanticVersion = Joi.string().regex(Regex.SemanticVersion);
+
+// The refinement records appear both in Slot.Full (a whole stored document) and Slot.Partial (a PATCH
+// body), which differ only in whether the server-managed fields have to be there
+const auditKeys = (isFull: boolean) => ({
+    created: isFull ? Joi.date().required() : Joi.date(),
+    createdBy: isFull ? Joi.string().required() : Joi.string(),
+    updated: isFull ? Joi.date().required() : Joi.date(),
+    updatedBy: isFull ? Joi.string().required() : Joi.string()
+});
+
+const refinementCheck = (isFull: boolean) =>
+    Joi.object({
+        version: isFull ? semanticVersion.required() : semanticVersion,
+        ...auditKeys(isFull)
+    });
+
+/**
+ * Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
+ * already answered for the inquiry, where the change's own note already stands as the record.
+ */
+export const inquiryResolution = (isAddressed: boolean) =>
+    Joi.object({
+        // Closing is one route. `rejected` remains readable in stored data but is no longer produced -
+        // "reject" read as the inquiry being wrong, where closing one is often accepting a known risk
+        status: Joi.string().required().valid("resolved"),
+        note: isAddressed
+            ? NonEmptyRichText
+            : NonEmptyRichText.required().messages({
+                  "any.required": "Say why this is being resolved",
+                  "string.empty": "Say why this is being resolved"
+              })
+    });
+
+const inquiry = (isFull: boolean) =>
+    Joi.object({
+        inquiry: isFull ? Joi.number().required() : Joi.number(),
+        version: isFull ? semanticVersion.required() : semanticVersion,
+        addressedIn: semanticVersion,
+        severity: isFull
+            ? Joi.string()
+                  .required()
+                  .valid(...Refinement.inquirySeverities)
+            : Joi.string().valid(...Refinement.inquirySeverities),
+        status: isFull
+            ? Joi.string()
+                  .required()
+                  .valid(...Refinement.inquiryStatuses)
+            : Joi.string().valid(...Refinement.inquiryStatuses),
+        summary: isFull
+            ? Joi.string().required().max(Refinement.INQUIRY_SUMMARY_MAX)
+            : Joi.string().max(Refinement.INQUIRY_SUMMARY_MAX),
+        detail: RichText,
+        resolution: Joi.object({
+            by: Joi.string().required(),
+            at: Joi.date().required(),
+            // Absent where a card update already answered for the inquiry - see inquiryResolution
+            note: NonEmptyRichText
+        }),
+        _metadata: Joi.object({
+            discord: Joi.object({
+                threadUrl: Joi.string().uri(),
+                messageUrl: Joi.string().uri(),
+                startedBy: Joi.string(),
+                lastSynced: Joi.date()
+            })
+        }),
+        ...auditKeys(isFull)
+    });
+
 export const Slot = {
     // Shared with the client's artwork form, so the tab and PATCH refuse the same things
     ArtworkProgress,
@@ -572,28 +645,33 @@ export const Slot = {
             .valid(...Cards.factions),
         type: Joi.string().valid(...Cards.types),
         notes: Joi.string().allow(""),
+        faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
                 status: Joi.string()
                     .required()
                     .valid(...Slots.designStatuses),
-                checks: Joi.array()
-                    .required()
-                    .items(
-                        Joi.object({
-                            ready: Joi.boolean().required(),
-                            categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
-                            note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
-                            version: Joi.string().required().regex(Regex.SemanticVersion),
-                            _metadata: Joi.object({
-                                discord: DiscordMetadata
-                            }),
-                            created: Joi.date().required(),
-                            createdBy: Joi.string().required(),
-                            updated: Joi.date().required(),
-                            updatedBy: Joi.string().required()
-                        })
-                    ),
+                checks: Joi.object({
+                    release: Joi.array()
+                        .required()
+                        .items(
+                            Joi.object({
+                                ready: Joi.boolean().required(),
+                                categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
+                                note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
+                                version: Joi.string().required().regex(Regex.SemanticVersion),
+                                _metadata: Joi.object({
+                                    discord: DiscordMetadata
+                                }),
+                                created: Joi.date().required(),
+                                createdBy: Joi.string().required(),
+                                updated: Joi.date().required(),
+                                updatedBy: Joi.string().required()
+                            })
+                        ),
+                    refinement: Joi.array().required().items(refinementCheck(true))
+                }).required(),
+                inquiries: Joi.array().required().items(inquiry(true)),
                 finalApproval: Joi.object({
                     by: Joi.string().required(),
                     at: Joi.date().required()
@@ -620,24 +698,29 @@ export const Slot = {
         faction: Joi.string().valid(...Cards.factions),
         type: Joi.string().valid(...Cards.types),
         notes: Joi.string().allow(""),
+        faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
                 status: Joi.string().valid(...Slots.designStatuses),
-                checks: Joi.array().items(
-                    Joi.object({
-                        ready: Joi.boolean().required(),
-                        categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
-                        note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
-                        version: Joi.string().regex(Regex.SemanticVersion),
-                        _metadata: Joi.object({
-                            discord: DiscordMetadata
-                        }),
-                        created: Joi.date(),
-                        createdBy: Joi.string(),
-                        updated: Joi.date(),
-                        updatedBy: Joi.string()
-                    })
-                ),
+                checks: Joi.object({
+                    release: Joi.array().items(
+                        Joi.object({
+                            ready: Joi.boolean().required(),
+                            categories: Joi.array().items(Joi.string().valid(...Slots.releaseCheckCategories)),
+                            note: Joi.string().max(Slots.RELEASE_CHECK_NOTE_MAX).allow(""),
+                            version: Joi.string().regex(Regex.SemanticVersion),
+                            _metadata: Joi.object({
+                                discord: DiscordMetadata
+                            }),
+                            created: Joi.date(),
+                            createdBy: Joi.string(),
+                            updated: Joi.date(),
+                            updatedBy: Joi.string()
+                        })
+                    ),
+                    refinement: Joi.array().items(refinementCheck(false))
+                }),
+                inquiries: Joi.array().items(inquiry(false)),
                 finalApproval: Joi.object({
                     by: Joi.string().required(),
                     at: Joi.date().required()
@@ -679,7 +762,27 @@ export const Slot = {
             }),
             otherwise: Joi.forbidden()
         })
-    })
+    }),
+    // Body for POST/PUT .../inquiries - shared with the client's raise form, so both refuse the same things
+    Inquiry: Joi.object({
+        severity: Joi.string()
+            .required()
+            .valid(...Refinement.inquirySeverities)
+            .messages({ "any.required": "Choose how serious this is", "any.only": "Choose how serious this is" }),
+        summary: Joi.string()
+            .trim()
+            .max(Refinement.INQUIRY_SUMMARY_MAX)
+            .required()
+            .messages({
+                "any.required": "Summarise this inquiry in a few words",
+                "string.empty": "Summarise this inquiry in a few words",
+                "string.max": `Keep the summary to ${Refinement.INQUIRY_SUMMARY_MAX} characters or fewer`
+            }),
+        detail: RichText
+    }),
+    InquiryResolution: inquiryResolution,
+    // Body for PATCH /:slot/faq
+    Faq: Joi.object({ faq: RichText.required() })
 };
 
 export const Project = {

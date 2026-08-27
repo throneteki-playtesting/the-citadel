@@ -69,7 +69,7 @@ export async function computeReleaseCheckCards(project: number, code: string): P
     return await Promise.all(
         slots.map(async (slot) => {
             const [latest] = await dataService.cards.read({ project, number: slot.number, latest: true });
-            const checks = slot.statuses.design.checks;
+            const checks = slot.statuses.design.checks.release;
 
             return {
                 number: slot.number,

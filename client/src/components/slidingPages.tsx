@@ -34,7 +34,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     return (
         <div
             ref={ref}
-            className={classNames("relative size-full overflow-hidden transition-height", className)}
+            className={classNames("relative size-full overflow-clip transition-height", className)}
             style={{ ...style, height: measuredHeight ? `${measuredHeight}px` : undefined }}
         >
             <div
@@ -46,7 +46,6 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
                         return page;
                     }
                     const pageNo = index + 1;
-                    // Portals escape both `inert` and the clipping, so are told outright when off show
                     const isActive = pageNo === currentPage;
                     return (
                         <div

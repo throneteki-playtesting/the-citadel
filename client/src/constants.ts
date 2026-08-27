@@ -14,22 +14,28 @@ import {
     ProductionStatus
 } from "common/models/slots";
 import { ArtworkContactState, ArtworkPrepFlag } from "common/models/artwork";
+import { InquirySeverity, InquiryStatus } from "common/models/refinement";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { UIColor } from "./types";
 import {
     faCheck,
+    faCircleDot,
+    faCircleExclamation,
     faEye,
     faFeather,
     faHammer,
     faHourglassStart,
     faImages,
     faLayerGroup,
+    faLightbulb,
     faLock,
     faMagnifyingGlass,
     faPaintbrush,
     faPalette,
+    faTriangleExclamation,
     faWandMagicSparkles
 } from "@fortawesome/free-solid-svg-icons";
+import { faCircleCheck, faCircleQuestion, faCircleXmark } from "@fortawesome/free-regular-svg-icons";
 
 // The one easing curve panels/rows settle with, so every fade/slide in the app moves the same way
 export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
@@ -200,7 +206,8 @@ export const releaseStatusColors: Record<ReleaseStatus, "default" | "warning" | 
 export const releaseStatusDescriptions: Record<ReleaseStatus, string> = {
     planning: "Cards are still being chosen for this release",
     confirming: "Cards are unlikely to change, and their final details are being polished",
-    approved: "Contents & final card details are locked in; the print sheet is being assembled and proofed by the design team",
+    approved:
+        "Contents & final card details are locked in; the print sheet is being assembled and proofed by the design team",
     released: "Officially released to the public for physical & digital play"
 };
 
@@ -409,12 +416,93 @@ export const emojis = {
     other: "eight_spoked_asterisk"
 } as { [emoji: string]: string };
 
+export type InquirySeverityMeta = {
+    label: string;
+    /** What this severity is for, shown under its name in the picker */
+    description: string;
+    /** A concrete case, so the boundary between two neighbouring severities is settled by illustration */
+    example: string;
+    icon: IconDefinition;
+    color: UIColor;
+    /** Chip and dot colouring, matching how changeTypeClasses draws a card's change note */
+    classes: string;
+    /** The icon alone, where there is no chip around it to carry the colour */
+    iconClass: string;
+    /** A light wash behind the inquiry's own title - the severity read at a glance, without a chip saying it */
+    titleClass: string;
+};
+
+// One scale, read top to bottom as increasing seriousness - the first two assert nothing is wrong yet,
+// raised only so a research task or open decision isn't forgotten
+export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> = {
+    unchecked: {
+        label: "Unchecked",
+        description:
+            "Needs investigating before we can say whether there is a problem at all. Raise it so it is not forgotten, then set the severity once you have looked.",
+        example: "Checking The Last Greenseer against every plot in the pool for unexpected interactions.",
+        icon: faMagnifyingGlass,
+        color: "default",
+        classes: "border-default-300 bg-default-100 text-default-700",
+        iconClass: "text-default-500",
+        titleClass: "bg-default-100"
+    },
+    needsConfirmation: {
+        label: "Needs Confirmation",
+        description:
+            "No problem as such - a decision that needs making, where either option would work and we need to settle on one.",
+        example: 'Deciding whether an ability reads "each player chooses" or "each player must choose".',
+        icon: faCircleQuestion,
+        color: "secondary",
+        classes: "border-secondary-300 bg-secondary-100 text-secondary-700",
+        iconClass: "text-secondary",
+        titleClass: "bg-secondary-100/60"
+    },
+    recommendation: {
+        label: "Recommendation",
+        description: "The card works as intended, but there is a change worth considering that would improve it.",
+        example: "Adding a trait for consistency with similar cards in the faction.",
+        icon: faLightbulb,
+        color: "primary",
+        classes: "border-primary-300 bg-primary-100 text-primary-700",
+        iconClass: "text-primary",
+        titleClass: "bg-primary-100/60"
+    },
+    minorProblem: {
+        label: "Minor Problem",
+        description:
+            "Genuinely wrong, but it does not stop the card working or being understood. Should be fixed before release.",
+        example: "Templating that does not match official wording, or traits listed in the wrong order.",
+        icon: faTriangleExclamation,
+        color: "warning",
+        classes: "border-warning-300 bg-warning-100 text-warning-700",
+        iconClass: "text-warning",
+        titleClass: "bg-warning-100/60"
+    },
+    majorProblem: {
+        label: "Major Problem",
+        description: "Must be resolved before release - broken, unclear, or carrying consequences we cannot accept.",
+        example: "An ability that loops infinitely, or wording that leaves a key timing question unanswerable.",
+        icon: faCircleExclamation,
+        color: "danger",
+        classes: "border-danger-300 bg-danger-100 text-danger-700",
+        iconClass: "text-danger",
+        titleClass: "bg-danger-100/60"
+    }
+};
+
+export const inquiryStatusMeta: Record<InquiryStatus, { label: string; icon: IconDefinition; color: UIColor }> = {
+    open: { label: "Open", icon: faCircleDot, color: "primary" },
+    resolved: { label: "Resolved", icon: faCircleCheck, color: "success" },
+    rejected: { label: "Rejected", icon: faCircleXmark, color: "default" }
+};
+
 export const highlightTarget = {
     review: (review: IPlaytestReview) =>
         `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
     release: (project: number, code: string) => `release-${project}|${code}`,
-    playtestingUpdateCard: (project: number, number: number) => `update-card-${project}|${number}`
+    playtestingUpdateCard: (project: number, number: number) => `update-card-${project}|${number}`,
+    inquiry: (project: number, number: number, inquiry: number) => `inquiry-${project}|${number}|${inquiry}`
 } as const;
 
 export const statementOptions: {

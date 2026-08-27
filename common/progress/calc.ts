@@ -63,6 +63,11 @@ export function artworkStagePct(status: ArtworkStatus): number {
     return stagePct(status, artworkStatuses, artworkStageWeights);
 }
 
+/** The design lane's own percentage in isolation - for callers holding only a refinement projection */
+export function designStagePct(status: DesignStatus): number {
+    return stagePct(status, designStatuses, designStageWeights);
+}
+
 export function releaseProgressBreakdown(
     cardsPct: number,
     status: ReleaseStatus

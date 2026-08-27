@@ -2,22 +2,14 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Avatar, Button, Chip, Divider, Input, ScrollShadow, Skeleton, Switch } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-    faEye,
-    faImage,
-    faListCheck,
-    faMagnifyingGlass,
-    faPencil,
-    faXmarkCircle
-} from "@fortawesome/free-solid-svg-icons";
-import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
+import { faEye, faImage, faMagnifyingGlass, faPencil, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { typeNames } from "common/utils";
 import classNames from "classnames";
 import { IProject, IProjectRelease } from "common/models/projects";
+import { isPrepDone, MAX_ARTWORK_TASKS } from "common/models/artwork";
 import { ArtworkStatus, artworkStatuses, ArtworkType, artworkTypes } from "common/models/slots";
-import { isPrepDone } from "common/models/artwork";
 import Permission from "common/models/permissions";
 import { useGetArtistsQuery, useGetCardsQuery, useGetSlotArtworksQuery, useGetUserQuery } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
@@ -32,6 +24,7 @@ import {
 import ProgressRing from "../../../components/progressRing";
 import UserAvatar from "../../../components/userAvatar";
 import SectionTitle from "../../../components/sectionTitle";
+import { FilterChip, FilterRow } from "../../../components/filterChips";
 import SortSelect from "../../../components/sortSelect";
 import ThronesIcon from "../../../components/thronesIcon";
 import { TouchTooltip } from "../../../components/touchTooltip";
@@ -39,6 +32,7 @@ import ArtworkImage from "../../../components/artwork/artworkImage";
 import ArtworkFocus from "../../../components/artwork/artworkFocus";
 import ArtworkTab from "../../card/artwork/artworkTab";
 import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
+import { ChecklistDots } from "../../../components/checklist";
 import SlidingPages from "../../../components/slidingPages";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
 import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
@@ -482,47 +476,6 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
     );
 }
 
-/** One filter axis. On a phone the chips scroll rather than wrap, so the row cannot push the list away */
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-            <span className="sm:w-14 shrink-0 sm:text-right text-[0.65rem] uppercase tracking-widest text-foreground/40">
-                {label}
-            </span>
-            <ScrollShadow
-                orientation="horizontal"
-                hideScrollBar
-                className="flex gap-1.5 py-0.5 sm:flex-wrap sm:overflow-visible"
-            >
-                {children}
-            </ScrollShadow>
-        </div>
-    );
-}
-
-function FilterChip({ label, count, isActive, onPress }: FilterChipProps) {
-    return (
-        <Chip
-            as="button"
-            size="sm"
-            variant={isActive ? "solid" : "bordered"}
-            color={isActive ? "primary" : "default"}
-            className="shrink-0 cursor-pointer"
-            onClick={onPress}
-            endContent={<span className="px-1.5 text-xs tabular-nums rounded-full bg-foreground/10 ml-1">{count}</span>}
-        >
-            {label}
-        </Chip>
-    );
-}
-
-type FilterChipProps = {
-    label: string;
-    count: number;
-    isActive: boolean;
-    onPress: () => void;
-};
-
 /** One card's artwork at a glance - a scrolling table from sm up, a stacked card below it */
 function ArtworkRow({ row, release, onEdit }: ArtworkRowProps) {
     const artwork = row.slot.artwork;
@@ -696,7 +649,7 @@ function AssigneeAvatar({ discordId }: { discordId: string }) {
 
 /** The card's checklist as one dot per task, with the editor's own rows behind it in the tooltip */
 function Attention({ row }: { row: IArtworkRow }) {
-    // Prep is one dot, as the checklist draws it; the strip is sized for a full four so rows stay aligned
+    // Prep is one dot, as the checklist draws it as one row
     const tasks = [...row.requirements.map(({ done }) => done), ...(row.prep.length > 0 ? [isPrepDone(row.prep)] : [])];
     if (tasks.length === 0) {
         return null;
@@ -717,19 +670,7 @@ function Attention({ row }: { row: IArtworkRow }) {
                     </div>
                 }
             >
-                <div
-                    className="shrink-0 flex items-center justify-start gap-1 w-20 text-xs cursor-help"
-                    aria-label={`${row.remaining} of ${tasks.length} tasks remaining`}
-                >
-                    <FontAwesomeIcon icon={faListCheck} className="w-4 text-foreground/40" />
-                    {tasks.map((done, task) => (
-                        <FontAwesomeIcon
-                            key={task}
-                            icon={done ? faCircleCheck : faCircle}
-                            className={classNames("w-3", done ? "text-success" : "text-foreground/30")}
-                        />
-                    ))}
-                </div>
+                <ChecklistDots tasks={tasks} max={MAX_ARTWORK_TASKS} />
             </TouchTooltip>
         </>
     );

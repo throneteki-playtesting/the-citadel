@@ -117,7 +117,7 @@ export default function ReleaseChecksModal({
 
     const latestVersion = card?.version;
     const hasDraft = !!draftData && draftData.total > 0;
-    const checks = slot?.statuses.design.checks ?? [];
+    const checks = slot?.statuses.design.checks.release ?? [];
     const mine = user && checks.find((entry) => entry.createdBy === user.discordId);
     const hasYouSlot = !!mine || (canEditCheck && !!user);
 
@@ -574,8 +574,6 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, onDone }:
                             placeholder="Why shouldn't this card be released yet?"
                             value={note}
                             classNames={{
-                                // Inset, or the expand animation's overflow-hidden clips it. Carries no
-                                // transition while on, so it snaps in and only the fade out is animated
                                 inputWrapper: classNames(
                                     "ring-2 ring-inset",
                                     isAtCapacity ? "ring-danger" : "ring-transparent transition-colors duration-700"

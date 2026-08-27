@@ -10,6 +10,7 @@ import { CardPreview } from "@agot/card-preview";
 import { PlaytestingCard } from "common/models/schemas";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../components/wizard";
 import NoteEditor from "./noteEditor";
+import AddressedInquiries from "./refinement/addressedInquiries";
 import { useIsReleaseBound } from "../../hooks/useIsReleaseBound";
 import StatusNotice from "../../components/statusNotice";
 import { faFlagCheckered } from "@fortawesome/free-solid-svg-icons";
@@ -23,10 +24,13 @@ export default function EditCardModal({
 }: EditCardModalProps) {
     const [putDraft, { isLoading: isPuttingDraft }] = usePutDraftCardMutation();
     const [card, setCard] = useState<DeepPartial<IPlaytestCard>>({});
+    // Kept apart from the card - it says something about the card's inquiries, not about the card
+    const [addressedInquiries, setAddressedInquiries] = useState<number[]>([]);
 
     useEffect(() => {
         const data: DeepPartial<IPlaytestCard> = !initial ? {} : initial;
         setCard(data);
+        setAddressedInquiries([]);
     }, [initial]);
 
     const isDraftReleaseBound = useIsReleaseBound(card.project, card.number);
@@ -42,12 +46,12 @@ export default function EditCardModal({
     const onSubmit = useCallback(
         async (validCard: IPlaytestCard) => {
             setCard(validCard);
-            const newCard = await putDraft(validCard).unwrap();
+            const newCard = await putDraft({ ...validCard, addressedInquiries }).unwrap();
             setCard(newCard);
             onSave(newCard);
             onModalClose();
         },
-        [onModalClose, onSave, putDraft]
+        [addressedInquiries, onModalClose, onSave, putDraft]
     );
 
     const renderDraftCard = useMemo(() => {
@@ -72,12 +76,12 @@ export default function EditCardModal({
                                     detail="This card is locked to its printed form — this draft won't trigger a playtesting update."
                                 />
                             )}
-                            <div className="flex flex-col md:flex-row gap-2">
+                            <div className="flex flex-col md:flex-row gap-2 min-w-0">
                                 <CardPreview
                                     card={renderDraftCard}
                                     className="self-center md:self-start shrink-0 max-w-64"
                                 />
-                                <WizardPages>
+                                <WizardPages className="flex-1 min-w-0">
                                     <WizardPage controlledData={getBaseCardValues(card)}>
                                         <CardEditor
                                             card={card}
@@ -92,6 +96,13 @@ export default function EditCardModal({
                                                 isReleaseBound={isDraftReleaseBound}
                                                 onChange={(note) => setCard((prev) => ({ ...prev, note }))}
                                             />
+                                            <AddressedInquiries
+                                                project={card.project}
+                                                number={card.number}
+                                                version={card.draft ? card.version : undefined}
+                                                value={addressedInquiries}
+                                                onChange={setAddressedInquiries}
+                                            />
                                         </WizardPage>
                                     )}
                                 </WizardPages>
@@ -99,7 +110,7 @@ export default function EditCardModal({
                         </ModalBody>
                         <ModalFooter>
                             <WizardBack onCancel={onClose} />
-                            <WizardNext isLoading={isPuttingDraft} color={"primary"} />
+                            <WizardNext isLoading={isPuttingDraft} color="primary" />
                         </ModalFooter>
                     </Wizard>
                 )}

@@ -10,6 +10,7 @@ import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import ProjectReleases from "./releases/projectReleases";
 import ProjectArtworks from "./artworks/projectArtworks";
+import ProjectRefinements from "./refinements/projectRefinements";
 import classNames from "classnames";
 import { dismoji, highlightTarget } from "../../constants";
 import Error from "../../components/error";
@@ -18,20 +19,21 @@ import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import useConsumableParams from "../../hooks/useConsumableParams";
 import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
+import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
 import Watermark from "../../components/watermark";
 import { IProject } from "common/models/projects";
 
 // "tab" is durable, shareable state kept in sync via its own search-param scope, not consumed here
 const PROJECT_PARAMS = ["release"] as const;
-type ProjectTab = "development" | "artworks" | "releases";
+type ProjectTab = "development" | "artworks" | "refinements" | "releases";
 
 // A release code implies the releases tab even without one named, so it wins over an absent tab param
 function entryProjectTab(tab?: string, release?: string): ProjectTab {
     if (tab === "releases" || release) {
         return "releases";
     }
-    return tab === "artworks" ? "artworks" : "development";
+    return tab === "artworks" || tab === "refinements" ? tab : "development";
 }
 
 export default function ProjectDetail({ className, style, project: number }: ProjectDetailProps) {
@@ -139,38 +141,48 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
     // Lets a link to the artworks/releases tab be copy-pasted; development (the default) leaves no trace
     const tabParams = useMemo(() => ({ tab: tab === "development" ? undefined : tab }), [tab]);
     useSearchParamsScope("tab", true, tabParams);
+    const tabsRef = useSelectedTabInView(tab);
 
     const canViewReleases = usePermission(Permission.READ_RELEASES);
     const canViewArtworks = usePermission(Permission.READ_ARTWORKS);
+    const canViewRefinements = usePermission(Permission.READ_REFINEMENT);
 
-    if (!(canViewReleases || canViewArtworks)) {
+    if (!(canViewReleases || canViewArtworks || canViewRefinements)) {
         return <ProjectDevelopment project={project} isActive />;
     }
 
     return (
-        <Tabs
-            selectedKey={tab}
-            onSelectionChange={(key) => setTab(key as ProjectTab)}
-            aria-label="Project Sections"
-            variant="underlined"
-            color="primary"
-            size="lg"
-            destroyInactiveTabPanel={false}
-        >
-            <Tab key="development" title="Development">
-                <ProjectDevelopment project={project} isActive={tab === "development"} />
-            </Tab>
-            {canViewArtworks ? (
-                <Tab key="artworks" title="Artworks">
-                    <ProjectArtworks project={project} isActive={tab === "artworks"} />
+        <div ref={tabsRef}>
+            <Tabs
+                classNames={scrollableTabs}
+                selectedKey={tab}
+                onSelectionChange={(key) => setTab(key as ProjectTab)}
+                aria-label="Project Sections"
+                variant="underlined"
+                color="primary"
+                size="lg"
+                destroyInactiveTabPanel={false}
+            >
+                <Tab key="development" title="Development">
+                    <ProjectDevelopment project={project} isActive={tab === "development"} />
                 </Tab>
-            ) : null}
-            {canViewReleases ? (
-                <Tab key="releases" title="Releases">
-                    <ProjectReleases project={project} isActive={tab === "releases"} />
-                </Tab>
-            ) : null}
-        </Tabs>
+                {canViewArtworks ? (
+                    <Tab key="artworks" title="Artworks">
+                        <ProjectArtworks project={project} isActive={tab === "artworks"} />
+                    </Tab>
+                ) : null}
+                {canViewRefinements ? (
+                    <Tab key="refinements" title="Refinements">
+                        <ProjectRefinements project={project} isActive={tab === "refinements"} />
+                    </Tab>
+                ) : null}
+                {canViewReleases ? (
+                    <Tab key="releases" title="Releases">
+                        <ProjectReleases project={project} isActive={tab === "releases"} />
+                    </Tab>
+                ) : null}
+            </Tabs>
+        </div>
     );
 }
 type ProjectTabsSectionProps = {

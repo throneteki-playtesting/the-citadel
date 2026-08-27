@@ -87,7 +87,7 @@ async function findOutstanding(discordId: string) {
                 continue;
             }
 
-            const mine = slot.statuses.design.checks.find((entry) => entry.createdBy === discordId);
+            const mine = slot.statuses.design.checks.release.find((entry) => entry.createdBy === discordId);
             if (mine && !isCheckStale(mine, latest.version)) {
                 continue;
             }

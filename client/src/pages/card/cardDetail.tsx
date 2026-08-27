@@ -1,6 +1,8 @@
 import { addToast, Button, Divider, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { versionLabel } from "./versionLabel";
+import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     useGetCardQuery,
     useGetCardsQuery,
@@ -56,12 +58,17 @@ import useSwipe from "../../hooks/useSwipe";
 import useConsumableParams from "../../hooks/useConsumableParams";
 import CardHeader from "./cardHeader";
 import ArtworkTab from "./artwork/artworkTab";
+import RefinementTab from "./refinement/refinementTab";
 import useHistoryState from "../../hooks/useHistoryState";
 import Error from "../../components/error";
 
 const CARD_PARAMS = ["releaseCheck", "tab"] as const;
 
-export type CardTab = "development" | "artwork";
+export type CardTab = "development" | "artwork" | "refinement";
+
+function entryCardTab(tab?: string): CardTab {
+    return tab === "artwork" || tab === "refinement" ? tab : "development";
+}
 
 export default function CardDetail({ className, style, project: projectNumber, number }: CardDetailProps) {
     const { data: project, isLoading: isLoadingProject } = useGetProjectQuery({ number: projectNumber });
@@ -73,8 +80,10 @@ export default function CardDetail({ className, style, project: projectNumber, n
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     // Consumed once here for the whole page - two callers would each strip their own keys and race
     const { releaseCheck: entryReleaseCheck, tab: entryTab } = useConsumableParams(CARD_PARAMS);
-    const [tab, setTab] = useHistoryState<CardTab>("tab", entryTab === "artwork" ? "artwork" : "development");
+    const [tab, setTab] = useHistoryState<CardTab>("tab", entryCardTab(entryTab));
+    const sectionTabsRef = useSelectedTabInView(tab);
     const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
+    const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
 
     if (isLoadingProject || isLoadingCard) {
         return (
@@ -107,23 +116,33 @@ export default function CardDetail({ className, style, project: projectNumber, n
             <PermissionGate requires={Permission.READ_STATS_SLOT}>
                 <CardProgress project={projectNumber} number={number} />
             </PermissionGate>
-            {canReadArtwork ? (
-                <Tabs
-                    selectedKey={tab}
-                    onSelectionChange={(key) => setTab(key as CardTab)}
-                    aria-label="Card Sections"
-                    variant="underlined"
-                    color="primary"
-                    size="lg"
-                    destroyInactiveTabPanel={false}
-                >
-                    <Tab key="development" title="Development">
-                        <DevelopmentSection project={projectNumber} number={number} />
-                    </Tab>
-                    <Tab key="artwork" title="Artwork">
-                        <ArtworkTab project={projectNumber} number={number} />
-                    </Tab>
-                </Tabs>
+            {canReadArtwork || canReadRefinement ? (
+                <div ref={sectionTabsRef}>
+                    <Tabs
+                        classNames={scrollableTabs}
+                        selectedKey={tab}
+                        onSelectionChange={(key) => setTab(key as CardTab)}
+                        aria-label="Card Sections"
+                        variant="underlined"
+                        color="primary"
+                        size="lg"
+                        destroyInactiveTabPanel={false}
+                    >
+                        <Tab key="development" title="Development">
+                            <DevelopmentSection project={projectNumber} number={number} />
+                        </Tab>
+                        {canReadArtwork ? (
+                            <Tab key="artwork" title="Artwork">
+                                <ArtworkTab project={projectNumber} number={number} />
+                            </Tab>
+                        ) : null}
+                        {canReadRefinement ? (
+                            <Tab key="refinement" title="Refinement">
+                                <RefinementTab project={projectNumber} number={number} />
+                            </Tab>
+                        ) : null}
+                    </Tabs>
+                </div>
             ) : (
                 <DevelopmentSection project={projectNumber} number={number} />
             )}
@@ -151,22 +170,6 @@ function DevelopmentSection({ project, number }: { project: number; number: numb
 
 type CardDetailProps = Omit<BaseElementProps, "children"> & { project: number; number: number };
 
-function versionLabel(card: IPlaytestCard, topIsReleaseBound: boolean): string {
-    if (card.latest && card.released) {
-        return "Release";
-    }
-    if ((card.latest || card.draft) && topIsReleaseBound) {
-        return "Release";
-    }
-    if (card.latest) {
-        return "Latest";
-    }
-    if (card.draft) {
-        return "Draft";
-    }
-    return card.version;
-}
-
 // The full version stack needs READ_CARDS (it reads every historical version); a READ_LATEST_CARDS-only
 // viewer instead gets just the one card they're entitled to see, with no stack/tabs to navigate between.
 function CardVersions(props: CardVersionsProps) {
@@ -192,10 +195,7 @@ function LimitedCardVersion({ className, style, project, number }: CardVersionsP
     }
 
     return (
-        <div
-            className={classNames("flex flex-col min-w-0", isPlot ? "md:w-98" : "md:w-72", className)}
-            style={style}
-        >
+        <div className={classNames("flex flex-col min-w-0", isPlot ? "md:w-98" : "md:w-72", className)} style={style}>
             <div className="text-center text-base font-sans px-4">{versionLabel(card, topIsReleaseBound)}</div>
             <div className="flex justify-center py-4">
                 <div className={classNames("max-w-full", isPlot ? "w-98" : "w-64")}>
@@ -225,7 +225,9 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
                 const rankA = cardVersionRank(a);
                 const rankB = cardVersionRank(b);
 
-                if (rankA !== rankB) return rankB - rankA;
+                if (rankA !== rankB) {
+                    return rankB - rankA;
+                }
 
                 // Same rank — sort by semver descending
                 return rcompare(b.version, a.version);
@@ -263,7 +265,11 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
                 .map((card, index) => (
                     <Tab
                         key={index}
-                        title={<span className="text-base font-sans">{versionLabel(card, topIsReleaseBound)}</span>}
+                        title={
+                            <span className="text-base font-sans">
+                                {versionLabel(card, topIsReleaseBound && index === 0)}
+                            </span>
+                        }
                     />
                 ))
                 .reverse(),
@@ -294,14 +300,7 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
         [sortedCards.length]
     );
 
-    // HeroUI only scrolls a tab into view when that tab itself is clicked, so a selection moved by the
-    // arrows (or a swipe) has to be brought into view by hand
-    const tabsRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        tabsRef.current
-            ?.querySelector('[role="tab"][aria-selected="true"]')
-            ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-    }, [selectedIndex]);
+    const tabsRef = useSelectedTabInView(selectedIndex);
 
     const swipeHandlers = useSwipe((direction) => selectRelative(direction === "right" ? -1 : 1, true), {
         directions: ["left", "right"]
@@ -364,7 +363,7 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
 
 // One card of the stack. Its change badge is a sibling of the preview rather than a child, since the
 // preview clips its own overflow - so it rides along with every tilt, slide and fade the stack applies.
-function StackedVersion({ card, isSelected }: StackedVersionProps) {
+export function StackedVersion({ card, isSelected }: StackedVersionProps) {
     // A fresh object each render would defeat CardPreview's memo, re-laying out every card in the stack
     const renderCard = useMemo(() => renderPlaytestingCard(card), [card]);
 
@@ -374,11 +373,7 @@ function StackedVersion({ card, isSelected }: StackedVersionProps) {
             {card.note && (
                 <ChangeBadge
                     card={card}
-                    className={classNames(
-                        "absolute top-0 right-0 m-2 z-10",
-                        // Cards behind the front one still peek out, so only the front badge answers
-                        !isSelected && "pointer-events-none"
-                    )}
+                    className={classNames("absolute top-0 right-0 m-2 z-10", !isSelected && "pointer-events-none")}
                 />
             )}
         </div>
@@ -520,7 +515,7 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
         [cardsData?.items]
     );
     const isReleased = !!(latest && latest.released);
-    const feedbackCount = slot?.statuses.design.checks.length ?? 0;
+    const feedbackCount = slot?.statuses.design.checks.release.length ?? 0;
 
     // The same statuses the desktop icon row renders, as dropdown entries for mobile
     const canReadDiscord = usePermission(Permission.READ_DISCORD_CARD_FORUM);

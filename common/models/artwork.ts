@@ -140,7 +140,7 @@ export function creditedArtistId(artwork: IArtworkProgress): string | undefined 
     return undefined;
 }
 
-/** Display name for whoever gets credited for this artwork - the credited artist, or, for AI (which has no artist record), whoever generated it plus the tool used */
+/** Display name for whoever gets credited - the credited artist, or for AI, whoever generated it plus the tool */
 export function illustratorName(artwork: IArtworkProgress, artists: IArtist[] = []): string | undefined {
     const creditedArtist = artists.find((artist) => artist.id === creditedArtistId(artwork));
     if (creditedArtist) {
@@ -194,6 +194,10 @@ export interface IArtworkRequirement {
 
 // The single statement of the rules, in order - the gate below reports the first unmet one, so the
 // checklist and the API's refusal can never disagree about what is left.
+// The most dots an artwork row can ever need - three requirements at the widest plus prep, which the
+// checklist draws as a single row. A list sizes its strip to this so every row's columns line up.
+export const MAX_ARTWORK_TASKS = 4;
+
 export function artworkRequirements(artwork: IArtworkProgress, artists: IArtist[] = []): IArtworkRequirement[] {
     const type: IArtworkRequirement = { label: "Choose how this artwork is being obtained", done: !!artwork.type };
     if (!artwork.type) {

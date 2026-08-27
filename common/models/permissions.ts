@@ -33,6 +33,22 @@ enum Permission {
     READ_ARTWORKS = "READ_ARTWORKS",
     /** Can edit a slot's artwork lane */
     EDIT_ARTWORKS = "EDIT_ARTWORKS",
+    /** Can view a card's refinement inquiries and checks */
+    READ_REFINEMENT = "READ_REFINEMENT",
+    /** Can raise refinement inquiries, and edit or delete their own */
+    RAISE_INQUIRIES = "RAISE_INQUIRIES",
+    /** Can edit refinement inquiries raised by others */
+    EDIT_INQUIRIES = "EDIT_INQUIRIES",
+    /** Can delete refinement inquiries raised by others */
+    DELETE_INQUIRIES = "DELETE_INQUIRIES",
+    /** Can resolve, reject or reopen any refinement inquiry */
+    RESOLVE_INQUIRIES = "RESOLVE_INQUIRIES",
+    /** Can record that they have checked a card during refinement */
+    SUBMIT_REFINEMENT_CHECK = "SUBMIT_REFINEMENT_CHECK",
+    /** Can view a card's FAQ notes */
+    READ_FAQ = "READ_FAQ",
+    /** Can edit a card's FAQ notes */
+    EDIT_FAQ = "EDIT_FAQ",
     /** Can see everyone's release checks on a card */
     READ_RELEASE_CHECKS = "READ_RELEASE_CHECKS",
     /** Can submit a release check on a card */
@@ -178,6 +194,34 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.EDIT_ARTWORKS]: { label: "Edit", group: "Artwork", dependencies: Permission.READ_ARTWORKS },
     [Permission.READ_ARTISTS]: { label: "Read Artists", group: "Artwork" },
     [Permission.EDIT_ARTISTS]: { label: "Edit Artists", group: "Artwork", dependencies: Permission.READ_ARTISTS },
+    [Permission.READ_REFINEMENT]: { label: "Read", group: "Refinement" },
+    [Permission.RAISE_INQUIRIES]: {
+        label: "Raise Inquiries",
+        group: "Refinement",
+        dependencies: Permission.READ_REFINEMENT
+    },
+    [Permission.EDIT_INQUIRIES]: {
+        label: "Edit Others' Inquiries",
+        group: "Refinement",
+        dependencies: Permission.RAISE_INQUIRIES
+    },
+    [Permission.DELETE_INQUIRIES]: {
+        label: "Delete Others' Inquiries",
+        group: "Refinement",
+        dependencies: Permission.READ_REFINEMENT
+    },
+    [Permission.RESOLVE_INQUIRIES]: {
+        label: "Resolve Inquiries",
+        group: "Refinement",
+        dependencies: Permission.READ_REFINEMENT
+    },
+    [Permission.SUBMIT_REFINEMENT_CHECK]: {
+        label: "Submit Refinement Check",
+        group: "Refinement",
+        dependencies: Permission.READ_REFINEMENT
+    },
+    [Permission.READ_FAQ]: { label: "Read FAQ", group: "Refinement" },
+    [Permission.EDIT_FAQ]: { label: "Edit FAQ", group: "Refinement", dependencies: Permission.READ_FAQ },
     [Permission.READ_RELEASE_CHECKS]: {
         label: "Read Release Checks",
         group: "Projects",

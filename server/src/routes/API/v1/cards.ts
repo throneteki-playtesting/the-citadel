@@ -6,6 +6,7 @@ import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import { isReleaseBound } from "common/models/slots";
+import { isInquiryOpen } from "common/models/refinement";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
@@ -207,6 +208,84 @@ router.get(
     )
 );
 
+// The first 0.0.x version not already in use, for a slot which can hold multiple option drafts at once
+function nextAvailableOptionVersion(usedVersions: Set<SemanticVersion>): SemanticVersion | undefined {
+    return Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
+}
+
+type DraftCardBody = IPlaytestCard & { addressedInquiries?: number[] };
+
+/**
+ * Reconciles which inquiries a version claims to fix. The list is the whole answer for this version, not
+ * an addition to it, so a box unticked in the editor takes its claim back. Inquiries stay open either way.
+ */
+async function markInquiriesAddressed(project: number, number: number, version: SemanticVersion, inquiries: number[]) {
+    const [slot] = await dataService.slots.read({ project, number });
+    if (!slot) {
+        return;
+    }
+
+    const targets = new Set(inquiries);
+    let changed = false;
+    const updated = slot.statuses.design.inquiries.map((entry) => {
+        // A number naming something already closed is ignored rather than refused - the list came from a
+        // form which may be a few seconds behind whoever else was closing them
+        const claims = targets.has(entry.inquiry) && isInquiryOpen(entry);
+        if (claims === (entry.addressedIn === version)) {
+            return entry;
+        }
+        changed = true;
+        if (claims) {
+            return { ...entry, addressedIn: version };
+        }
+        const cleared = { ...entry };
+        delete cleared.addressedIn;
+        return cleared;
+    });
+
+    if (!changed) {
+        return;
+    }
+
+    await dataService.slots.update({
+        ...slot,
+        statuses: { ...slot.statuses, design: { ...slot.statuses.design, inquiries: updated } }
+    });
+}
+
+/**
+ * Takes back every claim a version made. The claim is the version's, not the inquiry's, so once the
+ * version is gone the inquiry goes back to being unanswered rather than pointing at a card nobody can read.
+ */
+async function unmarkInquiriesAddressed(project: number, number: number, version: SemanticVersion) {
+    const [slot] = await dataService.slots.read({ project, number });
+    if (!slot) {
+        return;
+    }
+
+    let changed = false;
+    const updated = slot.statuses.design.inquiries.map((entry) => {
+        // An open inquiry loses the claim outright - the fix went with the draft. A resolved one keeps
+        // it as the record of how the inquiry was settled; the client marks it as withdrawn instead.
+        if (entry.addressedIn !== version || !isInquiryOpen(entry)) {
+            return entry;
+        }
+        changed = true;
+        const cleared = { ...entry };
+        delete cleared.addressedIn;
+        return cleared;
+    });
+
+    if (!changed) {
+        return;
+    }
+
+    await dataService.slots.update({
+        ...slot,
+        statuses: { ...slot.statuses, design: { ...slot.statuses.design, inquiries: updated } }
+    });
+}
+
 // Upsert draft card
 router.put(
     "/:project/:number/draft",
@@ -278,13 +357,15 @@ router.put(
         const { draft } = res.locals;
         return hasPermission(principal, draft ? Permission.EDIT_CARDS : Permission.CREATE_CARDS);
     }),
-    asyncHandler<{ project: number; number: number }, IPlaytestCard, IPlaytestCard, unknown>(async (req, res) => {
+    asyncHandler<{ project: number; number: number }, IPlaytestCard, DraftCardBody, unknown>(async (req, res) => {
         const { number } = req.params;
         const project = res.locals.project as IProject;
         const latest = res.locals.latest as IPlaytestCard | undefined;
         const drafts = res.locals.draft as IPlaytestCard[] | undefined;
 
-        const card = req.body;
+        // Taken off the body before anything else touches it - it says something about the card's
+        // inquiries, not about the card, and the card is stored exactly as it arrives
+        const { addressedInquiries, ...card } = req.body;
         const code = parseCardCode(false, project.number, number);
 
         if (latest) {
@@ -325,10 +406,7 @@ router.put(
             // We distinct card options by incrementing the patch to the next available number
             if (card.version === "0.0.0") {
                 const usedVersions = new Set(drafts.map((d) => d.version));
-                const newVersion = Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find(
-                    (v) => !usedVersions.has(v)
-                );
-                card.version = newVersion;
+                card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
             } else {
                 await process("update");
@@ -346,6 +424,12 @@ router.put(
             } else {
                 await process("create");
             }
+        }
+
+        // Absent means the caller is not speaking for the inquiries at all - only an editor which showed
+        // the boxes may reconcile them, or a save from anywhere else would silently drop every claim
+        if (addressedInquiries) {
+            await markInquiriesAddressed(project.number, number, card.version, addressedInquiries);
         }
 
         res.status(StatusCodes.OK).json(card);
@@ -378,6 +462,8 @@ router.delete(
                     `Draft card for #${number} in project #${project} does not exist`
                 );
             }
+
+            await unmarkInquiriesAddressed(project.number, number, deleted.version);
 
             await logActivity(LogCategory.CARD, "card.draft.deleted", "<principal> deleted draft <card>", {
                 context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) },
@@ -500,11 +586,7 @@ router.post(
 
             // Keep the card's version if it is free in the target slot; otherwise take the next available 0.0.x
             const usedVersions = new Set(targetDrafts.map((draft) => draft.version));
-            const newVersion = usedVersions.has(version)
-                ? Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find(
-                      (v) => !usedVersions.has(v)
-                  )
-                : version;
+            const newVersion = usedVersions.has(version) ? nextAvailableOptionVersion(usedVersions) : version;
 
             const movedCard: IPlaytestCard = {
                 ...card,
