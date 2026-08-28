@@ -3,6 +3,7 @@ import { ICard, IRenderCard } from "common/models/cards";
 import { Card as CardSchema } from "common/models/schemas";
 import { DeepPartial } from "common/types";
 import { getBaseCardValues } from "common/utils";
+import { toThronetekiText } from "common/richText/toThroneteki";
 import { useRenderImageMutation } from "../../api";
 import { downloadBlob } from "../../utils";
 import CardEditor from "../../components/cardEditor";
@@ -17,16 +18,20 @@ export default function CardEditorPage() {
     const [card, setCard] = useState<DeepPartial<ICard>>({});
     const [renderImage, { isLoading: isRendering }] = useRenderImageMutation();
     const isValid = useMemo(() => !CardSchema.Full.validate(card, { abortEarly: true }).error, [card]);
-    const renderCard = useMemo(() => ({ ...getBaseCardValues(card), key: "", watermark: {} }), [card]);
+    const renderCard = useMemo(
+        () => ({
+            ...getBaseCardValues(card),
+            // The renderer draws the pack dialect, where bold-italic is a single <i> - see renderPlaytestingCard
+            text: card.text ? toThronetekiText(card.text) : card.text,
+            key: "",
+            watermark: {}
+        }),
+        [card]
+    );
 
     const onExportPNG = async () => {
         try {
-            const renderCard = {
-                ...getBaseCardValues(card),
-                key: crypto.randomUUID(),
-                watermark: {}
-            };
-            const blob = await renderImage(renderCard as IRenderCard).unwrap();
+            const blob = await renderImage({ ...renderCard, key: crypto.randomUUID() } as IRenderCard).unwrap();
             const filename = (card.name ?? "card").replace(/[^a-zA-Z0-9 ]/g, "").replace(/ /g, "_");
             downloadBlob(blob, `${filename}.png`);
         } catch {
