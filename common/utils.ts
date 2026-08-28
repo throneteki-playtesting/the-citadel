@@ -536,8 +536,7 @@ export function toJSONExportCard(
     const imageUrl = release
         ? generateReleaseImageUrl(release.short, release.number, card.name)
         : card._metadata?.imageUrl;
-    const base = {
-        code,
+    const rest = {
         type: card.type,
         name: card.name,
         octgnId: null,
@@ -559,7 +558,7 @@ export function toJSONExportCard(
         imageUrl
     };
     // A release is the version, so only a still-in-progress development export is worth pinning to one
-    return release ? base : { ...base, version: card.version };
+    return release ? { code, ...rest } : { code, version: card.version, ...rest };
 }
 
 export function renderPlaytestingCard(card: Cards.IPlaytestCard, watermark?: Cards.Watermark): Cards.IRenderCard;

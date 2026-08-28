@@ -76,6 +76,9 @@ async function onIssueClosed({ issue }: IssuesClosedEvent) {
         cards = await dataService.cards.update(cards, false, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
+
+        await syncCodePullRequests();
+        logger.info("[Github] Synced pull requests after issue closing");
     }
 }
 
@@ -99,6 +102,9 @@ async function onIssueReopened({ issue }: IssuesReopenedEvent) {
         cards = await dataService.cards.update(cards, false, false, false);
 
         logger.info(`[Github] Updated github data for ${cards.length} cards`);
+
+        await syncCodePullRequests();
+        logger.info("[Github] Synced pull requests after issue reopening");
     }
 }
 

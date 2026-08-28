@@ -174,7 +174,9 @@ export async function syncDataPullRequests(forced?: boolean) {
                     const filePath = `packs/${project.code}.json`;
                     const staleFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
                     if (staleFile) {
-                        logger.info(`[Github] Removing stale ${filePath} from ${STAGING_BRANCH} (no unreleased cards remain)`);
+                        logger.info(
+                            `[Github] Removing stale ${filePath} from ${STAGING_BRANCH} (no unreleased cards remain)`
+                        );
                         await context.client.rest.repos.deleteFile({
                             owner: context.owner,
                             repo: context.repo,
@@ -262,7 +264,9 @@ export async function syncDataPullRequests(forced?: boolean) {
                 state = await internalDataSync(existingPR, pendingUpdates, context);
             } else if (existingPR) {
                 // Every project that had outstanding data has since been fully released - nothing left to review
-                logger.info(`[Github] Closing pull request #${existingPR.number} as no unreleased project data remains`);
+                logger.info(
+                    `[Github] Closing pull request #${existingPR.number} as no unreleased project data remains`
+                );
                 await context.client.rest.pulls.update({
                     owner: context.owner,
                     repo: context.repo,
@@ -626,13 +630,15 @@ async function buildImplementedCards(cards: IPlaytestCard[]) {
 }
 
 async function buildProjectChanges(playtestingUpdates: IPlaytestingUpdate[]) {
-    const pending = playtestingUpdates.filter((pu) => pu._metadata?.github?.code?.status !== "closed");
-
     const projectChanges: string[] = [];
-    for (const playtestingUpdate of pending) {
+    for (const playtestingUpdate of playtestingUpdates) {
+        const summary = await buildCardChangeSummary(playtestingUpdate);
+        if (!summary) {
+            continue;
+        }
+
         const [project] = await dataService.projects.read({ number: playtestingUpdate.project });
         const title = `:${project.emoji}: ${project.name} - Playtesting Update ${playtestingUpdate.version}`;
-        const summary = await buildCardChangeSummary(playtestingUpdate);
         const link = ` _**[Click for more details](${process.env.CLIENT_HOST}/project/${playtestingUpdate.project}/update/${playtestingUpdate.version})**_`;
         projectChanges.push([title, summary, link].join("\n"));
     }
@@ -644,27 +650,34 @@ async function buildProjectChanges(playtestingUpdates: IPlaytestingUpdate[]) {
 }
 
 async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
+    const cards = await dataService.cards.forUpdate(playtestingUpdate);
+
+    let unimplementedCount = 0;
+    let recentlyImplementedCount = 0;
+    for (const card of cards) {
+        if (!card.implemented) {
+            unimplementedCount++;
+            if (card._metadata?.github?.status === "closed") {
+                recentlyImplementedCount++;
+            }
+        }
+    }
+
+    // An active project's latest update is always a sync candidate (see readSyncingUpdates), even once fully
+    // delivered - so completion has to be judged here, by its cards, rather than by the shared PR's own status
+    if (unimplementedCount === 0) {
+        return "";
+    }
+
     const types: NoteType[] = ["updated", "reworked", "replaced"] as const;
     const typeCounts = {
         updated: 0,
         reworked: 0,
         replaced: 0
     };
-
-    let recentlyImplementedCount = 0;
-    let unimplementedCount = 0;
-
-    const cards = await dataService.cards.forUpdate(playtestingUpdate);
-
     for (const card of cards) {
         if (card.note?.type in typeCounts) {
             typeCounts[card.note.type]++;
-        }
-        if (!card.implemented) {
-            unimplementedCount++;
-            if (card._metadata?.github?.status === "closed") {
-                recentlyImplementedCount++;
-            }
         }
     }
     const typeLines = types
@@ -674,10 +687,6 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
             const label = count === 1 ? "card" : "cards";
             return `${emojis[type]} ${count} ${label} ${type}`;
         });
-
-    if (unimplementedCount === 0) {
-        return typeLines.join("\n");
-    }
 
     const implementedLine = `${emojis.implemented} ${recentlyImplementedCount}/${unimplementedCount} cards in this update were implemented.`;
 
