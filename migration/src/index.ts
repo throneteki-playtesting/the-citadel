@@ -19,8 +19,8 @@ import { migration as decksMigration } from "./migrations/008_decks";
 import { migration as slotDesignLaneMigration } from "./migrations/009_slotDesignLane";
 import { migration as richTextMigration } from "./migrations/010_richText";
 import { migration as mergeReleaseStatusesMigration } from "./migrations/011_mergeReleaseStatuses";
-import { migration as slotRefinementMigration } from "./migrations/012_slotRefinement";
 import { migration as renameProjectDataSyncPermissionMigration } from "./migrations/012_renameProjectDataSyncPermission";
+import { migration as slotRefinementMigration } from "./migrations/013_slotRefinement";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
