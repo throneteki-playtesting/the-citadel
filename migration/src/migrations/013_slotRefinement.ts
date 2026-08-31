@@ -5,7 +5,7 @@ import { log } from "../lib/logger";
 // Release checks (taken during development) and refinement checks (once design is locked in) share the
 // same shape and one-per-person rule, so they group under one key rather than sitting as unrelated siblings.
 export const migration: Migration = {
-    name: "012_slotRefinement",
+    name: "013_slotRefinement",
     description: "Group design checks under checks.release/.refinement and seed the refinement step's fields",
 
     async run({ destDb, dryRun }) {
