@@ -15,6 +15,7 @@ import { Link, useNavigate } from "react-router-dom";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
+import { asInlineIcon } from "../status/baseStatus";
 import { ActionItem } from "./types";
 
 // Navigates directly rather than passing href to Button/DropdownItem - this app's HeroUIProvider
@@ -39,7 +40,7 @@ function renderDropdownItem(item: ActionItem) {
             color={item.color}
             description={item.description}
             // Icons vary in width (brand glyphs, spinners, plain text), so they share a centred column
-            startContent={<span className="min-w-6 flex items-center justify-center">{item.icon}</span>}
+            startContent={<span className="min-w-6 flex items-center justify-center">{asInlineIcon(item.icon)}</span>}
             endContent={
                 item.badge ? (
                     <Chip size="sm" variant="flat" color="secondary">

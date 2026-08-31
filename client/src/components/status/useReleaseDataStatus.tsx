@@ -3,22 +3,29 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Spinner } from "@heroui/react";
 import { useMemo } from "react";
 import { faDatabase, faRotate } from "@fortawesome/free-solid-svg-icons";
-import { useGetPlaytestingUpdateQuery, useSyncProjectDataMutation } from "../../api";
+import { useGetProjectQuery, useSyncProjectDataMutation } from "../../api";
 import Permission from "common/models/permissions";
 import { StatusData } from "./baseStatus";
 import { usePermission } from "../../hooks/usePermission";
-import { usePlaytestingUpdateSync } from "../../hooks/useSync";
+import { useReleaseSync } from "../../hooks/useSync";
 
-export function useDataUpdateStatus(project: number, version: number) {
-    const { data: playtestingUpdate, isLoading } = useGetPlaytestingUpdateQuery({ project, version });
+// Mirrors useDataUpdateStatus, but reads/stamps IProjectRelease._metadata.github.data instead of a
+// playtesting update's - both point at the same underlying data PR, and can legitimately do so at once
+export function useReleaseDataStatus(project: number | undefined, code: string) {
+    const { data: projectData, isLoading } = useGetProjectQuery(
+        { number: project ?? 0 },
+        { skip: project === undefined }
+    );
+    const release = projectData?.releases.find((r) => r.code === code);
 
     const [syncProjectData, { isLoading: isSyncing }] = useSyncProjectDataMutation();
-    const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).github.data;
+    const { status, step, error } = useReleaseSync(release && project !== undefined ? { project, code } : undefined)
+        .github.data;
     const hasSyncPermission = usePermission(Permission.SYNC_PROJECT_GITHUB_DATA);
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Data Changes";
-        if (!playtestingUpdate) return null;
+        if (!release || project === undefined) return null;
 
         if (status === "start" || status === "progress" || isSyncing) {
             return {
@@ -54,8 +61,11 @@ export function useDataUpdateStatus(project: number, version: number) {
             };
         }
 
-        const dataMeta = playtestingUpdate._metadata?.github?.data;
-        if (!dataMeta || (dataMeta.lastSynced && dataMeta.lastSynced < playtestingUpdate.updated)) {
+        const dataMeta = release._metadata?.github?.data;
+        // Both sides are plain ISO strings on the wire (fetchBaseQuery never revives Dates), which already
+        // sort chronologically - wrapping either in new Date(...) would compare a Date against a string, always false
+        const referenceDate = release.releasedDate ?? release.updated;
+        if (!dataMeta || (dataMeta.lastSynced && dataMeta.lastSynced < referenceDate)) {
             return {
                 title,
                 icon: <FontAwesomeIcon icon={faRotate} size="xl" />,
@@ -64,7 +74,7 @@ export function useDataUpdateStatus(project: number, version: number) {
                 description: "Requires Syncing"
             };
         }
-        // If its been synced, but no PR was created due to no code changes
+        // If its been synced, but no PR was created due to no data changes
         if (dataMeta.lastSynced && !dataMeta.pullRequestUrl) {
             return {
                 title,
@@ -109,7 +119,7 @@ export function useDataUpdateStatus(project: number, version: number) {
             }
         }
         return null;
-    }, [playtestingUpdate, status, isSyncing, hasSyncPermission, step, syncProjectData, project, error]);
+    }, [release, status, isSyncing, hasSyncPermission, step, syncProjectData, project, error]);
 
     return { data, isLoading };
 }

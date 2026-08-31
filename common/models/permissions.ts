@@ -137,8 +137,8 @@ enum Permission {
     SYNC_CARD_GITHUB = "SYNC_CARD_GITHUB",
     /** Can sync playtesting update code pull requests */
     SYNC_PLAYTESTINGUPDATE_GITHUB_CODE = "SYNC_PLAYTESTINGUPDATE_GITHUB_CODE",
-    /** Can sync playtesting update data pull requests */
-    SYNC_PLAYTESTINGUPDATE_GITHUB_DATA = "SYNC_PLAYTESTINGUPDATE_GITHUB_DATA",
+    /** Can sync a project's development pack data pull request */
+    SYNC_PROJECT_GITHUB_DATA = "SYNC_PROJECT_GITHUB_DATA",
     /** Can sync playtesting update discord announcements */
     SYNC_PLAYTESTINGUPDATE_DISCORD = "SYNC_PLAYTESTINGUPDATE_DISCORD",
     /** Can sync review discord forum threads */
@@ -306,7 +306,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.SYNC_CARD_DISCORD]: { label: "Card Discord", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
-    [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA]: { label: "PT Update Github Data", group: "Sync" },
+    [Permission.SYNC_PROJECT_GITHUB_DATA]: { label: "Project Github Data", group: "Sync" },
     [Permission.SYNC_PLAYTESTINGUPDATE_DISCORD]: { label: "PT Update Discord", group: "Sync" },
     [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS }
 };

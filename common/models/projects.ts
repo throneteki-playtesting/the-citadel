@@ -57,6 +57,10 @@ export interface IProjectRelease extends IAuditable {
             messageUrl?: string;
             lastSynced?: Date;
         };
+        /** Data PR state for the release's own removal from the in-development pack file */
+        github?: {
+            data?: GithubPRMeta;
+        };
     };
 }
 

@@ -1,11 +1,11 @@
 import { dataService, githubService, logger } from "@/services";
-import { GithubPRMeta, IPlaytestingUpdate, IProject } from "common/models/projects";
+import { GithubPRMeta, IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
 import { GithubContext } from ".";
-import { IPlaytestCard, NoteType } from "common/models/cards";
+import { Code as CardCode, IPlaytestCard, NoteType } from "common/models/cards";
 import { syncImage } from "@/rendering/hosting";
 import { DEVELOPMENT_BRANCH, emojis, PLAYTESTING_BRANCH, STAGING_BRANCH } from "./utils";
 import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
-import { parseCardCode, PLAYTESTING_TIT_URL, toJSONExportCard } from "common/utils";
+import { parseCardCode, parsePlaytestCode, PLAYTESTING_TIT_URL, toJSONExportCard } from "common/utils";
 import { sortBy } from "lodash-es";
 import { Endpoints } from "@octokit/types";
 import { createSyncEmitter } from "@/services/sseService";
@@ -110,29 +110,62 @@ export async function syncCodePullRequests(forced?: boolean) {
     return playtestingUpdates;
 }
 
+type PtEmitter = ReturnType<typeof createSyncEmitter<"playtestingUpdate">>;
+type ReleaseEmitter = ReturnType<typeof createSyncEmitter<"release">>;
+
+// Deferred stamp for a project whose file changed this round - the final PR state for these isn't known
+// until internalDataSync runs once for the whole batch, after every project has been diffed
+type DeferredStamp = {
+    project: IProject;
+    playtestingUpdate?: IPlaytestingUpdate;
+    releases: IProjectRelease[];
+    ptEmitter?: PtEmitter;
+    releaseEmitters: Map<IProjectRelease, ReleaseEmitter>;
+};
+
+// Stamps the given PR state onto a project's playtesting update and releases alike, completing their
+// progress emitters and recording them so the caller knows what needs persisting afterward
+function stampProjectEntities(
+    { project, playtestingUpdate, releases, ptEmitter, releaseEmitters }: DeferredStamp,
+    lastSynced: Date,
+    resolveState: (entity: { created: Date }) => PullRequestState | null | undefined,
+    touchedPlaytestingUpdates: IPlaytestingUpdate[],
+    touchedProjects: IProject[]
+) {
+    if (playtestingUpdate) {
+        applyPullRequestState(playtestingUpdate, "data", lastSynced, resolveState(playtestingUpdate));
+        touchedPlaytestingUpdates.push(playtestingUpdate);
+        ptEmitter?.complete(playtestingUpdate);
+    }
+    for (const r of releases) {
+        applyReleasePullRequestState(r, lastSynced, resolveState(r));
+        releaseEmitters.get(r)?.complete({ ...r, project: project.number });
+    }
+    if (releases.length > 0) {
+        touchedProjects.push(project);
+    }
+}
+
 export async function syncDataPullRequests(forced?: boolean) {
     const release = await syncDataPullRequestMutex.acquire();
-    let playtestingUpdates: IPlaytestingUpdate[] = [];
+    const touchedPlaytestingUpdates: IPlaytestingUpdate[] = [];
+    const touchedProjects: IProject[] = [];
     try {
-        playtestingUpdates = await readSyncingUpdates();
+        const projects = await dataService.projects.read({});
         const context = githubService.getContext("data");
 
-        const emitters = new Map(
-            playtestingUpdates.map((pu) => [pu, createSyncEmitter("playtestingUpdate", "github.data", pu)])
-        );
-        emitters.forEach((e) => e.start());
-
-        let branchRef = await context.client.rest.git
+        const branchRef = await context.client.rest.git
             .getRef({ owner: context.owner, repo: context.repo, ref: `heads/${STAGING_BRANCH}` })
             .then((result) => result.data)
             .catch(() => null as BranchRef);
+        const branchRefHolder = { current: branchRef };
         const branches = { head: `${context.owner}:${STAGING_BRANCH}`, base: DEVELOPMENT_BRANCH };
         const existingPR = await findOpenPullRequest(context, branches);
 
-        const hasSyncedFile: IPlaytestingUpdate[] = [];
-        // Updates with unreleased data currently outstanding - narrower than hasSyncedFile, which also
-        // covers updates whose only action this round was pruning a now-stale staging file (see below)
-        const pendingUpdates: IPlaytestingUpdate[] = [];
+        const syncedProjects: IProject[] = [];
+        const pendingProjects: IProject[] = [];
+        const releasedByProject = new Map<number, Map<string, number>>();
+        const deferred: DeferredStamp[] = [];
         const lastSynced = new Date();
 
         let mergedPR: PullRequest | null = null;
@@ -141,127 +174,65 @@ export async function syncDataPullRequests(forced?: boolean) {
             return mergedPR;
         };
 
-        for (const playtestingUpdate of playtestingUpdates) {
+        for (const project of projects) {
+            const [playtestingUpdate] = await dataService.playtestingUpdates.read({
+                project: project.number,
+                version: project.version
+            });
+            const ptEmitter = playtestingUpdate
+                ? createSyncEmitter("playtestingUpdate", "github.data", playtestingUpdate)
+                : undefined;
+            ptEmitter?.start();
+
             try {
-                const [project] = await dataService.projects.read({ number: playtestingUpdate.project });
+                const result = await syncProjectDataFile(project, context, branchRefHolder, forced ?? false);
 
-                if (!project) {
-                    throw Error(
-                        `Project ${playtestingUpdate.project} does not exist for Playtesting Update #${playtestingUpdate.version}`
+                // Every published release is stamped every round, not just ones this round's diff explains -
+                // otherwise a release whose removal already merged never receives a first stamp at all
+                const releases = project.releases.filter((r) => !!r.releasedDate);
+                if (result.releasedCounts.size > 0) {
+                    releasedByProject.set(project.number, result.releasedCounts);
+                }
+                const releaseEmitters = new Map(
+                    releases.map((r) => [
+                        r,
+                        createSyncEmitter("release", "github.data", { ...r, project: project.number })
+                    ])
+                );
+                releaseEmitters.forEach((e) => e.start());
+
+                if (result.action === "matches-development" || result.action === "unchanged") {
+                    const merged = result.action === "matches-development" ? await getMergedPullRequest() : null;
+                    stampProjectEntities(
+                        { project, playtestingUpdate, releases, ptEmitter, releaseEmitters },
+                        lastSynced,
+                        (entity) => (merged ? toMergedState(merged, entity) : undefined),
+                        touchedPlaytestingUpdates,
+                        touchedProjects
                     );
-                }
-
-                emitters.get(playtestingUpdate).progress("Checking");
-
-                // Checking greater than to account for Playtesting Update creation, where its created prior to project being updated
-                const isLatest = playtestingUpdate.version >= project.version;
-
-                // Prevents data from being reverted to an older version
-                if (!isLatest) {
-                    applyPullRequestState(playtestingUpdate, "data", lastSynced);
-                    continue;
-                }
-
-                // Released cards ship in their own published pack, so only unreleased ones belong in this one
-                const unreleased = await dataService.cards.read({
-                    project: project.number,
-                    latest: true,
-                    released: { $exists: false }
-                });
-                if (unreleased.length === 0) {
-                    // A file may still linger on staging from before this project's cards were all released - prune it,
-                    // otherwise it sits there forever, silently resurfacing in the diff of any other project's data PR
-                    const filePath = `packs/${project.code}.json`;
-                    const staleFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
-                    if (staleFile) {
-                        logger.info(
-                            `[Github] Removing stale ${filePath} from ${STAGING_BRANCH} (no unreleased cards remain)`
-                        );
-                        await context.client.rest.repos.deleteFile({
-                            owner: context.owner,
-                            repo: context.repo,
-                            path: filePath,
-                            message: `Automatic removal of ${project.code} development pack (fully released)`,
-                            sha: staleFile.sha,
-                            branch: STAGING_BRANCH
-                        });
-                        hasSyncedFile.push(playtestingUpdate);
-                    } else {
-                        applyPullRequestState(playtestingUpdate, "data", lastSynced);
+                } else {
+                    // "pruned" or "committed" - final state depends on the batched PR sync below
+                    syncedProjects.push(project);
+                    if (result.action === "committed") {
+                        pendingProjects.push(project);
                     }
-                    continue;
+                    deferred.push({ project, playtestingUpdate, releases, ptEmitter, releaseEmitters });
                 }
-
-                // Builds the new data file & compares it to current development file
-                const cards = await syncImage(unreleased);
-                const pack = {
-                    cgdbId: null,
-                    code: project.code,
-                    name: `${project.name} (Unreleased)`,
-                    releaseDate: null,
-                    workInProgress: true,
-                    cards: cards.map((card) => toJSONExportCard(card))
-                };
-                const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
-                const devContent = await getDataFileContent(context, `packs/${project.code}.json`, DEVELOPMENT_BRANCH);
-
-                if (!forced && devContent?.trim() === content.trim()) {
-                    // Data already exists in development, so any pull request for it has already been merged
-                    const merged = toMergedState(await getMergedPullRequest(), playtestingUpdate);
-                    applyPullRequestState(playtestingUpdate, "data", lastSynced, merged);
-                    continue;
-                }
-
-                // Create branch if it doesnt already exist
-                if (!branchRef) {
-                    const { data: baseRef } = await context.client.rest.git.getRef({
-                        owner: context.owner,
-                        repo: context.repo,
-                        ref: `heads/${DEVELOPMENT_BRANCH}`
-                    });
-                    const response = await context.client.rest.git.createRef({
-                        owner: context.owner,
-                        repo: context.repo,
-                        ref: `refs/heads/${STAGING_BRANCH}`,
-                        sha: baseRef.object.sha
-                    });
-                    branchRef = response.data;
-                }
-
-                // Commits changed card file to staging branch
-                emitters.get(playtestingUpdate).progress("Committing");
-                const filePath = `packs/${project.code}.json`;
-                const dataFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
-                if (!dataFile || dataFile.content.trim() !== content.trim()) {
-                    logger.info(
-                        `[Github] Committing ${filePath} to ${STAGING_BRANCH} (dataFile ${dataFile ? "exists" : "is new"})`
-                    );
-                    await context.client.rest.repos.createOrUpdateFileContents({
-                        owner: context.owner,
-                        repo: context.repo,
-                        path: filePath,
-                        message: `Automatic sync of ${project.code} development pack changes`,
-                        content: Buffer.from(content).toString("base64"),
-                        branch: STAGING_BRANCH,
-                        sha: dataFile?.sha
-                    });
-                    logger.info(`[Github] Committed ${filePath} to ${STAGING_BRANCH}`);
-                }
-
-                hasSyncedFile.push(playtestingUpdate);
-                pendingUpdates.push(playtestingUpdate);
             } catch (err) {
-                emitters.get(playtestingUpdate).error("Failure");
-                emitters.delete(playtestingUpdate);
-                logger.warn(new Error("[Github] Failed to sync data pull request", { cause: err }));
+                ptEmitter?.error("Failure");
+                logger.warn(
+                    new Error(`[Github] Failed to sync data pull request for project #${project.number}`, {
+                        cause: err
+                    })
+                );
             }
         }
-        emitters.forEach((e) => e.progress("Syncing"));
+
         // Only touches the Pull Request if something changed this round (a real sync, or pruning a stale file)
-        if (hasSyncedFile.length > 0) {
+        if (syncedProjects.length > 0) {
             let state: PullRequestState | null | undefined;
-            if (pendingUpdates.length > 0) {
-                state = await internalDataSync(existingPR, pendingUpdates, context);
+            if (pendingProjects.length > 0) {
+                state = await internalDataSync(existingPR, pendingProjects, releasedByProject, context);
             } else if (existingPR) {
                 // Every project that had outstanding data has since been fully released - nothing left to review
                 logger.info(
@@ -275,19 +246,151 @@ export async function syncDataPullRequests(forced?: boolean) {
                 });
                 state = null;
             }
-            for (const playtestingUpdate of hasSyncedFile) {
-                applyPullRequestState(playtestingUpdate, "data", lastSynced, state);
+            for (const stamp of deferred) {
+                stampProjectEntities(stamp, lastSynced, () => state, touchedPlaytestingUpdates, touchedProjects);
             }
         }
-        emitters.forEach((e, pu) => e.complete(pu));
 
-        // But updates all playtesting updates as some may just have their lastSynced updated, and nothing else
-        playtestingUpdates = await dataService.playtestingUpdates.update(playtestingUpdates, false, false, false);
+        if (touchedPlaytestingUpdates.length > 0) {
+            await dataService.playtestingUpdates.update(touchedPlaytestingUpdates, false, false, false);
+        }
+        if (touchedProjects.length > 0) {
+            await dataService.projects.update(touchedProjects, false, false, false);
+        }
     } finally {
         release();
     }
 
-    return playtestingUpdates;
+    return touchedPlaytestingUpdates;
+}
+
+type ProjectDataFileSyncResult = {
+    action: "unchanged" | "matches-development" | "pruned" | "committed";
+    releasedCounts: Map<string, number>;
+};
+
+async function syncProjectDataFile(
+    project: IProject,
+    context: GithubContext,
+    branchRefHolder: { current: BranchRef | null },
+    forced: boolean
+): Promise<ProjectDataFileSyncResult> {
+    const filePath = `packs/${project.code}.json`;
+    const devContent = await getDataFileContent(context, filePath, DEVELOPMENT_BRANCH);
+    const devCodes: string[] = devContent
+        ? ((JSON.parse(devContent).cards ?? []) as { code: string }[]).map((card) => card.code)
+        : [];
+
+    // Released cards ship in their own published pack, so only unreleased ones belong in this one
+    const unreleased = await dataService.cards.read({
+        project: project.number,
+        latest: true,
+        released: { $exists: false }
+    });
+
+    if (unreleased.length === 0) {
+        const releasedCounts = await tallyReleasedCounts(project, devCodes);
+
+        // A file may still linger on staging from before this project's cards were all released - prune it,
+        // otherwise it sits there forever, silently resurfacing in the diff of any other project's data PR
+        const staleFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
+        if (staleFile) {
+            logger.info(`[Github] Removing stale ${filePath} from ${STAGING_BRANCH} (no unreleased cards remain)`);
+            await context.client.rest.repos.deleteFile({
+                owner: context.owner,
+                repo: context.repo,
+                path: filePath,
+                message: `Automatic removal of ${project.code} development pack (fully released)`,
+                sha: staleFile.sha,
+                branch: STAGING_BRANCH
+            });
+            return { action: "pruned", releasedCounts };
+        }
+        return { action: "unchanged", releasedCounts };
+    }
+
+    // Builds the new data file & compares it to current development file
+    const cards = await syncImage(unreleased);
+    const exportedCards = cards.map((card) => toJSONExportCard(card));
+    const pack = {
+        cgdbId: null,
+        code: project.code,
+        name: `${project.name} (Unreleased)`,
+        releaseDate: null,
+        workInProgress: true,
+        cards: exportedCards
+    };
+    const content = JSON.stringify(pack, null, 4).replace(/\r/g, "");
+    const newCodes = exportedCards.map((card) => card.code as string);
+    const releasedCounts = await tallyReleasedCounts(project, devCodes, newCodes);
+
+    if (!forced && devContent?.trim() === content.trim()) {
+        // Data already exists in development, so any pull request for it has already been merged
+        return { action: "matches-development", releasedCounts };
+    }
+
+    // Create branch if it doesnt already exist
+    if (!branchRefHolder.current) {
+        const { data: baseRef } = await context.client.rest.git.getRef({
+            owner: context.owner,
+            repo: context.repo,
+            ref: `heads/${DEVELOPMENT_BRANCH}`
+        });
+        const response = await context.client.rest.git.createRef({
+            owner: context.owner,
+            repo: context.repo,
+            ref: `refs/heads/${STAGING_BRANCH}`,
+            sha: baseRef.object.sha
+        });
+        branchRefHolder.current = response.data;
+    }
+
+    // Commits changed card file to staging branch
+    const dataFile = await getDataFileWithSha(context, filePath, STAGING_BRANCH);
+    if (!dataFile || dataFile.content.trim() !== content.trim()) {
+        logger.info(
+            `[Github] Committing ${filePath} to ${STAGING_BRANCH} (dataFile ${dataFile ? "exists" : "is new"})`
+        );
+        await context.client.rest.repos.createOrUpdateFileContents({
+            owner: context.owner,
+            repo: context.repo,
+            path: filePath,
+            message: `Automatic sync of ${project.code} development pack changes`,
+            content: Buffer.from(content).toString("base64"),
+            branch: STAGING_BRANCH,
+            sha: dataFile?.sha
+        });
+        logger.info(`[Github] Committed ${filePath} to ${STAGING_BRANCH}`);
+    }
+
+    return { action: "committed", releasedCounts };
+}
+
+// Diff-derived, not an event log: keeps explaining a release for as long as its removal hasn't merged into
+// development yet, and stops the moment it has - so a still-open PR always explains exactly what it still shows
+async function tallyReleasedCounts(project: IProject, devCodes: string[], newCodes: string[] = []) {
+    const releasedCounts = new Map<string, number>();
+    const removedCodes = devCodes.filter((code) => !newCodes.includes(code));
+    if (removedCodes.length === 0) {
+        return releasedCounts;
+    }
+
+    const numbers = removedCodes
+        .map((code) => parsePlaytestCode(code as CardCode)?.number)
+        .filter((number): number is number => number !== undefined);
+    if (numbers.length === 0) {
+        return releasedCounts;
+    }
+
+    const cards = await dataService.cards.read(
+        numbers.map((number) => ({ project: project.number, number, latest: true }))
+    );
+    for (const card of cards) {
+        if (card.released?.code) {
+            releasedCounts.set(card.released.code, (releasedCounts.get(card.released.code) ?? 0) + 1);
+        }
+    }
+    return releasedCounts;
 }
 
 // Updates sync until their code changes merge, whilst each project's latest update always keeps syncing
@@ -372,10 +475,11 @@ async function isPlaytestingBranchBehind(context: GithubContext) {
 
 async function internalDataSync(
     existingPR: PullRequest | undefined,
-    playtestingUpdates: IPlaytestingUpdate[],
+    projects: IProject[],
+    releasedByProject: Map<number, Map<string, number>>,
     context: GithubContext
 ) {
-    const details = await pullRequests.data(playtestingUpdates, context);
+    const details = await pullRequests.data(projects, releasedByProject, context);
     const data = await createOrUpdatePullRequest(existingPR, details, context);
     logger.info(`[Github] ${existingPR ? "Updated" : "Created"} data pull request #${data.number}`);
     return toPullRequestState(data);
@@ -488,9 +592,9 @@ function toPullRequestState(pullRequest: { html_url: string; state: string; merg
     };
 }
 
-// Only adopts a merged pull request created after the update itself, as earlier ones cannot contain its changes
-function toMergedState(pullRequest: PullRequest | null, playtestingUpdate: IPlaytestingUpdate) {
-    if (!pullRequest?.merged_at || new Date(pullRequest.merged_at) < new Date(playtestingUpdate.created)) {
+// Only adopts a merged pull request created after the entity itself, as earlier ones cannot contain its changes
+function toMergedState(pullRequest: PullRequest | null, entity: { created: Date }) {
+    if (!pullRequest?.merged_at || new Date(pullRequest.merged_at) < new Date(entity.created)) {
         return undefined;
     }
     return toPullRequestState(pullRequest);
@@ -510,16 +614,7 @@ export async function markCardsImplemented(cards: IPlaytestCard[], sync = true) 
 }
 
 // Refreshes lastSynced; an undefined state leaves existing pull request details untouched, whilst null clears them
-export function applyPullRequestState(
-    playtestingUpdate: IPlaytestingUpdate,
-    key: "code" | "data",
-    lastSynced: Date,
-    state?: PullRequestState | null
-) {
-    playtestingUpdate._metadata ??= {};
-    playtestingUpdate._metadata.github ??= {};
-    const meta = (playtestingUpdate._metadata.github[key] ??= {});
-
+function stampMeta(meta: GithubPRMeta, lastSynced: Date, state?: PullRequestState | null) {
     meta.lastSynced = lastSynced;
 
     if (state === undefined) {
@@ -540,6 +635,28 @@ export function applyPullRequestState(
     } else {
         delete meta.mergedAt;
     }
+}
+
+export function applyPullRequestState(
+    playtestingUpdate: IPlaytestingUpdate,
+    key: "code" | "data",
+    lastSynced: Date,
+    state?: PullRequestState | null
+) {
+    playtestingUpdate._metadata ??= {};
+    playtestingUpdate._metadata.github ??= {};
+    stampMeta((playtestingUpdate._metadata.github[key] ??= {}), lastSynced, state);
+}
+
+// Same as applyPullRequestState, but for a release - which only ever carries the one "data" slot
+export function applyReleasePullRequestState(
+    release: IProjectRelease,
+    lastSynced: Date,
+    state?: PullRequestState | null
+) {
+    release._metadata ??= {};
+    release._metadata.github ??= {};
+    stampMeta((release._metadata.github.data ??= {}), lastSynced, state);
 }
 
 type PullRequestBranches = { head: string; base: string };
@@ -583,14 +700,15 @@ const pullRequests = {
         const base = PLAYTESTING_BRANCH;
         return { title, body, labels, owner: context.owner, repo: context.repo, head, base };
     },
-    async data(playtestingUpdates: IPlaytestingUpdate[], context: GithubContext) {
-        const updateLinks = await buildDataUpdateLinks(playtestingUpdates);
+    async data(projects: IProject[], releasedByProject: Map<number, Map<string, number>>, context: GithubContext) {
+        const updateLinks = buildDataUpdateLinks(projects);
+        const releasedSection = await buildReleasedPacksSection(releasedByProject);
 
         const title = "Pack Data Update";
         const body =
             "# Pack Data Update" +
-            "\n\nSyncs development pack data for the following playtesting updates:" +
-            `\n${updateLinks}`;
+            (updateLinks ? "\n\nSyncs development pack data for the following projects:" + `\n${updateLinks}` : "") +
+            releasedSection;
 
         const labels = ["automated"];
         const head = `${context.owner}:${STAGING_BRANCH}`;
@@ -693,18 +811,35 @@ async function buildCardChangeSummary(playtestingUpdate: IPlaytestingUpdate) {
     return [...typeLines, "", implementedLine].join("\n");
 }
 
-async function buildDataUpdateLinks(playtestingUpdates: IPlaytestingUpdate[]) {
-    const projects = await dataService.projects.read(
-        [...new Set(playtestingUpdates.map((pu) => pu.project))].map((n) => ({ number: n }))
-    );
-    const projectMap = projects.reduce<Record<number, IProject>>((m, p) => {
-        m[p.number] = p;
-        return m;
-    }, {});
-    return playtestingUpdates
-        .map((pu) => {
-            const project = projectMap[pu.project];
-            return `- [${project.name} - Update ${pu.version}](${process.env.CLIENT_HOST}/project/${pu.project}/update/${pu.version})`;
-        })
+function buildDataUpdateLinks(projects: IProject[]) {
+    return projects
+        .map((project) => `- [${project.name}](${process.env.CLIENT_HOST}/project/${project.number})`)
         .join("\n");
+}
+
+// Diff-derived (see tallyReleasedCounts): explains a project's removed cards by the release that shipped them,
+// only while their removal hasn't yet merged into development - so this section never outlives its own diff
+async function buildReleasedPacksSection(releasedByProject: Map<number, Map<string, number>>) {
+    const entries = [...releasedByProject.entries()].filter(([, counts]) => counts.size > 0);
+    if (entries.length === 0) {
+        return "";
+    }
+
+    const projects = await dataService.projects.read(entries.map(([number]) => ({ number })));
+    const projectMap = new Map(projects.map((project) => [project.number, project]));
+
+    const rows = entries.flatMap(([projectNumber, counts]) => {
+        const project = projectMap.get(projectNumber);
+        return [...counts].map(([code, count]) => {
+            const release = project?.releases.find((r) => r.code === code);
+            const label = count === 1 ? "card" : "cards";
+            return `\n- :${project?.emoji}: ${project?.name} - "${release?.name ?? code}" (${code}): ${count} ${label} now released`;
+        });
+    });
+
+    return (
+        "\n\n## Recently Released" +
+        "\nThe following packs were published, removing their cards from this development file:" +
+        rows.join("")
+    );
 }
