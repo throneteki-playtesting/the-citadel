@@ -5,6 +5,8 @@ import { getAppliedMigrations, markMigrationApplied } from "./lib/migrationRegis
 import { destroyDiscordClient } from "./lib/discord";
 import { hasUnresolvedMappings } from "./lib/userMappings";
 import { MigrationContext, Migration } from "./lib/types";
+import { getArgValue } from "./lib/args";
+import { ENVIRONMENTS, isEnvironment, resolveDatabase } from "./lib/environments";
 
 import { migration as projectsMigration } from "./migrations/001_projects";
 import { migration as cardsMigration } from "./migrations/002_cards";
@@ -37,19 +39,33 @@ const dryRun = args.includes("--dry-run");
 const resolveUsersOnly = args.includes("--resolve-users");
 
 async function main() {
-    const sourceUrl = process.env.SOURCE_DATABASE_URL as string;
-    const destUrl = process.env.DEST_DATABASE_URL as string;
-    const sourceDbName = process.env.SOURCE_DATABASE_NAME as string;
-    const destDbName = process.env.DEST_DATABASE_NAME as string;
+    const environmentArg = getArgValue(args, "environment");
+    if (!environmentArg || !isEnvironment(environmentArg)) {
+        log.error(`--environment is required and must be one of: ${ENVIRONMENTS.join(", ")}`);
+        return process.exit(1);
+    }
 
-    if (!sourceUrl || !destUrl || !sourceDbName || !destDbName) {
-        log.error(
-            "SOURCE_DATABASE_NAME, SOURCE_DATABASE_URL, DEST_DATABASE_NAME and DEST_DATABASE_URL must be set in your .env"
-        );
+    const fromEnvironmentArg = getArgValue(args, "fromEnvironment");
+    if (fromEnvironmentArg && !isEnvironment(fromEnvironmentArg)) {
+        log.error(`--fromEnvironment must be one of: ${ENVIRONMENTS.join(", ")}`);
+        return process.exit(1);
+    }
+
+    const destEnvironment = environmentArg;
+    const sourceEnvironment = (fromEnvironmentArg as typeof environmentArg | undefined) ?? destEnvironment;
+
+    let sourceUrl: string, sourceDbName: string, destUrl: string, destDbName: string;
+    try {
+        ({ url: sourceUrl, name: sourceDbName } = resolveDatabase(sourceEnvironment));
+        ({ url: destUrl, name: destDbName } = resolveDatabase(destEnvironment));
+    } catch (err) {
+        log.error((err as Error).message);
         process.exit(1);
     }
 
     log.section("The Citadel — MongoDB Migration");
+    log.info(`Source: ${sourceEnvironment}`);
+    log.info(`Dest:   ${destEnvironment}`);
     if (dryRun) log.warn("--dry-run: no data will be written");
     if (resolveUsersOnly) log.info("--resolve-users: only reviews migration will run");
 

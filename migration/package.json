@@ -7,6 +7,7 @@
         "test": "echo \"Error: no test specified\" && exit 1",
         "build": "tsc",
         "migrate": "npx ts-node src/index.ts",
+        "refresh": "npx ts-node src/refresh.ts",
         "start": "node dist/migration/src/index.js"
     },
     "keywords": [],
