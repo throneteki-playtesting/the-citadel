@@ -841,6 +841,16 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "card")
         }),
+        syncProjectData: builder.mutation<IProject, { project: number; forced?: boolean }>({
+            query: ({ project, forced }) => {
+                const url = buildUrl(`projects/${project}/sync/data`, { forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => [
+                ...generateFor(result, "project"),
+                ...generateFor(undefined, "playtestingUpdate")
+            ]
+        }),
         syncCardImage: builder.mutation<
             IPlaytestCard,
             { project: number; number: number; version: SemanticVersion; forced?: boolean }
@@ -873,7 +883,7 @@ const api = createApi({
         }),
         syncPlaytestingUpdateGithub: builder.mutation<
             IPlaytestingUpdate,
-            { project: number; version: number; type: "code" | "data"; forced?: boolean }
+            { project: number; version: number; type: "code"; forced?: boolean }
         >({
             query: ({ project, version, type, forced }) => {
                 const url = buildUrl(`playtesting-updates/${project}/${version}/sync/github/${type}`, { forced });
@@ -1102,6 +1112,7 @@ export const {
     useSyncProjectImagesMutation,
     useSyncProjectDiscordMutation,
     useSyncProjectGithubMutation,
+    useSyncProjectDataMutation,
     useSyncCardImageMutation,
     useSyncCardDiscordMutation,
     useSyncCardGithubMutation,

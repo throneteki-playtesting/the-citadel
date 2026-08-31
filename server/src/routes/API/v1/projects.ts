@@ -24,6 +24,7 @@ import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
 import { syncIssues } from "@/github/issues";
+import { syncDataPullRequests } from "@/github/pullRequests";
 
 const router = express.Router();
 
@@ -380,6 +381,39 @@ async function visibleTargets(project: number, number?: number): Promise<IPlayte
     ]);
     return pickVisibleCards(candidates);
 }
+
+// Sync the project's development pack data pull request - not scoped to a single playtesting update, since
+// the pack file itself isn't; a release publish also triggers this (see /projects/:number/releases/:code/publish).
+// Registered before the wildcard /:number/sync/:type route below, which would otherwise swallow "data" as a type
+router.post(
+    "/:number/sync/data",
+    validateRequest(Permission.SYNC_PROJECT_GITHUB_DATA),
+    celebrate({
+        [Segments.PARAMS]: numberParams,
+        [Segments.QUERY]: { forced: Joi.boolean() }
+    }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { forced } = req.query;
+
+        await syncDataPullRequests(forced);
+        const [updated] = await dataService.projects.read({ number: project.number });
+
+        if (forced) {
+            await logActivity(
+                LogCategory.PROJECT,
+                "project.data_synced",
+                "<principal> forced a data sync for <project>",
+                {
+                    context: { project: projectSnapshot(project) }
+                }
+            );
+        }
+
+        res.status(StatusCodes.OK).json(updated ?? project);
+    })
+);
 
 type SyncParams = { number: number; type: "image" | "discord" | "github" };
 

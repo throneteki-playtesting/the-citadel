@@ -42,6 +42,8 @@ import { HighlightTarget } from "../../../components/highlightTarget";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ReleaseProgressMeter from "./releaseProgressMeter";
 import { downloadBlob } from "../../../utils";
+import { asInlineIcon, BaseStatus } from "../../../components/status/baseStatus";
+import { useReleaseDataStatus } from "../../../components/status/useReleaseDataStatus";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
 export function SortableReleaseBlock(props: ReleaseBlockProps) {
@@ -122,7 +124,12 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     const displayStatus = isLocked ? "released" : release.status;
     const canCopyCodes = canEditReleases && areReleaseChecksClosed(release.status);
     // Published data only - the export is exactly what shipped, so there's nothing to offer before then
-    const canDownloadJson = isLocked;
+    const canDownloadJson = isLocked && canEditReleases;
+    // Only a released pack can have shown up as a removal in the data PR - nothing to explain before then
+    const { data: dataStatus, isLoading: isDataStatusLoading } = useReleaseDataStatus(
+        isLocked ? projectNumber : undefined,
+        release.code
+    );
 
     return (
         <div
@@ -213,7 +220,10 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                     )}
                 </div>
             </div>
-            {(canCopyCodes || canDownloadJson || (!isLocked && (canEditReleases || canDeleteReleases))) && (
+            {(canCopyCodes ||
+                canDownloadJson ||
+                !!dataStatus ||
+                (!isLocked && (canEditReleases || canDeleteReleases))) && (
                 <div
                     className={classNames(
                         "flex gap-1 transition-opacity duration-200",
@@ -229,7 +239,10 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                         </DropdownTrigger>
                         <DropdownMenu
                             aria-label="Release actions"
-                            disabledKeys={isPublishDisabled ? ["publish"] : []}
+                            disabledKeys={[
+                                ...(isPublishDisabled ? ["publish"] : []),
+                                ...(dataStatus && !dataStatus.onPress && !dataStatus.href ? ["sync"] : [])
+                            ]}
                             onAction={(key) => {
                                 if (key === "copy") {
                                     onCopyCodes?.();
@@ -241,6 +254,12 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                     onDelete?.();
                                 } else if (key === "download") {
                                     onDownloadJson?.();
+                                } else if (key === "sync") {
+                                    if (dataStatus?.onPress) {
+                                        dataStatus.onPress();
+                                    } else if (dataStatus?.href) {
+                                        window.open(dataStatus.href, "_blank", "noreferrer");
+                                    }
                                 }
                             }}
                         >
@@ -259,6 +278,13 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                               startContent={<FontAwesomeIcon icon={faFileArrowDown} />}
                                           >
                                               Download JSON
+                                          </DropdownItem>
+                                      ]
+                                    : []),
+                                ...(dataStatus
+                                    ? [
+                                          <DropdownItem key="sync" startContent={asInlineIcon(dataStatus.icon)}>
+                                              {dataStatus.description}
                                           </DropdownItem>
                                       ]
                                     : []),
@@ -312,6 +338,7 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                 </Button>
                             </Tooltip>
                         )}
+                        <BaseStatus isIconOnly size="sm" data={dataStatus} isLoading={isDataStatusLoading} />
                         {!isLocked && canEditReleases && (
                             <Tooltip content="Edit Release">
                                 <Button isIconOnly size="sm" variant="flat" onPress={onEdit}>

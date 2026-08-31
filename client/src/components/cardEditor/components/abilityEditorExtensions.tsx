@@ -1,4 +1,4 @@
-import { Extension, Mark, Node } from "@tiptap/core";
+import { Extension, getMarkRange, Mark, Node } from "@tiptap/core";
 import HardBreak from "@tiptap/extension-hard-break";
 import { abilityIcons } from "common/utils";
 import { isPlotModifierLine, parsePlotModifiers, plotModifierCaptureKey, PlotModifiers } from "./plotModifiers";
@@ -231,7 +231,7 @@ export const Trait = Mark.create({
         return {
             Backspace: () => {
                 const { state } = this.editor;
-                const { selection, doc } = state;
+                const { selection, doc, schema } = state;
 
                 if (!selection.empty) return false;
 
@@ -243,8 +243,11 @@ export const Trait = Mark.create({
                 if (!nodeBefore || !nodeBefore.isText) return false;
 
                 if (nodeBefore.marks.some((m) => m.type.name === "trait")) {
+                    const range = getMarkRange($from, schema.marks.trait);
+                    if (!range) return false;
+
                     const tr = state.tr
-                        .removeMark($from.start(), $from.end(), state.schema.marks.trait)
+                        .removeMark(range.from, range.to, schema.marks.trait)
                         .setMeta(markRemovedKey, "trait");
                     this.editor.view.dispatch(tr);
                     return true;

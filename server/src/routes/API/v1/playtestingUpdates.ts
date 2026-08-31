@@ -14,7 +14,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { getRequestSchema } from "@/schemas";
 import { asPDF } from "@/rendering";
 import { hasPermission, renderPlaytestingCard } from "common/utils";
-import { syncCodePullRequests, syncDataPullRequests } from "@/github/pullRequests";
+import { syncCodePullRequests } from "@/github/pullRequests";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { notifyStaleChecks } from "@/discord/announcements/staleChecks";
@@ -299,34 +299,25 @@ router.post(
     })
 );
 
-// Sync github pull requests
+// Sync github pull requests - data sync is project-scoped now (POST /projects/:number/sync/data),
+// since a project's pack file isn't specific to any one playtesting update
 router.post(
     "/:project/:version/sync/github/:type",
     celebrate({
         [Segments.PARAMS]: {
             project: Joi.number().required(),
             version: Joi.number().required(),
-            type: Joi.string().valid("code", "data").required()
+            type: Joi.string().valid("code").required()
         },
         [Segments.QUERY]: {
             forced: Joi.boolean()
         }
     }),
-    validateRequest<{ project: number; version: number; type: "code" | "data" }, unknown, unknown, unknown>(
-        (principal, req) => {
-            const { type } = req.params;
-            switch (type) {
-                case "code":
-                    return hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE);
-                case "data":
-                    return hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_DATA);
-                default:
-                    return false;
-            }
-        }
+    validateRequest<{ project: number; version: number; type: "code" }, unknown, unknown, unknown>((principal) =>
+        hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE)
     ),
     loadProjectByParam,
-    asyncHandler<{ project: number; version: number; type: "code" | "data" }, unknown, unknown, unknown>(
+    asyncHandler<{ project: number; version: number; type: "code" }, unknown, unknown, unknown>(
         async (req, res, next) => {
             const { version } = req.params;
             const project = res.locals.project as IProject;
@@ -343,31 +334,18 @@ router.post(
             next();
         }
     ),
-    asyncHandler<{ project: number; version: number; type: "code" | "data" }, unknown, unknown, { forced?: boolean }>(
+    asyncHandler<{ project: number; version: number; type: "code" }, unknown, unknown, { forced?: boolean }>(
         async (req, res) => {
             const { type } = req.params;
             const { forced } = req.query;
             const project = res.locals.project as IProject;
             let playtestingUpdate = res.locals.playtestingUpdate as IPlaytestingUpdate;
 
-            switch (type) {
-                case "code": {
-                    const updates = await syncCodePullRequests(forced);
-                    playtestingUpdate =
-                        updates.find(
-                            (pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version
-                        ) ?? playtestingUpdate;
-                    break;
-                }
-                case "data": {
-                    const updates = await syncDataPullRequests(forced);
-                    playtestingUpdate =
-                        updates.find(
-                            (pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version
-                        ) ?? playtestingUpdate;
-                    break;
-                }
-            }
+            const updates = await syncCodePullRequests(forced);
+            playtestingUpdate =
+                updates.find(
+                    (pu) => pu.project === playtestingUpdate.project && pu.version === playtestingUpdate.version
+                ) ?? playtestingUpdate;
 
             if (forced) {
                 await logActivity(

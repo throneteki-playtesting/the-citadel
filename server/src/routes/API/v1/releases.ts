@@ -1,7 +1,7 @@
 import express from "express";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IProject, IProjectRelease, releaseStatuses } from "common/models/projects";
 import { factions } from "common/models/cards";
@@ -21,6 +21,7 @@ import { LogCategory } from "common/models/logs";
 import { computeReleasesProgress } from "@/services/progressService";
 import { clearDiscordMetadata } from "@/discord/forums/cardForum";
 import { IPlaytestCard } from "common/models/cards";
+import { syncDataPullRequests } from "@/github/pullRequests";
 
 const router = express.Router({ mergeParams: true });
 
@@ -524,6 +525,17 @@ router.post(
                         },
                         severity: "warn"
                     }
+                );
+            }
+
+            // (g) Best-effort resync of the development pack - a GitHub hiccup shouldn't fail the publish
+            try {
+                await syncDataPullRequests();
+            } catch (err) {
+                logger.warn(
+                    new Error(`[Github] Failed to sync development pack data after publishing release "${code}"`, {
+                        cause: err
+                    })
                 );
             }
 

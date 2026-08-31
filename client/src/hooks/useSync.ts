@@ -20,7 +20,8 @@ type SyncListenerState<K extends SyncType> = UnionToIntersection<DotNested<SyncO
 const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     card: { image: {}, discord: {}, github: {} },
     review: { discord: {} },
-    playtestingUpdate: { github: { code: {}, data: {} }, discord: {} }
+    playtestingUpdate: { github: { code: {}, data: {} }, discord: {} },
+    release: { github: { data: {} } }
 };
 
 // One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }
@@ -144,4 +145,8 @@ export function useReviewSync(review?: {
 export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number; version: number }) {
     const id = playtestingUpdate ? `${playtestingUpdate.project}|${playtestingUpdate?.version}` : undefined;
     return useSyncListener("playtestingUpdate", id);
+}
+export function useReleaseSync(release?: { project: number; code: string }) {
+    const id = release ? `${release.project}|${release.code}` : undefined;
+    return useSyncListener("release", id);
 }

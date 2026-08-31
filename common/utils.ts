@@ -525,13 +525,18 @@ export function isReleased(slot: Pick<ISlot, "release">): boolean {
     return !!slot.release?.released;
 }
 
-export function toJSONExportCard(card: Cards.IPlaytestCard, release?: { short: string; number: number }) {
+export function toJSONExportCard(card: Cards.IPlaytestCard): Cards.ICard & { version: SemanticVersion };
+export function toJSONExportCard(card: Cards.IPlaytestCard, release: { short: string; number: number }): Cards.ICard;
+export function toJSONExportCard(
+    card: Cards.IPlaytestCard,
+    release?: { short: string; number: number }
+): Cards.ICard | (Cards.ICard & { version: SemanticVersion }) {
+    // A released card is stamped with its release code (project/final number), not the development one it was drafted under
+    const code = release ? parseCardCode(true, card.project, release.number) : card.code;
     const imageUrl = release
         ? generateReleaseImageUrl(release.short, release.number, card.name)
         : card._metadata?.imageUrl;
-    return {
-        code: card.code,
-        version: card.version,
+    const rest = {
         type: card.type,
         name: card.name,
         octgnId: null,
@@ -552,6 +557,8 @@ export function toJSONExportCard(card: Cards.IPlaytestCard, release?: { short: s
         designer: card.designer,
         imageUrl
     };
+    // A release is the version, so only a still-in-progress development export is worth pinning to one
+    return release ? { code, ...rest } : { code, version: card.version, ...rest };
 }
 
 export function renderPlaytestingCard(card: Cards.IPlaytestCard, watermark?: Cards.Watermark): Cards.IRenderCard;
