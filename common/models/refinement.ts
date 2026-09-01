@@ -54,7 +54,6 @@ export interface IRefinementInquiry extends IAuditable {
     _metadata?: {
         /** Only ever set once somebody starts a discussion; absence means no thread exists */
         discord?: {
-            threadUrl?: string;
             messageUrl?: string;
             /** Who opened the thread - not necessarily whoever raised the inquiry */
             startedBy?: string;

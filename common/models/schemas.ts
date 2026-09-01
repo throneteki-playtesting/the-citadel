@@ -624,12 +624,7 @@ const inquiry = (isFull: boolean) =>
             note: NonEmptyRichText
         }),
         _metadata: Joi.object({
-            discord: Joi.object({
-                threadUrl: Joi.string().uri(),
-                messageUrl: Joi.string().uri(),
-                startedBy: Joi.string(),
-                lastSynced: Joi.date()
-            })
+            discord: DiscordMetadata.keys({ startedBy: Joi.string() })
         }),
         ...auditKeys(isFull)
     });

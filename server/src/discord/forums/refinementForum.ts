@@ -60,7 +60,7 @@ export async function startInquiryDiscussion(
     try {
         // Re-read rather than trusting the caller's copy: the slot it holds was loaded before the lock
         const existing = await storedDiscord(slot, inquiry.inquiry);
-        if (existing?.threadUrl) {
+        if (existing?.messageUrl) {
             return existing;
         }
 
@@ -82,10 +82,10 @@ export async function startInquiryDiscussion(
         });
 
         logger.info(`[Discord] Opened refinement discussion for ${label(slot, inquiry)}`);
-        // A thread's starter message carries the thread's own id in both positions, which is what makes
-        // one url serve as both the thread and the message the delete handler matches on
-        const url = `https://discord.com/channels/${thread.guildId}/${thread.id}/${thread.id}`;
-        return { threadUrl: url, messageUrl: url, startedBy, lastSynced: new Date() };
+        // A forum thread's opening message carries the thread's own id, which is what lets the one url
+        // stand for both - the same way a card's thread is found from the message stored against it
+        const messageUrl = `https://discord.com/channels/${thread.guildId}/${thread.id}/${thread.id}`;
+        return { messageUrl, startedBy, lastSynced: new Date() };
     } finally {
         release();
     }
@@ -152,7 +152,7 @@ export async function endInquiryDiscussion(slot: ISlot, inquiry: IRefinementInqu
 /** Clears the stored thread of an inquiry whose thread was deleted from Discord, so it can be opened again */
 export async function onRefinementForumMessageDeleted(messageUrl: string) {
     const affected = await dataService.slots.read({
-        "statuses.design.inquiries._metadata.discord.threadUrl": messageUrl
+        "statuses.design.inquiries._metadata.discord.messageUrl": messageUrl
     } as never);
     if (affected.length === 0) {
         return;
@@ -161,7 +161,7 @@ export async function onRefinementForumMessageDeleted(messageUrl: string) {
     logger.info(`[Discord] Refinement discussion deleted: ${messageUrl}`);
     for (const slot of affected) {
         for (const entry of slot.statuses.design.inquiries) {
-            if (entry._metadata?.discord?.threadUrl === messageUrl) {
+            if (entry._metadata?.discord?.messageUrl === messageUrl) {
                 delete entry._metadata.discord;
             }
         }
@@ -241,13 +241,13 @@ async function withThread(
     inquiry: IRefinementInquiry,
     action: (thread: ThreadChannel, context: RefinementForumContext) => Promise<void>
 ) {
-    const threadUrl = inquiry._metadata?.discord?.threadUrl;
-    if (!threadUrl) {
+    const messageUrl = inquiry._metadata?.discord?.messageUrl;
+    if (!messageUrl) {
         return;
     }
 
     try {
-        const thread = await fetchThread(threadUrl);
+        const thread = await fetchThread(messageUrl);
         if (!thread) {
             return;
         }
@@ -263,8 +263,8 @@ async function withThread(
 }
 
 /** The thread behind a stored url, or undefined where it has since been deleted */
-async function fetchThread(threadUrl: string) {
-    const { messageId: threadId } = extractFromURL(threadUrl);
+async function fetchThread(messageUrl: string) {
+    const { messageId: threadId } = extractFromURL(messageUrl);
     const guild = await discordService.getGuild();
     try {
         const channel = await guild.channels.fetch(threadId);

@@ -229,11 +229,11 @@ function DiscussionButton({ project, number, inquiry, canStart, isDisabled, clas
     const [startDiscussion, { isLoading }] = useStartInquiryDiscussionMutation();
     const [isOpening, setIsOpening] = useState(false);
     const target = useDiscordTarget();
-    const threadUrl = inquiry._metadata?.discord?.threadUrl;
+    const messageUrl = inquiry._metadata?.discord?.messageUrl;
 
-    if (threadUrl) {
+    if (messageUrl) {
         return (
-            <DiscordLinkButton url={threadUrl} className={className}>
+            <DiscordLinkButton url={messageUrl} className={className}>
                 Discussion
             </DiscordLinkButton>
         );
@@ -251,8 +251,8 @@ function DiscussionButton({ project, number, inquiry, canStart, isDisabled, clas
             // The thread is what was asked for, so the page follows the person to it
             const result = await startDiscussion({ project, number, inquiry: inquiry.inquiry }).unwrap();
             const opened = result.inquiries.find((entry) => entry.inquiry === inquiry.inquiry);
-            if (opened?._metadata?.discord?.threadUrl) {
-                openDiscordLink(opened._metadata.discord.threadUrl, target);
+            if (opened?._metadata?.discord?.messageUrl) {
+                openDiscordLink(opened._metadata.discord.messageUrl, target);
             }
         } catch (err) {
             setIsOpening(false);
