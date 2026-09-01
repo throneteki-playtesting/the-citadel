@@ -6,7 +6,8 @@ import {
     DropdownItem,
     DropdownMenu,
     DropdownSection,
-    DropdownTrigger
+    DropdownTrigger,
+    Tooltip
 } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
@@ -14,8 +15,7 @@ import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
-import { TouchTooltip } from "../touchTooltip";
-import { asInlineIcon } from "../status/baseStatus";
+import { asInlineIcon } from "../status/asInlineIcon";
 import { ActionItem } from "./types";
 
 // Navigates directly rather than passing href to Button/DropdownItem - this app's HeroUIProvider
@@ -86,7 +86,7 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                     );
 
                     return (
-                        <TouchTooltip
+                        <Tooltip
                             key={item.key}
                             content={
                                 <div className="flex flex-col">
@@ -121,7 +121,7 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                                     {buttonChildren}
                                 </Button>
                             )}
-                        </TouchTooltip>
+                        </Tooltip>
                     );
                 })}
             </ButtonGroup>

@@ -240,6 +240,7 @@ export function BaseStatus({
                     size={size}
                     color={data.color}
                     style={style}
+                    isDisabled={!hasLongPress && !data.onPress && !data.href}
                     onPressStart={hasLongPress ? startTimer : undefined}
                     onPressEnd={hasLongPress ? clearTimer : undefined}
                     onPress={hasLongPress ? handleButtonPress : data.onPress}
@@ -367,12 +368,6 @@ export type LongPressOption = {
     label: ReactNode;
     fn?: () => unknown;
 };
-
-// A status icon is sized for BaseStatus's own dedicated button (eg. size="xl"); reusing it elsewhere
-// (a dropdown item alongside other, ambient-sized icons) needs it reset back to inherited size
-export function asInlineIcon(icon: ReactNode) {
-    return <span className="[&_svg]:!text-[1em]">{icon}</span>;
-}
 
 type BaseStatusProps = Omit<BaseElementProps, "children"> & {
     isLoading?: boolean;

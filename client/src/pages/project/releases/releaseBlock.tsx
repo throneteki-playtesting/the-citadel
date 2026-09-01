@@ -42,7 +42,8 @@ import { HighlightTarget } from "../../../components/highlightTarget";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import ReleaseProgressMeter from "./releaseProgressMeter";
 import { downloadBlob } from "../../../utils";
-import { asInlineIcon, BaseStatus } from "../../../components/status/baseStatus";
+import { BaseStatus } from "../../../components/status/baseStatus";
+import { asInlineIcon } from "../../../components/status/asInlineIcon";
 import { useReleaseDataStatus } from "../../../components/status/useReleaseDataStatus";
 
 // Reordering only applies to unreleased releases - wraps ReleaseBlock with its own drag handle/transform
