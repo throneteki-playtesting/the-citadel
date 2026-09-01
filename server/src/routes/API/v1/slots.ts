@@ -1,7 +1,7 @@
 import express from "express";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { SchemaType } from "common/models/schemas";
 import {
@@ -47,6 +47,12 @@ import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityL
 import { LogCategory } from "common/models/logs";
 import { getContext } from "@/middleware/context";
 import { computeCardProgress } from "@/services/progressService";
+import {
+    closeInquiryDiscussion,
+    endInquiryDiscussion,
+    reopenInquiryDiscussion,
+    startInquiryDiscussion
+} from "@/discord/forums/refinementForum";
 
 const router = express.Router({ mergeParams: true });
 
@@ -964,9 +970,8 @@ router.put(
             );
         }
 
-        // Re-stamped against the card as it stands: somebody rewording an inquiry has just read it against
-        // the current card, which is exactly what the stale marker asks for. An untouched inquiry keeps the
-        // version it was raised against, so this is a statement rather than a side effect of any save
+        // Re-stamped against the card as it stands: rewording an inquiry means reading it against the
+        // current card, which is exactly what the stale marker asks for
         const version = await readFinalVersion(project, slot);
         const edited: IRefinementInquiry = {
             ...entry,
@@ -1028,6 +1033,9 @@ router.delete(
 
         const remaining = slot.statuses.design.inquiries.filter((existing) => existing.inquiry !== inquiryNumber);
         const updated = await saveInquiries(slot, remaining);
+        // Said in the thread rather than done to it: people replied there, and taking their words away to
+        // record that the thing they answered is gone is a worse account of it than saying so outright
+        void endInquiryDiscussion(slot, entry);
 
         await logActivity(
             LogCategory.SLOT,
@@ -1085,6 +1093,7 @@ router.patch(
             updatedBy: principal.id
         };
         const updated = await saveInquiries(slot, withInquiry(slot, resolvedEntry));
+        void closeInquiryDiscussion(project, updated, resolvedEntry);
 
         await logActivity(
             LogCategory.SLOT,
@@ -1129,12 +1138,71 @@ router.delete(
             updatedBy: principal.id
         };
         const updated = await saveInquiries(slot, withInquiry(slot, reopened));
+        void reopenInquiryDiscussion(project, updated, reopened);
 
         await logActivity(
             LogCategory.SLOT,
             "slot.inquiry_reopened",
             `<principal> reopened inquiry #${inquiryNumber} on slot ${slotNumber} in <project>`,
             { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
+        res.status(StatusCodes.OK).json(
+            toRefinementDetail(updated, await readFinalVersion(project, updated), canReadFaq())
+        );
+    })
+);
+
+// Open a Discord thread for one inquiry. Opt-in, since a forum given a thread for every inquiry is a
+// forum nobody reads, and idempotent - a second press gets the first thread
+router.post(
+    "/:slot/inquiries/:inquiry/discussion",
+    validateRequest(Permission.RAISE_INQUIRIES),
+    celebrate({ [Segments.PARAMS]: InquiryParams }),
+    loadProjectByNumber,
+    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
+
+        const slot = await requireSlot(project.number, slotNumber);
+        const entry = requireInquiry(slot, inquiryNumber);
+
+        // The thread names the card it is about, and a forum thread cannot be renamed into existence later
+        const [card] = await dataService.cards.read({ project: project.number, number: slotNumber, latest: true });
+        if (!card) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                `Slot #${slotNumber} does not have a card to discuss yet`
+            );
+        }
+
+        const { principal } = getContext();
+        let discord;
+        try {
+            discord = await startInquiryDiscussion(project, slot, entry, card, principal.id);
+        } catch (err) {
+            // Logged as well as answered: an ApiErrorResponse is reported at verbose, and its `cause`
+            // does not survive the JSON.stringify that reporting uses
+            logger.warn(new Error(`[Discord] Failed to open discussion for inquiry #${inquiryNumber}`, { cause: err }));
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_GATEWAY,
+                "Discord Error",
+                "A discussion could not be opened for this inquiry. The refinement forum may be missing a tag it needs.",
+                err
+            );
+        }
+
+        const updated = await saveInquiries(
+            slot,
+            withInquiry(slot, { ...entry, _metadata: { ...entry._metadata, discord } })
+        );
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.inquiry_discussed",
+            `<principal> opened a discussion for inquiry #${inquiryNumber} on slot ${slotNumber} in <project>`,
+            { context: { project: projectSnapshot(project) } }
         );
 
         res.status(StatusCodes.OK).json(

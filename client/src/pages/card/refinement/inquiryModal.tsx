@@ -86,10 +86,14 @@ export default function InquiryModal({ isOpen, project, number, inquiry, card, v
                                 label="Summary"
                                 isRequired
                                 maxLength={INQUIRY_SUMMARY_MAX}
-                                description={`${summary.length}/${INQUIRY_SUMMARY_MAX} - a headline, not the whole thought`}
                                 value={summary}
                                 onValueChange={setSummary}
                                 isDisabled={isSaving}
+                                endContent={
+                                    <span className="text-xs text-default-400">
+                                        {summary.length}/{INQUIRY_SUMMARY_MAX}
+                                    </span>
+                                }
                             />
                             <RichTextArea
                                 name="detail"

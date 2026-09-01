@@ -16,6 +16,16 @@ export const inquiryStatuses = ["open", "resolved", "rejected"] as const;
 export type InquirySeverity = (typeof inquirySeverities)[number];
 export type InquiryStatus = (typeof inquiryStatuses)[number];
 
+// Shared rather than kept beside the client's icons and colours, since the forum names its tags after
+// these - a tag which no longer matches is a tag nothing can be filed under
+export const inquirySeverityLabels: Record<InquirySeverity, string> = {
+    unchecked: "Unchecked",
+    needsConfirmation: "Needs Confirmation",
+    recommendation: "Recommendation",
+    minorProblem: "Minor Problem",
+    majorProblem: "Major Problem"
+};
+
 /** Doubles as the Discord thread name, so it stays a headline rather than the inquiry itself */
 export const INQUIRY_SUMMARY_MAX = 60;
 
@@ -96,8 +106,8 @@ export function isInquiryAddressed(inquiry: IRefinementInquiry) {
 }
 
 /**
- * The number a card's next inquiry takes. Deleting the highest one frees its number again, which is
- * only safe because deleting an inquiry takes its discussion thread with it
+ * The number a card's next inquiry takes. Deleting the highest one frees its number again - it is an id
+ * within the card, and a deleted inquiry's thread is closed off rather than left pointing at it
  */
 export function nextInquiryNumber(inquiries: IRefinementInquiry[]) {
     return inquiries.reduce((highest, entry) => Math.max(highest, entry.inquiry), 0) + 1;

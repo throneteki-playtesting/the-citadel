@@ -9,6 +9,7 @@ import { useGetCardQuery, useSyncCardDiscordMutation } from "../../api";
 import { useCardSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
 import { StatusData } from "./baseStatus";
+import { useDiscordHref } from "../../hooks/useDiscordLink";
 
 export function useDiscordCardStatus(project: number, number: number, version?: SemanticVersion) {
     const { data: card, isLoading } = useGetCardQuery({ project, number, version: version ?? "latest" });
@@ -17,6 +18,7 @@ export function useDiscordCardStatus(project: number, number: number, version?: 
     const { status, step, error } = useCardSync(card).discord;
 
     const hasSyncPermission = usePermission(Permission.SYNC_CARD_DISCORD);
+    const { href, isApp } = useDiscordHref(card?._metadata?.discord?.messageUrl ?? "");
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Discord Thread";
@@ -77,14 +79,14 @@ export function useDiscordCardStatus(project: number, number: number, version?: 
         return {
             title,
             icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
-            href: card._metadata!.discord!.messageUrl!.replace("https://", "discord://"),
+            href,
             // Browsers often refuse to open a custom protocol in a new tab
-            openInNewTab: false,
+            openInNewTab: !isApp,
             longPressOptions,
             color: "success",
             description: "Synced"
         };
-    }, [card, error, hasSyncPermission, isSyncing, status, step, syncCardDiscord]);
+    }, [card, error, hasSyncPermission, href, isApp, isSyncing, status, step, syncCardDiscord]);
 
     return { data, isLoading };
 }

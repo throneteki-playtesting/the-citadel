@@ -612,6 +612,13 @@ const api = createApi({
             },
             invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
         }),
+        startInquiryDiscussion: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number }>({
+            query: ({ project, number, inquiry }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/discussion`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
         submitRefinementCheck: builder.mutation<ISlotRefinementDetail, ISlotRef>({
             query: ({ project, number }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}/refinement/check`);
@@ -1085,6 +1092,7 @@ export const {
     useDeleteInquiryMutation,
     useResolveInquiryMutation,
     useReopenInquiryMutation,
+    useStartInquiryDiscussionMutation,
     useSubmitRefinementCheckMutation,
     useWithdrawRefinementCheckMutation,
     useUpdateSlotFaqMutation,

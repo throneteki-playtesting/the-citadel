@@ -249,7 +249,8 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
                       label: "Raise inquiry",
                       icon: faPlus,
                       color: "primary",
-                      // It already has a home beside the Inquiries heading; only a phone needs it lifted out
+                      // It has a home beside the Inquiries heading from `sm` up, which is where that copy
+                      // stops drawing - one button in one place at every width, just not the same place
                       isMobileOnly: true,
                       isDisabled: isSaving,
                       onPress: () => setIsRaising(true)
@@ -267,6 +268,7 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
             canEdit={canEditOthers || (canRaise && inquiry.createdBy === user?.discordId)}
             canDelete={canDeleteOthers || (canRaise && inquiry.createdBy === user?.discordId)}
             canResolve={canResolve}
+            canStartDiscussion={canRaise}
             isSaving={isSaving}
             isHighlighted={inquiry.inquiry === highlightInquiry}
             onEdit={() => setEditing(inquiry)}
@@ -292,8 +294,8 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
                     <div className="h-4 w-px shrink-0 bg-content3" />
                     <span className="text-xs text-foreground/40 tabular-nums">Card {number}</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                    <h2 className="flex-1 min-w-0 font-cinzel text-xl sm:text-2xl tracking-wide truncate">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h2 className="min-w-0 grow basis-auto font-cinzel text-xl sm:text-2xl tracking-wide">
                         {card?.name ?? `Slot ${number}`}
                     </h2>
                     <RefinementCheckControl
@@ -302,7 +304,7 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
                         version={refinement.version}
                         canSubmit={canCheck}
                         isSaving={isChecking || isWithdrawing || isFetching}
-                        className="sm:ml-auto"
+                        className="shrink-0"
                         onCheck={() => submitCheck({ project, number })}
                         onWithdraw={() => withdrawCheck({ project, number })}
                     />
@@ -384,6 +386,7 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
                                     <Button
                                         size="sm"
                                         color="primary"
+                                        className="hidden sm:flex"
                                         isDisabled={isSaving}
                                         startContent={<FontAwesomeIcon icon={faPlus} />}
                                         onPress={() => setIsRaising(true)}

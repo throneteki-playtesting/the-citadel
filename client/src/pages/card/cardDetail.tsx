@@ -2,6 +2,7 @@ import { addToast, Button, Divider, Skeleton, Tab, Tabs } from "@heroui/react";
 import { BaseElementProps } from "../../types";
 import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
+import { PageActiveContext } from "../../hooks/useIsPageActive";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     useGetCardQuery,
@@ -147,16 +148,22 @@ function CardContent({ project, number, entryReleaseCheck }: CardContentProps) {
                         destroyInactiveTabPanel={false}
                     >
                         <Tab key="development" title="Development">
-                            <DevelopmentSection project={project} number={number} />
+                            <PageActiveContext.Provider value={tab === "development"}>
+                                <DevelopmentSection project={project} number={number} />
+                            </PageActiveContext.Provider>
                         </Tab>
                         {canReadArtwork ? (
                             <Tab key="artwork" title="Artwork">
-                                <ArtworkTab project={project} number={number} />
+                                <PageActiveContext.Provider value={tab === "artwork"}>
+                                    <ArtworkTab project={project} number={number} />
+                                </PageActiveContext.Provider>
                             </Tab>
                         ) : null}
                         {canReadRefinement ? (
                             <Tab key="refinement" title="Refinement">
-                                <RefinementTab project={project} number={number} />
+                                <PageActiveContext.Provider value={tab === "refinement"}>
+                                    <RefinementTab project={project} number={number} />
+                                </PageActiveContext.Provider>
                             </Tab>
                         ) : null}
                     </Tabs>

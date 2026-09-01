@@ -14,7 +14,7 @@ import {
     ProductionStatus
 } from "common/models/slots";
 import { ArtworkContactState, ArtworkPrepFlag } from "common/models/artwork";
-import { InquirySeverity, InquiryStatus } from "common/models/refinement";
+import { InquirySeverity, inquirySeverityLabels, InquiryStatus } from "common/models/refinement";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { UIColor } from "./types";
 import {
@@ -436,7 +436,7 @@ export type InquirySeverityMeta = {
 // raised only so a research task or open decision isn't forgotten
 export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> = {
     unchecked: {
-        label: "Unchecked",
+        label: inquirySeverityLabels.unchecked,
         description:
             "Needs investigating before we can say whether there is a problem at all. Raise it so it is not forgotten, then set the severity once you have looked.",
         example: "Checking The Last Greenseer against every plot in the pool for unexpected interactions.",
@@ -447,7 +447,7 @@ export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> =
         titleClass: "bg-default-100"
     },
     needsConfirmation: {
-        label: "Needs Confirmation",
+        label: inquirySeverityLabels.needsConfirmation,
         description:
             "No problem as such - a decision that needs making, where either option would work and we need to settle on one.",
         example: 'Deciding whether an ability reads "each player chooses" or "each player must choose".',
@@ -458,7 +458,7 @@ export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> =
         titleClass: "bg-secondary-100/60"
     },
     recommendation: {
-        label: "Recommendation",
+        label: inquirySeverityLabels.recommendation,
         description: "The card works as intended, but there is a change worth considering that would improve it.",
         example: "Adding a trait for consistency with similar cards in the faction.",
         icon: faLightbulb,
@@ -468,7 +468,7 @@ export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> =
         titleClass: "bg-primary-100/60"
     },
     minorProblem: {
-        label: "Minor Problem",
+        label: inquirySeverityLabels.minorProblem,
         description:
             "Genuinely wrong, but it does not stop the card working or being understood. Should be fixed before release.",
         example: "Templating that does not match official wording, or traits listed in the wrong order.",
@@ -479,7 +479,7 @@ export const inquirySeverityMeta: Record<InquirySeverity, InquirySeverityMeta> =
         titleClass: "bg-warning-100/60"
     },
     majorProblem: {
-        label: "Major Problem",
+        label: inquirySeverityLabels.majorProblem,
         description: "Must be resolved before release - broken, unclear, or carrying consequences we cannot accept.",
         example: "An ability that loops infinitely, or wording that leaves a key timing question unanswerable.",
         icon: faCircleExclamation,

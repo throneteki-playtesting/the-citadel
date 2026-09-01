@@ -1,17 +1,19 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button, Chip } from "@heroui/react";
+import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
     faCheck,
     faChevronRight,
+    faEllipsisVertical,
     faPencil,
     faRotateLeft,
     faTrash,
     faTriangleExclamation
 } from "@fortawesome/free-solid-svg-icons";
 import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
+import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import classNames from "classnames";
 import {
     IRefinementInquiry,
@@ -28,14 +30,21 @@ import { TouchTooltip } from "../../../components/touchTooltip";
 import TooltipDetail from "../../../components/tooltipDetail";
 import { UserRow } from "../../../components/userAvatar";
 import Timestamp from "../../../components/timestamp";
+import { useStartInquiryDiscussionMutation } from "../../../api";
+import { showApiErrorToast } from "../../../api/errors";
+import DiscordLinkButton from "../../../components/discordLinkButton";
+import { openDiscordLink, useDiscordTarget } from "../../../hooks/useDiscordLink";
 import { SeverityBadge } from "../../../components/refinement/severitySelect";
 
 const COLLAPSED_HEIGHT = "8rem";
 const FOLD_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
+// An equal share of the phone-width row, its own width from `md` up
+const ACTION_CLASS = "flex-1 md:flex-none md:shrink-0";
+
 /**
- * One mark in an inquiry's title row saying where it stands against the card. Never more than one at a
- * time, so they share a shape as well as a slot rather than reading as two different marks.
+ * One mark in an inquiry's title row saying where it stands. The label is dropped below `md` and only
+ * the icon kept, since the tooltip carries the whole account either way.
  */
 function TitleChip({ color, icon, label, heading, children }: TitleChipProps) {
     return (
@@ -44,10 +53,17 @@ function TitleChip({ color, icon, label, heading, children }: TitleChipProps) {
                 size="sm"
                 variant="flat"
                 color={color}
-                className="shrink-0 gap-1 cursor-help tabular-nums"
-                startContent={<FontAwesomeIcon icon={icon} className="ml-1.5" />}
+                classNames={{
+                    // Squared off to its own height, so an icon alone reads as a circle. `max-w-none`
+                    // undoes the chip's own `max-w-fit`, which would cap it at the icon's width
+                    base: "w-6 max-w-none shrink-0 cursor-help justify-center px-0 tabular-nums md:w-auto md:max-w-fit md:px-1",
+                    content: "px-0 md:px-1"
+                }}
             >
-                {label}
+                <span className="flex items-center justify-center gap-1">
+                    <FontAwesomeIcon icon={icon} />
+                    <span className="hidden md:inline">{label}</span>
+                </span>
             </Chip>
         </TouchTooltip>
     );
@@ -109,6 +125,167 @@ function ResolvedMark({ inquiry }: { inquiry: IRefinementInquiry }) {
     );
 }
 
+/**
+ * What can be done to an open inquiry from its title - both buttons where there is room, and the same two
+ * folded into a `...` menu below `md`, as the release blocks do.
+ */
+function TitleActions({ canEdit, canDelete, isDisabled, onEdit, onDelete }: TitleActionsProps) {
+    if (!canEdit && !canDelete) {
+        return null;
+    }
+
+    return (
+        // The header folds the inquiry when pressed, so nothing in here may reach it
+        <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+            <Dropdown>
+                <DropdownTrigger>
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="solid"
+                        aria-label="Inquiry actions"
+                        className="md:hidden"
+                        isDisabled={isDisabled}
+                    >
+                        <FontAwesomeIcon icon={faEllipsisVertical} />
+                    </Button>
+                </DropdownTrigger>
+                <DropdownMenu
+                    aria-label="Inquiry actions"
+                    onAction={(key) => {
+                        if (key === "edit") {
+                            onEdit();
+                        } else {
+                            onDelete();
+                        }
+                    }}
+                >
+                    {[
+                        ...(canEdit
+                            ? [
+                                  <DropdownItem key="edit" startContent={<FontAwesomeIcon icon={faPencil} />}>
+                                      Edit
+                                  </DropdownItem>
+                              ]
+                            : []),
+                        ...(canDelete
+                            ? [
+                                  <DropdownItem
+                                      key="delete"
+                                      color="danger"
+                                      startContent={<FontAwesomeIcon icon={faTrash} />}
+                                  >
+                                      Delete
+                                  </DropdownItem>
+                              ]
+                            : [])
+                    ]}
+                </DropdownMenu>
+            </Dropdown>
+            <div className="hidden items-center gap-1 md:flex">
+                {canEdit && (
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="solid"
+                        aria-label="Edit inquiry"
+                        isDisabled={isDisabled}
+                        onPress={onEdit}
+                    >
+                        <FontAwesomeIcon icon={faPencil} />
+                    </Button>
+                )}
+                {canDelete && (
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="solid"
+                        color="danger"
+                        aria-label="Delete inquiry"
+                        isDisabled={isDisabled}
+                        onPress={onDelete}
+                    >
+                        <FontAwesomeIcon icon={faTrash} />
+                    </Button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+type TitleActionsProps = {
+    canEdit: boolean;
+    canDelete: boolean;
+    isDisabled: boolean;
+    onEdit: () => void;
+    onDelete: () => void;
+};
+
+/**
+ * The way to Discord, and back from it: one button which offers to open a thread until there is one, then
+ * opens it. Opt-in, since a forum handed a thread for every inquiry is a forum nobody reads.
+ */
+function DiscussionButton({ project, number, inquiry, canStart, isDisabled, className }: DiscussionButtonProps) {
+    const [startDiscussion, { isLoading }] = useStartInquiryDiscussionMutation();
+    const [isOpening, setIsOpening] = useState(false);
+    const target = useDiscordTarget();
+    const threadUrl = inquiry._metadata?.discord?.threadUrl;
+
+    if (threadUrl) {
+        return (
+            <DiscordLinkButton url={threadUrl} className={className}>
+                Discussion
+            </DiscordLinkButton>
+        );
+    }
+
+    if (!canStart) {
+        return null;
+    }
+
+    const onStart = async () => {
+        // Held past the mutation, since the request finishing is not the end of the errand. Only failing
+        // puts it back - success ends with this button replaced by the one which opens the thread
+        setIsOpening(true);
+        try {
+            // The thread is what was asked for, so the page follows the person to it
+            const result = await startDiscussion({ project, number, inquiry: inquiry.inquiry }).unwrap();
+            const opened = result.inquiries.find((entry) => entry.inquiry === inquiry.inquiry);
+            if (opened?._metadata?.discord?.threadUrl) {
+                openDiscordLink(opened._metadata.discord.threadUrl, target);
+            }
+        } catch (err) {
+            setIsOpening(false);
+            showApiErrorToast(err, { title: "Failed to start a discussion" });
+        }
+    };
+
+    return (
+        <Button
+            size="sm"
+            variant="flat"
+            className={className}
+            isLoading={isLoading || isOpening}
+            isDisabled={isDisabled}
+            startContent={
+                isLoading || isOpening ? undefined : <FontAwesomeIcon icon={faDiscord} className="text-base" />
+            }
+            onPress={onStart}
+        >
+            Start Discussion
+        </Button>
+    );
+}
+
+type DiscussionButtonProps = {
+    project: number;
+    number: number;
+    inquiry: IRefinementInquiry;
+    canStart: boolean;
+    isDisabled: boolean;
+    className?: string;
+};
+
 /** One inquiry in full: what was raised, by whom, against which card, and where it stands */
 export default function InquiryCard({
     project,
@@ -118,6 +295,7 @@ export default function InquiryCard({
     canEdit,
     canDelete,
     canResolve,
+    canStartDiscussion,
     isSaving,
     isHighlighted,
     onEdit,
@@ -187,7 +365,7 @@ export default function InquiryCard({
                             <FontAwesomeIcon icon={faChevronRight} />
                         </motion.span>
                     </button>
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
                         <TouchTooltip
                             classNames={{ content: "p-0 overflow-hidden max-w-72" }}
                             content={
@@ -204,7 +382,7 @@ export default function InquiryCard({
                         <span className="flex-1 min-w-0 text-sm font-semibold leading-snug">{inquiry.summary}</span>
                         <ResolvedMark inquiry={inquiry} />
                         <div
-                            className={classNames("w-full items-center gap-2 md:w-auto", {
+                            className={classNames("shrink-0 items-center gap-2", {
                                 flex: hasTitleControls,
                                 hidden: !hasTitleControls
                             })}
@@ -252,36 +430,15 @@ export default function InquiryCard({
                                     point still stands.
                                 </TitleChip>
                             )}
-                            <div
-                                className="ml-auto flex shrink-0 items-center gap-1"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                {isOpen && canEdit && (
-                                    <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="solid"
-                                        aria-label="Edit inquiry"
-                                        isDisabled={isSaving}
-                                        onPress={onEdit}
-                                    >
-                                        <FontAwesomeIcon icon={faPencil} />
-                                    </Button>
-                                )}
-                                {isOpen && canDelete && (
-                                    <Button
-                                        isIconOnly
-                                        size="sm"
-                                        variant="solid"
-                                        color="danger"
-                                        aria-label="Delete inquiry"
-                                        isDisabled={isSaving}
-                                        onPress={onDelete}
-                                    >
-                                        <FontAwesomeIcon icon={faTrash} />
-                                    </Button>
-                                )}
-                            </div>
+                            {isOpen && (
+                                <TitleActions
+                                    canEdit={canEdit}
+                                    canDelete={canDelete}
+                                    isDisabled={isSaving}
+                                    onEdit={onEdit}
+                                    onDelete={onDelete}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
@@ -345,34 +502,44 @@ export default function InquiryCard({
                                         <span className="text-foreground/25">·</span>
                                         <Timestamp date={inquiry.created} />
                                     </div>
-                                    {canResolve &&
-                                        (isOpen ? (
-                                            <Button
-                                                size="sm"
-                                                color="success"
-                                                className="shrink-0"
-                                                isDisabled={isSaving}
-                                                startContent={
-                                                    <FontAwesomeIcon icon={faCircleCheck} className="text-base" />
-                                                }
-                                                onPress={onResolve}
-                                            >
-                                                Resolve
-                                            </Button>
-                                        ) : (
-                                            <Button
-                                                size="sm"
-                                                variant="flat"
-                                                className="shrink-0"
-                                                isDisabled={isSaving}
-                                                startContent={
-                                                    <FontAwesomeIcon icon={faRotateLeft} className="text-base" />
-                                                }
-                                                onPress={onReopen}
-                                            >
-                                                Reopen
-                                            </Button>
-                                        ))}
+                                    <div className="flex w-full items-center gap-2 md:w-auto">
+                                        <DiscussionButton
+                                            project={project}
+                                            number={number}
+                                            inquiry={inquiry}
+                                            canStart={canStartDiscussion}
+                                            isDisabled={isSaving}
+                                            className={ACTION_CLASS}
+                                        />
+                                        {canResolve &&
+                                            (isOpen ? (
+                                                <Button
+                                                    size="sm"
+                                                    color="success"
+                                                    className={ACTION_CLASS}
+                                                    isDisabled={isSaving}
+                                                    startContent={
+                                                        <FontAwesomeIcon icon={faCircleCheck} className="text-base" />
+                                                    }
+                                                    onPress={onResolve}
+                                                >
+                                                    Resolve
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    variant="flat"
+                                                    className={ACTION_CLASS}
+                                                    isDisabled={isSaving}
+                                                    startContent={
+                                                        <FontAwesomeIcon icon={faRotateLeft} className="text-base" />
+                                                    }
+                                                    onPress={onReopen}
+                                                >
+                                                    Reopen
+                                                </Button>
+                                            ))}
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
@@ -391,6 +558,8 @@ type InquiryCardProps = {
     canEdit: boolean;
     canDelete: boolean;
     canResolve: boolean;
+    /** Whether this viewer may take an inquiry to Discord; following one already there needs no permission */
+    canStartDiscussion: boolean;
     isSaving: boolean;
     /** Draw attention to this one on arrival - set by whoever navigated here naming it */
     isHighlighted?: boolean;

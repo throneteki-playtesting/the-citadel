@@ -2,6 +2,7 @@ import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
 import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
 import { useMemo, useState } from "react";
+import { PageActiveContext } from "../../hooks/useIsPageActive";
 import EditProjectModal from "./editProjectModal";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
@@ -164,21 +165,29 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
                 destroyInactiveTabPanel={false}
             >
                 <Tab key="development" title="Development">
-                    <ProjectDevelopment project={project} isActive={tab === "development"} />
+                    <PageActiveContext.Provider value={tab === "development"}>
+                        <ProjectDevelopment project={project} isActive={tab === "development"} />
+                    </PageActiveContext.Provider>
                 </Tab>
                 {canViewArtworks ? (
                     <Tab key="artworks" title="Artworks">
-                        <ProjectArtworks project={project} isActive={tab === "artworks"} />
+                        <PageActiveContext.Provider value={tab === "artworks"}>
+                            <ProjectArtworks project={project} isActive={tab === "artworks"} />
+                        </PageActiveContext.Provider>
                     </Tab>
                 ) : null}
                 {canViewRefinements ? (
                     <Tab key="refinements" title="Refinements">
-                        <ProjectRefinements project={project} isActive={tab === "refinements"} />
+                        <PageActiveContext.Provider value={tab === "refinements"}>
+                            <ProjectRefinements project={project} isActive={tab === "refinements"} />
+                        </PageActiveContext.Provider>
                     </Tab>
                 ) : null}
                 {canViewReleases ? (
                     <Tab key="releases" title="Releases">
-                        <ProjectReleases project={project} isActive={tab === "releases"} />
+                        <PageActiveContext.Provider value={tab === "releases"}>
+                            <ProjectReleases project={project} isActive={tab === "releases"} />
+                        </PageActiveContext.Provider>
                     </Tab>
                 ) : null}
             </Tabs>

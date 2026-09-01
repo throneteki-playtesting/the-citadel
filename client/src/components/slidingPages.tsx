@@ -1,6 +1,6 @@
 import React, { Children, HTMLAttributes, ReactNode, Ref, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
-import { PageActiveContext } from "../hooks/useIsPageActive";
+import { PageActiveContext, useIsPageActive } from "../hooks/useIsPageActive";
 import { BaseElementProps } from "../types";
 
 /**
@@ -8,6 +8,8 @@ import { BaseElementProps } from "../types";
  * the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling.
  */
 export default function SlidingPages({ className, style, currentPage, pageProps, children, ref }: SlidingPagesProps) {
+    // A page which is the one on show inside something hidden is still not on screen
+    const isParentActive = useIsPageActive();
     const activeWrapperRef = useRef<HTMLDivElement>(null);
     const [measuredHeight, setMeasuredHeight] = useState<number>();
     // Counted rather than compared - children are a fresh array every render, and rebuilding the observer
@@ -56,7 +58,9 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
                             className={classNames("flex-shrink-0 w-full", { "overflow-clip": !isActive })}
                             {...pageProps?.(pageNo)}
                         >
-                            <PageActiveContext.Provider value={isActive}>{page}</PageActiveContext.Provider>
+                            <PageActiveContext.Provider value={isActive && isParentActive}>
+                                {page}
+                            </PageActiveContext.Provider>
                         </div>
                     );
                 })}

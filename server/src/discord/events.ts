@@ -15,6 +15,7 @@ import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
+import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
@@ -138,6 +139,9 @@ async function onForumMessageDeleted(forumName: string, messageUrl: string) {
             break;
         case "playtesting-reviews":
             await onReviewForumMessageDeleted(messageUrl);
+            break;
+        case "refinement-forum":
+            await onRefinementForumMessageDeleted(messageUrl);
             break;
     }
 }

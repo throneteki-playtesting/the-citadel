@@ -13,6 +13,7 @@ import {
 import { usePlaytestingUpdateSync } from "../../hooks/useSync";
 import { usePermission } from "../../hooks/usePermission";
 import { StatusData } from "./baseStatus";
+import { useDiscordHref } from "../../hooks/useDiscordLink";
 
 export function useDiscordUpdateStatus(project: number, version: number) {
     const { data: playtestingUpdate, isLoading: isLoadingPlaytestingUpdate } = useGetPlaytestingUpdateQuery({
@@ -29,6 +30,7 @@ export function useDiscordUpdateStatus(project: number, version: number) {
     const [syncPlaytestingUpdateDiscord, { isLoading: isSyncing }] = useSyncPlaytestingUpdateDiscordMutation();
     const { status, step, error } = usePlaytestingUpdateSync(playtestingUpdate).discord;
     const hasSyncPermission = usePermission(Permission.SYNC_PLAYTESTINGUPDATE_DISCORD);
+    const { href, isApp } = useDiscordHref(playtestingUpdate?._metadata?.discord?.messageUrl ?? "");
 
     const data = useMemo<StatusData | null>(() => {
         const title = "Announcement";
@@ -87,9 +89,9 @@ export function useDiscordUpdateStatus(project: number, version: number) {
         return {
             title,
             icon: <FontAwesomeIcon icon={faDiscord} size="xl" />,
-            href: messageUrl.replace("https://", "discord://"),
+            href,
             // Browsers often refuse to open a custom protocol in a new tab
-            openInNewTab: false,
+            openInNewTab: !isApp,
             longPressOptions,
             color: "success",
             description: "Announced"
@@ -98,6 +100,8 @@ export function useDiscordUpdateStatus(project: number, version: number) {
         cards,
         error,
         hasSyncPermission,
+        href,
+        isApp,
         isSyncing,
         playtestingUpdate,
         project,
