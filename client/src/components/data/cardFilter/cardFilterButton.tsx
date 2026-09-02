@@ -4,17 +4,25 @@ import { faFilter } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
 import { BaseElementProps } from "../../../types";
 import CardFilterDrawer from "./cardFilterDrawer";
-import { CardFilterValue, countActiveCardFilters } from "./types";
+import { CardFilterValue, countActiveCardFilters, ReleaseCount } from "./types";
 
 type CardFilterButtonProps = Omit<BaseElementProps, "children"> & {
     value: CardFilterValue;
     onChange: (value: CardFilterValue) => void;
     traits: string[];
-    releases?: { code: string; name: string }[];
+    releaseCounts?: ReleaseCount[];
     isDisabled?: boolean;
 };
 
-const CardFilterButton = ({ className, style, value, onChange, traits, releases, isDisabled }: CardFilterButtonProps) => {
+const CardFilterButton = ({
+    className,
+    style,
+    value,
+    onChange,
+    traits,
+    releaseCounts,
+    isDisabled
+}: CardFilterButtonProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const activeCount = countActiveCardFilters(value);
 
@@ -38,7 +46,7 @@ const CardFilterButton = ({ className, style, value, onChange, traits, releases,
                         value={value}
                         onChange={onChange}
                         traits={traits}
-                        releases={releases}
+                        releaseCounts={releaseCounts}
                         onClose={() => setIsOpen(false)}
                     />
                 </DrawerContent>

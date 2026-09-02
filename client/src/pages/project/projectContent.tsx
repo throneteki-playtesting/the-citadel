@@ -6,7 +6,7 @@ import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetArtistsQuery, useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { memo, useCallback, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
@@ -32,7 +32,9 @@ import ProgressRing from "../../components/progressRing";
 import CardProgressBreakdown from "../../components/cardProgressBreakdown";
 import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
+import { useAuth } from "../../hooks/useAuth";
 import CardGrid from "../../components/cardGrid";
+import ReleaseChecksModal from "../../components/releaseChecksModal";
 import {
     CardFilterSearchBar,
     CardFilterValue,
@@ -154,6 +156,19 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
     const { data: artistsData } = useGetArtistsQuery(undefined, { skip: !canReadArtists || view !== "detail" });
 
+    const { user } = useAuth();
+    const canSubmitReleaseCheck = usePermission(Permission.SUBMIT_RELEASE_CHECK);
+    // Which card's release-check modal is open, if any - kept mounted (target sticky) past close so the
+    // modal's own close animation has something to animate away, matching the release board's capsule
+    const [checksTarget, setChecksTarget] = useState<{ project: number; number: number }>();
+    const [checksOpen, setChecksOpen] = useState(false);
+    // Stable reference - detailRows memoizes each row against it, so a row whose own data hasn't
+    // changed can skip re-rendering rather than treating every ProjectContent render as a new prop
+    const openReleaseCheck = useCallback((card: IPlaytestCard) => {
+        setChecksTarget({ project: card.project, number: card.number });
+        setChecksOpen(true);
+    }, []);
+
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
     const [cardFilter, setCardFilter] = useState<CardFilterValue>(() => cardFilterFromParams(searchParams));
     const [storedSort, setStoredSort] = useState<SortOption>(
@@ -270,6 +285,11 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
             name: (a, b) => a.name.localeCompare(b.name),
             reviews: (a, b) => compareByReviews(cardStats, a, b),
             priority: (a, b) => {
+                // Already-shipped cards are done, not a priority - pushed to the end regardless of
+                // which release they're bound to, so a low-numbered old release doesn't lead the list
+                if (!!a.released !== !!b.released) {
+                    return a.released ? 1 : -1;
+                }
                 const releaseA = cardReleases.get(a.number);
                 const releaseB = cardReleases.get(b.number);
                 if (releaseA && releaseB) {
@@ -330,9 +350,42 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
         [isFiltering, filteredCards, visibleCards, comparators, sortBy]
     );
     const detailRows = useMemo(
-        () => buildDetailRows(detailCards, slotsData?.items ?? [], project, artistsData?.items ?? []),
-        [detailCards, slotsData?.items, project, artistsData?.items]
+        () =>
+            buildDetailRows(
+                detailCards,
+                slotsData?.items ?? [],
+                project,
+                artistsData?.items ?? [],
+                user?.discordId,
+                canSubmitReleaseCheck,
+                openReleaseCheck
+            ),
+        [
+            detailCards,
+            slotsData?.items,
+            project,
+            artistsData?.items,
+            user?.discordId,
+            canSubmitReleaseCheck,
+            openReleaseCheck
+        ]
     );
+
+    // Codes actually carried by these cards, ordered by release number, so the filter never offers a
+    // code with nothing behind it
+    const releaseCounts = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const card of visibleCards) {
+            const code = releaseCodeByCardNumber.get(card.number);
+            if (code) {
+                counts.set(code, (counts.get(code) ?? 0) + 1);
+            }
+        }
+        return [...project.releases]
+            .sort((a, b) => a.number - b.number)
+            .map((release) => ({ code: release.code, count: counts.get(release.code) ?? 0 }))
+            .filter((entry) => entry.count > 0);
+    }, [visibleCards, releaseCodeByCardNumber, project.releases]);
 
     if (!isLoading && !data) {
         return (
@@ -354,7 +407,7 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                         filter={cardFilter}
                         onFilterChange={(next) => startContentTransition(() => setCardFilter(next))}
                         traits={distinctTraits}
-                        releases={project.releases}
+                        releaseCounts={releaseCounts}
                         isDisabled={isLoading}
                         className="min-w-40"
                     />
@@ -495,6 +548,15 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                         </div>
                     )}
                 </div>
+            )}
+            {checksTarget && (
+                <ReleaseChecksModal
+                    isOpen={checksOpen}
+                    onClose={() => setChecksOpen(false)}
+                    project={checksTarget.project}
+                    number={checksTarget.number}
+                    viewTarget="card"
+                />
             )}
         </div>
     );

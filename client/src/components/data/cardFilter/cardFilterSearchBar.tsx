@@ -5,7 +5,7 @@ import { useState } from "react";
 import classNames from "classnames";
 import { BaseElementProps } from "../../../types";
 import CardFilterDrawer from "./cardFilterDrawer";
-import { CardFilterValue, countActiveCardFilters, isCardFilterActive } from "./types";
+import { CardFilterValue, countActiveCardFilters, isCardFilterActive, ReleaseCount } from "./types";
 
 type CardFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     search: string;
@@ -13,7 +13,7 @@ type CardFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     filter: CardFilterValue;
     onFilterChange: (value: CardFilterValue) => void;
     traits: string[];
-    releases?: { code: string; name: string }[];
+    releaseCounts?: ReleaseCount[];
     isDisabled?: boolean;
 };
 
@@ -27,7 +27,7 @@ const CardFilterSearchBar = ({
     filter,
     onFilterChange,
     traits,
-    releases,
+    releaseCounts,
     isDisabled
 }: CardFilterSearchBarProps) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -94,7 +94,7 @@ const CardFilterSearchBar = ({
                         value={filter}
                         onChange={onFilterChange}
                         traits={traits}
-                        releases={releases}
+                        releaseCounts={releaseCounts}
                         onClose={() => setIsOpen(false)}
                     />
                 </DrawerContent>

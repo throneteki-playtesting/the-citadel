@@ -8,6 +8,10 @@ export type CardFilterValue = Omit<Explodable<IPlaytestCard>, "traits"> & {
     releases?: string[];
 };
 
+// A release code as it's offered to the filter - only codes actually present among the cards on
+// screen, alongside how many carry it
+export type ReleaseCount = { code: string; count: number };
+
 export const EMPTY_CARD_FILTER: CardFilterValue = {};
 
 export function isCardFilterActive(value: CardFilterValue): boolean {

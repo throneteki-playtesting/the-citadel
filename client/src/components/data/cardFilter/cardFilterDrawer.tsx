@@ -6,7 +6,8 @@ import ThronesIcon from "../../thronesIcon";
 import SearchableMultiSelect from "../searchableMultiSelect";
 import { ToggleButtonGroup, BooleanToggle, NumericFilterInput } from "../filters";
 import { NumericFilterValue, decodeNumericOperators, numericOperators } from "../filters/numeric";
-import { CardFilterValue, EMPTY_CARD_FILTER, isCardFilterActive } from "./types";
+import { FilterChip, FilterRow } from "../../filterChips";
+import { CardFilterValue, EMPTY_CARD_FILTER, isCardFilterActive, ReleaseCount } from "./types";
 
 type InternalState = {
     types: Type[];
@@ -189,11 +190,11 @@ type CardFilterDrawerProps = {
     value: CardFilterValue;
     onChange: (value: CardFilterValue) => void;
     traits: string[];
-    releases?: { code: string; name: string }[];
+    releaseCounts?: ReleaseCount[];
     onClose: () => void;
 };
 
-const CardFilterDrawer = ({ value, onChange, traits, releases, onClose }: CardFilterDrawerProps) => {
+const CardFilterDrawer = ({ value, onChange, traits, releaseCounts, onClose }: CardFilterDrawerProps) => {
     const [internal, setInternal] = useState<InternalState>(() => decode(value));
 
     const update = (patch: Partial<InternalState>) => {
@@ -207,7 +208,13 @@ const CardFilterDrawer = ({ value, onChange, traits, releases, onClose }: CardFi
         onChange(EMPTY_CARD_FILTER);
     };
 
-    const releaseCodes = useMemo(() => (releases ?? []).map((release) => release.code), [releases]);
+    const toggleRelease = (code: string) => {
+        update({
+            releases: internal.releases.includes(code)
+                ? internal.releases.filter((entry) => entry !== code)
+                : [...internal.releases, code]
+        });
+    };
 
     return (
         <>
@@ -298,13 +305,21 @@ const CardFilterDrawer = ({ value, onChange, traits, releases, onClose }: CardFi
                     value={internal.designer}
                     onValueChange={(designer) => update({ designer })}
                 />
-                {releaseCodes.length > 0 && (
-                    <MultiSelectField
-                        placeholder="Search release codes..."
-                        options={releaseCodes}
-                        value={internal.releases}
-                        onChange={(releases) => update({ releases })}
-                    />
+                {releaseCounts && releaseCounts.length > 0 && (
+                    <div className="flex flex-col gap-1">
+                        <div className="text-xs text-default-500">Release</div>
+                        <FilterRow>
+                            {releaseCounts.map(({ code, count }) => (
+                                <FilterChip
+                                    key={code}
+                                    label={code}
+                                    count={count}
+                                    isActive={internal.releases.includes(code)}
+                                    onPress={() => toggleRelease(code)}
+                                />
+                            ))}
+                        </FilterRow>
+                    </div>
                 )}
             </DrawerBody>
             <DrawerFooter>
