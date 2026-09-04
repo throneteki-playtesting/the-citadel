@@ -502,17 +502,11 @@ const sourcedOption = (isInUse: boolean) =>
               })
             : Joi.string().allow(""),
         ffg: Joi.boolean(),
-        // Restates Artwork.canImplyPermission's rule rather than calling it: .custom() chained after
-        // .valid() is silently never invoked in Joi 17.13.3, so routing through it would disable the check
+        // Unlike the rest of the option, not restated from Artwork.canImplyPermission: it also allows
+        // "implied" via blanket permission, invisible here since only the artist's id is present
         contact: Joi.string()
             .required()
-            .valid(...Artwork.artworkContactStates)
-            .when("ffg", {
-                is: Joi.not(true),
-                then: Joi.invalid("implied").messages({
-                    "any.invalid": "Implied permission requires FFG artwork to be checked"
-                })
-            }),
+            .valid(...Artwork.artworkContactStates),
         notes: Joi.string().allow("")
     });
 

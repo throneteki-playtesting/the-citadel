@@ -1,4 +1,4 @@
-import { CSSProperties } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { Button, Checkbox, Chip, Input, Textarea } from "@heroui/react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -19,6 +19,9 @@ import ExternalLinkButton from "../../../components/externalLinkButton";
 // The literal step order - denied/implied are states an option can be in, not steps on this run, so
 // they're never in this list rather than filtered back out of it. See ContactPicker.
 const CONTACT_PROGRESSION: ArtworkContactState[] = ["none", "contacted", "responded", "granted"];
+
+// Drives the JS-timed rounding delay below - the Tailwind arbitrary-value class must be kept matching
+const FOLD_DURATION_MS = reorderTransition.duration * 1000;
 
 // Written out per colour rather than composed, since Tailwind only sees class names it can read whole
 const CONTACT_CURRENT_CLASSES: Partial<Record<UIColor, string>> = {
@@ -53,6 +56,16 @@ export default function SortableSourcedOption(props: SourcedOptionCardProps) {
             isDragging={isDragging}
         />
     );
+}
+
+// Once "implied" no longer holds - neither FFG nor blanket permission still justifies it - falls back
+// to "none" rather than leaving a stale record
+function withImpliedSync(option: ISourcedOption, patch: Partial<ISourcedOption>, artists: IArtist[]): ISourcedOption {
+    const next = { ...option, ...patch };
+    if (option.contact === "implied" && !canImplyPermission(next, artists)) {
+        next.contact = "none";
+    }
+    return next;
 }
 
 /** One candidate piece. Denied options stay put, dimmed - who said no is worth keeping visible */
@@ -203,14 +216,25 @@ export function SourcedOptionCard({
                                 selectedId={option.artist}
                                 slot={slot}
                                 isDisabled={isDisabled}
-                                onChange={(id) => set("artist", id)}
+                                onChange={(id) => {
+                                    const nextOption = withImpliedSync(option, { artist: id }, artists);
+                                    // Blanket permission stands in for a granted reply, same as FFG - but
+                                    // only take the step for someone who hadn't started the contact run
+                                    if (
+                                        artists.find((entry) => entry.id === id)?.blanketPermission &&
+                                        option.contact === "none"
+                                    ) {
+                                        nextOption.contact = "implied";
+                                    }
+                                    onChange(nextOption);
+                                }}
                             />
                         </div>
                     </div>
                     <div className="flex flex-col md:flex-row md:items-center gap-3">
                         <ContactPicker
                             value={option.contact}
-                            canImply={canImplyPermission(option)}
+                            canImply={canImplyPermission(option, artists)}
                             isDisabled={isDisabled}
                             onChange={(contact) => set("contact", contact)}
                         />
@@ -221,13 +245,7 @@ export function SourcedOptionCard({
                                     isSelected={!!option.ffg}
                                     isDisabled={isDisabled}
                                     onValueChange={(value) =>
-                                        // Implied only exists because FFG is checked, so unchecking it
-                                        // takes the permission back to unasked rather than leaving it on record
-                                        onChange({
-                                            ...option,
-                                            ffg: value,
-                                            contact: !value && option.contact === "implied" ? "none" : option.contact
-                                        })
+                                        onChange(withImpliedSync(option, { ffg: value }, artists))
                                     }
                                 >
                                     <span className="text-sm whitespace-nowrap">FFG artwork</span>
@@ -275,7 +293,8 @@ type SourcedOptionDragProps = {
 };
 
 // The approach as one progression, everything up to the current step filled in. Denied calls the run off
-// and greys it out; Implied fades in only while FFG is checked, sharing Granted's border.
+// and greys it out; Implied fades in once FFG is checked or the chosen artist has blanket permission,
+// sharing Granted's border.
 function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerProps) {
     const isDenied = value === "denied";
     const isImplied = value === "implied";
@@ -285,6 +304,17 @@ function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerP
     const grantedIndex = CONTACT_PROGRESSION.length - 1;
     const showImplied = canImply && !isDenied;
 
+    // Squares off immediately when Implied starts folding away, but only rounds back once it's fully gone
+    const [grantedRounded, setGrantedRounded] = useState(!showImplied);
+    useEffect(() => {
+        if (showImplied) {
+            setGrantedRounded(false);
+            return;
+        }
+        const timeout = setTimeout(() => setGrantedRounded(true), FOLD_DURATION_MS);
+        return () => clearTimeout(timeout);
+    }, [showImplied]);
+
     return (
         <div className="flex flex-col gap-1 min-w-0">
             <span className="text-xs text-foreground/50">Permission</span>
@@ -292,39 +322,53 @@ function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerP
                 <div
                     className={classNames("flex flex-wrap items-stretch gap-1", isDenied && "brightness-75 grayscale")}
                 >
-                    {CONTACT_PROGRESSION.slice(0, -1).map((state, index) => (
-                        <ContactStep
-                            key={state}
-                            state={state}
-                            isCurrent={!isDenied && value === state}
-                            isReached={!isDenied && index <= currentIndex}
-                            isDisabled={isDisabled || isDenied}
-                            onClick={() => onChange(state)}
-                        />
-                    ))}
+                    <div className="flex">
+                        {CONTACT_PROGRESSION.slice(0, -1).map((state, index, steps) => {
+                            const isFirst = index === 0;
+                            const isLast = index === steps.length - 1;
+                            return (
+                                <ContactStep
+                                    key={state}
+                                    state={state}
+                                    isCurrent={!isDenied && value === state}
+                                    isReached={!isDenied && index <= currentIndex}
+                                    isDisabled={isDisabled || isDenied}
+                                    roundedClassName={classNames(
+                                        isFirst && "rounded-l-md rounded-r-none",
+                                        isLast && "rounded-r-md rounded-l-none",
+                                        !isFirst && !isLast && "rounded-none",
+                                        !isFirst && "-ml-px"
+                                    )}
+                                    onClick={() => onChange(state)}
+                                />
+                            );
+                        })}
+                    </div>
                     <div className="flex">
                         <ContactStep
                             state="granted"
                             isCurrent={!isDenied && value === "granted"}
                             isReached={!isDenied && grantedIndex <= currentIndex}
                             isDisabled={isDisabled || isDenied}
-                            roundedClassName={showImplied ? "rounded-l-md rounded-r-none" : "rounded-md"}
+                            roundedClassName={grantedRounded ? "rounded-md" : "rounded-l-md rounded-r-none"}
                             onClick={() => onChange("granted")}
                         />
-                        <AnimatePresence initial={false}>
-                            {showImplied && (
-                                <motion.button
-                                    key="implied"
+                        <div
+                            className={classNames(
+                                "grid transition-[grid-template-columns] duration-[400ms] ease-[cubic-bezier(0.65,0,0.35,1)]",
+                                showImplied ? "grid-cols-[1fr]" : "grid-cols-[0fr]"
+                            )}
+                        >
+                            <div className="min-w-0 overflow-hidden">
+                                <button
                                     type="button"
                                     disabled={isDisabled}
                                     aria-current={isImplied}
+                                    aria-hidden={!showImplied}
+                                    tabIndex={showImplied ? 0 : -1}
                                     onClick={() => onChange("implied")}
-                                    initial={{ width: 0, opacity: 0, scale: 0.6 }}
-                                    animate={{ width: "auto", opacity: 1, scale: 1 }}
-                                    exit={{ width: 0, opacity: 0, scale: 0.6 }}
-                                    transition={reorderTransition}
                                     className={classNames(
-                                        "flex items-center gap-1 overflow-hidden -ml-px px-2 py-1 rounded-r-md rounded-l-none border text-xs whitespace-nowrap transition-colors",
+                                        "flex items-center gap-1 -ml-px px-2 py-1 rounded-r-md rounded-l-none border text-xs whitespace-nowrap transition-colors",
                                         isDisabled ? "cursor-default" : "cursor-pointer",
                                         isImplied
                                             ? CONTACT_CURRENT_CLASSES.success
@@ -337,9 +381,9 @@ function ContactPicker({ value, canImply, isDisabled, onChange }: ContactPickerP
                                     >
                                         <FontAwesomeIcon icon={faCircleInfo} className="opacity-70" />
                                     </TouchTooltip>
-                                </motion.button>
-                            )}
-                        </AnimatePresence>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <TouchTooltip
@@ -402,7 +446,9 @@ function ContactStep({
                 aria-current={isCurrent}
                 onClick={onClick}
                 className={classNames(
-                    "px-2 py-1 border text-xs whitespace-nowrap transition-colors",
+                    // border-radius folded in here (Tailwind's transition-colors doesn't cover it) so
+                    // Granted's corner rounding back in once Implied's fold finishes eases rather than snaps
+                    "px-2 py-1 border text-xs whitespace-nowrap transition-[color,background-color,border-color,border-radius] duration-150 ease-[cubic-bezier(0.4,0,0.2,1)]",
                     roundedClassName,
                     isDisabled ? "cursor-default" : "cursor-pointer",
                     contactChevronClasses(meta.color, isCurrent, isReached)
@@ -425,7 +471,7 @@ type ContactStepProps = {
 
 type ContactPickerProps = {
     value: ArtworkContactState;
-    /** Whether FFG artwork is checked on this option, the only condition under which implied is offered */
+    /** Whether "implied" should be offered - see Artwork.canImplyPermission for the conditions */
     canImply: boolean;
     isDisabled?: boolean;
     onChange: (value: ArtworkContactState) => void;

@@ -181,9 +181,13 @@ export function hasArtistPermission(option: ISourcedOption, artists: IArtist[]):
     return !!artist?.blanketPermission;
 }
 
-/** Whether "implied" is available for this option - only once FFG artwork is actually recorded */
-export function canImplyPermission(option: Pick<ISourcedOption, "ffg">): boolean {
-    return !!option.ffg;
+/** Whether "implied" is available - FFG art, or an artist with blanket permission already granted */
+export function canImplyPermission(option: Pick<ISourcedOption, "ffg" | "artist">, artists: IArtist[] = []): boolean {
+    if (option.ffg) {
+        return true;
+    }
+    const artist = artists.find((entry) => entry.id === option.artist);
+    return !!artist?.blanketPermission;
 }
 
 /** One thing an artwork needs before it counts as obtained, and whether it has been done */
