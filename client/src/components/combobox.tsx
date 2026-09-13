@@ -1,5 +1,5 @@
 import { Button, Chip, ChipProps, Select, SelectItem } from "@heroui/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BaseElementProps } from "../types";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -172,4 +172,4 @@ type ComboBoxProps = Omit<BaseElementProps, "children"> & {
     allowDuplicates?: boolean;
 };
 
-export default ComboBox;
+export default memo(ComboBox);

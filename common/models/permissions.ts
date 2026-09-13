@@ -83,10 +83,12 @@ enum Permission {
     EDIT_SUGGESTIONS = "EDIT_SUGGESTIONS",
     /** Can delete other users card suggestions */
     DELETE_SUGGESTIONS = "DELETE_SUGGESTIONS",
-    /** Can import card suggestions in bulk */
-    IMPORT_SUGGESTIONS = "IMPORT SUGGESTIONS",
-    /** Can export card suggestions in bulk */
-    EXPORT_SUGGESTIONS = "EXPORT_SUGGESTIONS",
+    /** Can approve (or unapprove) a submitted suggestion */
+    APPROVE_SUGGESTIONS = "APPROVE_SUGGESTIONS",
+    /** Can see archived suggestions, filter by archive reason, and unarchive one */
+    MANAGE_SUGGESTIONS_ARCHIVE = "MANAGE_SUGGESTIONS_ARCHIVE",
+    /** Can sync suggestion discord forum threads */
+    SYNC_SUGGESTIONS_DISCORD = "SYNC_SUGGESTIONS_DISCORD",
     /** Can view a single user by ID */
     READ_USER = "READ_USER",
     /** Can view all users */
@@ -293,8 +295,16 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         group: "Suggestions",
         dependencies: Permission.READ_SUGGESTIONS
     },
-    [Permission.IMPORT_SUGGESTIONS]: { label: "Import", group: "Suggestions" },
-    [Permission.EXPORT_SUGGESTIONS]: { label: "Export", group: "Suggestions" },
+    [Permission.APPROVE_SUGGESTIONS]: {
+        label: "Approve",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
+    [Permission.MANAGE_SUGGESTIONS_ARCHIVE]: {
+        label: "Manage Archive",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
     [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
     [Permission.MAKE_REVIEWS]: {
         label: "Make Own",
@@ -352,7 +362,12 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
     [Permission.SYNC_PROJECT_GITHUB_DATA]: { label: "Project Github Data", group: "Sync" },
     [Permission.SYNC_PLAYTESTINGUPDATE_DISCORD]: { label: "PT Update Discord", group: "Sync" },
-    [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS }
+    [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS },
+    [Permission.SYNC_SUGGESTIONS_DISCORD]: {
+        label: "Suggestion Discord",
+        group: "Sync",
+        dependencies: Permission.READ_SUGGESTIONS
+    }
 };
 
 export const permissionGroups = (Object.entries(permissionMeta) as [Permission, PermissionMeta][]).reduce<

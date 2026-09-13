@@ -12,6 +12,14 @@ export function useWizard<T>(): WizardContextProps<T> {
     return context as WizardContextProps<T>;
 }
 
+// Scoped to the single `WizardPage` a field lives on, not the global current-page - every page is
+// mounted at once, so this tells "has MY page's Next/Submit been pressed" apart from any other's.
+export const WizardPageSubmitContext = createContext(false);
+
+export function useWizardPageSubmitted(): boolean {
+    return useContext(WizardPageSubmitContext);
+}
+
 // A schema re-check on a field may clear its own or a prior server verdict, but never an "external" one
 // (eg. a DB uniqueness check) - Joi has no way to know whether that still applies.
 export type WizardErrorSource = "schema" | "external" | "server";
@@ -34,6 +42,25 @@ export function countErrorsInDirection(
         return direction === "back" ? meta.onPage < currentPage : meta.onPage > currentPage;
     }).length;
     return count;
+}
+
+// `flatten()` recurses into plain objects, so a NESTED field never appears as its own key - only its
+// leaves do. A path is "covered" if it's in the key set, or anything nested under it is.
+export function isPathCovered(path: string, flatKeys: readonly string[]): boolean {
+    return flatKeys.includes(path) || flatKeys.some((key) => key.startsWith(`${path}.`));
+}
+
+// The other direction of the same gap: a changed LEAF needs to also clear whatever error is keyed
+// on one of ITS ancestors, since a leaf changing is exactly what answers for its parent object.
+export function withPathAncestors(paths: readonly string[]): string[] {
+    const expanded = new Set<string>();
+    for (const path of paths) {
+        const parts = path.split(".");
+        for (let i = 1; i <= parts.length; i++) {
+            expanded.add(parts.slice(0, i).join("."));
+        }
+    }
+    return [...expanded];
 }
 
 export function titleizeFieldName(name: string): string {

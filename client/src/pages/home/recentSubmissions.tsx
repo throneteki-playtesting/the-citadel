@@ -4,9 +4,8 @@ import { useMemo } from "react";
 import { ICardSuggestion } from "common/models/cards";
 import { IPlaytestReview, StatementAnswer, Statements } from "common/models/reviews";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheckCircle, faCircleQuestion, faFeatherPointed, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
+import { faFeatherPointed } from "@fortawesome/free-solid-svg-icons";
 import { Alert, Avatar, Skeleton } from "@heroui/react";
-import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
 import Timestamp from "../../components/timestamp";
 import { highlightTarget, watermarkClasses } from "../../constants";
@@ -14,6 +13,7 @@ import SectionTitle from "../../components/sectionTitle";
 import { usePermission } from "../../hooks/usePermission";
 import PermissionedLink from "../../components/permissionedLink";
 import Watermark from "../../components/watermark";
+import SuggestionRow from "../../components/suggestionRow";
 
 type Submission =
     | ({ key: string; type: "suggestion" } & ICardSuggestion)
@@ -153,10 +153,7 @@ function ReviewRow({ review }: ReviewRowProps) {
                         <div className="text-md font-cinzel text-foreground truncate">
                             {card.name} <span className="text-foreground/50">{card.version}</span>
                         </div>
-                        <Timestamp
-                            className="my-auto text-xs italic text-foreground/40"
-                            date={new Date(review.updated)}
-                        />
+                        <Timestamp className="my-auto text-xs italic text-foreground/40" date={review.updated} />
                     </div>
                     <div className="flex gap-2 items-center">
                         <Avatar
@@ -200,82 +197,3 @@ const scoreBarClass: Record<StatementAnswer, string> = {
     "somewhat agree": "bg-statement-4",
     "strongly agree": "bg-statement-5"
 };
-
-function SuggestionRow({ suggestion }: SuggestionRowProps) {
-    const isApproved = !!suggestion.approvedBy;
-
-    return (
-        <Watermark
-            position="center"
-            icon={
-                <div className="relative ml-32">
-                    <ThronesIcon
-                        name={suggestion.card.faction}
-                        className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}
-                    />
-                    <FontAwesomeIcon
-                        icon={isApproved ? faCheckCircle : faCircleQuestion}
-                        className="absolute right-0 bottom-0 text-2xl opacity-20"
-                    />
-                </div>
-            }
-            containerClassName="bg-content1 hover:bg-content3"
-        >
-            <PermissionedLink to="/suggestions" requires={Permission.READ_SUGGESTIONS}>
-                <div className="relative z-10 px-4 py-3 space-y-1">
-                    <div className="grid grid-cols-[1fr_auto] gap-2">
-                        <div className="min-w-0">
-                            <div className="flex gap-2 flex-wrap">
-                                <div className="text-sm font-cinzel text-foreground truncate">
-                                    <ThronesIcon name={suggestion.card.type} /> {suggestion.card.name}
-                                </div>
-                                {isApproved && (
-                                    <span className="text-xxs tracking-wide font-sans uppercase px-2 py-0.5 border text-success-700 border-success-300 bg-success-100 shrink-0">
-                                        Approved
-                                    </span>
-                                )}
-                            </div>
-                            <div className="text-xs font-crimson italic text-foreground/40">
-                                Suggestion by {suggestion.user.displayname}
-                            </div>
-                        </div>
-                        <div className="ml-auto flex flex-col items-end gap-1 shrink-0">
-                            <div className="flex items-center gap-1 font-sans text-foreground/40 shrink-0 text-xs">
-                                <FontAwesomeIcon icon={faThumbsUp} />
-                                <span>{suggestion.likedBy.length}</span>
-                            </div>
-                            <Timestamp
-                                date={new Date(suggestion.updated)}
-                                className="text-xs font-sans italic text-foreground/40"
-                            />
-                        </div>
-                    </div>
-                    {suggestion.tags.length > 0 && <TagList tags={suggestion.tags} />}
-                </div>
-            </PermissionedLink>
-        </Watermark>
-    );
-}
-type SuggestionRowProps = {
-    suggestion: ICardSuggestion;
-};
-
-function TagList({ tags }: { tags: string[] }) {
-    const visible = tags.slice(0, 3);
-    const overflow = tags.length - visible.length;
-    return (
-        <div className="flex flex-wrap items-center gap-1">
-            {visible.map((tag) => (
-                <span
-                    key={tag}
-                    className="text-[0.5rem] tracking-wider uppercase px-2 py-0.5 bg-content2 border border-content3 text-foreground/50"
-                >
-                    {tag}
-                </span>
-            ))}
-            {overflow > 0 && (
-                <span className="text-xxs italic tracking-normal uppercase text-foreground/50">+{overflow} more</span>
-            )}
-        </div>
-    );
-}

@@ -8,6 +8,16 @@ Stack: React + TipTap (frontend), Node/Express + Redis (backend), shared `common
 
 ---
 
+## Loading States
+
+**Every page, and every data-fetching component inside one, gets a skeleton — no exceptions.** A component whose content depends on a query must render a skeleton shaped like its own final layout while that query is loading, not `null`/`undefined` and not an unconditional render that only fills in numbers once data arrives. A page built the second way collapses to whatever height its data-independent chrome happens to leave, which reads as the page being broken rather than loading. `client/src/pages/suggestions/index.tsx` (dashboard stats, the Recent Suggestions rail, Suggestion Spread, the approval panel) and `client/src/pages/project/projectDetail.tsx`/`client/src/pages/card/cardDetail.tsx` (whole-page skeleton) are the two shapes this takes — a full-page gate when the page has one dominant query, or matched per-section skeletons when several independent queries drive different parts of the same page — pick whichever fits, but never neither.
+
+**Always consider a fade-in on the swap from skeleton to real content** (see `client/src/components/reveal.tsx`) — it's what makes the transition read as content arriving rather than the page flickering. Not every case needs it (a value popping into an already-stable layout is often fine on its own), but it should be a deliberate call, not an omission.
+
+**Don't mount work that isn't visible yet.** A component behind a toggle, tab, or "show more" that hasn't been opened shouldn't be constructed at all — mounting it early (even off-screen) still pays for its queries, memoized derivations, and any nested layout-measuring components (eg. `SlidingPages`) on every visit to the page, which is exactly the kind of avoidable cost that makes a page feel slow to first paint. Gate its mount on having been opened at least once, not just on visibility.
+
+---
+
 ## Artwork System
 
 ### Model (`common/models/artwork.ts`)

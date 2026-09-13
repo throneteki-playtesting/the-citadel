@@ -20,6 +20,7 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
     const isOpenRef = useRef(false);
     const isTouchRef = useRef(false);
     const triggerRef = useRef<HTMLElement | null>(null);
+    const contentRef = useRef<HTMLSpanElement | null>(null);
 
     const setOpen = useCallback(
         (open: boolean) => {
@@ -30,9 +31,8 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
         [onOpenChange]
     );
 
-    // react-aria's useTooltipTrigger force-closes on every pointerdown on the trigger (its
-    // onPressStart), ahead of the click event. On touch we drive open/close ourselves via
-    // handleClickCapture, so library-initiated changes are ignored to avoid the two fighting.
+    // react-aria's useTooltipTrigger force-closes on every trigger pointerdown, ahead of the click -
+    // on touch we drive open/close ourselves via handleClickCapture, so library changes are ignored.
     const handleTooltipOpenChange = useCallback(
         (open: boolean) => {
             if (isTouchRef.current) {
@@ -68,9 +68,13 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
             return;
         }
         const handleOutsidePointerDown = (event: PointerEvent) => {
-            if (!triggerRef.current?.contains(event.target as Node)) {
-                setOpen(false);
+            const target = event.target as Node;
+            // Content is portalled elsewhere, so without also checking `contentRef`, a pointerdown
+            // INSIDE the tooltip read as "outside" and closed it mid-gesture.
+            if (triggerRef.current?.contains(target) || contentRef.current?.contains(target)) {
+                return;
             }
+            setOpen(false);
         };
         document.addEventListener("pointerdown", handleOutsidePointerDown, true);
         return () => document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
@@ -88,7 +92,7 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
         <Tooltip
             {...props}
             content={
-                <span className="contents" onPointerDown={stopBubbling} onClick={stopBubbling}>
+                <span ref={contentRef} className="contents" onPointerDown={stopBubbling} onClick={stopBubbling}>
                     {content}
                 </span>
             }

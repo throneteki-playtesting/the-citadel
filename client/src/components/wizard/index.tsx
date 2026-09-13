@@ -22,12 +22,15 @@ import SlidingPages from "../slidingPages";
 import { showApiErrorToast, toNormalizedError } from "../../api/errors";
 import {
     countErrorsInDirection,
+    isPathCovered,
     titleizeFieldName,
     useWizard,
     WizardContext,
     WizardContextProps,
     WizardFieldError,
-    WizardFieldMeta
+    WizardFieldMeta,
+    WizardPageSubmitContext,
+    withPathAncestors
 } from "./context";
 
 export { default as ValidationSummary } from "./components/validationSummary";
@@ -119,23 +122,33 @@ export function Wizard<T>({
                 errors: { label: false }
             });
 
+            // Flattened once, reused below - a page submitting only *part* of an object another page
+            // shares needs the exact leaf path checked, or every sibling left for later reads missing.
+            const flatData = flatten(data as object) as Record<string, unknown>;
+
+            // See isPathCovered - an object-level error would otherwise always look untouched and get
+            // silently dropped, even though this page plainly submitted it.
+            const touchedKeys = Object.keys(flatData);
+            const isTouched = (path: string) => isPathCovered(path, touchedKeys);
+
             const inputErrors: Record<string, string> = {};
             if (error) {
                 error.details.forEach((detail) => {
-                    if (partial && !(detail.path[0] in data)) {
+                    const inputId = detail.path.join(".");
+                    // A page only answers for paths it lists - a sibling left for a later page is
+                    // absent and mustn't block Next; a key it DOES list must surface its own error.
+                    if (partial && !isTouched(inputId)) {
                         return;
                     }
-                    const inputId = detail.path.join(".");
                     const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
                     inputErrors[inputId] = message;
                 });
             }
 
-            const touchedPaths = Object.keys(flatten(data as object));
             setFieldErrors((prev) => {
                 const next = { ...prev };
-                touchedPaths.forEach((path) => {
-                    if (next[path]?.source !== "external") {
+                Object.keys(next).forEach((path) => {
+                    if (next[path]?.source !== "external" && isTouched(path)) {
                         delete next[path];
                     }
                 });
@@ -333,6 +346,10 @@ type WizardPagesProps = Omit<BaseElementProps, "children"> & {
 export function WizardPage({ className, style, children, controlledData, pageNo }: WizardPageProps) {
     const { id, validationErrors, onPageSubmit, clearAnsweredErrors } = useWizard();
 
+    // Once true, stays true - "has this page's own Next/Submit ever been pressed", for fields that
+    // only answer for themselves from that point on. See WizardPageSubmitContext.
+    const [submitted, setSubmitted] = useState(false);
+
     const values = useRef<Record<string, unknown> | undefined>(undefined);
     const hasErrors = Object.keys(validationErrors).length > 0;
     useEffect(() => {
@@ -348,13 +365,16 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
         }
         const answered = Object.keys({ ...previous, ...flat }).filter((path) => !isEqual(previous[path], flat[path]));
         if (answered.length > 0) {
-            clearAnsweredErrors(answered);
+            // A changed leaf answers for an object-level error keyed on one of its ancestors too -
+            // see isPathCovered/withPathAncestors in wizard/context.tsx.
+            clearAnsweredErrors(withPathAncestors(answered));
         }
     }, [controlledData, hasErrors, clearAnsweredErrors]);
 
     const onSubmit = useCallback(
         (e: FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            setSubmitted(true);
 
             // If controlled, simply submit that (ignore form data)
             if (controlledData !== undefined) {
@@ -393,7 +413,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
             validationErrors={validationErrors}
             onSubmit={onSubmit}
         >
-            {children}
+            <WizardPageSubmitContext.Provider value={submitted}>{children}</WizardPageSubmitContext.Provider>
         </Form>
     );
 }

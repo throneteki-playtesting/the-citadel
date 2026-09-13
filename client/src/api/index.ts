@@ -18,7 +18,7 @@ import { IPack } from "common/models/pack";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
-import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
+import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard, ReactionType } from "common/models/cards";
 import {
     DesignStatus,
     IReleaseCheckSummary,
@@ -41,9 +41,23 @@ import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "comm
 import { ILogEntry } from "common/models/logs";
 import { GlobalStats, ProjectStats } from "common/models/stats";
 import { getConnectionId } from "./connectionId";
+import { patchEntityEverywhere } from "./cacheHelpers";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
 import { refreshSession } from "./refresh";
+
+export type SuggestionsFeed = {
+    recent: ICardSuggestion[];
+    stats: {
+        total: number;
+        totalSubmitters: number;
+        awaitingApproval: number;
+        /** Suggestions the current user hasn't reacted to at all yet (Like/Dislike/Ignore) */
+        unreacted: number;
+        mine: number;
+        myDrafts: number;
+    };
+};
 
 const baseQuery = fetchBaseQuery({
     baseUrl: "/api/v1",
@@ -334,12 +348,14 @@ const api = createApi({
             },
             providesTags: (response) => generateFor(response?.items, "suggestion")
         }),
-        getSuggestionsBy: builder.query<IGetResponse<ICardSuggestion>, { discordId: string }>({
-            query: (options) => {
-                const url = buildUrl(`suggestions/${options.discordId}`);
+        getSuggestion: builder.query<ICardSuggestion, string>({
+            query: (id) => {
+                const url = buildUrl(`suggestions/${id}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => generateFor(result?.items, "suggestion")
+            // `includeList: false` - the default LIST tag wrongly queued a "new data" toast on any
+            // other suggestion's reaction change, instead of a silent background invalidate.
+            providesTags: (result) => generateFor(result, "suggestion", { includeList: false })
         }),
         createSuggestion: builder.mutation<ICardSuggestion, Omit<ICardSuggestion, "created" | "updated">>({
             query: (suggestion) => {
@@ -347,29 +363,131 @@ const api = createApi({
                 const body = suggestion;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
+        // Draft save - only ever valid while the suggestion is still a draft (or new); the server
+        // rejects this once a suggestion has been submitted.
+        saveDraftSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
+            query: (suggestion) => {
+                const url = buildUrl(`suggestions/${suggestion.id}/draft`);
+                const body = suggestion;
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // General save - accepts a new/draft/already-submitted suggestion alike, always fully
+        // validates, and always results in a submitted (non-draft) suggestion.
         updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
             query: (suggestion) => {
                 const url = buildUrl(`suggestions/${suggestion.id}`);
                 const body = suggestion;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        unarchiveSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/unarchive`);
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
         deleteSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
             query: (options) => {
                 const url = buildUrl(`suggestions/${options.id}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
-        getTags: builder.query<string[], void>({
+        // `discordId` is only used client-side, to patch the right key of the cached reactions map
+        // optimistically - the server derives it from the authenticated principal, never the body.
+        reactToSuggestion: builder.mutation<
+            ICardSuggestion,
+            { id: string; reactType: ReactionType; discordId: string }
+        >({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/reaction`);
+                return { url, method: "POST", body: { reactType: options.reactType } };
+            },
+            async onQueryStarted({ id, reactType, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    suggestion._metadata ??= {};
+                    suggestion._metadata.engagement ??= { reactions: {} };
+                    suggestion._metadata.engagement.reactions[discordId] = { type: reactType, reactedAt: new Date() };
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        clearSuggestionReaction: builder.mutation<ICardSuggestion, { id: string; discordId: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/reaction`);
+                return { url, method: "DELETE" };
+            },
+            async onQueryStarted({ id, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    delete suggestion._metadata?.engagement?.reactions[discordId];
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // `discordId` is only used client-side (the optimistic approvedBy, before the server's own
+        // response confirms it) - same reasoning as reactToSuggestion's own `discordId` above.
+        approveSuggestion: builder.mutation<ICardSuggestion, { id: string; discordId: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/approve`);
+                return { url, method: "POST" };
+            },
+            async onQueryStarted({ id, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    suggestion._metadata ??= {};
+                    suggestion._metadata.engagement ??= { reactions: {} };
+                    suggestion._metadata.engagement.approvedBy = discordId;
+                    suggestion._metadata.engagement.approvedAt = new Date();
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        unapproveSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/approve`);
+                return { url, method: "DELETE" };
+            },
+            async onQueryStarted({ id }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    if (suggestion._metadata?.engagement) {
+                        delete suggestion._metadata.engagement.approvedBy;
+                        delete suggestion._metadata.engagement.approvedAt;
+                    }
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        getSuggestionsFeed: builder.query<SuggestionsFeed, void>({
             query: () => {
-                const url = buildUrl("suggestions/tags");
+                const url = buildUrl("suggestions/feed");
                 return { url, method: "GET" };
             },
-            providesTags: (results) => generateFor(results, "tag")
+            providesTags: () => [{ type: "suggestion", id: "LIST" }]
         }),
         // Render API
         renderImage: builder.mutation<Blob, IRenderCard>({
@@ -1051,11 +1169,17 @@ export const {
     useMoveCardMutation,
 
     useGetSuggestionsQuery,
-    useGetSuggestionsByQuery,
+    useGetSuggestionQuery,
     useCreateSuggestionMutation,
+    useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation,
+    useUnarchiveSuggestionMutation,
     useDeleteSuggestionMutation,
-    useGetTagsQuery,
+    useReactToSuggestionMutation,
+    useClearSuggestionReactionMutation,
+    useApproveSuggestionMutation,
+    useUnapproveSuggestionMutation,
+    useGetSuggestionsFeedQuery,
 
     useRenderImageMutation,
     useRenderPrintSheetMutation,

@@ -147,6 +147,9 @@ export interface ResourceUpdateEvent<K extends ResourceType = ResourceType> {
     originId?: string;
     // True if broadcast from execution detached from its triggering request.
     deferred?: boolean;
+    // True for a passive field change (a reaction, an approval) - applied immediately, not queued
+    // behind the "new data" confirmation toast, since no in-progress edit can lose anything to it.
+    silent?: boolean;
 }
 
 export interface ConnectedEvent {

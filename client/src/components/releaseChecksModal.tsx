@@ -641,10 +641,7 @@ function ReadOnlyReleaseCheck({ entry, latestVersion }: { entry?: IReleaseCheck;
             >
                 <FontAwesomeIcon icon={entry.ready ? faCheck : faXmark} />
                 {entry.ready ? "Ready to release" : "Not ready to release"}
-                <Timestamp
-                    className="ml-auto text-xs italic font-normal text-foreground/40"
-                    date={new Date(entry.updated)}
-                />
+                <Timestamp className="ml-auto text-xs italic font-normal text-foreground/40" date={entry.updated} />
             </div>
             {!entry.ready && (
                 <>

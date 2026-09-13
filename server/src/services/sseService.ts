@@ -91,7 +91,8 @@ export function createSyncEmitter<K extends SyncType>(
 export function broadcastResourceChange<K extends ResourceType>(
     type: K,
     resources: SingleOrArray<ResourceDataMap[K]>,
-    status: "create" | "update" | "delete" = "update"
+    status: "create" | "update" | "delete" = "update",
+    options?: { silent?: boolean }
 ): void {
     const items = asArray(resources).map((resource) => ({
         id: resourceIdFuncs[type](resource),
@@ -100,5 +101,5 @@ export function broadcastResourceChange<K extends ResourceType>(
     const context = requestContext.getStore();
     const originId = context?.source === "client" ? context.clientId : undefined;
     const deferred = context?.source === "client" && context.detached === true;
-    sseService.broadcast({ type, status, items, originId, deferred });
+    sseService.broadcast({ type, status, items, originId, deferred, silent: options?.silent });
 }

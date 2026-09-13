@@ -77,6 +77,15 @@ export const stepperSizeClasses = {
 
 export type StepperSize = keyof typeof stepperSizeClasses;
 
+// The suggestion editor's toggle-tile look (border + tint, no motion) - shared by every option tile
+// (AbilityTypeToggle, IconicSwitch, RepeatabilityTiles, TriggerReliabilityCards).
+export function answerTileClasses(isOn: boolean, isDisabled?: boolean) {
+    return classNames(
+        isDisabled ? "cursor-default" : "cursor-pointer",
+        isOn ? "border-primary bg-primary/10" : "border-content3 bg-content1 hover:border-content4"
+    );
+}
+
 export function statusNodeClass(isReached: boolean, color: UIColor, size: StepperSize) {
     return classNames(
         "shrink-0 flex items-center justify-center rounded-full border-2 bg-content1",
@@ -170,6 +179,20 @@ export const factionAccentClasses: Record<Faction, string> = {
     targaryen: "bg-targaryen",
     tyrell: "bg-tyrell",
     neutral: "bg-neutral"
+};
+
+// Full strength text colour - eg. a small faction icon sat beside plain text, where the -300 wash
+// watermarkClasses uses below would barely read at icon size
+export const factionTextClasses: Record<Faction, string> = {
+    baratheon: "text-baratheon",
+    greyjoy: "text-greyjoy",
+    lannister: "text-lannister",
+    martell: "text-martell",
+    thenightswatch: "text-thenightswatch",
+    stark: "text-stark",
+    targaryen: "text-targaryen",
+    tyrell: "text-tyrell",
+    neutral: "text-neutral"
 };
 
 export const watermarkClasses: Record<string, string> = {

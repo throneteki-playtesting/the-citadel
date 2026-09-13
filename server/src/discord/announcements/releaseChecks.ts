@@ -125,7 +125,6 @@ async function postOrEdit(
     const announcement = messages.announcement(project, release, cards, participation, context.taggedRole);
     if (existing) {
         const message = await fetchMessage(context, existing);
-        // Edits never re-notify, but suppressing mentions keeps that true regardless of Discord's mood
         await message.edit({ ...announcement, allowedMentions: { parse: [] } });
         logger.verbose(`[Discord] Updated release check announcement for ${release.code}`);
         return;

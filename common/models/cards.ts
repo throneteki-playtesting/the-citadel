@@ -1,6 +1,8 @@
 import { SemanticVersion } from "../utils";
 import * as Projects from "./projects";
 import { IAuditable } from "./shared";
+import { RewardType } from "../designGuidelines/rewardTypes";
+import { PunishmentType } from "../designGuidelines/punishmentTypes";
 
 export const factions = [
     "baratheon",
@@ -30,9 +32,7 @@ export type Strength = number | "X";
 export type PlotValue = number | "X";
 export type Quantity = 1 | 2 | 3;
 
-/**
- * Base released card, fitting structure of JSON Card Data Repository, minus certain fields
- */
+/** Base released card, fitting the JSON Card Data Repository's structure, minus certain fields */
 export interface ICard {
     code?: Code;
     cost?: Cost;
@@ -156,6 +156,95 @@ export interface ILabeledCard extends ICard {
     workInProgress: boolean;
 }
 
+export const triggerReliabilities = ["natural", "discretionary", "dependent"] as const;
+export type TriggerReliability = (typeof triggerReliabilities)[number];
+
+/** Three independent toggles - see common/designGuidelines for the full rationale. `paidCost` also
+ *  covers keyword-driven costs (Bestow, Limited); `oneTime` moved here from `TriggerReliability`. */
+export interface IRepeatability {
+    hardLimit: boolean;
+    paidCost: boolean;
+    oneTime: boolean;
+}
+
+export const abilityTypes = ["triggered", "passive"] as const;
+export type AbilityType = (typeof abilityTypes)[number];
+
+/** Questions asked of a suggestion's submitter - distinct from `IDerivedFields`, which is computed
+ *  automatically from `card.text` and never asked of anyone. */
+export interface ISuggestionQuestions {
+    rewardTypes: RewardType[];
+    punishment: PunishmentType[];
+    /** 0-many; seeded from the text (see deriveFields.hasTriggeredAbility/hasPassiveAbility) but
+     *  always overridable - gates Trigger Reliability/Repeatability. */
+    abilityTypes: AbilityType[];
+    /** all card types; feeds the strength calc only for characters, otherwise a plain filter */
+    triggerReliability: TriggerReliability[];
+    repeatability: IRepeatability;
+    /** all card types - feeds the strength calc only for characters, otherwise a plain filter */
+    iconic?: boolean;
+}
+
+export type TriggerType =
+    | "Action"
+    | "Challenges Action"
+    | "Dominance Action"
+    | "Draw Action"
+    | "Marshaling Action"
+    | "Plot Action"
+    | "Standing Action"
+    | "Taxation Action"
+    | "Interrupt"
+    | "Reaction"
+    | "Forced Reaction"
+    | "Forced Interrupt"
+    | "When Revealed";
+
+export interface IDerivedKeyword {
+    keyword: string;
+    /** the "(X)" parameter, or the "except {trait}" suffix */
+    value?: number | string;
+}
+
+/** Always server-computed from `card.text` via `deriveFields()` - never asked of, or sent by, a client */
+export interface IDerivedFields {
+    triggerTypes: TriggerType[];
+    keywords: IDerivedKeyword[];
+}
+
+export const checklistRuleIds = [
+    "strGuideline",
+    "rewardFocus",
+    "punishmentFocus",
+    "loyaltyConsistency",
+    "repeatabilityControl",
+    "plotBudget",
+    "pivotPointBalance"
+] as const;
+export type ChecklistRuleId = (typeof checklistRuleIds)[number];
+
+export const reactionTypes = ["like", "dislike", "ignore"] as const;
+export type ReactionType = (typeof reactionTypes)[number];
+
+export const archiveReasons = ["usedInProject", "duplicate", "rejected", "other"] as const;
+
+/** Justification text per checklist rule, keyed by rule id - holds no pass/fail flag of its own,
+ *  since that's always `checklistRules()`'s call, recomputed server-side at submit time. */
+export type ChecklistJustifications = Partial<Record<ChecklistRuleId, string>>;
+
+export type ArchiveReason = (typeof archiveReasons)[number];
+
+export interface IArchivedInfo {
+    reason: ArchiveReason;
+    /** required when reason is "other" or "rejected" */
+    details?: string;
+    /** set when reason is "usedInProject" */
+    project?: { code: string; number: number };
+    archivedAt: Date;
+    /** undefined for the system archive at project-initialise time */
+    archivedBy?: string;
+}
+
 export interface ICardSuggestion extends IAuditable {
     /** Unique Id of this saved suggestion (undefined for new) */
     id?: string;
@@ -168,16 +257,50 @@ export interface ICardSuggestion extends IAuditable {
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;
+            /** shallow snapshot of watched fields as of the last sync, for the "what changed" edit message */
+            lastSyncedSnapshot?: Record<string, unknown>;
+        };
+        /** Never client-writable (see the dedicated /:id/reaction routes) - lives under `_metadata`
+         *  rather than top-level so reacting/approving never bumps `updated` (see stripAudit). */
+        engagement?: {
+            reactions: Record<string, { type: ReactionType; reactedAt: Date }>;
+            approvedBy?: string;
+            approvedAt?: Date;
         };
     };
-    /** Discord Id array of users who like this suggestion */
-    likedBy: string[];
-    /** Discord Id of user who approved this suggestion */
-    approvedBy?: string;
-    /** Reason for this suggestion to be archived, or undefined if not archived */
-    archivedReason?: string;
-    /** Additional tags related to this suggestion */
-    tags: string[];
+    /** Present only once archived - see IArchivedInfo */
+    archived?: IArchivedInfo;
     /** Card design */
     card: ICard;
+    /** true until formally Submitted; only `card` needs to be valid while true */
+    draft: boolean;
+    questions: ISuggestionQuestions;
+    /** always server-computed from card.text, never client-supplied */
+    derived: IDerivedFields;
+    /** justification text per rule the submitter has explained - see ChecklistJustifications */
+    checklistJustifications: ChecklistJustifications;
+    /** 0-many short callouts, each capped at PIVOT_POINT_MAX_LENGTH - see common/designGuidelines/pivotPoints */
+    pivotPoints: string[];
+    /** ThronesDB card codes */
+    comparableCards: string[];
+    /** ThronesDB card codes - printed cards only, same shape as comparableCards */
+    combosWith: string[];
+    notes?: string;
+}
+
+/** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who
+ *  created it, with no permission able to override that. */
+export function canViewSuggestion(suggestion: Pick<ICardSuggestion, "draft" | "user">, viewerDiscordId?: string) {
+    return !suggestion.draft || suggestion.user.discordId === viewerDiscordId;
+}
+
+/** Shared by the server route (the actual gate) and the client (to hide the affordance) - mirrors
+ *  artworkBlocker's shape. Says nothing about drafts; that falls out of canViewSuggestion alone. */
+export function suggestionReactionBlockReason(
+    suggestion: Pick<ICardSuggestion, "user">,
+    reactorDiscordId?: string
+): string | undefined {
+    return !reactorDiscordId || suggestion.user.discordId === reactorDiscordId
+        ? "You cannot react to your own suggestion"
+        : undefined;
 }

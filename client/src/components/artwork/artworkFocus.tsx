@@ -15,7 +15,15 @@ const EDGE_PADDING = 24;
 
 // Driven from the trigger's own measured rectangle so there is no clipping ancestor to cut the returning
 // piece off. Portalled to the body so a fixed child positions against the viewport, not SlidingPages.
-export default function ArtworkFocus({ origin, src, url, alt, onClose }: ArtworkFocusProps) {
+export default function ArtworkFocus({
+    origin,
+    src,
+    url,
+    alt,
+    linkLabel = "Open original",
+    showSkeleton = true,
+    onClose
+}: ArtworkFocusProps) {
     const viewport = useViewport();
 
     const candidates = src ? [src, ...displayableUrls(url).filter((entry) => entry !== src)] : displayableUrls(url);
@@ -78,7 +86,9 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                             </div>
                         ) : (
                             <>
-                                {state === "loading" && <Skeleton className="absolute inset-0 rounded-none" />}
+                                {state === "loading" && showSkeleton && (
+                                    <Skeleton className="absolute inset-0 rounded-none" />
+                                )}
                                 <Image
                                     removeWrapper
                                     src={candidates[attempt]}
@@ -112,7 +122,7 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                                 className="shrink-0 pointer-events-auto text-white/70 text-sm data-[hover=true]:text-white"
                                 onClick={(event) => event.stopPropagation()}
                             >
-                                Open original
+                                {linkLabel}
                             </Link>
                         )}
                     </motion.div>
@@ -158,5 +168,11 @@ type ArtworkFocusProps = {
     /** Where the piece really lives, for the caption's way out */
     url?: string;
     alt: string;
+    /** Text for the `url` link - defaults to "Open original", the wording that fits real artwork;
+     *  a caller pointing `url` somewhere else (eg. a ThronesDB card page) can say so instead. */
+    linkLabel?: string;
+    /** Whether a loading skeleton covers the piece while it loads - on by default (real artwork can
+     *  be a large, slow Drive image), a caller with a quick-loading image can opt out instead. */
+    showSkeleton?: boolean;
     onClose: () => void;
 };

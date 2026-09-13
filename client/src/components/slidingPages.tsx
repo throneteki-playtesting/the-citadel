@@ -3,10 +3,8 @@ import classNames from "classnames";
 import { PageActiveContext, useIsPageActive } from "../hooks/useIsPageActive";
 import { BaseElementProps } from "../types";
 
-/**
- * Lays its children out side by side and slides between them, keeping only the active one's height so
- * the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling.
- */
+/** Lays its children out side by side and slides between them, keeping only the active one's height
+ *  so the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling. */
 export default function SlidingPages({ className, style, currentPage, pageProps, children, ref }: SlidingPagesProps) {
     // A page which is the one on show inside something hidden is still not on screen
     const isParentActive = useIsPageActive();
@@ -19,7 +17,9 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     // Watches the active page rather than measuring once - pages can grow after mount, and a stale
     // height would either clip them or leave a gap underneath
     useLayoutEffect(() => {
-        const measure = () => setMeasuredHeight(activeWrapperRef.current?.offsetHeight);
+        // `?? undefined`, not `||` - a genuinely-collapsed page (offsetHeight 0, eg. mid-remeasure)
+        // must still count as "measured", or the container's explicit height gets un-set instead.
+        const measure = () => setMeasuredHeight(activeWrapperRef.current?.offsetHeight ?? undefined);
 
         measure();
 
@@ -36,35 +36,36 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     return (
         <div
             ref={ref}
-            className={classNames("relative size-full overflow-clip transition-height", className)}
-            style={{ ...style, height: measuredHeight ? `${measuredHeight}px` : undefined }}
+            className={classNames("relative size-full overflow-clip", className)}
+            style={{ ...style, height: measuredHeight !== undefined ? `${measuredHeight}px` : undefined }}
         >
-            <div
-                className="flex flex-row items-start transition-transform duration-500 ease-in-out"
-                style={{ transform: `translateX(-${(currentPage - 1) * 100}%)` }}
-            >
-                {Children.map(children, (page, index) => {
-                    if (!React.isValidElement(page)) {
-                        return page;
-                    }
-                    const pageNo = index + 1;
-                    const isActive = pageNo === currentPage;
-                    return (
-                        <div
-                            key={pageNo}
-                            ref={isActive ? activeWrapperRef : null}
-                            aria-hidden={!isActive}
-                            inert={!isActive}
-                            className={classNames("flex-shrink-0 w-full", { "overflow-clip": !isActive })}
-                            {...pageProps?.(pageNo)}
-                        >
-                            <PageActiveContext.Provider value={isActive && isParentActive}>
-                                {page}
-                            </PageActiveContext.Provider>
-                        </div>
-                    );
-                })}
-            </div>
+            {Children.map(children, (page, index) => {
+                if (!React.isValidElement(page)) {
+                    return page;
+                }
+                const pageNo = index + 1;
+                const isActive = pageNo === currentPage;
+                return (
+                    <div
+                        key={pageNo}
+                        ref={isActive ? activeWrapperRef : null}
+                        aria-hidden={!isActive}
+                        inert={!isActive}
+                        // Absolutely positioned, not a flex sibling - a flex row flashed the tallest
+                        // page's height before snapping down once the active page's was measured.
+                        className={classNames(
+                            "absolute inset-x-0 top-0 w-full transition-transform duration-500 ease-in-out",
+                            { "overflow-clip": !isActive }
+                        )}
+                        style={{ transform: `translateX(${(pageNo - currentPage) * 100}%)` }}
+                        {...pageProps?.(pageNo)}
+                    >
+                        <PageActiveContext.Provider value={isActive && isParentActive}>
+                            {page}
+                        </PageActiveContext.Provider>
+                    </div>
+                );
+            })}
         </div>
     );
 }

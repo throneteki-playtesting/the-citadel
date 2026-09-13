@@ -1,7 +1,9 @@
 import { Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
 import { useInfiniteScroll } from "@heroui/use-infinite-scroll";
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import { BaseElementProps } from "../../types";
 
 const SENTINEL_KEY = "__searchable-select-sentinel__";
@@ -19,6 +21,8 @@ function SearchableMultiSelect<T extends object>({
     matches,
     renderItem,
     renderSelected,
+    hideChipsInInput,
+    keepSearchOnSelect,
     selectedKeys,
     onSelectionChange,
     search,
@@ -39,10 +43,22 @@ function SearchableMultiSelect<T extends object>({
     const term = search.trim();
     const isHidden = (item: T) => term.length > 0 && !!matches && !matches(item, term);
 
+    // Whatever opened the dropdown hands focus to the trigger button first, per usual listbox a11y -
+    // a deferred focus grab is what turns that into "the search box is already active" instead.
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+        const handle = requestAnimationFrame(() => inputRef.current?.focus());
+        return () => cancelAnimationFrame(handle);
+    }, [isOpen, selectedKeys]);
+
     const handleSelectionChange = (keys: SharedSelection) => {
-        // Picking a result clears the search so the next keystroke starts a fresh search
-        // rather than continuing to filter against what was just typed
-        onSearchChange("");
+        // Picking a result clears the search so the next keystroke starts fresh, unless the caller
+        // wants to keep browsing the same result set (eg. picking several matches for one term).
+        if (!keepSearchOnSelect) {
+            onSearchChange("");
+        }
         if (keys === "all") {
             onSelectionChange(keys);
             return;
@@ -56,14 +72,14 @@ function SearchableMultiSelect<T extends object>({
         const selectedItems = selected.map((s) => s.data).filter((s): s is T => s != null && s !== sentinel);
         return (
             <div
-                className="flex flex-wrap items-center gap-1 w-full cursor-text"
+                className="flex flex-wrap items-center gap-1 w-full py-1 cursor-text"
                 onPointerDown={(e) => {
                     e.stopPropagation();
                     inputRef.current?.focus();
                     setIsOpen(true);
                 }}
             >
-                {renderSelected(selectedItems)}
+                {!hideChipsInInput && renderSelected?.(selectedItems)}
                 <input
                     ref={inputRef}
                     aria-label={label ? `${label} search` : "Search"}
@@ -79,9 +95,26 @@ function SearchableMultiSelect<T extends object>({
                             e.stopPropagation();
                         }
                     }}
-                    placeholder={selectedItems.length === 0 ? placeholder : undefined}
+                    placeholder={hideChipsInInput || selectedItems.length === 0 ? placeholder : undefined}
                     className="flex-1 min-w-[80px] bg-transparent outline-none text-foreground mx-1"
                 />
+                {/* A bare `<input>`, not a HeroUI `Input`, so there's no `endContent` slot - positioned
+                as its last flex sibling instead, landing in the same spot `endContent` would. */}
+                {search && (
+                    <button
+                        type="button"
+                        aria-label="Clear search"
+                        className="shrink-0 cursor-pointer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onSearchChange("");
+                            inputRef.current?.focus();
+                        }}
+                    >
+                        <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
+                    </button>
+                )}
             </div>
         );
     };
@@ -114,7 +147,12 @@ function SearchableMultiSelect<T extends object>({
                     <SelectItem
                         key={getKey(item)}
                         className={classNames(isHidden(item) && "hidden")}
-                        classNames={{ title: "min-w-0 overflow-hidden" }}
+                        classNames={{
+                            title: "min-w-0 overflow-hidden",
+                            // The listbox's own scroll container clips the focus ring's default
+                            // OUTSIDE offset near an edge - a negative offset draws it INSIDE instead.
+                            base: "data-[focus-visible=true]:outline-offset-[-2px]"
+                        }}
                     >
                         {renderItem(item)}
                     </SelectItem>
@@ -136,7 +174,13 @@ type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     /** Whether an item survives the current search. Without it the list is left to the server alone */
     matches?: (item: T, search: string) => boolean;
     renderItem: (item: T) => ReactNode;
-    renderSelected: (items: T[]) => ReactNode;
+    /** Not called at all when `hideChipsInInput` is set - a caller showing selections elsewhere doesn't need it */
+    renderSelected?: (items: T[]) => ReactNode;
+    /** Keeps the field a pure search-and-pick control with no inline chips, for a caller that
+     *  renders the selection itself somewhere else (eg. above the field) */
+    hideChipsInInput?: boolean;
+    /** Keeps the typed term after picking a result, so the same search can pick several matches in a row */
+    keepSearchOnSelect?: boolean;
     selectedKeys: string[];
     onSelectionChange: (keys: SharedSelection) => void;
     search: string;

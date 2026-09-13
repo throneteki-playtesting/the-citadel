@@ -8,11 +8,8 @@ import {
     useGetUserQuery
 } from "../../../api";
 import { SemanticVersion } from "common/utils";
-import { Faction, Type } from "common/models/cards";
 import { CardLikeSnapshot, IntegrationSnapshot, ProjectSnapshot, RoleSnapshot, UserSnapshot } from "common/models/logs";
-import { factionBgClasses, factionBorderClasses } from "../../../constants";
-import ThronesIcon from "../../../components/thronesIcon";
-import classNames from "classnames";
+import CardBadge from "../../../components/cardBadge";
 
 // A snapshot `value` renders directly; a bare string is a pre-snapshot log id, falling back to a live lookup.
 export function UserChip({ value }: { value: unknown }) {
@@ -75,24 +72,6 @@ function LegacyRoleChip({ discordId }: { discordId: string }) {
             style={hex ? { backgroundColor: `${hex}33`, borderColor: `${hex}66`, color: hex } : undefined}
         >
             {role?.name ?? `Unknown Role (${discordId})`}
-        </span>
-    );
-}
-
-// Shared visual for anything backed by an `ICard` (faction colour + type icon + name), used by
-// both the card chip itself and any entity that wraps a card (eg. suggestions).
-function CardBadge({ faction, type, name, suffix }: { faction: Faction; type: Type; name: string; suffix?: string }) {
-    return (
-        <span
-            className={classNames(
-                "inline-flex items-center gap-1 align-middle px-2 py-0.5 rounded-full border text-xs font-medium",
-                factionBgClasses[faction],
-                factionBorderClasses[faction]
-            )}
-        >
-            <ThronesIcon name={type} />
-            {name}
-            {suffix ? ` (${suffix})` : ""}
         </span>
     );
 }

@@ -243,8 +243,13 @@ router.post(
         const suggestionIds = Object.keys(suggestionNumbers);
         if (suggestionIds.length > 0) {
             const suggestions = await dataService.suggestions.read(suggestionIds.map((id) => ({ id })));
+            const archivedAt = new Date();
             for (const suggestion of suggestions) {
-                suggestion.archivedReason = `Used for ${project.code} card #${suggestionNumbers[suggestion.id]}`;
+                suggestion.archived = {
+                    reason: "usedInProject",
+                    project: { code: project.code, number: suggestionNumbers[suggestion.id] },
+                    archivedAt
+                };
             }
             await dataService.suggestions.update(suggestions);
         }

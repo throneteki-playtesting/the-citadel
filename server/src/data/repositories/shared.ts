@@ -131,9 +131,9 @@ export class BroadcastDatabase<
         broadcastResourceChange(this.updateType, items, "create");
     }
 
-    protected broadcastUpdates(items: T[]): void {
+    protected broadcastUpdates(items: T[], options?: { silent?: boolean }): void {
         if (items.length === 0) return;
-        broadcastResourceChange(this.updateType, items, "update");
+        broadcastResourceChange(this.updateType, items, "update", options);
     }
 
     protected broadcastDeletes(items: T[]): void {

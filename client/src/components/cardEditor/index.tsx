@@ -1,5 +1,5 @@
 import { DefaultDeckLimit, ICard } from "common/models/cards";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import {
@@ -336,4 +336,6 @@ type InputOptions = { [K in keyof ICard]?: "disabled" | "hidden" };
 
 type VisibilityOptions = { [K in keyof ICard]?: boolean };
 
-export default CardEditor;
+// Memoized deliberately - this hosts the ability text's TipTap editor, the most expensive thing in
+// any caller. Only worth anything as long as callers pass stable `onUpdate`/`inputOptions` references.
+export default memo(CardEditor);

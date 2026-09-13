@@ -475,7 +475,7 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                 <div className="flex flex-col-reverse md:flex-row">
                     <Timestamp
                         className="self-end px-2 md:mb-auto text-xs italic text-foreground/40"
-                        date={new Date(review.updated)}
+                        date={review.updated}
                     />
                     <div className="flex flex-wrap items-center gap-1">
                         <PermissionGate

@@ -13,7 +13,9 @@ export default function UserAvatar({ className, style, discordId, title, size = 
             src={user?.avatarUrl}
             name={user?.displayname?.charAt(0) ?? "?"}
             isDisabled={isLoading}
-            title={title ?? user?.displayname}
+            // `title={false}` opts out entirely - for a caller already wrapping this in its own
+            // TouchTooltip, the native title attribute duplicates it (both show up on hover).
+            title={title === false ? undefined : (title ?? user?.displayname)}
             className={classNames("shrink-0", className)}
             style={style}
             {...rest}
@@ -35,12 +37,13 @@ export function UserRow({ className, style, discordId, trailing }: UserRowProps)
     );
 }
 
-type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children"> &
+type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children" | "title"> &
     Omit<BaseElementProps, "children"> & {
         ref?: Ref<HTMLSpanElement>;
         discordId: string;
-        /** Overrides the hover title, which is otherwise just the display name */
-        title?: string;
+        /** Overrides the hover title, which is otherwise just the display name - pass `false` to
+         *  suppress the native title entirely (eg. when already wrapped in a TouchTooltip). */
+        title?: string | false;
         /** HeroUI Avatar size; defaults to the small avatar used in rows and tallies */
         size?: AvatarProps["size"];
     };

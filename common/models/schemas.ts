@@ -9,6 +9,9 @@ import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
 import { logCategories, logSeverities } from "./logs";
 import { sanitiseHtml } from "../richText/sanitise";
+import { REWARD_TYPES } from "../designGuidelines/rewardTypes";
+import { PUNISHMENT_TYPES } from "../designGuidelines/punishmentTypes";
+import { PIVOT_POINT_MAX_LENGTH } from "../designGuidelines/pivotPoints";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
@@ -245,63 +248,158 @@ export const RenderedCard = {
     })
 };
 
+// Snapshot of watched fields at last Discord sync, for the suggestion forum's "what changed" edit message
+const DiscordMetadataWithSnapshot = DiscordMetadata.keys({
+    lastSyncedSnapshot: Joi.object().unknown(true)
+});
+
+const ArchivedInfo = Joi.object({
+    reason: Joi.string()
+        .valid(...Cards.archiveReasons)
+        .required(),
+    details: Joi.when("reason", {
+        is: Joi.valid("other", "rejected"),
+        then: Joi.string().required(),
+        otherwise: Joi.string()
+    }),
+    project: Joi.object({
+        code: Joi.string().required(),
+        number: Joi.number().required()
+    }),
+    archivedAt: Joi.date().required(),
+    archivedBy: Joi.string()
+});
+
+// Shared field definitions between the strict (submit-time) and partial (draft-time) Questions schemas
+const questionsFields = {
+    // Most cards have neither - absent is "none", not "not yet answered", so these default rather
+    // than require an explicit empty array from every submitter
+    rewardTypes: Joi.array()
+        .items(Joi.string().valid(...REWARD_TYPES.map((r) => r.id)))
+        .default([]),
+    punishment: Joi.array()
+        .items(Joi.string().valid(...PUNISHMENT_TYPES.map((p) => p.id)))
+        .default([]),
+    abilityTypes: Joi.array().items(Joi.string().valid(...Cards.abilityTypes)),
+    triggerReliability: Joi.array().items(Joi.string().valid(...Cards.triggerReliabilities)),
+    iconic: Joi.boolean()
+};
+
+const RepeatabilityShape = {
+    hardLimit: Joi.boolean(),
+    paidCost: Joi.boolean(),
+    oneTime: Joi.boolean()
+};
+
+const QuestionsPartial = Joi.object({
+    ...questionsFields,
+    repeatability: Joi.object(RepeatabilityShape)
+});
+
+// Only `iconic` is genuinely required - the others default to a safe "no answer yet" value
+// (`[]`/all-false) that `checklistRules()` itself flags rather than blocking submission on.
+const Questions = Joi.object({
+    rewardTypes: questionsFields.rewardTypes,
+    punishment: questionsFields.punishment,
+    abilityTypes: questionsFields.abilityTypes.default([]),
+    triggerReliability: questionsFields.triggerReliability.default([]),
+    repeatability: Joi.object(RepeatabilityShape).default({ hardLimit: false, paidCost: false, oneTime: false }),
+    // Forces a real answer - unlike reward/punishment, "iconic" has no meaningful default; the
+    // submitter has to say one way or the other rather than silently falling to a guessed value
+    iconic: Joi.boolean().required()
+});
+
+// Always server-computed via deriveFields() before validation runs - a client-sent value is
+// discarded. Defaulted, not required: the client's own local mirror isn't ready until after mount.
+const Derived = Joi.object({
+    triggerTypes: Joi.array().items(Joi.string()).default([]),
+    keywords: Joi.array()
+        .items(
+            Joi.object({
+                keyword: Joi.string().required(),
+                value: Joi.alternatives().try(Joi.number(), Joi.string())
+            })
+        )
+        .default([])
+}).default({ triggerTypes: [], keywords: [] });
+
+// Whether a rule currently NEEDS a justification isn't checked here (beyond Joi's `.when()`) -
+// POST /:id/submit recomputes checklistRules() itself and reports any gap as a field error.
+const ChecklistJustifications = Joi.object()
+    .pattern(Joi.string().valid(...Cards.checklistRuleIds), Joi.string())
+    .default({});
+
+// Never client-writable in practice - PUT /:id(/draft) force this server-side (same convention as
+// `derived`); only /:id/reaction and /:id/approve may actually change it.
+const SuggestionEngagement = Joi.object({
+    reactions: Joi.object()
+        .pattern(
+            Joi.string(),
+            Joi.object({
+                type: Joi.string()
+                    .valid(...Cards.reactionTypes)
+                    .required(),
+                reactedAt: Joi.date().required()
+            })
+        )
+        .default({}),
+    approvedBy: Joi.string(),
+    approvedAt: Joi.date()
+});
+
+const suggestionSharedFields = {
+    id: Joi.string(),
+    user: Joi.object({
+        discordId: Joi.string().required(),
+        displayname: Joi.string().required()
+    }).required(),
+    created: Joi.date(),
+    createdBy: Joi.string(),
+    updated: Joi.date(),
+    updatedBy: Joi.string(),
+    archived: ArchivedInfo,
+    _metadata: Joi.object({
+        discord: DiscordMetadataWithSnapshot,
+        engagement: SuggestionEngagement
+    }),
+    card: Card.Full.required(),
+    // Deliberately NOT `.required()` here too - `.default()` doesn't make the key optional, and
+    // chaining `.required()` after it re-imposes the exact check the default exists to avoid.
+    derived: Derived,
+    checklistJustifications: ChecklistJustifications,
+    pivotPoints: Joi.array().items(Joi.string().max(PIVOT_POINT_MAX_LENGTH)),
+    comparableCards: Joi.array().items(Joi.string()),
+    combosWith: Joi.array().items(Joi.string()),
+    notes: Joi.string().allow("")
+};
+
 export const CardSuggestion = {
+    /** The general stored-object shape, and the submit-time schema - whether checklistJustifications
+     *  actually covers every failing rule is checked server-side at submit time, not here. */
     Full: Joi.object({
-        id: Joi.string(),
-        user: Joi.object({
-            discordId: Joi.string().required(),
-            displayname: Joi.string().required()
-        }).required(),
-        created: Joi.date().required(),
-        createdBy: Joi.string().required(),
-        updated: Joi.date().required(),
-        updatedBy: Joi.string().required(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()).default([]),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()).default([]),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Full.required()
+        ...suggestionSharedFields,
+        draft: Joi.boolean().required(),
+        questions: Questions.required(),
+        pivotPoints: suggestionSharedFields.pivotPoints.default([]),
+        comparableCards: suggestionSharedFields.comparableCards.default([]),
+        combosWith: suggestionSharedFields.combosWith.default([])
     }),
     Partial: Joi.object({
-        id: Joi.string(),
+        ...suggestionSharedFields,
         user: Joi.object({
             discordId: Joi.string(),
             displayname: Joi.string()
         }),
-        created: Joi.date(),
-        createdBy: Joi.string(),
-        updated: Joi.date(),
-        updatedBy: Joi.string(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Partial
+        card: Card.Partial,
+        derived: Derived,
+        draft: Joi.boolean(),
+        questions: QuestionsPartial
     }),
-    Draft: Joi.object({
-        id: Joi.string(),
-        user: Joi.object({
-            discordId: Joi.string(),
-            displayname: Joi.string()
-        }).required(),
-        created: Joi.date(),
-        createdBy: Joi.string(),
-        updated: Joi.date(),
-        updatedBy: Joi.string(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()).default([]),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()).default([]),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Full.required()
+    /** the permissive, in-progress-save schema - only `user` + a fully valid `card` are required */
+    DraftSave: Joi.object({
+        ...suggestionSharedFields,
+        draft: Joi.boolean(),
+        questions: QuestionsPartial
     })
 };
 

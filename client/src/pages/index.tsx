@@ -4,6 +4,7 @@ import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
 import { ReactElement } from "react";
 import Suggestions from "./suggestions";
+import SuggestionDetail from "./suggestions/suggestionDetail";
 import CardEditorPage from "./cardEditor";
 import Users from "./admin/users";
 import Roles from "./admin/roles";
@@ -78,6 +79,11 @@ export const navItems: NavItem[] = [
             Permission.DELETE_SUGGESTIONS
         ],
         element: <Suggestions />
+    },
+    {
+        path: "/suggestions/:id",
+        permission: Permission.READ_SUGGESTIONS,
+        element: <SuggestionDetail />
     },
     {
         path: "/review/submit",
