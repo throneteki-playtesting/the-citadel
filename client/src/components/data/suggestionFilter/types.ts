@@ -14,9 +14,6 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     // Specific submitters' discordIds (the drawer's Submitted By multiselect) - its own field rather
     // than reusing `mine`, since that's always "the signed-in viewer" and this can be anyone.
     byUsers?: string[];
-    // Mutually exclusive with each other (enforced by the drawer, not by this type) - at most one of
-    // the two is ever set at a time.
-    draftFilter?: "only" | "none";
     approvedFilter?: "awaiting" | "only" | "none";
     // Which of the viewer's own reactions to filter to, not mutually exclusive - unset/empty still
     // excludes ignored-by-me by default, so this is the one field whose ABSENCE isn't a no-op.
@@ -54,7 +51,6 @@ export function countActiveSuggestionFilters(value: SuggestionFilterValue): numb
     if (value.mine) count++;
     if (value.unseen) count++;
     if (value.byUsers && value.byUsers.length > 0) count++;
-    if (value.draftFilter !== undefined) count++;
     if (value.approvedFilter !== undefined) count++;
     if (value.myReactions && value.myReactions.length > 0) count++;
     if (value.rewardTypes && value.rewardTypes.length > 0) count++;

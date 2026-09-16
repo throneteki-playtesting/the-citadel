@@ -1,12 +1,18 @@
 ﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
-import { SingleOrArray } from "common/types";
+import { Filter, SingleOrArray } from "common/types";
 import { ICardSuggestion, ReactionType } from "common/models/cards";
 import { asArray } from "common/utils";
 import Permission from "common/models/permissions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { dataService } from "@/services";
 import { BasicAuditableRepository } from "./shared";
+import {
+    onSuggestionApproved,
+    onSuggestionDeleted,
+    onSuggestionUnapproved,
+    syncSuggestionForum
+} from "@/discord/forums/suggestionForum";
 
 type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];
 
@@ -19,15 +25,90 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
         super(new MongoDataSource<ICardSuggestion>(mongoClient, "suggestions", { id: 1 }), "suggestion");
     }
 
-    public override async create(creating: ICardSuggestion): Promise<ICardSuggestion>;
-    public override async create(creating: ICardSuggestion[]): Promise<ICardSuggestion[]>;
-    public override async create(creating: SingleOrArray<ICardSuggestion>) {
+    public override async create(
+        creating: ICardSuggestion,
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<ICardSuggestion>;
+    public override async create(
+        creating: ICardSuggestion[],
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<ICardSuggestion[]>;
+    public override async create(creating: SingleOrArray<ICardSuggestion>, sync = true, broadcast = true) {
         let data = asArray(creating);
         for (const create of data) {
             create.id = crypto.randomUUID();
         }
-        data = await super.create(data);
+        data = await super.create(data, broadcast);
+        if (sync) {
+            data = await this.sync(data);
+        }
         return Array.isArray(creating) ? data : data[0];
+    }
+
+    public override async update(
+        updating: ICardSuggestion,
+        upsert?: boolean,
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<ICardSuggestion>;
+    public override async update(
+        updating: ICardSuggestion[],
+        upsert?: boolean,
+        sync?: boolean,
+        broadcast?: boolean
+    ): Promise<ICardSuggestion[]>;
+    public override async update(
+        updating: SingleOrArray<ICardSuggestion>,
+        upsert = true,
+        sync = true,
+        broadcast = true
+    ) {
+        let data = asArray(updating);
+        data = await super.update(data, upsert, broadcast);
+        if (sync) {
+            data = await this.sync(data);
+        }
+        return Array.isArray(updating) ? data : data[0];
+    }
+
+    public override async destroy(
+        destroying: SingleOrArray<Filter<ICardSuggestion>>,
+        sync: boolean = true
+    ): Promise<ICardSuggestion[]> {
+        const data = await super.destroy(destroying);
+        if (sync) {
+            await this.desync(data);
+        }
+        return data;
+    }
+
+    // Drafts never sync to Discord - first sync is submission (draft flips to false). internalSync
+    // fire-and-forgets for client requests and awaits otherwise, same split cardsRepository.sync() uses.
+    public async sync(syncing: ICardSuggestion): Promise<ICardSuggestion>;
+    public async sync(syncing: ICardSuggestion[]): Promise<ICardSuggestion[]>;
+    public async sync(syncing: SingleOrArray<ICardSuggestion>) {
+        let data = asArray(syncing);
+        const syncable = data.filter((suggestion) => !suggestion.draft);
+        if (syncable.length > 0) {
+            await this.internalSync([
+                () =>
+                    syncSuggestionForum(syncable).then((result) => {
+                        const byId = new Map(result.map((suggestion) => [suggestion.id, suggestion]));
+                        data = data.map((suggestion) => byId.get(suggestion.id) ?? suggestion);
+                    })
+            ]);
+        }
+        return Array.isArray(syncing) ? data : data[0];
+    }
+
+    public async desync(desyncing: ICardSuggestion[]): Promise<void> {
+        const withThreads = desyncing.filter((suggestion) => suggestion._metadata?.discord?.messageUrl);
+        if (withThreads.length === 0) {
+            return;
+        }
+        await this.internalSync([() => Promise.all(withThreads.map((suggestion) => onSuggestionDeleted(suggestion)))]);
     }
 
     // Finds by id and applies a Mongo update, atomically - none of react/unreact/setApproval below
@@ -121,6 +202,11 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
             return undefined;
         }
         this.broadcastUpdates([suggestion], { silent: true });
+        if (suggestion._metadata?.discord?.messageUrl) {
+            await this.internalSync([
+                () => (approvedBy ? onSuggestionApproved(suggestion) : onSuggestionUnapproved(suggestion))
+            ]);
+        }
         return suggestion;
     }
 }

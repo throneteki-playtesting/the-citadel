@@ -1,7 +1,7 @@
 import { DeepPartial, Filter, SingleOrArray, Sort } from "common/types";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "common/models/shared";
-import { IPlaytestCard, IRenderCard } from "common/models/cards";
+import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
 import { IPlaytestingUpdate, IProjectRelease } from "common/models/projects";
 import { IPlaytestReview } from "common/models/reviews";
 import { ResourceDataMap, ResourceType } from "common/resources";
@@ -92,18 +92,20 @@ export interface IDeleteResponse<T> {
     deleted: T[];
 }
 
-export type SyncType = "card" | "review" | "playtestingUpdate" | "release";
+export type SyncType = "card" | "review" | "playtestingUpdate" | "release" | "suggestion";
 export interface SyncDataMap {
     card: IPlaytestCard;
     review: IPlaytestReview;
     playtestingUpdate: IPlaytestingUpdate;
     release: IProjectRelease & { project: number };
+    suggestion: ICardSuggestion;
 }
 interface SyncOperationMap {
     card: "image" | "discord" | "github";
     review: "discord";
     playtestingUpdate: "github.code" | "github.data" | "discord";
     release: "github.data";
+    suggestion: "discord";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
 export type SyncStatus = "start" | "progress" | "complete" | "error";

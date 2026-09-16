@@ -23,6 +23,7 @@ import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
+import { closeSuggestionThreads } from "@/discord/forums/suggestionForum";
 import { syncIssues } from "@/github/issues";
 import { syncDataPullRequests } from "@/github/pullRequests";
 
@@ -251,7 +252,10 @@ router.post(
                     archivedAt
                 };
             }
-            await dataService.suggestions.update(suggestions);
+            // Archiving is silent on Discord - closes the thread directly rather than through the normal
+            // edit-diff sync path, which would otherwise treat this as a plain edit and post a notice
+            await closeSuggestionThreads(suggestions);
+            await dataService.suggestions.update(suggestions, true, false);
         }
 
         await logActivity(LogCategory.PROJECT, "project.initialised", "<principal> initialised project <project>", {

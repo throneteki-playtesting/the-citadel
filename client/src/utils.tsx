@@ -3,6 +3,7 @@ import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faGem } from "@fo
 import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
+import classNames from "classnames";
 
 /** Strips a leading http(s):// (or protocol-relative //) and any leading/trailing slashes, for display. */
 export function stripUrlProtocol(url: string): string {
@@ -60,4 +61,19 @@ export function formatCurrency(amount: number, currency: string, options?: Intl.
         currencyDisplay: "narrowSymbol",
         ...options
     }).format(amount);
+}
+
+/** Caps a row of children to `max` visible per breakpoint, hiding the rest outright rather than
+ *  collapsing them to 0 height - `steps` in ascending breakpoint order, eg.
+ *  `[{ max: 4 }, { prefix: "sm", max: 6 }, { prefix: "lg", max: 10 }]`. */
+export function rowCapClasses(steps: { prefix?: string; max: number }[]): string {
+    return classNames(
+        steps.map(({ prefix, max }, i) => {
+            const at = (className: string) => (prefix ? `${prefix}:${className}` : className);
+            return classNames(
+                i > 0 && at(`[&>*:nth-child(n+${steps[i - 1].max + 1})]:block`),
+                i < steps.length - 1 && at(`[&>*:nth-child(n+${max + 1})]:hidden`)
+            );
+        })
+    );
 }

@@ -37,13 +37,21 @@ const syncCardForumMutex = new Mutex();
  */
 export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
     const release = await syncCardForumMutex.acquire();
+    // Created and started before the context resolves, so a context failure still fails them properly.
+    const emitters = new Map(cards.map((card) => [card, createSyncEmitter("card", "discord", card)]));
+    emitters.forEach((emitter) => emitter.start());
     try {
         const context = await getCardForumContext();
         const results: IPlaytestCard[] = [];
         for (const card of cards) {
-            results.push(await syncCardThread(card, context, forced));
+            results.push(await syncCardThread(card, context, emitters.get(card)!, forced));
+            emitters.delete(card);
         }
         return results;
+    } catch (err) {
+        // Only reached by the context resolution above - per-card failures are already handled.
+        emitters.forEach((emitter) => emitter.error("Failure"));
+        throw err;
     } finally {
         release();
     }
@@ -51,13 +59,12 @@ export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): P
 
 async function syncCardThread(
     card: IPlaytestCard,
-    context?: CardForumContext,
+    context: CardForumContext | undefined,
+    emitter: ReturnType<typeof createSyncEmitter<"card">>,
     forced: boolean = false
 ): Promise<IPlaytestCard> {
-    context = context ?? (await getCardForumContext());
-    const emitter = createSyncEmitter("card", "discord", card);
     try {
-        emitter.start();
+        context = context ?? (await getCardForumContext());
         if (forced || isMessageOutdated(card)) {
             // Drafts & Regular releases are treated differently:
             // - Draft posts a new message per revision (striking the old one) once actually outdated; a forced
@@ -614,7 +621,9 @@ export async function getThreadFor(card: IPlaytestCard) {
             logger.info(
                 `[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`
             );
-            previous = await syncCardThread(previous);
+            const emitter = createSyncEmitter("card", "discord", previous);
+            emitter.start();
+            previous = await syncCardThread(previous, undefined, emitter);
         }
 
         target = previous;

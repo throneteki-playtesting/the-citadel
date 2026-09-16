@@ -6,7 +6,6 @@ import {
     faCheck,
     faEye,
     faEyeSlash,
-    faFileLines,
     faThumbsDown,
     faThumbsUp,
     IconDefinition
@@ -162,22 +161,6 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                 }}
                 onPointerDown={(e) => e.stopPropagation()}
             >
-                {suggestion.draft && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faFileLines} /> Draft
-                                </div>
-                                <div className="text-xs">Still being worked on - not yet submitted.</div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 animate-pulse">
-                            <FontAwesomeIcon icon={faFileLines} className="text-lg text-primary" />
-                        </div>
-                    </TouchTooltip>
-                )}
                 {approvedBy && (
                     <TouchTooltip
                         content={

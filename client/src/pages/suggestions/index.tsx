@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from "react";
+import classNames from "classnames";
 import Reveal from "../../components/reveal";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { DeepPartial } from "common/types";
@@ -6,8 +7,7 @@ import { ICardSuggestion } from "common/models/cards";
 import { useGetSuggestionsFeedQuery } from "../../api";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import { addToast, Skeleton } from "@heroui/react";
-import HeaderActions from "../../components/actions/headerActions";
+import { addToast, Badge, Button, Skeleton } from "@heroui/react";
 import SectionTitle from "../../components/sectionTitle";
 import CardGrid from "../../components/cardGrid";
 import StatsGrid from "../../components/statsGrid";
@@ -16,6 +16,7 @@ import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvi
 import { ScopeParams, useSearchParamsScope } from "../../hooks/useSearchParamsScope";
 import SuggestionCardLink from "./suggestionCardLink";
 import SuggestionsGrid from "./suggestionsGrid";
+import MyDraftsModal from "./myDraftsModal";
 import { SortOption } from "./suggestionSortOptions";
 import SuggestionSpread from "./suggestionSpread";
 import SuggestionApprovalPanel from "./suggestionApprovalPanel";
@@ -24,8 +25,9 @@ import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components
 import usePageTitle from "../../hooks/usePageTitle";
 import { usePermission } from "../../hooks/usePermission";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowRight, faPlus } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faFileLines, faLightbulb } from "@fortawesome/free-solid-svg-icons";
 import LoadingCard from "../../components/loadingCard";
+import { rowCapClasses } from "../../utils";
 // Every key the "all suggestions" scope might write - declared up front so a cleared field's key
 // is dropped rather than left stale, same convention projectContent.tsx/projectArtworks.tsx use.
 const URL_OWNED_KEYS = [
@@ -51,7 +53,6 @@ const URL_OWNED_KEYS = [
     "traits",
     "mine",
     "byUsers",
-    "draftFilter",
     "approvedFilter",
     "myReactions",
     "rewardTypes",
@@ -59,6 +60,14 @@ const URL_OWNED_KEYS = [
     "abilityTypes",
     "iconic"
 ];
+
+// Caps the Recent Suggestions rail at 2 rows per breakpoint (grid-cols-2/3/4/5) - see the grid below.
+const RECENT_RAIL_ROW_CAP_CLASSES = rowCapClasses([
+    { max: 4 },
+    { prefix: "sm", max: 6 },
+    { prefix: "md", max: 8 },
+    { prefix: "lg", max: 10 }
+]);
 
 export default function Suggestions() {
     return (
@@ -73,6 +82,8 @@ function SuggestionsContent() {
     const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
     const { data: feed, isLoading } = useGetSuggestionsFeedQuery();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
+    const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+    const myDraftsCount = feed?.stats.myDrafts;
 
     // A draft's own detail page has nowhere to render itself - it redirects here with the already-
     // loaded suggestion via router state, consumed once and cleared so a refresh can't reopen it.
@@ -133,147 +144,212 @@ function SuggestionsContent() {
     let sectionIndex = 0;
 
     return (
-        <SlidingPages currentPage={isBrowsingAll ? 2 : 1}>
-            <div className="flex flex-col gap-5">
-                <div className="px-4 md:px-0 space-y-2 md:space-y-4">
-                    <div className="flex flex-row items-end justify-between gap-6">
-                        <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
-                            Suggestions
-                        </div>
-                        <HeaderActions
-                            items={[
-                                canCreate && {
-                                    key: "create",
-                                    title: "Create Suggestion",
-                                    icon: <FontAwesomeIcon icon={faPlus} size="xl" />,
-                                    color: "primary",
-                                    onPress: () => setEditing({})
-                                }
-                            ]}
-                        />
-                    </div>
-                    <div className="flex items-center justify-between gap-2 py-1">
-                        <div className="text-sm lg:text-medium text-foreground/70 italic">
-                            Card designs proposed by the design team.
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => openAll()}
-                            className="text-xs sm:text-sm text-primary shrink-0 whitespace-nowrap cursor-pointer hover:brightness-125"
-                        >
-                            All Suggestions <FontAwesomeIcon icon={faArrowRight} />
-                        </button>
+        <div className="flex flex-col gap-5">
+            <div className="px-4 md:px-0 space-y-2 md:space-y-4">
+                <div className="flex flex-row items-end justify-between gap-6">
+                    <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
+                        Suggestions
                     </div>
                 </div>
+                <div className="flex items-center justify-between gap-2 py-1">
+                    <div className="text-sm lg:text-medium text-foreground/70 italic">
+                        Card designs proposed by the design team.
+                    </div>
+                    <div className="flex items-center gap-3">
+                        {canCreate && (
+                            <Button
+                                className="hidden sm:inline-flex"
+                                size="sm"
+                                color="primary"
+                                startContent={<FontAwesomeIcon icon={faLightbulb} />}
+                                onPress={() => setEditing({})}
+                            >
+                                Create Suggestion
+                            </Button>
+                        )}
+                        {canCreate && (
+                            <Badge
+                                content={myDraftsCount}
+                                color="primary"
+                                isInvisible={!myDraftsCount}
+                                showOutline={false}
+                                className="hidden sm:flex"
+                            >
+                                <Button
+                                    className="hidden sm:inline-flex"
+                                    size="sm"
+                                    variant="flat"
+                                    startContent={<FontAwesomeIcon icon={faFileLines} />}
+                                    isDisabled={!myDraftsCount}
+                                    onPress={() => setIsDraftsOpen(true)}
+                                >
+                                    My Drafts
+                                </Button>
+                            </Badge>
+                        )}
+                    </div>
+                </div>
+            </div>
 
-                <Reveal index={sectionIndex++}>
-                    <StatsGrid className="border border-content3 drop-shadow-lg">
-                        <StatCard
-                            label="Active Suggestions"
-                            value={feed?.stats.total}
-                            footer={feed && `across ${feed.stats.totalSubmitters} users`}
-                            isLoading={isLoading}
-                            onPress={() => openAll()}
-                        />
-                        <StatCard
-                            label="Awaiting Approval"
-                            value={feed?.stats.awaitingApproval}
-                            footer="across all liked suggestions"
-                            isLoading={isLoading}
-                            onPress={() => openAll({ filter: { approvedFilter: "awaiting" }, sort: "updated" })}
-                        />
-                        <StatCard
-                            label="New Suggestions"
-                            value={feed?.stats.unreacted}
-                            footer="you haven't reacted to yet"
-                            isLoading={isLoading}
-                            onPress={() => openAll({ filter: { unseen: true }, sort: "updated" })}
-                        />
-                        <StatCard
-                            label="My Suggestions"
-                            value={feed?.stats.mine}
-                            footer={feed && `with ${feed.stats.myDrafts} as drafts`}
-                            isLoading={isLoading}
-                            onPress={() => openAll({ filter: { mine: true }, sort: "draft" })}
-                        />
-                    </StatsGrid>
-                </Reveal>
-
-                {(isLoading || !!feed?.recent.length) && (
+            <SlidingPages currentPage={isBrowsingAll ? 2 : 1}>
+                <div className="flex flex-col gap-5">
                     <Reveal index={sectionIndex++}>
-                        <div className="flex flex-col gap-2">
-                            <div className="px-4 md:px-0 flex items-center justify-between gap-2">
-                                <SectionTitle size="sm" indent="xs" className="flex-1 min-w-0">
-                                    Recent Suggestions
-                                </SectionTitle>
-                                {!isLoading && (
-                                    <button
-                                        type="button"
-                                        onClick={() => openAll({ sort: "updated" })}
-                                        className="text-xs text-primary shrink-0 whitespace-nowrap cursor-pointer hover:brightness-125"
+                        <StatsGrid className="border border-content3 drop-shadow-lg">
+                            <StatCard
+                                label="Active Suggestions"
+                                value={feed?.stats.total}
+                                footer={feed && `across ${feed.stats.totalSubmitters} users`}
+                                isLoading={isLoading}
+                                onPress={() => openAll()}
+                            />
+                            <StatCard
+                                label="Awaiting Approval"
+                                value={feed?.stats.awaitingApproval}
+                                footer="across all liked suggestions"
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { approvedFilter: "awaiting" }, sort: "updated" })}
+                            />
+                            <StatCard
+                                label="New Suggestions"
+                                value={feed?.stats.unreacted}
+                                footer="you haven't reacted to yet"
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { unseen: true }, sort: "updated" })}
+                            />
+                            <StatCard
+                                label="My Suggestions"
+                                value={feed?.stats.mine}
+                                footer={feed && `with ${feed.stats.myDrafts} as drafts`}
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { mine: true }, sort: "updated" })}
+                            />
+                        </StatsGrid>
+                    </Reveal>
+
+                    {(isLoading || !!feed?.recent.length) && (
+                        <Reveal index={sectionIndex++}>
+                            <div className="flex flex-col gap-2">
+                                <div className="px-4 md:px-0 flex items-center justify-between gap-2">
+                                    <SectionTitle size="sm" indent="xs" className="flex-1 min-w-0">
+                                        Recent Suggestions
+                                    </SectionTitle>
+                                    {!isLoading && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openAll({ sort: "updated" })}
+                                            className="text-xs sm:text-sm text-primary shrink-0 whitespace-nowrap cursor-pointer hover:brightness-125"
+                                        >
+                                            <span className="sm:hidden">See all</span>
+                                            <span className="hidden sm:inline">See all suggestions</span>{" "}
+                                            <FontAwesomeIcon icon={faArrowRight} />
+                                        </button>
+                                    )}
+                                </div>
+                                {isLoading ? (
+                                    <div
+                                        className={classNames(
+                                            "grid gap-1 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
+                                            RECENT_RAIL_ROW_CAP_CLASSES
+                                        )}
                                     >
-                                        See all <FontAwesomeIcon icon={faArrowRight} />
-                                    </button>
+                                        {Array.from({ length: 10 }).map((_, index) => (
+                                            <LoadingCard key={index} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <CardGrid
+                                        size="md"
+                                        cards={feed?.recent ?? []}
+                                        className={RECENT_RAIL_ROW_CAP_CLASSES}
+                                    >
+                                        {(suggestion) => (
+                                            <SuggestionCardLink key={suggestion.id} suggestion={suggestion} />
+                                        )}
+                                    </CardGrid>
                                 )}
                             </div>
-                            {/* Caps the rail at 2 rows, no JS - grid-auto-rows collapses any further
-                                row to 0 height, and overflow-hidden clips whatever spills into it. */}
-                            {isLoading ? (
-                                <div className="grid gap-1 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 grid-rows-[repeat(2,auto)] auto-rows-[0px] overflow-hidden">
-                                    {Array.from({ length: 10 }).map((_, index) => (
-                                        <LoadingCard key={index} />
-                                    ))}
-                                </div>
-                            ) : (
-                                <CardGrid
-                                    size="md"
-                                    cards={feed?.recent ?? []}
-                                    className="grid-rows-[repeat(2,auto)] auto-rows-[0px] overflow-hidden"
-                                >
-                                    {(suggestion) => <SuggestionCardLink key={suggestion.id} suggestion={suggestion} />}
-                                </CardGrid>
-                            )}
+                        </Reveal>
+                    )}
+
+                    <Reveal index={sectionIndex++} className="flex flex-col md:flex-row gap-2 md:gap-4">
+                        <div className="md:flex-1 min-w-0 space-y-2">
+                            <SuggestionSpread
+                                onSelect={(preset) => openAll({ filter: { ...EMPTY_SUGGESTION_FILTER, ...preset } })}
+                            />
                         </div>
+                        <SuggestionApprovalPanel className="md:flex-1 min-w-0 flex flex-col gap-2" />
                     </Reveal>
+                </div>
+                {hasOpenedAll ? (
+                    <SuggestionsGrid
+                        animationKey={browseSessionKey}
+                        filter={filter}
+                        onFilterChange={setFilter}
+                        search={search}
+                        onSearchChange={setSearch}
+                        sortBy={sortBy}
+                        onSortChange={setSortBy}
+                        onBack={() => setIsBrowsingAll(false)}
+                    />
+                ) : (
+                    <div />
                 )}
+            </SlidingPages>
 
-                <Reveal index={sectionIndex++} className="flex flex-col md:flex-row gap-2 md:gap-4">
-                    <div className="md:flex-1 min-w-0 space-y-2">
-                        <SuggestionSpread
-                            onSelect={(preset) => openAll({ filter: { ...EMPTY_SUGGESTION_FILTER, ...preset } })}
-                        />
-                    </div>
-                    <SuggestionApprovalPanel className="md:flex-1 min-w-0 flex flex-col gap-2" />
-                </Reveal>
+            <EditSuggestionModal
+                isOpen={!!editing}
+                suggestion={editing}
+                onClose={() => setEditing(undefined)}
+                onSave={(suggestion) =>
+                    addToast({
+                        title: "Successfully saved",
+                        color: "success",
+                        description: `"${suggestion.card.name}" suggestion has been saved`
+                    })
+                }
+                // Reopens "My Drafts" behind the now-closed editor when it was an existing draft.
+                onReturnToDrafts={() => setIsDraftsOpen(true)}
+            />
 
-                <EditSuggestionModal
-                    isOpen={!!editing}
-                    suggestion={editing}
-                    onClose={() => setEditing(undefined)}
-                    onSave={(suggestion) =>
-                        addToast({
-                            title: "Successfully saved",
-                            color: "success",
-                            description: `"${suggestion.card.name}" suggestion has been saved`
-                        })
-                    }
-                />
-            </div>
-            {hasOpenedAll ? (
-                <SuggestionsGrid
-                    animationKey={browseSessionKey}
-                    filter={filter}
-                    onFilterChange={setFilter}
-                    search={search}
-                    onSearchChange={setSearch}
-                    sortBy={sortBy}
-                    onSortChange={setSortBy}
-                    onBack={() => setIsBrowsingAll(false)}
-                />
-            ) : (
-                <div />
+            <MyDraftsModal
+                isOpen={isDraftsOpen}
+                onClose={() => setIsDraftsOpen(false)}
+                onSelectDraft={(draft) => setEditing(draft)}
+            />
+
+            {canCreate && !!myDraftsCount && (
+                <div className="sm:hidden fixed bottom-6 right-20 z-20">
+                    <Badge content={myDraftsCount} color="primary" showOutline={false}>
+                        <Button
+                            isIconOnly
+                            radius="full"
+                            size="lg"
+                            color="default"
+                            className="shadow-lg"
+                            aria-label="My Drafts"
+                            onPress={() => setIsDraftsOpen(true)}
+                        >
+                            <FontAwesomeIcon icon={faFileLines} />
+                        </Button>
+                    </Badge>
+                </div>
             )}
-        </SlidingPages>
+            {canCreate && (
+                <div className="sm:hidden fixed bottom-6 right-4 z-20">
+                    <Button
+                        isIconOnly
+                        radius="full"
+                        size="lg"
+                        color="primary"
+                        className="shadow-lg"
+                        aria-label="Create Suggestion"
+                        onPress={() => setEditing({})}
+                    >
+                        <FontAwesomeIcon icon={faLightbulb} />
+                    </Button>
+                </div>
+            )}
+        </div>
     );
 }
 

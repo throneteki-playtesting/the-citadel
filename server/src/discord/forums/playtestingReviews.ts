@@ -26,13 +26,21 @@ const syncReviewForumMutex = new Mutex();
 
 export async function syncReviewForum(reviews: IPlaytestReview[], forced?: boolean): Promise<IPlaytestReview[]> {
     const release = await syncReviewForumMutex.acquire();
+    // Created and started before the context resolves, so a context failure still fails them properly.
+    const emitters = new Map(reviews.map((review) => [review, createSyncEmitter("review", "discord", review)]));
+    emitters.forEach((emitter) => emitter.start());
     try {
         const context = await getPlaytestingReviewContext();
         const results: IPlaytestReview[] = [];
         for (const review of reviews) {
-            results.push(await syncReviewThread(review, context, forced));
+            results.push(await syncReviewThread(review, context, emitters.get(review)!, forced));
+            emitters.delete(review);
         }
         return results;
+    } catch (err) {
+        // Only reached by the context resolution above - per-review failures are already handled.
+        emitters.forEach((emitter) => emitter.error("Failure"));
+        throw err;
     } finally {
         release();
     }
@@ -40,12 +48,12 @@ export async function syncReviewForum(reviews: IPlaytestReview[], forced?: boole
 
 async function syncReviewThread(
     review: IPlaytestReview,
-    context?: PlaytestingReviewContext,
+    context: PlaytestingReviewContext | undefined,
+    emitter: ReturnType<typeof createSyncEmitter<"review">>,
     forced: boolean = false
 ): Promise<IPlaytestReview> {
-    context = context ?? (await getPlaytestingReviewContext());
-    const emitter = createSyncEmitter("review", "discord", review);
     try {
+        context = context ?? (await getPlaytestingReviewContext());
         if (isMessageOutdated(review)) {
             emitter.progress("Syncing");
             logger.info(

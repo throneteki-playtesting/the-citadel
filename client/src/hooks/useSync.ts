@@ -21,7 +21,8 @@ const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     card: { image: {}, discord: {}, github: {} },
     review: { discord: {} },
     playtestingUpdate: { github: { code: {}, data: {} }, discord: {} },
-    release: { github: { data: {} } }
+    release: { github: { data: {} } },
+    suggestion: { discord: {} }
 };
 
 // One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }
@@ -149,4 +150,7 @@ export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number; 
 export function useReleaseSync(release?: { project: number; code: string }) {
     const id = release ? `${release.project}|${release.code}` : undefined;
     return useSyncListener("release", id);
+}
+export function useSuggestionSync(suggestion?: { id: string }) {
+    return useSyncListener("suggestion", suggestion?.id);
 }

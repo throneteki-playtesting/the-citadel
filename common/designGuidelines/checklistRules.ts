@@ -1,4 +1,10 @@
-import { ChecklistRuleId, ICard, IDerivedFields, ISuggestionQuestions } from "../models/cards";
+import {
+    ChecklistRuleId,
+    ICard,
+    IDerivedFields,
+    ISuggestionQuestions,
+    plotStats as PLOT_STAT_KEYS
+} from "../models/cards";
 import { computeStrength } from "./computeStrength";
 import { computePlotBudget } from "./computePlotBudget";
 import { REWARD_TYPES } from "./rewardTypes";
@@ -144,30 +150,37 @@ export function checklistRules(input: {
     }
 
     if (card.type === "plot") {
-        if (plotMedian === undefined) {
+        const stats = card.plotStats;
+        const hasAllStats = !!stats && PLOT_STAT_KEYS.every((key) => stats[key] !== undefined);
+        const tooltip = "Weighted by each stat's usefulness, compared against other plots.";
+
+        if (!hasAllStats) {
             results.push({
                 rule: "plotBudget",
                 status: "indeterminate",
-                label: "Plot stat total stays near the pool median",
-                description: "Cannot be evaluated until the ThronesDB plot pool median is available."
+                label: "Plot stats are balanced",
+                description: "Cannot be evaluated until all four plot stats have been filled in.",
+                tooltip
             });
-        } else if (card.plotStats) {
-            const budget = computePlotBudget({
-                income: typeof card.plotStats.income === "number" ? card.plotStats.income : 0,
-                initiative: typeof card.plotStats.initiative === "number" ? card.plotStats.initiative : 0,
-                claim: typeof card.plotStats.claim === "number" ? card.plotStats.claim : 0,
-                reserve: typeof card.plotStats.reserve === "number" ? card.plotStats.reserve : 0
-            });
-            const warn = budget > plotMedian * 1.3;
-            const overBy = Math.round(((budget - plotMedian) / plotMedian) * 100);
+        } else if (plotMedian === undefined) {
             results.push({
                 rule: "plotBudget",
-                status: warn ? "warn" : "pass",
-                label: "Plot stat total stays near the pool median",
-                description: warn
-                    ? `This plot's stat total (${budget}) is ${overBy}% over the pool median (${plotMedian}).`
-                    : `This plot's stat total (${budget}) stays within the pool median (${plotMedian}).`,
-                tooltip: "Stat total = income*2 + initiative + claim*5 + reserve."
+                status: "indeterminate",
+                label: "Plot stats are balanced",
+                description: "Cannot be evaluated until existing plots' stats are available to compare against.",
+                tooltip
+            });
+        } else {
+            const budget = computePlotBudget(stats);
+            const pass = budget <= plotMedian;
+            results.push({
+                rule: "plotBudget",
+                status: pass ? "pass" : "warn",
+                label: "Plot stats are balanced",
+                description: pass
+                    ? `This plot's weighted stat score (${budget}) is equal to or lower than the typical score for existing plots (${plotMedian}).`
+                    : `This plot's weighted stat score (${budget}) is higher than the typical score for existing plots (${plotMedian}).`,
+                tooltip
             });
         }
     }

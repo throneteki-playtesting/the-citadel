@@ -78,7 +78,6 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
     set("mine", filter.mine ? "true" : undefined);
     set("unseen", filter.unseen ? "true" : undefined);
     set("byUsers", encodeArray(filter.byUsers));
-    set("draftFilter", filter.draftFilter);
     set("approvedFilter", filter.approvedFilter);
     set("myReactions", encodeArray(filter.myReactions));
     set("rewardTypes", encodeArray(filter.rewardTypes));
@@ -111,12 +110,10 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     const loyalRaw = params.get("loyal");
     const uniqueRaw = params.get("unique");
     const iconicRaw = params.get("iconic");
-    const draftFilterRaw = params.get("draftFilter");
     const approvedFilterRaw = params.get("approvedFilter");
     const myReactions = decodeArray(params.get("myReactions")).filter(
         (entry): entry is ReactionType => entry === "like" || entry === "dislike" || entry === "ignore"
     );
-    const asDraftFilter = (raw: string | null) => (raw === "only" || raw === "none" ? raw : undefined);
     const asApprovalFilter = (raw: string | null) =>
         raw === "awaiting" || raw === "only" || raw === "none" ? raw : undefined;
 
@@ -139,7 +136,6 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
         mine: params.get("mine") === "true" ? true : undefined,
         unseen: params.get("unseen") === "true" ? true : undefined,
         byUsers: byUsers.length > 0 ? byUsers : undefined,
-        draftFilter: asDraftFilter(draftFilterRaw),
         approvedFilter: asApprovalFilter(approvedFilterRaw),
         myReactions: myReactions.length > 0 ? myReactions : undefined,
         rewardTypes: rewardTypes.length > 0 ? rewardTypes : undefined,

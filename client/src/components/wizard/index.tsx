@@ -115,8 +115,8 @@ export function Wizard<T>({
     );
 
     const validate = useCallback(
-        (data: Record<string, any>, partial = false) => {
-            const { error } = schema.validate(data, {
+        (data: Record<string, any>, partial = false, schemaOverride?: Joi.Schema) => {
+            const { error } = (schemaOverride ?? schema).validate(data, {
                 allowUnknown: true,
                 abortEarly: false,
                 errors: { label: false }
@@ -197,6 +197,13 @@ export function Wizard<T>({
         setCurrentPage((prev) => Math.max(prev - 1, 0));
     }, [setCurrentPage]);
 
+    // For callers outside the page/Next flow (eg. a "Save Draft" button) that still want the same
+    // client-first validation, against a schema of their own choosing.
+    const validateForm = useCallback(
+        (data: Record<string, any>, schemaOverride?: Joi.Schema) => validate(data, false, schemaOverride),
+        [validate]
+    );
+
     const contextValue = useMemo<WizardContextProps<T>>(
         () => ({
             id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
@@ -216,7 +223,8 @@ export function Wizard<T>({
             fieldMeta,
             setFieldMeta,
             onPageSubmit,
-            onPageBack
+            onPageBack,
+            validateForm
         }),
         [
             currentPage,
@@ -232,7 +240,8 @@ export function Wizard<T>({
             isValidationError,
             fieldMeta,
             onPageSubmit,
-            onPageBack
+            onPageBack,
+            validateForm
         ]
     );
 

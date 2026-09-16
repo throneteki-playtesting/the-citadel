@@ -4,6 +4,7 @@ import { isEnvironment } from "@/env";
 import { THRONESDB_URL } from "common/utils";
 import { ILabeledCard } from "common/models/cards";
 import { Filter, matchesFilter, SingleOrArray, Sort } from "common/types";
+import { computePlotPoolMedian } from "common/designGuidelines/computePlotBudget";
 import cron from "node-cron";
 
 const POOL_REDIS_KEY = "thronesdb:cardPool";
@@ -106,6 +107,19 @@ class ThronesDbCardPoolService {
 
         const start = (page - 1) * perPage;
         return { items: matched.slice(start, start + perPage), total: matched.length };
+    }
+
+    /** The typical plot's stat total across the whole pool - checklistRules() compares a new plot
+     *  suggestion's own total against this. Undefined only while the pool hasn't loaded any plots yet. */
+    public async getPlotMedian(): Promise<number | undefined> {
+        const pool = await this.getPool();
+        return computePlotPoolMedian(pool);
+    }
+
+    // Only plots have a budget to compare against - checklistRules() takes plotMedian as undefined
+    // for every other card type.
+    public async getPlotMedianForCardType(cardType: string): Promise<number | undefined> {
+        return cardType === "plot" ? this.getPlotMedian() : undefined;
     }
 }
 

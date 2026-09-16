@@ -62,7 +62,8 @@ const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = 
     card: (card) => `${card.project}|${card.number}|${card.version}`,
     review: (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`,
-    release: (release) => `${release.project}|${release.code}`
+    release: (release) => `${release.project}|${release.code}`,
+    suggestion: (suggestion) => suggestion.id
 };
 
 export function createSyncEmitter<K extends SyncType>(

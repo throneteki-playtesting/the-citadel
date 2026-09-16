@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { DeepPartial } from "common/types";
+import Joi from "joi";
 import { createContext, useContext } from "react";
 
 export const WizardContext = createContext<WizardContextProps<any> | null>(null);
@@ -91,4 +92,7 @@ export type WizardContextProps<T> = {
     setFieldMeta: React.Dispatch<React.SetStateAction<Record<string, WizardFieldMeta>>>;
     onPageSubmit: (data: Record<string, any>) => void;
     onPageBack: () => void;
+    /** Full-object validation against an arbitrary schema, outside the page-by-page Next/Submit flow -
+     *  same field-error mapping either way, just not scoped to "what did this page just submit". */
+    validateForm: (data: Record<string, any>, schemaOverride?: Joi.Schema) => boolean;
 };

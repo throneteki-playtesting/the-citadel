@@ -4,7 +4,7 @@ import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
 import { canViewSuggestion, ICardSuggestion, reactionTypes, suggestionReactionBlockReason } from "common/models/cards";
-import { dataService } from "@/services";
+import { dataService, thronesDbCardPoolService } from "@/services";
 import { hasPermission, validate } from "common/utils";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
@@ -21,6 +21,7 @@ import { deriveFields } from "common/designGuidelines/deriveFields";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { ApiFieldError } from "@/types";
+import { syncSuggestionForum } from "@/discord/forums/suggestionForum";
 
 const router = express.Router();
 
@@ -59,8 +60,8 @@ const restrictArchivedVisibility = asyncHandler<unknown, unknown, unknown, IGetR
     }
 );
 
-// Applies canViewSuggestion's rule to every read - "not a draft, OR my own draft" is an OR, so
-// (unlike restrictArchivedVisibility) each existing filter branch expands into up to two.
+// Applies canViewSuggestion's rule to every read - "not a draft, OR my own draft" is an OR, so each
+// existing filter branch expands into up to two. Used only by the single-suggestion route (GET /:id).
 const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(
     async (req, _res, next) => {
         const { principal } = getContext();
@@ -73,6 +74,24 @@ const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequ
                 visible.push({ ...branch, draft: true, user: { discordId } });
             }
             return visible;
+        });
+        next();
+    }
+);
+
+// GET / (list) never mixes drafts into the general pool, except a branch explicitly asking
+// `draft: true` (the "My Drafts" modal) - and even then, narrowed to the caller's own.
+const restrictListDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(
+    async (req, _res, next) => {
+        const { principal } = getContext();
+        const discordId = "discordId" in principal ? principal.discordId : undefined;
+
+        const branches = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter ?? {}];
+        req.query.filter = branches.map((branch): Filter<ICardSuggestion> => {
+            if (branch.draft === true && discordId) {
+                return { ...branch, draft: true, user: { discordId } };
+            }
+            return { ...branch, draft: false };
         });
         next();
     }
@@ -122,12 +141,14 @@ function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
 
 // Recomputes checklistRules() server-side and requires justification for every rule failing - not
 // declared in the Joi schema, since that depends on card/questions/derived/pivotPoints together.
-function checklistJustificationErrors(suggestion: ICardSuggestion): ApiFieldError[] {
+async function checklistJustificationErrors(suggestion: ICardSuggestion): Promise<ApiFieldError[]> {
+    const plotMedian = await thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type);
     const results = checklistRules({
         card: suggestion.card,
         questions: suggestion.questions,
         derived: suggestion.derived,
-        pivotPoints: suggestion.pivotPoints ?? []
+        pivotPoints: suggestion.pivotPoints ?? [],
+        plotMedian
     });
 
     return results
@@ -183,7 +204,7 @@ router.get(
         [Segments.QUERY]: getQuerySchema
     }),
     restrictArchivedVisibility,
-    restrictDraftVisibility,
+    restrictListDraftVisibility,
     asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
@@ -245,6 +266,17 @@ router.get(
                 myDrafts
             }
         });
+    })
+);
+
+// Backs checklistRules()'s plot budget rule - reads the already-cached ThronesDB pool rather than
+// hitting ThronesDB itself. Declared before /:id, or the param route would swallow it as a suggestion id.
+router.get(
+    "/stats/plot-median",
+    validateRequest(Permission.READ_SUGGESTIONS),
+    asyncHandler(async (_req, res) => {
+        const median = await thronesDbCardPoolService.getPlotMedian();
+        res.status(StatusCodes.OK).json({ median });
     })
 );
 
@@ -347,7 +379,7 @@ router.put(
         let suggestion = req.body;
         suggestion.id = id;
 
-        const fields = checklistJustificationErrors(suggestion);
+        const fields = await checklistJustificationErrors(suggestion);
         if (fields.length > 0) {
             throw new ApiErrorResponse(
                 StatusCodes.BAD_REQUEST,
@@ -479,6 +511,36 @@ router.delete(
             "<principal> unapproved suggestion <suggestion>",
             { context: { suggestion: cardSnapshot(id, suggestion.card) } }
         );
+
+        res.status(StatusCodes.OK).json(suggestion);
+    })
+);
+
+// Manual re-sync trigger, for when an automatic sync failed or a forced refresh is wanted. Mirrors
+// cards.ts's own `/sync/:type` route shape, minus `:type` since suggestions only sync to Discord.
+router.post(
+    "/:id/sync/discord",
+    validateRequest(Permission.SYNC_SUGGESTIONS_DISCORD),
+    celebrate({
+        [Segments.PARAMS]: { id: Joi.string().required() },
+        [Segments.QUERY]: { forced: Joi.boolean() }
+    }),
+    asyncHandler<{ id: string }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
+        const { id } = req.params;
+        const { forced } = req.query;
+        let [suggestion] = await dataService.suggestions.read({ id });
+        if (!suggestion) {
+            notFoundSuggestion(id);
+        }
+        if (suggestion.draft) {
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Validation Error",
+                "This suggestion is still a draft and has nothing to sync"
+            );
+        }
+
+        [suggestion] = await syncSuggestionForum([suggestion], forced);
 
         res.status(StatusCodes.OK).json(suggestion);
     })

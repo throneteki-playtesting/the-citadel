@@ -4,6 +4,7 @@ import {
     useApproveSuggestionMutation,
     useClearSuggestionReactionMutation,
     useDeleteSuggestionMutation,
+    useGetSuggestionPlotMedianQuery,
     useGetSuggestionQuery,
     useGetUserQuery,
     useReactToSuggestionMutation,
@@ -49,9 +50,11 @@ import {
     faXmarkCircle,
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
-import { faDiscord as faDiscordBrand } from "@fortawesome/free-brands-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import DiscordSuggestionStatus from "../../components/status/discordSuggestionStatus";
+import { useDiscordSuggestionStatus } from "../../components/status/useDiscordSuggestionStatus";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../hooks/useAuth";
 import { User } from "common/models/auth";
@@ -59,6 +62,7 @@ import { showApiErrorToast } from "../../api/errors";
 import { downloadBlob } from "../../utils";
 import usePageTitle from "../../hooks/usePageTitle";
 import EditSuggestionModal from "./editSuggestionModal";
+import ConfirmModal from "../../components/confirmModal";
 import { Code, ICardSuggestion, ILabeledCard, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import { DeepPartial } from "common/types";
 import { checklistRules } from "common/designGuidelines/checklistRules";
@@ -383,10 +387,13 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
 
     const bothPresent = comparableCards.length > 0 && combosWith.length > 0;
     const halfWidth = (containerWidth - GROUP_GAP_PX) / 2;
+    // "Side by side" only decides the flex direction; a lone group always gets the full row, same as
+    // two groups that don't fit and end up stacked instead.
     const sideBySide =
         !bothPresent ||
         (groupRowWidthPx(comparableCards, cardsByCode) <= halfWidth &&
             groupRowWidthPx(combosWith, cardsByCode) <= halfWidth);
+    const fullWidth = !bothPresent || !sideBySide;
 
     return (
         <div ref={containerRef} className="border border-content3 bg-content1 p-3">
@@ -398,7 +405,7 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
                         codes={comparableCards}
                         cardsByCode={cardsByCode}
                         isLoading={isLoading}
-                        fullWidth={!sideBySide}
+                        fullWidth={fullWidth}
                     />
                 )}
                 {combosWith.length > 0 && (
@@ -408,7 +415,7 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
                         codes={combosWith}
                         cardsByCode={cardsByCode}
                         isLoading={isLoading}
-                        fullWidth={!sideBySide}
+                        fullWidth={fullWidth}
                     />
                 )}
             </div>
@@ -428,6 +435,8 @@ const SuggestionDetail = () => {
     const [approveSuggestion, { isLoading: isApproving }] = useApproveSuggestionMutation();
     const [unapproveSuggestion, { isLoading: isUnapproving }] = useUnapproveSuggestionMutation();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
+    const [isConfirmingApprove, setIsConfirmingApprove] = useState(false);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const { user } = useAuth();
 
     usePageTitle(suggestion ? `Suggestion - ${suggestion.card.name}` : "Suggestion");
@@ -451,6 +460,11 @@ const SuggestionDetail = () => {
 
     const approvedBy = suggestion?._metadata?.engagement?.approvedBy;
     const { data: approver } = useGetUserQuery({ discordId: approvedBy as string }, { skip: !approvedBy });
+    const { data: discordStatus } = useDiscordSuggestionStatus(id ?? "");
+    // Only fetched for a plot - checklistRules() ignores it entirely for every other type.
+    const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
+        skip: suggestion?.card.type !== "plot"
+    });
 
     if (!id) {
         return <Navigate to="/suggestions" />;
@@ -480,7 +494,8 @@ const SuggestionDetail = () => {
         card: suggestion.card,
         questions: suggestion.questions,
         derived: suggestion.derived,
-        pivotPoints: suggestion.pivotPoints
+        pivotPoints: suggestion.pivotPoints,
+        plotMedian: plotPoolMedian?.median
     });
 
     const onExportPNG = async () => {
@@ -491,9 +506,10 @@ const SuggestionDetail = () => {
             showApiErrorToast(err, { title: "Failed to Download" });
         }
     };
-    const onDelete = async () => {
+    const doDelete = async () => {
         try {
             await deleteSuggestion({ id: suggestion.id! }).unwrap();
+            setIsConfirmingDelete(false);
             addToast({
                 title: "Successfully deleted",
                 color: "success",
@@ -529,17 +545,34 @@ const SuggestionDetail = () => {
             showApiErrorToast(err, { title: "Failed to React" });
         }
     };
+    const likedBy = Object.entries(reactions)
+        .filter(([, entry]) => entry.type === "like")
+        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
+    const dislikedBy = Object.entries(reactions)
+        .filter(([, entry]) => entry.type === "dislike")
+        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
+
     // Approving and unapproving are deliberately not one toggle - unapproving is a real removal, not
     // something a second press on the same badge should do by accident.
-    const onApprove = async () => {
+    const doApprove = async () => {
         if (!user) {
             return;
         }
         try {
             await approveSuggestion({ id: suggestion.id!, discordId: user.discordId }).unwrap();
+            setIsConfirmingApprove(false);
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Approve" });
         }
+    };
+    // Below the recommended vote threshold, approving is an override rather than confirming what the
+    // votes already decided - worth a deliberate "are you sure" rather than a single accidental press.
+    const onApprove = () => {
+        if (likedBy.length < SUGGESTION_APPROVAL_VOTE_THRESHOLD) {
+            setIsConfirmingApprove(true);
+            return;
+        }
+        doApprove();
     };
     const onUnapprove = async () => {
         try {
@@ -548,13 +581,6 @@ const SuggestionDetail = () => {
             showApiErrorToast(err, { title: "Failed to Unapprove" });
         }
     };
-
-    const likedBy = Object.entries(reactions)
-        .filter(([, entry]) => entry.type === "like")
-        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
-    const dislikedBy = Object.entries(reactions)
-        .filter(([, entry]) => entry.type === "dislike")
-        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
 
     // Mirrors suggestionApprovalPanel.tsx's own `awaiting` filter (minus the draft check, since a
     // draft never reaches this page - see the redirect above).
@@ -621,9 +647,9 @@ const SuggestionDetail = () => {
                     <PermissionedLink
                         to="/suggestions"
                         requires={Permission.READ_SUGGESTIONS}
-                        className="order-1 text-lg sm:text-2xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
+                        className="order-1 text-base sm:text-xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
                     >
-                        <FontAwesomeIcon icon={faAngleLeft} /> Suggestions
+                        <FontAwesomeIcon icon={faAngleLeft} /> All Suggestions
                     </PermissionedLink>
                     {/* Approved is a permanent chip beside the name, not a full-width alert - stacked
                         below the name on mobile, beside it on desktop (sm:flex-row). */}
@@ -664,12 +690,6 @@ const SuggestionDetail = () => {
                                 <UserRow discordId={suggestion.updatedBy} className="shrink-0 max-w-full" />
                             </div>
                         )}
-                        {/* Desktop gets its own copy next to the reactions below - `ml-auto` right-
-                            anchors it, dropping to its own line (still right-anchored) if needed. */}
-                        <Timestamp
-                            date={suggestion.created}
-                            className="sm:hidden ml-auto shrink-0 text-xs font-sans italic text-foreground/40"
-                        />
                     </div>
                 </div>
 
@@ -690,15 +710,13 @@ const SuggestionDetail = () => {
                                 <ApproveButtonContent approved={!!approvedBy} />
                             </Button>
                         )}
+                        <div className="hidden sm:flex items-center gap-1.5">
+                            <DiscordSuggestionStatus id={suggestion.id!} isIconOnly />
+                        </div>
                         <HeaderActions
                             items={[
                                 approveActionItem,
-                                !!suggestion._metadata?.discord?.messageUrl && {
-                                    key: "discord",
-                                    title: "Discord Discussion",
-                                    icon: <FontAwesomeIcon icon={faDiscordBrand} />,
-                                    href: suggestion._metadata.discord.messageUrl
-                                },
+                                statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
                                 canRenderCard && {
                                     key: "export-png",
                                     title: "Export PNG",
@@ -731,22 +749,20 @@ const SuggestionDetail = () => {
                                     title: "Delete",
                                     icon: <FontAwesomeIcon icon={faTrash} />,
                                     color: "danger",
-                                    onPress: onDelete,
+                                    onPress: () => setIsConfirmingDelete(true),
                                     isLoading: isDeleting
                                 }
                             ]}
                         />
                     </div>
 
-                    {/* Reactions get their own row, desktop-only (mobile gets the floating bubble
-                        below). On your own suggestion Like/Dislike stay visible but blocked. */}
-                    <div className="hidden sm:flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                         <Timestamp
-                            date={suggestion.created}
+                            date={suggestion.updated}
                             className="shrink-0 text-xs font-sans italic text-foreground/40"
                         />
                         {user && (
-                            <ButtonGroup size="sm">
+                            <ButtonGroup size="sm" className="hidden sm:flex">
                                 {REACTION_OPTIONS.filter(({ type }) => type !== "ignore" || !reactionBlockReason).map(
                                     ({ type, label, icon }) => {
                                         const isActive = myReaction === type;
@@ -874,12 +890,20 @@ const SuggestionDetail = () => {
                     smoothly as an animated notice exits, so each block owns its own margin instead. */}
                 <Reveal
                     index={sectionIndex++}
-                    className="w-full lg:w-72 shrink-0 flex flex-col lg:sticky lg:top-4 lg:self-start"
+                    className={classNames(
+                        "w-full shrink-0 flex flex-col lg:sticky lg:top-4 lg:self-start",
+                        // A plot's box is a portrait's box rotated - its width is what a portrait's
+                        // height would be at the same base size, or it reads squashed into a
+                        // portrait's narrower width footprint instead of its own landscape shape.
+                        suggestion.card.type === "plot" ? "lg:w-[calc(18rem*333/240)]" : "lg:w-72"
+                    )}
                 >
                     <div
                         className={classNames(
-                            "w-full max-w-72 mx-auto lg:max-w-none lg:mx-0 self-center lg:self-stretch",
-                            suggestion.card.type === "plot" ? "aspect-[333/240]" : "aspect-[240/333]"
+                            "w-full mx-auto lg:mx-0 self-center lg:self-stretch",
+                            suggestion.card.type === "plot"
+                                ? "max-w-[calc(18rem*333/240)] aspect-[333/240]"
+                                : "max-w-72 aspect-[240/333]"
                         )}
                     >
                         <CardPreview
@@ -1054,6 +1078,27 @@ const SuggestionDetail = () => {
                         description: "Suggestion has been saved"
                     })
                 }
+            />
+
+            <ConfirmModal
+                isOpen={isConfirmingApprove}
+                isLoading={isApproving}
+                confirmColor="primary"
+                size="md"
+                title="Approve this suggestion?"
+                content={`It only has ${likedBy.length} like${likedBy.length === 1 ? "" : "s"} so far, below the recommended minimum of ${SUGGESTION_APPROVAL_VOTE_THRESHOLD}. Approve it anyway?`}
+                confirmContent="Approve"
+                onConfirm={doApprove}
+                onClose={() => setIsConfirmingApprove(false)}
+            />
+            <ConfirmModal
+                isOpen={isConfirmingDelete}
+                isLoading={isDeleting}
+                title="Delete this suggestion?"
+                content="This is permanent and cannot be undone."
+                confirmContent="Delete"
+                onConfirm={doDelete}
+                onClose={() => setIsConfirmingDelete(false)}
             />
         </div>
     );

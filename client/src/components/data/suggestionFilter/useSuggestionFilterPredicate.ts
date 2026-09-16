@@ -24,7 +24,6 @@ export default function useSuggestionFilterPredicate(
         mine,
         unseen,
         byUsers,
-        draftFilter,
         approvedFilter,
         myReactions,
         rewardTypes,
@@ -58,12 +57,6 @@ export default function useSuggestionFilterPredicate(
                 (suggestion.user.discordId === context?.currentUserId ||
                     suggestion._metadata?.engagement?.reactions?.[context?.currentUserId ?? ""])
             ) {
-                return false;
-            }
-            if (draftFilter === "only" && !suggestion.draft) {
-                return false;
-            }
-            if (draftFilter === "none" && suggestion.draft) {
                 return false;
             }
             if (approvedFilter === "only" && !suggestion._metadata?.engagement?.approvedBy) {
@@ -126,7 +119,6 @@ export default function useSuggestionFilterPredicate(
         mine,
         unseen,
         byUsers,
-        draftFilter,
         approvedFilter,
         myReactions,
         rewardTypes,

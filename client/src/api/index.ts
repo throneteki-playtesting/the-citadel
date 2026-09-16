@@ -489,6 +489,22 @@ const api = createApi({
             },
             providesTags: () => [{ type: "suggestion", id: "LIST" }]
         }),
+        // Refreshed at most daily server-side, so once fetched it's kept for the life of the tab -
+        // toggling a plot type on/off/on must never re-request it.
+        getSuggestionPlotMedian: builder.query<{ median?: number }, void>({
+            query: () => {
+                const url = buildUrl("suggestions/stats/plot-median");
+                return { url, method: "GET" };
+            },
+            keepUnusedDataFor: Infinity
+        }),
+        syncSuggestionDiscord: builder.mutation<ICardSuggestion, { id: string; forced?: boolean }>({
+            query: ({ id, forced }) => {
+                const url = buildUrl(`suggestions/${id}/sync/discord`, { forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
         // Render API
         renderImage: builder.mutation<Blob, IRenderCard>({
             queryFn: async (card, _api, _extraOptions, baseQuery) => {
@@ -1180,6 +1196,8 @@ export const {
     useApproveSuggestionMutation,
     useUnapproveSuggestionMutation,
     useGetSuggestionsFeedQuery,
+    useGetSuggestionPlotMedianQuery,
+    useSyncSuggestionDiscordMutation,
 
     useRenderImageMutation,
     useRenderPrintSheetMutation,

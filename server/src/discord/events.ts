@@ -16,6 +16,7 @@ import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
+import { onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
@@ -142,6 +143,9 @@ async function onForumMessageDeleted(forumName: string, messageUrl: string) {
             break;
         case "refinement-forum":
             await onRefinementForumMessageDeleted(messageUrl);
+            break;
+        case "suggestion-forum":
+            await onSuggestionForumMessageDeleted(messageUrl);
             break;
     }
 }

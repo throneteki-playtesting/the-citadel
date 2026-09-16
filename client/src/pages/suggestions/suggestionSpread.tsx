@@ -159,9 +159,6 @@ export default function SuggestionSpread({ onSelect }: SuggestionSpreadProps) {
                                                     onSelect({
                                                         faction: [faction],
                                                         type: [type],
-                                                        // "Only Approved" already implies non-draft, so
-                                                        // it replaces rather than stacks with it.
-                                                        draftFilter: approvedOnly ? undefined : "none",
                                                         approvedFilter: approvedOnly ? "only" : undefined
                                                     })
                                                 }

@@ -36,7 +36,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     return (
         <div
             ref={ref}
-            className={classNames("relative size-full overflow-clip", className)}
+            className={classNames("relative size-full overflow-clip transition-height", className)}
             style={{ ...style, height: measuredHeight !== undefined ? `${measuredHeight}px` : undefined }}
         >
             {Children.map(children, (page, index) => {

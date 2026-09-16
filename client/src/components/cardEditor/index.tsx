@@ -90,6 +90,17 @@ const CardEditor = ({
             delete card.loyal;
         }
 
+        if (card.type === "plot") {
+            defaults.plotStats = {
+                income: card.plotStats?.income,
+                initiative: card.plotStats?.initiative,
+                claim: card.plotStats?.claim,
+                reserve: card.plotStats?.reserve
+            };
+        } else {
+            delete card.plotStats;
+        }
+
         // An added-but-emptied field saves as absent, not as "" - the Add/Remove toggle is a display
         // concern only, tracked separately in addedFields
         if (!card.flavor?.trim()) {

@@ -17,23 +17,34 @@ const syncIssuesMutex = new Mutex();
 
 export async function syncIssues(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
     const release = await syncIssuesMutex.acquire();
+    // Created and started before the context resolves, so a context failure still fails them properly.
+    const emitters = new Map(cards.map((card) => [card, createSyncEmitter("card", "github", card)]));
+    emitters.forEach((emitter) => emitter.start());
     try {
+        const context = githubService.getContext();
         const results: IPlaytestCard[] = [];
         for (const card of cards) {
-            results.push(await syncIssue(card, forced));
+            results.push(await syncIssue(card, context, emitters.get(card)!, forced));
+            emitters.delete(card);
         }
         return results;
+    } catch (err) {
+        // Only reached by the context resolution above - per-card failures are already handled.
+        emitters.forEach((emitter) => emitter.error("Failure"));
+        throw err;
     } finally {
         release();
     }
 }
 
-async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<IPlaytestCard> {
-    const [project] = await dataService.projects.read({ number: card.project });
-    const context = githubService.getContext();
-    const emitter = createSyncEmitter("card", "github", card);
+async function syncIssue(
+    card: IPlaytestCard,
+    context: GithubContext,
+    emitter: ReturnType<typeof createSyncEmitter<"card">>,
+    forced: boolean = false
+): Promise<IPlaytestCard> {
     try {
-        emitter.start();
+        const [project] = await dataService.projects.read({ number: card.project });
         let isMissing = isIssueMissing(card);
         if (isMissing) {
             emitter.progress("Searching");
@@ -68,19 +79,19 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
         if (forced || isMissing || isIssueOutdated(card)) {
             emitter.progress("Syncing");
             if (isInitial(card)) {
-                card = await syncInitial(card, project, forced);
+                card = await syncInitial(card, project, forced, context);
             } else {
                 switch (card.note?.type) {
                     case "updated": {
-                        card = await syncUpdate(card, project, forced);
+                        card = await syncUpdate(card, project, forced, context);
                         break;
                     }
                     case "reworked": {
-                        card = await syncRework(card, project, forced);
+                        card = await syncRework(card, project, forced, context);
                         break;
                     }
                     case "replaced": {
-                        card = await syncReplace(card, project, forced);
+                        card = await syncReplace(card, project, forced, context);
                         break;
                     }
                     default: {

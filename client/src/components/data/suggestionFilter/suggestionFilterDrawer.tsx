@@ -58,7 +58,6 @@ type InternalState = {
     mine: boolean;
     unseen: boolean;
     byUsers: string[];
-    draftFilter?: "only" | "none";
     approvedFilter?: "awaiting" | "only" | "none";
     myReactions: ReactionType[];
     rewardTypes: RewardType[];
@@ -103,7 +102,6 @@ function decode(value: SuggestionFilterValue): InternalState {
         mine: value.mine === true,
         unseen: value.unseen === true,
         byUsers: value.byUsers ?? [],
-        draftFilter: value.draftFilter,
         approvedFilter: value.approvedFilter,
         myReactions: value.myReactions ?? [],
         rewardTypes: value.rewardTypes ?? [],
@@ -151,7 +149,6 @@ function compose(state: InternalState): SuggestionFilterValue {
         mine: state.mine || undefined,
         unseen: state.unseen || undefined,
         byUsers: state.byUsers.length > 0 ? state.byUsers : undefined,
-        draftFilter: state.draftFilter,
         approvedFilter: state.approvedFilter,
         myReactions: state.myReactions.length > 0 ? state.myReactions : undefined,
         rewardTypes: state.rewardTypes.length > 0 ? state.rewardTypes : undefined,
@@ -243,7 +240,7 @@ function KeyedMultiSelectField({ label, placeholder, options, value, onChange }:
 }
 
 // A ToggleButtonGroup toggles independently per key - resolving the picked key here (rather than
-// teaching it a new "exclusive" mode) gives the draft/approval rows radio-like behaviour instead.
+// teaching it a new "exclusive" mode) gives the approval row radio-like behaviour instead.
 function pickExclusive<T extends string>(next: T[], previous?: T): T | undefined {
     return next.find((key) => key !== previous);
 }
@@ -303,22 +300,6 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                     value={internal.byUsers}
                     onChange={(byUsers) => update({ byUsers })}
                 />
-                {/* Draft/approval are each their own row, mutually exclusive - selecting either clears
-                    the other, since both filter the same submission-state axis. */}
-                <ToggleButtonGroup
-                    options={[
-                        { key: "only", label: "Only Drafts" },
-                        { key: "none", label: "No Drafts" }
-                    ]}
-                    value={internal.draftFilter ? [internal.draftFilter] : []}
-                    onChange={(next) => {
-                        const draftFilter = pickExclusive(next, internal.draftFilter);
-                        update({
-                            draftFilter,
-                            approvedFilter: draftFilter !== undefined ? undefined : internal.approvedFilter
-                        });
-                    }}
-                />
                 <ToggleButtonGroup
                     options={[
                         { key: "awaiting", label: "Awaiting Approval" },
@@ -328,10 +309,7 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                     value={internal.approvedFilter ? [internal.approvedFilter] : []}
                     onChange={(next) => {
                         const approvedFilter = pickExclusive(next, internal.approvedFilter);
-                        update({
-                            approvedFilter,
-                            draftFilter: approvedFilter !== undefined ? undefined : internal.draftFilter
-                        });
+                        update({ approvedFilter });
                     }}
                 />
                 {/* A bespoke group, not ToggleButtonGroup - that treats an option carrying an icon as

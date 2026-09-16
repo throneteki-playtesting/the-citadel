@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
     cloneElement,
@@ -80,25 +81,31 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
         return () => document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
     }, [isOpen, setOpen]);
 
-    const child = isValidElement(children)
-        ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-              ref: triggerRef,
-              onPointerDownCapture: handlePointerDownCapture,
-              onClickCapture: handleClickCapture
-          })
-        : children;
+    // Stable identity across renders that don't change children/content, so Tooltip doesn't see a
+    // "new" node mid-transition and restart the fade.
+    const child = useMemo(
+        () =>
+            isValidElement(children)
+                ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+                      ref: triggerRef,
+                      onPointerDownCapture: handlePointerDownCapture,
+                      onClickCapture: handleClickCapture
+                  })
+                : children,
+        [children, handlePointerDownCapture, handleClickCapture]
+    );
+
+    const tooltipContent = useMemo(
+        () => (
+            <span ref={contentRef} className="contents" onPointerDown={stopBubbling} onClick={stopBubbling}>
+                {content}
+            </span>
+        ),
+        [content]
+    );
 
     return (
-        <Tooltip
-            {...props}
-            content={
-                <span ref={contentRef} className="contents" onPointerDown={stopBubbling} onClick={stopBubbling}>
-                    {content}
-                </span>
-            }
-            isOpen={keepOpen || isOpen}
-            onOpenChange={handleTooltipOpenChange}
-        >
+        <Tooltip {...props} content={tooltipContent} isOpen={keepOpen || isOpen} onOpenChange={handleTooltipOpenChange}>
             {child}
         </Tooltip>
     );

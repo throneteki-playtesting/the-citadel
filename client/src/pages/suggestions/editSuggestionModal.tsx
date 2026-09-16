@@ -12,7 +12,14 @@ import {
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Textarea } from "@heroui/react";
-import { useCreateSuggestionMutation, useSaveDraftSuggestionMutation, useUpdateSuggestionMutation } from "../../api";
+import {
+    useCreateSuggestionMutation,
+    useDeleteSuggestionMutation,
+    useGetSuggestionPlotMedianQuery,
+    useSaveDraftSuggestionMutation,
+    useUpdateSuggestionMutation
+} from "../../api";
+import ConfirmModal from "../../components/confirmModal";
 import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
@@ -138,8 +145,6 @@ function CollapsibleQuestion({
                     {isOpen ? "Close" : "Edit"}
                 </Button>
             </div>
-            {/* Only ever used for Rewards/Punishment (see below) - capped at 2 lines since these two
-            descriptions run longer than most, and the section is collapsible anyway. */}
             <SectionBlurb className="line-clamp-2">{blurb}</SectionBlurb>
             {alwaysVisible}
             <AnimatePresence initial={false}>
@@ -168,7 +173,7 @@ function ChecklistRail({ results, suggestion }: { results: RuleResult[]; suggest
     if (!hasEngagementToClear(suggestion)) {
         return (
             <AnimatePresence initial={false}>
-                {!isLastPage && (
+                {!isLastPage && results.length > 0 && (
                     <motion.div
                         key="checklist"
                         initial={{ height: 0, opacity: 0 }}
@@ -189,7 +194,7 @@ function ChecklistRail({ results, suggestion }: { results: RuleResult[]; suggest
             <div
                 className={classNames(
                     "col-start-1 row-start-1 transition-opacity duration-200",
-                    isLastPage ? "opacity-0 pointer-events-none" : "opacity-100"
+                    !isLastPage && results.length > 0 ? "opacity-100" : "opacity-0 pointer-events-none"
                 )}
             >
                 <MiniChecklistNotice results={results} />
@@ -292,18 +297,25 @@ function MobileChecklistReveal({ results, onCollapse }: { results: RuleResult[];
 function SaveDraftButton({
     suggestionId,
     data,
+    isDisabled,
     onSaved,
     onClose
 }: {
     suggestionId?: string;
     data: DeepPartial<ICardSuggestion>;
+    isDisabled?: boolean;
     onSaved: (suggestion: ICardSuggestion) => void;
     onClose: () => void;
 }) {
     const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
     const [saveDraftSuggestion, { isLoading: isUpdating }] = useSaveDraftSuggestionMutation();
+    const { isValidationError, validateForm } = useWizard();
 
     const onPress = async () => {
+        // Validates against the permissive draft schema before saving.
+        if (!validateForm(data, CardSuggestion.DraftSave)) {
+            return;
+        }
         try {
             const saved = suggestionId
                 ? await saveDraftSuggestion({ ...data, id: suggestionId } as ICardSuggestion).unwrap()
@@ -316,12 +328,14 @@ function SaveDraftButton({
             });
             onClose();
         } catch (err) {
-            showApiErrorToast(err);
+            if (!isValidationError(err)) {
+                showApiErrorToast(err);
+            }
         }
     };
 
     return (
-        <Button variant="flat" onPress={onPress} isLoading={isCreating || isUpdating}>
+        <Button variant="flat" onPress={onPress} isLoading={isCreating || isUpdating} isDisabled={isDisabled}>
             Save Draft
         </Button>
     );
@@ -401,11 +415,83 @@ function applyAbilityTypes(
     };
 }
 
+function SavedDraftActions({
+    suggestion,
+    hasCardBasics,
+    isLoading,
+    onDeleteRequested,
+    onSaved,
+    onSaveClose,
+    onCancel
+}: {
+    suggestion: DeepPartial<ICardSuggestion>;
+    hasCardBasics: boolean;
+    isLoading: boolean;
+    onDeleteRequested: () => void;
+    onSaved: (suggestion: ICardSuggestion) => void;
+    onSaveClose: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <>
+            <Button variant="flat" color="danger" onPress={onDeleteRequested}>
+                Delete Draft
+            </Button>
+            <SaveDraftButton
+                suggestionId={suggestion.id}
+                data={suggestion}
+                isDisabled={!hasCardBasics}
+                onSaved={onSaved}
+                onClose={onSaveClose}
+            />
+            <WizardBack onCancel={onCancel} />
+            <WizardNext isLoading={isLoading} isDisabled={!hasCardBasics} color="primary" />
+        </>
+    );
+}
+
+// Shared by the desktop rail and mobile footer - only the engagement-clear icon differs between them.
+function StandardActions({
+    suggestion,
+    hasCardBasics,
+    isLoading,
+    engagementIcon,
+    onSaved,
+    onSaveClose,
+    onCancel
+}: {
+    suggestion: DeepPartial<ICardSuggestion>;
+    hasCardBasics: boolean;
+    isLoading: boolean;
+    engagementIcon: ReactNode;
+    onSaved: (suggestion: ICardSuggestion) => void;
+    onSaveClose: () => void;
+    onCancel: () => void;
+}) {
+    return (
+        <>
+            {engagementIcon}
+            <WizardBack onCancel={onCancel} />
+            {suggestion.draft !== false && (
+                <SaveDraftButton
+                    suggestionId={suggestion.id}
+                    data={suggestion}
+                    isDisabled={!hasCardBasics}
+                    onSaved={onSaved}
+                    onClose={onSaveClose}
+                />
+            )}
+            <WizardNext isLoading={isLoading} isDisabled={!hasCardBasics} color="primary" />
+        </>
+    );
+}
+
 const EditSuggestionModal = ({
     isOpen,
     suggestion: initial,
     onClose: onModalClose = () => true,
-    onSave = () => true
+    onSave = () => true,
+    onReturnToDrafts = () => true
 }: EditSuggestionModalProps) => {
     const { user } = useAuth();
     // Read via a ref inside the load effect below, so that effect can depend on `initial` alone -
@@ -414,7 +500,11 @@ const EditSuggestionModal = ({
     userRef.current = user;
     const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
     const [updateSuggestion, { isLoading: isSubmitting }] = useUpdateSuggestionMutation();
+    const [deleteSuggestion, { isLoading: isDeletingDraft }] = useDeleteSuggestionMutation();
     const [suggestion, setSuggestion] = useState<DeepPartial<ICardSuggestion>>({});
+    // Closes the editor's own Modal without telling the parent, so cancelling the confirmation
+    // reopens the editor exactly where it was.
+    const [isConfirmingDeleteDraft, setIsConfirmingDeleteDraft] = useState(false);
     // The mobile rail's peek state - collapsed (icons only) is the resting state, expanded shows
     // the checklist + card. See the AnimatePresence block near the footer for the fade choreography.
     const [railExpanded, setRailExpanded] = useState(false);
@@ -491,6 +581,11 @@ const EditSuggestionModal = ({
     const deferredDerived = useDeferredValue(derived);
     const deferredPivotPoints = useDeferredValue(pivotPoints);
 
+    // Only fetched for a plot - checklistRules() ignores it entirely for every other type.
+    const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
+        skip: deferredCard?.type !== "plot"
+    });
+
     // Narrowed to only what checklistRules() actually reads - a whole-object dependency was
     // recomputing (and re-rendering every row) on every Notes/justification keystroke too.
     const checklistResults = useMemo(() => {
@@ -512,9 +607,18 @@ const EditSuggestionModal = ({
                 iconic: deferredQuestions?.iconic
             },
             derived: (deferredDerived as IDerivedFields) ?? { triggerTypes: [], keywords: [] },
-            pivotPoints: (deferredPivotPoints ?? []).filter((p): p is string => !!p)
+            pivotPoints: (deferredPivotPoints ?? []).filter((p): p is string => !!p),
+            plotMedian: plotPoolMedian?.median
         });
-    }, [deferredCard, deferredQuestions, deferredDerived, deferredPivotPoints]);
+    }, [deferredCard, deferredQuestions, deferredDerived, deferredPivotPoints, plotPoolMedian]);
+
+    // Nothing worth saving or moving on from until the design has at least these two basics -
+    // Save Draft/Next stay disabled rather than letting either commit an unusably bare suggestion.
+    const hasCardBasics = !!suggestion.card?.faction && !!suggestion.card?.type;
+
+    // Only a saved draft gets the Delete Draft button and its 2x2 footer layout - a new,
+    // never-saved suggestion has nothing to delete (Cancel already covers that).
+    const isSavedDraft = !!suggestion.id && suggestion.draft === true;
 
     // Stable so FullChecklist (memoized - its rows carry a `layout` animation, real work to redo on
     // every unrelated keystroke) doesn't see a new function identity on every render.
@@ -602,11 +706,37 @@ const EditSuggestionModal = ({
             const submitted = await updateSuggestion({ ...validSuggestion, id }).unwrap();
             setSuggestion(submitted);
             onSave(submitted);
+            // Submitting turns the draft into a real suggestion, so this never reopens "My Drafts".
             onModalClose();
         } catch (err) {
             if (!isValidationError(err)) {
                 showApiErrorToast(err);
             }
+        }
+    };
+
+    // Closes the editor, reopening "My Drafts" behind it if this was an existing saved draft.
+    const closeEditor = () => {
+        onModalClose();
+        if (isSavedDraft) {
+            onReturnToDrafts();
+        }
+    };
+
+    // Only closes the confirmation (and the editor for good) once the delete has actually gone
+    // through - a failure leaves both exactly where they were, error surfaced by toast.
+    const doDeleteDraft = async () => {
+        try {
+            await deleteSuggestion({ id: suggestion.id! }).unwrap();
+            setIsConfirmingDeleteDraft(false);
+            closeEditor();
+            addToast({
+                title: "Draft deleted",
+                color: "success",
+                description: `"${suggestion.card?.name}" draft has been deleted`
+            });
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to Delete" });
         }
     };
 
@@ -633,398 +763,450 @@ const EditSuggestionModal = ({
         () => renderCardSuggestion({ card: deferredCard, id: suggestion.id, user: suggestion.user }),
         [deferredCard, suggestion.id, suggestion.user]
     );
+    // A plot renders landscape everywhere else in the app.
+    const isPlot = suggestion.card?.type === "plot";
 
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="top-center"
-            onOpenChange={(isOpen) => !isOpen && onModalClose()}
-            size="5xl"
-            scrollBehavior="inside"
-        >
-            <ModalContent>
-                {(onClose) => (
-                    <Wizard schema={CardSuggestion.Full} onSubmit={onSubmit} data={suggestion}>
-                        <ModalHeader>Card Suggestion Editor</ModalHeader>
-                        {/* Wraps the body so the mobile reveal panel below can position against this box
-                            exactly, covering it rather than pushing content below. */}
-                        <div className="relative flex-1 min-h-0 flex flex-col">
-                            {/* `overflow-hidden`, not the scrollable body default - scrolling is handled
-                            by the two columns below instead, so this just stays clipped to its own height. */}
-                            <ModalBody className="flex-1 min-h-0 overflow-hidden">
-                                <ValidationSummary />
-                                {/* Same idea as amending a review on someone's behalf, but a proper
-                                    StatusNotice, matching every other non-modal notice in the app. */}
-                                {isEditingOthersSuggestion && (
-                                    <StatusNotice
-                                        icon={faUserPen}
-                                        color="info"
-                                        label="Editing Another User's Suggestion"
-                                        detail={
-                                            <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                You are amending
-                                                <UserRow
-                                                    discordId={suggestion.user!.discordId!}
-                                                    className="inline-flex w-auto"
-                                                    trailing="'s suggestion on their behalf."
-                                                />
-                                            </span>
-                                        }
-                                        className="mb-2 shrink-0"
-                                    />
-                                )}
-                                {/* `flex-1 min-h-0` unconditionally, not just `md:` - left at `md:` only,
-                                this row sized to its content on mobile, taller than ModalBody's own box. */}
-                                <div className="flex flex-1 min-h-0 flex-col md:flex-row gap-2">
-                                    {/* Left column: the wizard's own pages, scrolling as a whole - the ONLY
-                                    thing that scrolls on desktop, and (right rail `hidden` below `md`) on mobile too. */}
-                                    <div className="flex-1 min-w-0 min-h-0 overflow-y-auto md:pr-2">
-                                        <WizardPages>
-                                            <WizardPage
-                                                controlledData={{ card: getBaseCardValues(suggestion.card ?? {}) }}
-                                            >
-                                                <CardEditor
-                                                    className="w-full"
-                                                    card={suggestion.card}
-                                                    onUpdate={onCardUpdate}
-                                                    inputOptions={CARD_EDITOR_INPUT_OPTIONS}
-                                                    for="card"
-                                                />
-                                            </WizardPage>
+        <>
+            <Modal
+                // Hides the Modal without closing it - onOpenChange only fires on a genuine close
+                // interaction, not from this prop changing on its own.
+                isOpen={isOpen && !isConfirmingDeleteDraft}
+                placement="top-center"
+                onOpenChange={(isOpen) => !isOpen && closeEditor()}
+                size="5xl"
+                scrollBehavior="inside"
+            >
+                <ModalContent>
+                    {(onClose) => (
+                        <Wizard schema={CardSuggestion.Full} onSubmit={onSubmit} data={suggestion}>
+                            <ModalHeader>{isSavedDraft ? "Draft Suggestion Editor" : "Suggestion Editor"}</ModalHeader>
+                            <div className="relative flex-1 min-h-0 flex flex-col">
+                                <ModalBody className="flex-1 min-h-0 overflow-hidden">
+                                    <ValidationSummary />
+                                    {isEditingOthersSuggestion && (
+                                        <StatusNotice
+                                            icon={faUserPen}
+                                            color="info"
+                                            label="Editing Another User's Suggestion"
+                                            detail={
+                                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                                    You are amending
+                                                    <UserRow
+                                                        discordId={suggestion.user!.discordId!}
+                                                        className="inline-flex w-auto"
+                                                        trailing="'s suggestion on their behalf."
+                                                    />
+                                                </span>
+                                            }
+                                            className="mb-2 shrink-0"
+                                        />
+                                    )}
+                                    <div className="flex flex-1 min-h-0 flex-col md:flex-row gap-2">
+                                        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto md:pr-2">
+                                            <WizardPages>
+                                                <WizardPage
+                                                    controlledData={{ card: getBaseCardValues(suggestion.card ?? {}) }}
+                                                >
+                                                    <CardEditor
+                                                        className="w-full"
+                                                        card={suggestion.card}
+                                                        onUpdate={onCardUpdate}
+                                                        inputOptions={CARD_EDITOR_INPUT_OPTIONS}
+                                                        for="card"
+                                                    />
+                                                </WizardPage>
 
-                                            <WizardPage
-                                                controlledData={{
-                                                    questions: {
-                                                        abilityTypes: suggestion.questions?.abilityTypes ?? [],
-                                                        triggerReliability:
-                                                            suggestion.questions?.triggerReliability ?? [],
-                                                        repeatability: suggestion.questions?.repeatability,
-                                                        iconic: suggestion.questions?.iconic,
-                                                        rewardTypes: suggestion.questions?.rewardTypes ?? [],
-                                                        punishment: suggestion.questions?.punishment ?? []
-                                                    }
-                                                }}
-                                            >
-                                                <div className="flex flex-col gap-5 w-full">
-                                                    <div className="flex flex-col gap-2 w-full">
-                                                        <SectionTitle size="sm">
-                                                            Iconic Weight
-                                                            <RequiredMark />
-                                                        </SectionTitle>
-                                                        <SectionBlurb>
-                                                            {SUGGESTION_SECTION_DESCRIPTIONS.iconic}
-                                                        </SectionBlurb>
-                                                        <RequiredField name="questions.iconic">
-                                                            <IconicSwitch
-                                                                value={suggestion.questions?.iconic}
-                                                                onChange={onIconicChange}
-                                                            />
-                                                        </RequiredField>
-                                                    </div>
-
-                                                    <div className="flex flex-col gap-4 w-full rounded-lg border border-content3 p-3">
+                                                <WizardPage
+                                                    controlledData={{
+                                                        questions: {
+                                                            abilityTypes: suggestion.questions?.abilityTypes ?? [],
+                                                            triggerReliability:
+                                                                suggestion.questions?.triggerReliability ?? [],
+                                                            repeatability: suggestion.questions?.repeatability,
+                                                            iconic: suggestion.questions?.iconic,
+                                                            rewardTypes: suggestion.questions?.rewardTypes ?? [],
+                                                            punishment: suggestion.questions?.punishment ?? []
+                                                        }
+                                                    }}
+                                                >
+                                                    <div className="flex flex-col gap-5 w-full">
                                                         <div className="flex flex-col gap-2 w-full">
-                                                            <SectionTitle size="sm">Ability Types</SectionTitle>
+                                                            <SectionTitle size="sm">
+                                                                Iconic Weight
+                                                                <RequiredMark />
+                                                            </SectionTitle>
                                                             <SectionBlurb>
-                                                                {SUGGESTION_SECTION_DESCRIPTIONS.abilityTypes}
+                                                                {SUGGESTION_SECTION_DESCRIPTIONS.iconic}
                                                             </SectionBlurb>
-                                                            <AbilityTypeToggle
-                                                                value={abilityTypeValues}
-                                                                onChange={onAbilityTypesChange}
-                                                                autoDetected={autoDetectedAbilityTypes}
-                                                            />
+                                                            <RequiredField name="questions.iconic">
+                                                                <IconicSwitch
+                                                                    value={suggestion.questions?.iconic}
+                                                                    onChange={onIconicChange}
+                                                                />
+                                                            </RequiredField>
                                                         </div>
 
-                                                        <AnimatePresence initial={false}>
-                                                            {hasTriggered && (
-                                                                <motion.div
-                                                                    key="trigger-details"
-                                                                    initial={{ height: 0, opacity: 0 }}
-                                                                    animate={{ height: "auto", opacity: 1 }}
-                                                                    exit={{ height: 0, opacity: 0 }}
-                                                                    transition={RAIL_TRANSITION}
-                                                                    className="overflow-hidden"
-                                                                >
-                                                                    <div className="flex flex-col gap-4">
-                                                                        <div className="flex flex-col gap-2 w-full">
-                                                                            <SubTitle>Trigger Reliability</SubTitle>
-                                                                            <SectionBlurb>
-                                                                                {
-                                                                                    SUGGESTION_SECTION_DESCRIPTIONS.triggerReliability
-                                                                                }
-                                                                            </SectionBlurb>
-                                                                            <TriggerReliabilityCards
-                                                                                value={
-                                                                                    suggestion.questions
-                                                                                        ?.triggerReliability ??
-                                                                                    EMPTY_TRIGGER_RELIABILITY
-                                                                                }
-                                                                                onChange={onTriggerReliabilityChange}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="flex flex-col gap-2 w-full">
-                                                                            <SubTitle>Trigger Repeatability</SubTitle>
-                                                                            <SectionBlurb>
-                                                                                {
-                                                                                    SUGGESTION_SECTION_DESCRIPTIONS.triggerRepeatability
-                                                                                }
-                                                                            </SectionBlurb>
-                                                                            <RepeatabilityTiles
-                                                                                value={repeatabilityValue}
-                                                                                onChange={onRepeatabilityChange}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
+                                                        <div className="flex flex-col gap-4 w-full rounded-lg border border-content3 p-3">
+                                                            <div className="flex flex-col gap-2 w-full">
+                                                                <SectionTitle size="sm">Ability Types</SectionTitle>
+                                                                <SectionBlurb>
+                                                                    {SUGGESTION_SECTION_DESCRIPTIONS.abilityTypes}
+                                                                </SectionBlurb>
+                                                                <AbilityTypeToggle
+                                                                    value={abilityTypeValues}
+                                                                    onChange={onAbilityTypesChange}
+                                                                    autoDetected={autoDetectedAbilityTypes}
+                                                                />
+                                                            </div>
 
-                                                    <CollapsibleQuestion
-                                                        title="Rewards"
-                                                        blurb={SUGGESTION_SECTION_DESCRIPTIONS.rewardTypes}
-                                                        isOpen={rewardsOpen}
-                                                        onOpenChange={setRewardsOpen}
-                                                        alwaysVisible={
-                                                            <SelectedTagChips
+                                                            <AnimatePresence initial={false}>
+                                                                {hasTriggered && (
+                                                                    <motion.div
+                                                                        key="trigger-details"
+                                                                        initial={{ height: 0, opacity: 0 }}
+                                                                        animate={{ height: "auto", opacity: 1 }}
+                                                                        exit={{ height: 0, opacity: 0 }}
+                                                                        transition={RAIL_TRANSITION}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="flex flex-col gap-4">
+                                                                            <div className="flex flex-col gap-2 w-full">
+                                                                                <SubTitle>Trigger Reliability</SubTitle>
+                                                                                <SectionBlurb>
+                                                                                    {
+                                                                                        SUGGESTION_SECTION_DESCRIPTIONS.triggerReliability
+                                                                                    }
+                                                                                </SectionBlurb>
+                                                                                <TriggerReliabilityCards
+                                                                                    value={
+                                                                                        suggestion.questions
+                                                                                            ?.triggerReliability ??
+                                                                                        EMPTY_TRIGGER_RELIABILITY
+                                                                                    }
+                                                                                    onChange={
+                                                                                        onTriggerReliabilityChange
+                                                                                    }
+                                                                                />
+                                                                            </div>
+                                                                            <div className="flex flex-col gap-2 w-full">
+                                                                                <SubTitle>
+                                                                                    Trigger Repeatability
+                                                                                </SubTitle>
+                                                                                <SectionBlurb>
+                                                                                    {
+                                                                                        SUGGESTION_SECTION_DESCRIPTIONS.triggerRepeatability
+                                                                                    }
+                                                                                </SectionBlurb>
+                                                                                <RepeatabilityTiles
+                                                                                    value={repeatabilityValue}
+                                                                                    onChange={onRepeatabilityChange}
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                )}
+                                                            </AnimatePresence>
+                                                        </div>
+
+                                                        <CollapsibleQuestion
+                                                            title="Rewards"
+                                                            blurb={SUGGESTION_SECTION_DESCRIPTIONS.rewardTypes}
+                                                            isOpen={rewardsOpen}
+                                                            onOpenChange={setRewardsOpen}
+                                                            alwaysVisible={
+                                                                <SelectedTagChips
+                                                                    options={REWARD_TYPES}
+                                                                    value={
+                                                                        suggestion.questions?.rewardTypes ??
+                                                                        EMPTY_STRINGS
+                                                                    }
+                                                                    onChange={onRewardTypesChange}
+                                                                    isDisabled={!rewardsOpen}
+                                                                    emptyLabel="No rewards selected."
+                                                                />
+                                                            }
+                                                        >
+                                                            <SearchTagPicker
                                                                 options={REWARD_TYPES}
                                                                 value={
                                                                     suggestion.questions?.rewardTypes ?? EMPTY_STRINGS
                                                                 }
                                                                 onChange={onRewardTypesChange}
-                                                                isDisabled={!rewardsOpen}
-                                                                emptyLabel="No rewards selected."
+                                                                showChips={false}
+                                                                placeholder="Search reward types by name or category…"
                                                             />
-                                                        }
-                                                    >
-                                                        <SearchTagPicker
-                                                            options={REWARD_TYPES}
-                                                            value={suggestion.questions?.rewardTypes ?? EMPTY_STRINGS}
-                                                            onChange={onRewardTypesChange}
-                                                            showChips={false}
-                                                            placeholder="Search reward types by name or category…"
-                                                        />
-                                                    </CollapsibleQuestion>
+                                                        </CollapsibleQuestion>
 
-                                                    <CollapsibleQuestion
-                                                        title="Punishment"
-                                                        blurb={SUGGESTION_SECTION_DESCRIPTIONS.punishment}
-                                                        isOpen={punishmentOpen}
-                                                        onOpenChange={setPunishmentOpen}
-                                                        alwaysVisible={
-                                                            <SelectedTagChips
+                                                        <CollapsibleQuestion
+                                                            title="Punishment"
+                                                            blurb={SUGGESTION_SECTION_DESCRIPTIONS.punishment}
+                                                            isOpen={punishmentOpen}
+                                                            onOpenChange={setPunishmentOpen}
+                                                            alwaysVisible={
+                                                                <SelectedTagChips
+                                                                    options={PUNISHMENT_TYPES}
+                                                                    value={
+                                                                        suggestion.questions?.punishment ??
+                                                                        EMPTY_STRINGS
+                                                                    }
+                                                                    onChange={onPunishmentChange}
+                                                                    isDisabled={!punishmentOpen}
+                                                                    emptyLabel="No punishment selected."
+                                                                />
+                                                            }
+                                                        >
+                                                            <SearchTagPicker
                                                                 options={PUNISHMENT_TYPES}
                                                                 value={
                                                                     suggestion.questions?.punishment ?? EMPTY_STRINGS
                                                                 }
                                                                 onChange={onPunishmentChange}
-                                                                isDisabled={!punishmentOpen}
-                                                                emptyLabel="No punishment selected."
+                                                                showChips={false}
+                                                                placeholder="Search punishment types…"
                                                             />
-                                                        }
-                                                    >
-                                                        <SearchTagPicker
-                                                            options={PUNISHMENT_TYPES}
-                                                            value={suggestion.questions?.punishment ?? EMPTY_STRINGS}
-                                                            onChange={onPunishmentChange}
-                                                            showChips={false}
-                                                            placeholder="Search punishment types…"
-                                                        />
-                                                    </CollapsibleQuestion>
-                                                </div>
-                                            </WizardPage>
-
-                                            <WizardPage
-                                                controlledData={{
-                                                    pivotPoints: suggestion.pivotPoints ?? [],
-                                                    comparableCards: suggestion.comparableCards ?? [],
-                                                    combosWith: suggestion.combosWith ?? []
-                                                }}
-                                            >
-                                                <div className="flex flex-col gap-5 w-full">
-                                                    <div className="flex flex-col gap-2 w-full">
-                                                        <SectionTitle size="sm">Pivot Points</SectionTitle>
-                                                        <SectionBlurb>
-                                                            {SUGGESTION_SECTION_DESCRIPTIONS.pivotPoints}
-                                                        </SectionBlurb>
-                                                        <PivotPointsInput
-                                                            className="w-full"
-                                                            value={pivotPointsValue}
-                                                            onChange={onPivotPointsChange}
-                                                        />
+                                                        </CollapsibleQuestion>
                                                     </div>
-                                                    <CollapsibleQuestion
-                                                        title="Comparable Cards"
-                                                        blurb={SUGGESTION_SECTION_DESCRIPTIONS.comparableCards}
-                                                        isOpen={comparableCardsOpen}
-                                                        onOpenChange={setComparableCardsOpen}
-                                                        alwaysVisible={
-                                                            <SelectedCardChips
+                                                </WizardPage>
+
+                                                <WizardPage
+                                                    controlledData={{
+                                                        pivotPoints: suggestion.pivotPoints ?? [],
+                                                        comparableCards: suggestion.comparableCards ?? [],
+                                                        combosWith: suggestion.combosWith ?? []
+                                                    }}
+                                                >
+                                                    <div className="flex flex-col gap-5 w-full">
+                                                        <div className="flex flex-col gap-2 w-full">
+                                                            <SectionTitle size="sm">Pivot Points</SectionTitle>
+                                                            <SectionBlurb>
+                                                                {SUGGESTION_SECTION_DESCRIPTIONS.pivotPoints}
+                                                            </SectionBlurb>
+                                                            <PivotPointsInput
+                                                                className="w-full"
+                                                                value={pivotPointsValue}
+                                                                onChange={onPivotPointsChange}
+                                                            />
+                                                        </div>
+                                                        <CollapsibleQuestion
+                                                            title="Comparable Cards"
+                                                            blurb={SUGGESTION_SECTION_DESCRIPTIONS.comparableCards}
+                                                            isOpen={comparableCardsOpen}
+                                                            onOpenChange={setComparableCardsOpen}
+                                                            alwaysVisible={
+                                                                <SelectedCardChips
+                                                                    value={comparableCardsValue}
+                                                                    onChange={onComparableCardsChange}
+                                                                    isDisabled={!comparableCardsOpen}
+                                                                    emptyLabel="No comparable cards selected."
+                                                                />
+                                                            }
+                                                        >
+                                                            <CardMultiSelect
+                                                                className="w-full"
+                                                                ariaLabel="Comparable Cards"
+                                                                placeholder="Search printed cards…"
                                                                 value={comparableCardsValue}
                                                                 onChange={onComparableCardsChange}
-                                                                isDisabled={!comparableCardsOpen}
-                                                                emptyLabel="No comparable cards selected."
                                                             />
-                                                        }
-                                                    >
-                                                        <CardMultiSelect
-                                                            className="w-full"
-                                                            ariaLabel="Comparable Cards"
-                                                            placeholder="Search printed cards…"
-                                                            value={comparableCardsValue}
-                                                            onChange={onComparableCardsChange}
-                                                        />
-                                                    </CollapsibleQuestion>
-                                                    <CollapsibleQuestion
-                                                        title="Combos With"
-                                                        blurb={SUGGESTION_SECTION_DESCRIPTIONS.combosWith}
-                                                        isOpen={combosWithOpen}
-                                                        onOpenChange={setCombosWithOpen}
-                                                        alwaysVisible={
-                                                            <SelectedCardChips
+                                                        </CollapsibleQuestion>
+                                                        <CollapsibleQuestion
+                                                            title="Combos With"
+                                                            blurb={SUGGESTION_SECTION_DESCRIPTIONS.combosWith}
+                                                            isOpen={combosWithOpen}
+                                                            onOpenChange={setCombosWithOpen}
+                                                            alwaysVisible={
+                                                                <SelectedCardChips
+                                                                    value={combosWithValue}
+                                                                    onChange={onCombosWithChange}
+                                                                    isDisabled={!combosWithOpen}
+                                                                    emptyLabel="No combos selected."
+                                                                />
+                                                            }
+                                                        >
+                                                            <CardMultiSelect
+                                                                className="w-full"
+                                                                ariaLabel="Combos With"
+                                                                placeholder="Search printed cards…"
                                                                 value={combosWithValue}
                                                                 onChange={onCombosWithChange}
-                                                                isDisabled={!combosWithOpen}
-                                                                emptyLabel="No combos selected."
                                                             />
-                                                        }
-                                                    >
-                                                        <CardMultiSelect
-                                                            className="w-full"
-                                                            ariaLabel="Combos With"
-                                                            placeholder="Search printed cards…"
-                                                            value={combosWithValue}
-                                                            onChange={onCombosWithChange}
-                                                        />
-                                                    </CollapsibleQuestion>
-                                                </div>
-                                            </WizardPage>
+                                                        </CollapsibleQuestion>
+                                                    </div>
+                                                </WizardPage>
 
-                                            <WizardPage
-                                                controlledData={{
-                                                    checklistJustifications:
-                                                        suggestion.checklistJustifications ?? EMPTY_JUSTIFICATIONS,
-                                                    notes: suggestion.notes,
-                                                    derived: suggestion.derived,
-                                                    draft: false
-                                                }}
-                                            >
-                                                <div className="flex flex-col gap-5 w-full">
-                                                    <div className="flex flex-col gap-2 w-full">
-                                                        <SectionTitle size="sm">Checklist Review</SectionTitle>
-                                                        <SectionBlurb>
-                                                            {SUGGESTION_SECTION_DESCRIPTIONS.checklistReview}
-                                                        </SectionBlurb>
-                                                        <FullChecklist
-                                                            results={checklistResults}
-                                                            justifications={
-                                                                suggestion.checklistJustifications ??
-                                                                EMPTY_JUSTIFICATIONS
-                                                            }
-                                                            onJustificationChange={onJustificationChange}
-                                                        />
+                                                <WizardPage
+                                                    controlledData={{
+                                                        checklistJustifications:
+                                                            suggestion.checklistJustifications ?? EMPTY_JUSTIFICATIONS,
+                                                        notes: suggestion.notes,
+                                                        derived: suggestion.derived,
+                                                        draft: false
+                                                    }}
+                                                >
+                                                    <div className="flex flex-col gap-5 w-full">
+                                                        <div className="flex flex-col gap-2 w-full">
+                                                            <SectionTitle size="sm">Checklist Review</SectionTitle>
+                                                            <SectionBlurb>
+                                                                {SUGGESTION_SECTION_DESCRIPTIONS.checklistReview}
+                                                            </SectionBlurb>
+                                                            <FullChecklist
+                                                                results={checklistResults}
+                                                                justifications={
+                                                                    suggestion.checklistJustifications ??
+                                                                    EMPTY_JUSTIFICATIONS
+                                                                }
+                                                                onJustificationChange={onJustificationChange}
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2 w-full">
+                                                            <SectionTitle size="sm">Editor Notes</SectionTitle>
+                                                            <SectionBlurb>
+                                                                {SUGGESTION_SECTION_DESCRIPTIONS.editorNotes}
+                                                            </SectionBlurb>
+                                                            <Textarea
+                                                                value={suggestion.notes ?? ""}
+                                                                onValueChange={(notes) =>
+                                                                    setSuggestion((prev) => ({ ...prev, notes }))
+                                                                }
+                                                                placeholder="E.g. Intended as a soft counter to control decks..."
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div className="flex flex-col gap-2 w-full">
-                                                        <SectionTitle size="sm">Editor Notes</SectionTitle>
-                                                        <SectionBlurb>
-                                                            {SUGGESTION_SECTION_DESCRIPTIONS.editorNotes}
-                                                        </SectionBlurb>
-                                                        <Textarea
-                                                            value={suggestion.notes ?? ""}
-                                                            onValueChange={(notes) =>
-                                                                setSuggestion((prev) => ({ ...prev, notes }))
-                                                            }
-                                                            placeholder="E.g. Intended as a soft counter to control decks..."
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </WizardPage>
-                                        </WizardPages>
-                                    </div>
-                                    <div className="hidden md:flex md:w-72 md:shrink-0 md:min-h-0 md:flex-col gap-3">
-                                        <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto">
-                                            <div>
-                                                <CardPreview card={renderedCard} orientation="vertical" rounded />
-                                            </div>
-                                            <ChecklistRail results={checklistResults} suggestion={suggestion} />
+                                                </WizardPage>
+                                            </WizardPages>
                                         </div>
-                                        <div className="shrink-0 flex items-center justify-end gap-2 border-t border-content3 pt-3">
-                                            <DesktopEngagementClearIcon suggestion={suggestion} />
-                                            <WizardBack onCancel={onClose} />
-                                            {suggestion.draft !== false && (
-                                                <SaveDraftButton
-                                                    suggestionId={suggestion.id}
-                                                    data={suggestion}
-                                                    onSaved={setSuggestion}
-                                                    onClose={onModalClose}
-                                                />
+                                        <div
+                                            className={classNames(
+                                                "hidden md:flex md:shrink-0 md:min-h-0 md:flex-col gap-3",
+                                                isPlot ? "md:w-[calc(18rem*333/240)]" : "md:w-72"
                                             )}
-                                            <WizardNext isLoading={isCreating || isSubmitting} color="primary" />
-                                        </div>
-                                    </div>
-                                </div>
-                            </ModalBody>
-
-                            {/* Mobile reveal: an overlay covering the body exactly (not content pushed
-                                below it) - collapsing removes it and the body's own scroll is back. */}
-                            <AnimatePresence>
-                                {railExpanded && (
-                                    <motion.div
-                                        key="mobile-reveal"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={RAIL_TRANSITION}
-                                        className="md:hidden absolute inset-0 z-20 bg-content1 flex flex-col gap-3 p-4"
-                                    >
-                                        <MobileChecklistReveal
-                                            results={checklistResults}
-                                            onCollapse={() => setRailExpanded(false)}
-                                        />
-                                        <div className="flex-1 min-h-0 flex flex-col gap-3">
-                                            {/* CardPreview has no "fit available height" mode - this
-                                            aspect-ratio div gives it a correctly-sized box, height-first. */}
-                                            <div className="flex-1 min-h-0 flex items-center justify-center">
-                                                <div className="h-full max-w-full" style={{ aspectRatio: "240 / 333" }}>
+                                        >
+                                            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto">
+                                                <div
+                                                    className={classNames(
+                                                        "w-full mx-auto",
+                                                        isPlot
+                                                            ? "max-w-[calc(18rem*333/240)] aspect-[333/240]"
+                                                            : "max-w-72 aspect-[240/333]"
+                                                    )}
+                                                >
                                                     <CardPreview
                                                         card={renderedCard}
-                                                        orientation="vertical"
+                                                        orientation={isPlot ? "horizontal" : "vertical"}
                                                         rounded
-                                                        className="h-full w-full"
                                                     />
                                                 </div>
+                                                <ChecklistRail results={checklistResults} suggestion={suggestion} />
                                             </div>
+                                            {isSavedDraft ? (
+                                                <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-content3 pt-3">
+                                                    <SavedDraftActions
+                                                        suggestion={suggestion}
+                                                        hasCardBasics={hasCardBasics}
+                                                        isLoading={isCreating || isSubmitting}
+                                                        onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
+                                                        onSaved={setSuggestion}
+                                                        onSaveClose={closeEditor}
+                                                        onCancel={onClose}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="shrink-0 flex items-center justify-end gap-2 border-t border-content3 pt-3">
+                                                    <StandardActions
+                                                        suggestion={suggestion}
+                                                        hasCardBasics={hasCardBasics}
+                                                        isLoading={isCreating || isSubmitting}
+                                                        engagementIcon={
+                                                            <DesktopEngagementClearIcon suggestion={suggestion} />
+                                                        }
+                                                        onSaved={setSuggestion}
+                                                        onSaveClose={closeEditor}
+                                                        onCancel={onClose}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                                    </div>
+                                </ModalBody>
 
-                        {/* Collapsed resting state - a slim always-visible bar below the body, outside
-                            the relative wrapper above so it never gets covered by the overlay itself. */}
-                        {!railExpanded && (
-                            <MobileChecklistBar results={checklistResults} onExpand={() => setRailExpanded(true)} />
-                        )}
+                                <AnimatePresence>
+                                    {railExpanded && (
+                                        <motion.div
+                                            key="mobile-reveal"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={RAIL_TRANSITION}
+                                            className="md:hidden absolute inset-0 z-20 bg-content1 flex flex-col gap-3 p-4"
+                                        >
+                                            <MobileChecklistReveal
+                                                results={checklistResults}
+                                                onCollapse={() => setRailExpanded(false)}
+                                            />
+                                            <div className="flex-1 min-h-0 flex flex-col gap-3">
+                                                <div className="flex-1 min-h-0 flex items-center justify-center">
+                                                    <div
+                                                        className="h-full max-w-full"
+                                                        style={{ aspectRatio: isPlot ? "333 / 240" : "240 / 333" }}
+                                                    >
+                                                        <CardPreview
+                                                            card={renderedCard}
+                                                            orientation={isPlot ? "horizontal" : "vertical"}
+                                                            rounded
+                                                            className="h-full w-full"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                        {/* Desktop has its own copy inside the sticky rail - mobile has no rail for the
-                        full last-page message to move into, so it just keeps showing the icon. */}
-                        <ModalFooter className="md:hidden">
-                            <EngagementClearIcon suggestion={suggestion} />
-                            <WizardBack onCancel={onClose} />
-                            {suggestion.draft !== false && (
-                                <SaveDraftButton
-                                    suggestionId={suggestion.id}
-                                    data={suggestion}
-                                    onSaved={setSuggestion}
-                                    onClose={onModalClose}
-                                />
+                            {!railExpanded && (
+                                <MobileChecklistBar results={checklistResults} onExpand={() => setRailExpanded(true)} />
                             )}
-                            <WizardNext isLoading={isCreating || isSubmitting} color="primary" />
-                        </ModalFooter>
-                    </Wizard>
-                )}
-            </ModalContent>
-        </Modal>
+
+                            {isSavedDraft ? (
+                                <ModalFooter className="md:hidden grid grid-cols-2 gap-2">
+                                    <SavedDraftActions
+                                        suggestion={suggestion}
+                                        hasCardBasics={hasCardBasics}
+                                        isLoading={isCreating || isSubmitting}
+                                        onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
+                                        onSaved={setSuggestion}
+                                        onSaveClose={closeEditor}
+                                        onCancel={onClose}
+                                    />
+                                </ModalFooter>
+                            ) : (
+                                <ModalFooter className="md:hidden">
+                                    <StandardActions
+                                        suggestion={suggestion}
+                                        hasCardBasics={hasCardBasics}
+                                        isLoading={isCreating || isSubmitting}
+                                        engagementIcon={<EngagementClearIcon suggestion={suggestion} />}
+                                        onSaved={setSuggestion}
+                                        onSaveClose={closeEditor}
+                                        onCancel={onClose}
+                                    />
+                                </ModalFooter>
+                            )}
+                        </Wizard>
+                    )}
+                </ModalContent>
+            </Modal>
+            <ConfirmModal
+                isOpen={isConfirmingDeleteDraft}
+                isLoading={isDeletingDraft}
+                title="Delete this draft?"
+                content={`This will permanently delete "${suggestion.card?.name}". This cannot be undone.`}
+                confirmContent="Delete"
+                onConfirm={doDeleteDraft}
+                onClose={() => setIsConfirmingDeleteDraft(false)}
+            />
+        </>
     );
 };
 
@@ -1033,6 +1215,8 @@ type EditSuggestionModalProps = Omit<BaseElementProps, "children"> & {
     suggestion?: DeepPartial<ICardSuggestion>;
     onClose?: () => void;
     onSave?: (suggestion: ICardSuggestion) => void;
+    /** Fires when a saved draft's editor closes without submitting, so the caller can reopen "My Drafts". */
+    onReturnToDrafts?: () => void;
 };
 
 export default EditSuggestionModal;
