@@ -22,7 +22,7 @@ import {
 import { Mutex } from "async-mutex";
 import { isEqual, merge } from "lodash-es";
 import { colors, extractFromURL } from "../utils";
-import { Code, ICardSuggestion, IRepeatability } from "common/models/cards";
+import { Code, countReactionsByType, ICardSuggestion, IRepeatability } from "common/models/cards";
 import { dataService, discordService, logger, thronesDbCardPoolService } from "@/services";
 import { factionNames, renderCardSuggestion, THRONESDB_URL } from "common/utils";
 import { asPNG } from "@/rendering";
@@ -35,6 +35,8 @@ import { createSyncEmitter } from "@/services/sseService";
 const FORUM_NAME = "suggestion-forum";
 // Discord's own cap on a thread's name
 const THREAD_NAME_MAX = 100;
+// Shared with server/src/discord/buttons/, which routes a click back here by this customId prefix
+export const SUGGESTION_REACTION_PREFIX = "suggestion-reaction";
 
 const syncSuggestionForumMutex = new Mutex();
 
@@ -194,6 +196,23 @@ async function refreshSuggestionThread(
 
     merge(suggestion, { _metadata: { discord: { lastSynced: new Date(), lastSyncedSnapshot: snapshot } } });
     return suggestion;
+}
+
+/** Edits the reaction buttons' labels in place - never a full rebuild, since that re-renders and
+ *  re-uploads the card image for what's only ever a count change. */
+export async function onSuggestionReactionChanged(suggestion: ICardSuggestion) {
+    await withSuggestionThread(suggestion, async (thread) => {
+        const starter = await thread.fetchStarterMessage();
+        if (!starter) {
+            return;
+        }
+        const container = await buildContainer(suggestion, suggestionImageFilename(suggestion));
+        await starter.edit({ components: [container] });
+    });
+}
+
+export function suggestionImageFilename(suggestion: ICardSuggestion): string {
+    return `${suggestion.id}.png`;
 }
 
 /** Posts who approved (or that approval was revoked) - the only two engagement events that reach Discord */
@@ -516,14 +535,27 @@ async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICa
     }
 }
 
-async function buildStarterMessage(
-    suggestion: ICardSuggestion
-): Promise<{ options: GuildForumThreadMessageCreateOptions; snapshot: Record<string, unknown> }> {
-    const filename = `${suggestion.id}.png`;
-    const render = renderCardSuggestion(suggestion);
-    const { buffer } = await asPNG(render);
-    const attachment = new AttachmentBuilder(buffer, { name: filename });
+/** The two live-count reaction buttons - a click resolves back to its suggestion via the clicked
+ *  message's own url (see server/src/discord/buttons/suggestionReaction.ts), never a suggestion id here. */
+function buildReactionRow(suggestion: ICardSuggestion): ActionRowBuilder<ButtonBuilder> {
+    const reactions = suggestion._metadata?.engagement?.reactions;
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${SUGGESTION_REACTION_PREFIX}:like`)
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("👍")
+            .setLabel(String(countReactionsByType(reactions, "like"))),
+        new ButtonBuilder()
+            .setCustomId(`${SUGGESTION_REACTION_PREFIX}:dislike`)
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("👎")
+            .setLabel(String(countReactionsByType(reactions, "dislike")))
+    );
+}
 
+/** Everything but the rendered card image - lets a reaction-only change refresh the button labels
+ *  without re-rendering/re-uploading the PNG. */
+export async function buildContainer(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder> {
     const heading = `## Card Suggestion\n<@${suggestion.user.discordId}> has submitted **${suggestion.card.name}** for consideration.`;
     const container = new ContainerBuilder()
         .setAccentColor(resolveColor(colors[suggestion.card.faction]))
@@ -545,6 +577,20 @@ async function buildStarterMessage(
     container.addActionRowComponents(
         new ActionRowBuilder<ButtonBuilder>().addComponents(viewOnCitadelButton(suggestion), addSuggestionButton())
     );
+    container.addActionRowComponents(buildReactionRow(suggestion));
+
+    return container;
+}
+
+async function buildStarterMessage(
+    suggestion: ICardSuggestion
+): Promise<{ options: GuildForumThreadMessageCreateOptions; snapshot: Record<string, unknown> }> {
+    const filename = suggestionImageFilename(suggestion);
+    const render = renderCardSuggestion(suggestion);
+    const { buffer } = await asPNG(render);
+    const attachment = new AttachmentBuilder(buffer, { name: filename });
+
+    const container = await buildContainer(suggestion, filename);
 
     return {
         options: {

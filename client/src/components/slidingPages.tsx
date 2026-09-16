@@ -1,4 +1,4 @@
-import React, { Children, HTMLAttributes, ReactNode, Ref, useLayoutEffect, useRef, useState } from "react";
+import React, { Children, HTMLAttributes, ReactNode, Ref, useEffect, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { PageActiveContext, useIsPageActive } from "../hooks/useIsPageActive";
 import { BaseElementProps } from "../types";
@@ -10,6 +10,12 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     const isParentActive = useIsPageActive();
     const activeWrapperRef = useRef<HTMLDivElement>(null);
     const [measuredHeight, setMeasuredHeight] = useState<number>();
+    // Before the first measurement, the container can't be trusted to have a correct height from JS
+    // alone - so until then the active page is left in normal flow (not absolute) instead, which sizes
+    // the container by pure CSS on whatever the first painted frame turns out to be, and the container
+    // itself isn't clipped, so even a wrong guess here leaves content visible rather than hidden. Both
+    // relax back to the measured/absolute/clipped steady state together once a real measurement lands.
+    const [hasMeasuredOnce, setHasMeasuredOnce] = useState(false);
     // Counted rather than compared - children are a fresh array every render, and rebuilding the observer
     // each time is the work the observer was there to avoid
     const pageCount = Children.count(children);
@@ -33,10 +39,26 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
         return () => observer.disconnect();
     }, [currentPage, pageCount]);
 
+    // Deliberately a render behind measuredHeight, via a plain (not layout) effect - flipping this in
+    // the same commit as the first real height would add "transition-height" at the same moment the
+    // container's height first goes from unmeasured to real, and the browser then animates that jump
+    // from its actual previous (collapsed) state, regardless of the class only just having arrived.
+    // Waiting one extra paint means the frame this lands on already shows the correct height (put there
+    // by the active page's own normal-flow layout, not by this state), so there's nothing left to ease.
+    useEffect(() => {
+        if (measuredHeight !== undefined) {
+            setHasMeasuredOnce(true);
+        }
+    }, [measuredHeight]);
+
     return (
         <div
             ref={ref}
-            className={classNames("relative size-full overflow-clip transition-height", className)}
+            className={classNames(
+                "relative size-full",
+                { "overflow-clip transition-height": hasMeasuredOnce },
+                className
+            )}
             style={{ ...style, height: measuredHeight !== undefined ? `${measuredHeight}px` : undefined }}
         >
             {Children.map(children, (page, index) => {
@@ -52,9 +74,12 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
                         aria-hidden={!isActive}
                         inert={!isActive}
                         // Absolutely positioned, not a flex sibling - a flex row flashed the tallest
-                        // page's height before snapping down once the active page's was measured.
+                        // page's height before snapping down once the active page's was measured. The
+                        // active page is the one exception, and only until that first measurement lands
+                        // (see hasMeasuredOnce) - left in normal flow, it sizes the container itself.
                         className={classNames(
-                            "absolute inset-x-0 top-0 w-full transition-transform duration-500 ease-in-out",
+                            "inset-x-0 top-0 w-full transition-transform duration-500 ease-in-out",
+                            isActive && !hasMeasuredOnce ? "relative" : "absolute",
                             { "overflow-clip": !isActive }
                         )}
                         style={{ transform: `translateX(${(pageNo - currentPage) * 100}%)` }}

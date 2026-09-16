@@ -1,5 +1,6 @@
 import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
+import { buttonHandlers } from "./buttons";
 import { registerEvents } from "./events";
 import { dataService, logger } from "@/services";
 import {
@@ -104,6 +105,14 @@ class DiscordService {
                             await command.autocomplete(interaction);
                         }
                     });
+                } else if (interaction.isButton()) {
+                    const [prefix] = interaction.customId.split(":");
+                    const handler = buttonHandlers[prefix];
+                    if (handler) {
+                        await discordCommandMiddleware(interaction.member ?? interaction.user, () =>
+                            handler.execute(interaction)
+                        );
+                    }
                 }
             } catch (err) {
                 logger.error(err);
@@ -327,6 +336,8 @@ class DiscordService {
         const rolesChanged =
             currentRoleIds.size !== previousRoleIds.size || [...currentRoleIds].some((id) => !previousRoleIds.has(id));
 
+        // Silent - this is a background touch-up (name/avatar/roles catching up to Discord) on every
+        // login and every interaction alike, not a content change any other viewer needs prompted to refresh for.
         const user = await dataService.users.update(
             {
                 id: discordUser.id,
@@ -340,8 +351,10 @@ class DiscordService {
                 roles,
                 lastLogin: loggingIn ? new Date() : existing?.lastLogin
             },
-            true,
-            rolesChanged
+            true, // upsert
+            rolesChanged, // sync
+            true, // broadcast
+            true // silent
         );
 
         return {

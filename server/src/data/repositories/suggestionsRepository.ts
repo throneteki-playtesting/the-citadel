@@ -1,7 +1,7 @@
 ﻿import MongoDataSource from "./dataSources/mongoDataSource";
 import { Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
 import { Filter, SingleOrArray } from "common/types";
-import { ICardSuggestion, ReactionType } from "common/models/cards";
+import { countReactionsByType, ICardSuggestion, ReactionType } from "common/models/cards";
 import { asArray } from "common/utils";
 import Permission from "common/models/permissions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
@@ -10,6 +10,7 @@ import { BasicAuditableRepository } from "./shared";
 import {
     onSuggestionApproved,
     onSuggestionDeleted,
+    onSuggestionReactionChanged,
     onSuggestionUnapproved,
     syncSuggestionForum
 } from "@/discord/forums/suggestionForum";
@@ -17,7 +18,7 @@ import {
 type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];
 
 function countLikes(reactions?: SuggestionReactions) {
-    return Object.values(reactions ?? {}).filter((entry) => entry.type === "like").length;
+    return countReactionsByType(reactions, "like");
 }
 
 export default class SuggestionsRepository extends BasicAuditableRepository<"suggestion"> {
@@ -127,7 +128,12 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
 
     // Broadcast `silent: true` throughout this class - a reaction/approval can't clobber anyone's
     // in-progress edit, so there's nothing to ask before applying (unlike a real edit/draft save).
-    public async react(id: string, discordId: string, reactType: ReactionType): Promise<ICardSuggestion | undefined> {
+    public async react(
+        id: string,
+        discordId: string,
+        reactType: ReactionType,
+        syncDiscord: boolean = true
+    ): Promise<ICardSuggestion | undefined> {
         // Read first so a like that crosses the approval threshold can be told apart from one that
         // doesn't - findAndUpdate only ever hands back one side of that comparison.
         const before = await this.database.collection.findOne({ id } as MongoFilter<ICardSuggestion>, {
@@ -148,7 +154,16 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
         }
 
         this.broadcastUpdates([suggestion], { silent: true });
+        await this.syncReactionChange(suggestion, syncDiscord);
         return suggestion;
+    }
+
+    // Shared by react/unreact - a button click answering its own interaction already has the updated
+    // state, so it passes syncDiscord: false to skip this otherwise-redundant edit.
+    private async syncReactionChange(suggestion: ICardSuggestion, syncDiscord: boolean) {
+        if (syncDiscord && suggestion._metadata?.discord?.messageUrl) {
+            await this.internalSync([() => onSuggestionReactionChanged(suggestion)]);
+        }
     }
 
     // Lifts a prior Ignore (given only while below the threshold) once a suggestion crosses it, so
@@ -177,7 +192,11 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
         }
     }
 
-    public async unreact(id: string, discordId: string): Promise<ICardSuggestion | undefined> {
+    public async unreact(
+        id: string,
+        discordId: string,
+        syncDiscord: boolean = true
+    ): Promise<ICardSuggestion | undefined> {
         const suggestion = await this.findAndUpdate(id, {
             $unset: { [`_metadata.engagement.reactions.${discordId}`]: "" }
         } as UpdateFilter<ICardSuggestion>);
@@ -185,6 +204,7 @@ export default class SuggestionsRepository extends BasicAuditableRepository<"sug
             return undefined;
         }
         this.broadcastUpdates([suggestion], { silent: true });
+        await this.syncReactionChange(suggestion, syncDiscord);
         return suggestion;
     }
 

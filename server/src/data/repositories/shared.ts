@@ -239,13 +239,13 @@ export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K
         return this.database.count(counting);
     }
 
-    public async update(updating: T, upsert?: boolean, broadcast?: boolean): Promise<T>;
-    public async update(updating: T[], upsert?: boolean, broadcast?: boolean): Promise<T[]>;
-    public async update(updating: SingleOrArray<T>, upsert = true, broadcast = true) {
+    public async update(updating: T, upsert?: boolean, broadcast?: boolean, silent?: boolean): Promise<T>;
+    public async update(updating: T[], upsert?: boolean, broadcast?: boolean, silent?: boolean): Promise<T[]>;
+    public async update(updating: SingleOrArray<T>, upsert = true, broadcast = true, silent = false) {
         const items = asArray(updating);
         const result = await this.database.update(items, { upsert });
         if (broadcast) {
-            this.broadcastUpdates(result);
+            this.broadcastUpdates(result, { silent });
         }
         return Array.isArray(updating) ? result : result[0];
     }

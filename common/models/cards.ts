@@ -304,3 +304,9 @@ export function suggestionReactionBlockReason(
         ? "You cannot react to your own suggestion"
         : undefined;
 }
+
+type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];
+
+export function countReactionsByType(reactions: SuggestionReactions | undefined, type: ReactionType): number {
+    return Object.values(reactions ?? {}).filter((entry) => entry.type === type).length;
+}
