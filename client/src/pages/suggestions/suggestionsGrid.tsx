@@ -1,21 +1,32 @@
-import { useDeferredValue, useMemo } from "react";
+import { useState } from "react";
 import { useGetSuggestionsQuery } from "../../api";
-import CardGrid from "../../components/cardGrid";
+import CardGrid, { CardGridQueryState } from "../../components/cardGrid";
 import SortSelect from "../../components/sortSelect";
-import { AnimatePresence, motion } from "framer-motion";
-import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAngleLeft } from "@fortawesome/free-solid-svg-icons";
 import { useAuth } from "../../hooks/useAuth";
+import useDebounce from "../../hooks/useDebounce";
 import SuggestionCardLink from "./suggestionCardLink";
 import {
     isSuggestionFilterActive,
     SuggestionFilterSearchBar,
     SuggestionFilterValue
 } from "../../components/data/suggestionFilter";
-import { reorderTransition } from "../../constants";
 import { SortOption, sortOptions } from "./suggestionSortOptions";
-import useFilteredSuggestionList, { useDistinctTraits, useDistinctUsers } from "./useFilteredSuggestionList";
+import useSuggestionServerFilter, { suggestionListQueryExtras, suggestionSortOrderBy } from "./suggestionServerFilter";
+import { useDistinctTraits, useDistinctUsers } from "./useFilteredSuggestionList";
+import { ICardSuggestionFilterable } from "common/models/cards";
+import type { IGetRequest } from "server/types";
+
+const PER_PAGE = 20;
+const SEARCH_DEBOUNCE_MS = 500;
+
+const EMPTY_GRID_STATE: CardGridQueryState<ICardSuggestionFilterable> = {
+    items: [],
+    isInitialLoading: true,
+    isRefreshing: false,
+    isFetching: false
+};
 
 // A fully controlled component - filter/search/sort/unseen live in the dashboard's own state (see
 // index.tsx), so a stat card can jump straight into a preset view via a plain state update.
@@ -30,28 +41,32 @@ const SuggestionsGrid = ({
     onBack
 }: SuggestionsGridProps) => {
     const { user } = useAuth();
-    // Unpaginated, entirely client-side filtering (same precedent ProjectContent relies on). Archived
-    // and draft suggestions are already excluded server-side.
-    const { data: suggestionsData, isLoading } = useGetSuggestionsQuery();
-    const suggestions = useMemo(() => suggestionsData?.items ?? [], [suggestionsData?.items]);
-
-    const deferredSearch = useDeferredValue(search.trim());
     const isFilterActive = isSuggestionFilterActive(filter);
     // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
     // search text stays visible in the (now tucked-away) search box but no longer applies
-    const effectiveSearch = isFilterActive ? "" : deferredSearch;
+    const { value: debouncedSearch, isPending: isSearchDebouncing } = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
+    const effectiveSearch = isFilterActive ? "" : debouncedSearch;
 
-    const distinctTraits = useDistinctTraits(suggestions);
-    const distinctUsers = useDistinctUsers(suggestions);
+    const serverFilter = useSuggestionServerFilter(filter, effectiveSearch, { currentUserId: user?.discordId });
+    const orderBy = suggestionSortOrderBy[sortBy];
+    const queryExtras = suggestionListQueryExtras(filter);
 
-    const filtered = useFilteredSuggestionList(suggestions, {
-        filter,
-        search: effectiveSearch,
-        sortBy,
-        currentUserId: user?.discordId
-    });
+    // CardGrid's `query` prop is typed generically against IGetRequest<T> alone - suggestions' own
+    // unseen/myReactions extras (ISuggestionsListQuery) are closed over here instead. Named with a `use`
+    // prefix (not wrapped in useCallback, which would make eslint-plugin-react-hooks treat the hook call
+    // inside it as happening in a plain callback) so it reads as the small custom hook it actually is -
+    // CardGrid calls it directly during its own render, which is exactly how any custom hook composes.
+    function useSuggestionsQuery(arg: IGetRequest<ICardSuggestionFilterable>) {
+        return useGetSuggestionsQuery({ ...arg, ...queryExtras });
+    }
 
-    const isEmpty = !isLoading && filtered.length === 0;
+    // Mirrored out of CardGrid (which now owns fetching/paging) - needed here for the filter dropdown's
+    // option lists and the search box's own loading spinner.
+    const [gridState, setGridState] = useState(EMPTY_GRID_STATE);
+    const distinctTraits = useDistinctTraits(gridState.items);
+    const distinctUsers = useDistinctUsers(gridState.items);
+    const isBusy = gridState.isInitialLoading || gridState.isRefreshing;
+    const isSearching = isSearchDebouncing || (isBusy && gridState.isFetching && !!effectiveSearch);
 
     return (
         <div className="w-full flex flex-col gap-2">
@@ -71,50 +86,39 @@ const SuggestionsGrid = ({
                     onFilterChange={onFilterChange}
                     traits={distinctTraits}
                     users={distinctUsers}
-                    isDisabled={isLoading}
+                    isDisabled={isBusy}
+                    isSearching={isSearching}
                     className="w-full sm:w-auto sm:min-w-40"
                 />
                 <SortSelect
                     options={sortOptions}
                     value={sortBy}
-                    isDisabled={isLoading}
+                    isDisabled={isBusy}
                     onChange={onSortChange}
-                    className="w-full !max-w-none sm:w-auto sm:!max-w-44"
+                    className="w-full sm:w-44"
                 />
             </div>
-            {isLoading ? (
-                <CardGrid cards={[]} isLoading>
-                    {() => null}
-                </CardGrid>
-            ) : isEmpty ? (
-                <div className="p-8 text-center text-default-400">
-                    {effectiveSearch ? (
+            <CardGrid<ICardSuggestionFilterable>
+                key={animationKey}
+                query={useSuggestionsQuery}
+                queryArgs={{ filter: serverFilter, orderBy }}
+                resetKey={queryExtras}
+                perPage={PER_PAGE}
+                animate
+                keyExtractor={(suggestion) => suggestion.id ?? ""}
+                onStateChange={setGridState}
+                emptyContent={
+                    effectiveSearch ? (
                         <>No suggestions match &ldquo;{effectiveSearch}&rdquo;.</>
                     ) : (
                         "No suggestions match the current filters."
-                    )}
-                </div>
-            ) : (
-                <div
-                    key={animationKey}
-                    className={classNames("grid gap-1", "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5")}
-                >
-                    <AnimatePresence initial={false} mode="popLayout">
-                        {filtered.map((suggestion) => (
-                            <motion.div
-                                key={suggestion.id}
-                                layout
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={reorderTransition}
-                            >
-                                <SuggestionCardLink suggestion={suggestion} showLikesBadge={sortBy === "likes"} />
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-                </div>
-            )}
+                    )
+                }
+                errorContent="Something went wrong loading suggestions."
+                endContent={<>You&rsquo;ve seen everything that matches.</>}
+            >
+                {(suggestion) => <SuggestionCardLink suggestion={suggestion} showLikesBadge={sortBy === "likes"} />}
+            </CardGrid>
         </div>
     );
 };

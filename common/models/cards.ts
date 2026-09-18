@@ -288,6 +288,21 @@ export interface ICardSuggestion extends IAuditable {
     notes?: string;
 }
 
+// Filter/sort-only field - a like tally computed server-side from the stored reactions map, never itself
+// stored. Shared here (rather than declared only in suggestionsRepository.ts) so the client can also
+// type filters/sorts against it when querying GET /suggestions.
+export type ICardSuggestionFilterable = ICardSuggestion & { likes?: number };
+
+// GET /suggestions extras handled by dedicated server-side middleware rather than the generic `filter`
+// param - `_metadata.engagement.reactions` is a Joi `.pattern()`-keyed object (keyed by discord id), which
+// the generic filter-schema deriver can't validate arbitrary keys against. The server resolves these
+// against the *authenticated* principal's own discordId rather than trusting one from the client.
+export type ISuggestionsListQuery = {
+    unseen?: boolean;
+    /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */
+    myReactions?: string;
+};
+
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who
  *  created it, with no permission able to override that. */
 export function canViewSuggestion(suggestion: Pick<ICardSuggestion, "draft" | "user">, viewerDiscordId?: string) {

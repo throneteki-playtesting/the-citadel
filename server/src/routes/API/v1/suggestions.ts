@@ -3,7 +3,14 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
-import { canViewSuggestion, ICardSuggestion, reactionTypes, suggestionReactionBlockReason } from "common/models/cards";
+import {
+    canViewSuggestion,
+    ICardSuggestion,
+    ICardSuggestionFilterable,
+    ISuggestionsListQuery,
+    reactionTypes,
+    suggestionReactionBlockReason
+} from "common/models/cards";
 import { dataService, thronesDbCardPoolService } from "@/services";
 import { hasPermission, validate } from "common/utils";
 import { Filter } from "common/types";
@@ -26,11 +33,11 @@ import { syncSuggestionForum } from "@/discord/forums/suggestionForum";
 const router = express.Router();
 
 async function getSuggestions(
-    filter: IGetRequest<ICardSuggestion>["filter"],
-    orderBy: IGetRequest<ICardSuggestion>["orderBy"],
-    page: IGetRequest<ICardSuggestion>["page"],
-    perPage: IGetRequest<ICardSuggestion>["perPage"]
-): Promise<IGetResponse<ICardSuggestion>> {
+    filter: IGetRequest<ICardSuggestionFilterable>["filter"],
+    orderBy: IGetRequest<ICardSuggestionFilterable>["orderBy"],
+    page: IGetRequest<ICardSuggestionFilterable>["page"],
+    perPage: IGetRequest<ICardSuggestionFilterable>["perPage"]
+): Promise<IGetResponse<ICardSuggestionFilterable>> {
     const [result, count] = await Promise.all([
         dataService.suggestions.read(filter, orderBy, page, perPage),
         dataService.suggestions.count(filter)
@@ -38,11 +45,54 @@ async function getSuggestions(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(Schemas.CardSuggestion.Full, { created: "desc" });
+// Filter/sort-only field - computed server-side by SuggestionsRepository's virtualFields, never stored
+const SuggestionFilterExtensions = { likes: Joi.number() };
+
+const getQuerySchema = (
+    getRequestSchema<ICardSuggestionFilterable>(
+        Schemas.CardSuggestion.Full.keys(SuggestionFilterExtensions),
+        { created: "desc" }
+    ) as Joi.ObjectSchema<IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery>
+).keys({
+    // Handled by applyReactionVisibilityFilter below, not the generic `filter` param - see
+    // ISuggestionsListQuery's comment for why these two can't go through the generic filter schema
+    unseen: Joi.boolean(),
+    myReactions: Joi.string()
+});
+
+// Resolves `unseen`/`myReactions` against the *authenticated* principal's own discordId - never a
+// client-supplied one - and merges the result into `req.query.filter`, the same way
+// restrictListDraftVisibility below merges its own server-known conditions in.
+const applyReactionVisibilityFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, _res, next) => {
+    const { principal } = getContext();
+    const discordId = "discordId" in principal ? principal.discordId : undefined;
+    if (!discordId) {
+        next();
+        return;
+    }
+
+    const { unseen, myReactions } = req.query;
+    const reactionCondition = unseen
+        ? { $exists: false }
+        : myReactions
+          ? { type: { $in: myReactions.split(",") } }
+          : { type: { $ne: "ignore" } }; // default: ignored-by-me stays hidden unless asked for
+
+    req.query.filter = applyToFilter(req.query.filter, {
+        _metadata: { engagement: { reactions: { [discordId]: reactionCondition } } },
+        ...(unseen ? { user: { discordId: { $ne: discordId } } } : {})
+    });
+    next();
+});
 
 // Archived suggestions (and filtering by archive reason) are only visible to MANAGE_SUGGESTIONS_ARCHIVE
 // holders - everyone else's queries are silently narrowed to unarchived suggestions only.
-const restrictArchivedVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(
+const restrictArchivedVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(
     async (req, _res, next) => {
         const { principal } = getContext();
 
@@ -62,7 +112,7 @@ const restrictArchivedVisibility = asyncHandler<unknown, unknown, unknown, IGetR
 
 // Applies canViewSuggestion's rule to every read - "not a draft, OR my own draft" is an OR, so each
 // existing filter branch expands into up to two. Used only by the single-suggestion route (GET /:id).
-const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(
+const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(
     async (req, _res, next) => {
         const { principal } = getContext();
         const discordId = "discordId" in principal ? principal.discordId : undefined;
@@ -81,7 +131,7 @@ const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequ
 
 // GET / (list) never mixes drafts into the general pool, except a branch explicitly asking
 // `draft: true` (the "My Drafts" modal) - and even then, narrowed to the caller's own.
-const restrictListDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(
+const restrictListDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(
     async (req, _res, next) => {
         const { principal } = getContext();
         const discordId = "discordId" in principal ? principal.discordId : undefined;
@@ -205,7 +255,8 @@ router.get(
     }),
     restrictArchivedVisibility,
     restrictListDraftVisibility,
-    asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestion>>(async (req, res) => {
+    applyReactionVisibilityFilter,
+    asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
@@ -288,7 +339,7 @@ router.get(
         [Segments.QUERY]: getQuerySchema
     }),
     restrictDraftVisibility,
-    asyncHandler<{ id: string }, unknown, unknown, IGetRequest<ICardSuggestion>>(async (req, res) => {
+    asyncHandler<{ id: string }, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { id } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(applyToFilter(filter, { id }), orderBy, page, perPage);

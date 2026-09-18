@@ -100,7 +100,7 @@ export default function MyDraftsModal({ isOpen, onClose, onSelectDraft }: MyDraf
                             value={sortBy}
                             isDisabled={isLoading}
                             onChange={setSortBy}
-                            className="w-full !max-w-none sm:w-auto sm:!max-w-44"
+                            className="w-full sm:w-44"
                         />
                     </div>
                     {isLoading ? (

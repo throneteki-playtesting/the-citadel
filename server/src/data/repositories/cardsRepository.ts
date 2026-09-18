@@ -1,4 +1,4 @@
-﻿import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
+﻿import { BulkWriteOptions, DeleteOptions, Document, MongoClient } from "mongodb";
 import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
@@ -12,8 +12,63 @@ import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
 import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
 
-export default class CardsRepository extends BasicAuditableRepository<"card"> {
+// Filter/sort-only fields, computed by the virtualFields stages below - never part of the stored document
+export type IPlaytestCardFilterable = IPlaytestCard & {
+    reviews?: { current: number; total: number };
+    release?: { position: number };
+};
+
+// current counts reviews of this row's own version - "latest" only if the request itself is scoped to latest:true
+const REVIEW_STAGES: Document[] = [
+    {
+        $lookup: {
+            from: "reviews",
+            let: { project: "$project", number: "$number" },
+            pipeline: [
+                {
+                    $match: {
+                        $expr: { $and: [{ $eq: ["$project", "$$project"] }, { $eq: ["$number", "$$number"] }] }
+                    }
+                }
+            ],
+            as: "_reviews"
+        }
+    },
+    {
+        $addFields: {
+            "reviews.total": { $size: "$_reviews" },
+            "reviews.current": {
+                $size: { $filter: { input: "$_reviews", cond: { $eq: ["$$this.version", "$version"] } } }
+            }
+        }
+    },
+    { $project: { _reviews: 0 } }
+];
+
+const RELEASE_STAGES: Document[] = [
+    {
+        $lookup: {
+            from: "slots",
+            let: { project: "$project", number: "$number" },
+            pipeline: [
+                {
+                    $match: {
+                        $expr: { $and: [{ $eq: ["$project", "$$project"] }, { $eq: ["$number", "$$number"] }] }
+                    }
+                },
+                { $project: { _id: 0, position: "$release.position" } }
+            ],
+            as: "_slot"
+        }
+    },
+    { $addFields: { "release.position": { $arrayElemAt: ["$_slot.position", 0] } } },
+    { $project: { _slot: 0 } }
+];
+
+export default class CardsRepository extends BasicAuditableRepository<"card", IPlaytestCard, IPlaytestCardFilterable> {
     declare protected database: CardMongoDataSource;
+    protected override virtualFields = { reviews: REVIEW_STAGES, release: RELEASE_STAGES };
+
     constructor(mongoClient: MongoClient) {
         super(new CardMongoDataSource(mongoClient), "card");
     }

@@ -1,4 +1,4 @@
-import { Badge, Button, Drawer, DrawerContent, Input } from "@heroui/react";
+import { Badge, Button, Drawer, DrawerContent, Input, Spinner } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFilter, faMagnifyingGlass, faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
 import { useState } from "react";
@@ -15,6 +15,8 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     traits: string[];
     users: { discordId: string; displayname: string }[];
     isDisabled?: boolean;
+    // While debouncing or the resulting server search is in flight - shown in place of the clear button
+    isSearching?: boolean;
 };
 
 // Search and Advanced read as one connected control that shrinks to just Advanced while filtering.
@@ -28,7 +30,8 @@ const SuggestionFilterSearchBar = ({
     onFilterChange,
     traits,
     users,
-    isDisabled
+    isDisabled,
+    isSearching
 }: SuggestionFilterSearchBarProps) => {
     const [isOpen, setIsOpen] = useState(false);
     const isFiltering = isSuggestionFilterActive(filter);
@@ -52,7 +55,9 @@ const SuggestionFilterSearchBar = ({
                     onValueChange={onSearchChange}
                     startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
                     endContent={
-                        search ? (
+                        isSearching ? (
+                            <Spinner size="sm" aria-label="Searching" />
+                        ) : search ? (
                             <button type="button" onClick={() => onSearchChange("")} aria-label="Clear search">
                                 <FontAwesomeIcon icon={faXmarkCircle} className="text-default-400" />
                             </button>

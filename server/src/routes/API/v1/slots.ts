@@ -42,6 +42,7 @@ import { ApiErrorResponse } from "@/errors";
 import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
+import { ISlotFilterable } from "@/data/repositories/slotsRepository";
 import { isEqual } from "lodash-es";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
@@ -62,11 +63,11 @@ const SlotParams = {
 };
 
 async function getSlots(
-    filter: IGetRequest<ISlot>["filter"],
-    orderBy: IGetRequest<ISlot>["orderBy"],
-    page: IGetRequest<ISlot>["page"],
-    perPage: IGetRequest<ISlot>["perPage"]
-): Promise<IGetResponse<ISlot>> {
+    filter: IGetRequest<ISlotFilterable>["filter"],
+    orderBy: IGetRequest<ISlotFilterable>["orderBy"],
+    page: IGetRequest<ISlotFilterable>["page"],
+    perPage: IGetRequest<ISlotFilterable>["perPage"]
+): Promise<IGetResponse<ISlotFilterable>> {
     const [result, count] = await Promise.all([
         dataService.slots.read(filter, orderBy, page, perPage),
         dataService.slots.count(filter)
@@ -211,7 +212,16 @@ function withRefinementCheck(checks: IRefinementCheck[], by: string, version: Se
     return existing ? checks.map((check) => (check.createdBy === by ? entry : check)) : [...checks, entry];
 }
 
-const getQuerySchema = getRequestSchema(Schemas.Slot.Full, { project: "asc", number: "asc" });
+// Filter/sort-only fields - computed server-side by SlotsRepository's virtualFields, never stored
+const SlotFilterExtensions = {
+    artworkMeta: Joi.object({ artistName: Joi.string(), needsAttention: Joi.boolean() }),
+    refinementMeta: Joi.object({ openInquiries: Joi.number() })
+};
+
+const getQuerySchema = getRequestSchema<ISlotFilterable>(Schemas.Slot.Full.keys(SlotFilterExtensions), {
+    project: "asc",
+    number: "asc"
+});
 
 // Read slots for project
 router.get(
@@ -222,7 +232,7 @@ router.get(
     }),
     validateRequest(Permission.READ_SLOTS),
     loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const { number: project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
@@ -241,7 +251,7 @@ router.get(
     }),
     validateRequest(Permission.READ_ARTWORKS),
     loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const { number: project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
@@ -259,7 +269,7 @@ router.get(
     }),
     validateRequest(Permission.READ_REFINEMENT),
     loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project: project.number });

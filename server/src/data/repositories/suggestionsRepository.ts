@@ -1,7 +1,7 @@
 ﻿import MongoDataSource from "./dataSources/mongoDataSource";
-import { Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
+import { Document, Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
 import { Filter, SingleOrArray } from "common/types";
-import { countReactionsByType, ICardSuggestion, ReactionType } from "common/models/cards";
+import { countReactionsByType, ICardSuggestion, ICardSuggestionFilterable, ReactionType } from "common/models/cards";
 import { asArray } from "common/utils";
 import Permission from "common/models/permissions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
@@ -21,7 +21,29 @@ function countLikes(reactions?: SuggestionReactions) {
     return countReactionsByType(reactions, "like");
 }
 
-export default class SuggestionsRepository extends BasicAuditableRepository<"suggestion"> {
+// Self-contained (no $lookup) - reactions already live on the document, just keyed by discord id
+const LIKES_STAGES: Document[] = [
+    {
+        $addFields: {
+            likes: {
+                $size: {
+                    $filter: {
+                        input: { $objectToArray: { $ifNull: ["$_metadata.engagement.reactions", {}] } },
+                        cond: { $eq: ["$$this.v.type", "like"] }
+                    }
+                }
+            }
+        }
+    }
+];
+
+export default class SuggestionsRepository extends BasicAuditableRepository<
+    "suggestion",
+    ICardSuggestion,
+    ICardSuggestionFilterable
+> {
+    protected override virtualFields = { likes: LIKES_STAGES };
+
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<ICardSuggestion>(mongoClient, "suggestions", { id: 1 }), "suggestion");
     }

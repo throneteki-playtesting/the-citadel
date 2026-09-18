@@ -1200,8 +1200,13 @@ const EditSuggestionModal = ({
             <ConfirmModal
                 isOpen={isConfirmingDeleteDraft}
                 isLoading={isDeletingDraft}
-                title="Delete this draft?"
-                content={`This will permanently delete "${suggestion.card?.name}". This cannot be undone.`}
+                title="Delete draft suggestion?"
+                content={
+                    <div>
+                        This will permanently delete <span className="font-bold">{suggestion.card?.name}</span>, and
+                        cannot be undone.
+                    </div>
+                }
                 confirmContent="Delete"
                 onConfirm={doDeleteDraft}
                 onClose={() => setIsConfirmingDeleteDraft(false)}

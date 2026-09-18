@@ -3,7 +3,7 @@ import MongoDataSource from "./dataSources/mongoDataSource";
 import { Filter, SingleOrArray, Sort } from "common/types";
 import { asArray } from "common/utils";
 import { flatten } from "flat";
-import { Sort as MongoSort } from "mongodb";
+import { Document, Sort as MongoSort } from "mongodb";
 import { getContext, requestContext } from "@/middleware/context";
 import { IRepository } from "@/types";
 import { logger } from "@/services";
@@ -52,6 +52,53 @@ async function runSyncsByPriority(syncs: { priority: number; func: () => Promise
     for (const priority of sortedPriorities) {
         await Promise.all(priorityGroups[priority].map(({ func }) => func().catch((err) => logger.warn(err))));
     }
+}
+
+// Pipeline stages (typically $lookup/$addFields) for one virtual field, keyed by its top-level name
+export type VirtualFieldMap = Record<string, Document[]>;
+
+// Only pulls in a virtual field's stages when a request actually references it - zero cost otherwise
+function virtualStagesFor<T>(
+    virtualFields: VirtualFieldMap,
+    reading?: SingleOrArray<Filter<T>>,
+    orderBy?: Sort<T>
+): Document[] {
+    const keys = new Set<string>();
+    asArray(reading ?? []).forEach((filter) => Object.keys(filter as object).forEach((key) => keys.add(key)));
+    if (orderBy) {
+        Object.keys(orderBy).forEach((key) => keys.add(key));
+    }
+    return Object.entries(virtualFields)
+        .filter(([field]) => keys.has(field))
+        .flatMap(([, stages]) => stages);
+}
+
+// Shared by both repository base classes' read/count, same pattern as doApplyAudit below
+async function doRead<T, TFilterable extends T>(
+    database: MongoDataSource<T>,
+    virtualFields: VirtualFieldMap,
+    reading?: SingleOrArray<Filter<TFilterable>>,
+    orderBy?: Sort<TFilterable>,
+    page?: number,
+    perPage?: number
+): Promise<TFilterable[]> {
+    const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
+    const limit = perPage;
+    const skip = (page - 1) * perPage;
+    const stages = virtualStagesFor(virtualFields, reading, orderBy);
+    if (stages.length === 0) {
+        return (await database.read(reading, { sort, limit, skip })) as TFilterable[];
+    }
+    return await database.aggregateRead<TFilterable>(stages, reading, { sort, limit, skip });
+}
+
+async function doCount<T, TFilterable extends T>(
+    database: MongoDataSource<T>,
+    virtualFields: VirtualFieldMap,
+    counting?: SingleOrArray<Filter<TFilterable>>
+): Promise<number> {
+    const stages = virtualStagesFor(virtualFields, counting);
+    return stages.length === 0 ? database.count(counting) : database.aggregateCount<TFilterable>(stages, counting);
 }
 
 const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
@@ -167,11 +214,16 @@ export abstract class BroadcastIAuditableDatabase<
 
 export class BasicAuditableRepository<
         K extends ResourceType,
-        T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K]
+        T extends IAuditable & ResourceDataMap[K] = IAuditable & ResourceDataMap[K],
+        // Widen to T plus a repository's virtual fields (eg. IPlaytestCardFilterable) so read/count accept them
+        TFilterable extends T = T
     >
     extends BroadcastIAuditableDatabase<K, T>
     implements IRepository<T>
 {
+    // Override to add aggregation-computed fields read/count can filter/sort by - see cardsRepository's `reviews`
+    protected virtualFields: VirtualFieldMap = {};
+
     public async create(creating: T, broadcast?: boolean): Promise<T>;
     public async create(creating: T[], broadcast?: boolean): Promise<T[]>;
     public async create(creating: SingleOrArray<T>, broadcast = true) {
@@ -183,15 +235,17 @@ export class BasicAuditableRepository<
         return Array.isArray(creating) ? result : result[0];
     }
 
-    public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
-        const limit = perPage;
-        const skip = (page - 1) * perPage;
-        return await this.database.read(reading, { sort, limit, skip });
+    public async read(
+        reading?: SingleOrArray<Filter<TFilterable>>,
+        orderBy?: Sort<TFilterable>,
+        page?: number,
+        perPage?: number
+    ): Promise<TFilterable[]> {
+        return doRead(this.database, this.virtualFields, reading, orderBy, page, perPage);
     }
 
-    public async count(counting?: SingleOrArray<Filter<T>>) {
-        return this.database.count(counting);
+    public async count(counting?: SingleOrArray<Filter<TFilterable>>): Promise<number> {
+        return doCount(this.database, this.virtualFields, counting);
     }
 
     public async update(updating: T, upsert?: boolean, broadcast?: boolean): Promise<T>;
@@ -214,10 +268,13 @@ export class BasicAuditableRepository<
     }
 }
 
-export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K] = ResourceDataMap[K]>
-    extends BroadcastDatabase<K, T>
-    implements IRepository<T>
-{
+export class BasicRepository<
+    K extends ResourceType,
+    T extends ResourceDataMap[K] = ResourceDataMap[K],
+    TFilterable extends T = T
+> extends BroadcastDatabase<K, T> implements IRepository<T> {
+    protected virtualFields: VirtualFieldMap = {};
+
     public async create(creating: T, broadcast?: boolean): Promise<T>;
     public async create(creating: T[], broadcast?: boolean): Promise<T[]>;
     public async create(creating: SingleOrArray<T>, broadcast = true) {
@@ -228,15 +285,17 @@ export class BasicRepository<K extends ResourceType, T extends ResourceDataMap[K
         return Array.isArray(creating) ? result : result[0];
     }
 
-    public async read(reading?: SingleOrArray<Filter<T>>, orderBy?: Sort<T>, page?: number, perPage?: number) {
-        const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
-        const limit = perPage;
-        const skip = (page - 1) * perPage;
-        return await this.database.read(reading, { sort, limit, skip });
+    public async read(
+        reading?: SingleOrArray<Filter<TFilterable>>,
+        orderBy?: Sort<TFilterable>,
+        page?: number,
+        perPage?: number
+    ): Promise<TFilterable[]> {
+        return doRead(this.database, this.virtualFields, reading, orderBy, page, perPage);
     }
 
-    public async count(counting?: SingleOrArray<Filter<T>>) {
-        return this.database.count(counting);
+    public async count(counting?: SingleOrArray<Filter<TFilterable>>): Promise<number> {
+        return doCount(this.database, this.virtualFields, counting);
     }
 
     public async update(updating: T, upsert?: boolean, broadcast?: boolean, silent?: boolean): Promise<T>;

@@ -2,15 +2,39 @@ import {
     BulkWriteOptions,
     Collection,
     DeleteOptions,
+    Document,
     Filter as MongoFilter,
     FindOptions,
     IndexSpecification,
     MongoClient,
     OptionalUnlessRequiredId,
+    Sort as MongoSort,
     WithId
 } from "mongodb";
 import { Filter, isOperatorObject, SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
+import { omit } from "lodash-es";
+
+// A `find()` cursor's `sort` option accepts the friendly "asc"/"desc" strings and translates them itself,
+// but a raw `$sort` stage inside an aggregation pipeline is sent to the server as-is and only accepts
+// numeric 1/-1 (or `$meta`) - so a pipeline-based sort needs that translation done here instead.
+function toAggregationSort(sort: MongoSort): Document {
+    const direction = (value: unknown): 1 | -1 | undefined => {
+        if (value === 1 || value === "asc" || value === "ascending") {
+            return 1;
+        }
+        if (value === -1 || value === "desc" || value === "descending") {
+            return -1;
+        }
+        return undefined;
+    };
+
+    const result: Document = {};
+    for (const [key, value] of Object.entries(sort)) {
+        result[key] = direction(value) ?? value;
+    }
+    return result;
+}
 
 export default class MongoDataSource<T> {
     public collection: Collection<T>;
@@ -29,11 +53,12 @@ export default class MongoDataSource<T> {
             this.primaryKeys.push("_id");
         }
     }
-    protected buildFilterQuery(values?: SingleOrArray<Filter<T>>): MongoFilter<T> {
+    // Generic over F (not fixed to T) so it can also flatten a Filter<T & V> once virtual fields are mixed in
+    protected buildFilterQuery<F = T>(values?: SingleOrArray<Filter<F>>): MongoFilter<F> {
         let query: Record<string, unknown> = {};
 
         if (values) {
-            const flattenFilter = (value: Filter<T>): Record<string, unknown> => {
+            const flattenFilter = (value: Filter<F>): Record<string, unknown> => {
                 const result: Record<string, unknown> = {};
 
                 const traverse = (obj: Record<string, unknown>, prefix: string) => {
@@ -75,17 +100,14 @@ export default class MongoDataSource<T> {
             }
         }
 
-        return query as MongoFilter<T>;
+        return query as MongoFilter<F>;
     }
 
-    protected withoutId(values: WithId<T>[]): T[];
-    protected withoutId(values: WithId<T>): T;
-    protected withoutId(values: SingleOrArray<WithId<T>>) {
-        const stripId = (value: WithId<T>) => {
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { _id, ...rest } = value;
-            return rest as T;
-        };
+    // Generic over F (not fixed to T) so aggregateRead can also strip _id from a T & V result
+    protected withoutId<F = T>(values: WithId<F>[]): F[];
+    protected withoutId<F = T>(values: WithId<F>): F;
+    protected withoutId<F = T>(values: SingleOrArray<WithId<F>>) {
+        const stripId = (value: WithId<F>) => omit(value, "_id") as F;
         if (Array.isArray(values)) {
             return values.map(stripId);
         }
@@ -113,6 +135,38 @@ export default class MongoDataSource<T> {
         const query = this.buildFilterQuery(counting);
         const result = await this.total(query);
         return result;
+    }
+
+    // Like `read`, but runs `virtualStages` first so `reading`/`options.sort` can reference computed fields
+    public async aggregateRead<V = unknown>(
+        virtualStages: Document[],
+        reading?: SingleOrArray<Filter<T & V>>,
+        options?: { sort?: MongoSort; skip?: number; limit?: number }
+    ): Promise<(T & V)[]> {
+        const query = this.buildFilterQuery(reading);
+        const pipeline: Document[] = [...virtualStages, { $match: query }];
+        if (options?.sort) {
+            pipeline.push({ $sort: toAggregationSort(options.sort) });
+        }
+        if (options?.skip) {
+            pipeline.push({ $skip: options.skip });
+        }
+        if (options?.limit) {
+            pipeline.push({ $limit: options.limit });
+        }
+        const result = await this.collection.aggregate<WithId<T & V>>(pipeline).toArray();
+        return this.withoutId<T & V>(result);
+    }
+
+    // Counterpart to aggregateRead, for count against the same virtual fields
+    public async aggregateCount<V = unknown>(
+        virtualStages: Document[],
+        counting?: SingleOrArray<Filter<T & V>>
+    ): Promise<number> {
+        const query = this.buildFilterQuery(counting);
+        const pipeline: Document[] = [...virtualStages, { $match: query }, { $count: "total" }];
+        const [result] = await this.collection.aggregate<{ total: number }>(pipeline).toArray();
+        return result?.total ?? 0;
     }
 
     public async update(updating: SingleOrArray<T>, options?: BulkWriteOptions & { upsert?: boolean }) {

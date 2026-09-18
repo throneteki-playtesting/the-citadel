@@ -18,7 +18,15 @@ import { IPack } from "common/models/pack";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
-import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard, ReactionType } from "common/models/cards";
+import {
+    Faction,
+    ICardSuggestion,
+    ICardSuggestionFilterable,
+    IPlaytestCard,
+    IRenderCard,
+    ISuggestionsListQuery,
+    ReactionType
+} from "common/models/cards";
 import {
     DesignStatus,
     IReleaseCheckSummary,
@@ -341,7 +349,10 @@ const api = createApi({
             invalidatesTags: (result) => generateFor(result, "card")
         }),
         // Suggestions API
-        getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetRequest<ICardSuggestion> | void>({
+        getSuggestions: builder.query<
+            IGetResponse<ICardSuggestionFilterable>,
+            (IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery) | void
+        >({
             query: (options) => {
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };

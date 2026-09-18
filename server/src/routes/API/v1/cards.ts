@@ -5,6 +5,7 @@ import { inc } from "semver";
 import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
+import { IPlaytestCardFilterable } from "@/data/repositories/cardsRepository";
 import { isReleaseBound } from "common/models/slots";
 import { isInquiryOpen } from "common/models/refinement";
 import * as Schemas from "common/models/schemas";
@@ -49,11 +50,11 @@ const CardVersionOrLatestParams = {
 
 // Core data-fetching logic, shared across GET routes
 async function getCards(
-    filter: IGetRequest<IPlaytestCard>["filter"],
-    orderBy: IGetRequest<IPlaytestCard>["orderBy"],
-    page: IGetRequest<IPlaytestCard>["page"],
-    perPage: IGetRequest<IPlaytestCard>["perPage"]
-): Promise<IGetResponse<IPlaytestCard>> {
+    filter: IGetRequest<IPlaytestCardFilterable>["filter"],
+    orderBy: IGetRequest<IPlaytestCardFilterable>["orderBy"],
+    page: IGetRequest<IPlaytestCardFilterable>["page"],
+    perPage: IGetRequest<IPlaytestCardFilterable>["perPage"]
+): Promise<IGetResponse<IPlaytestCardFilterable>> {
     const [result, count] = await Promise.all([
         dataService.cards.read(filter, orderBy, page, perPage),
         dataService.cards.count(filter)
@@ -61,19 +62,24 @@ async function getCards(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(Schemas.PlaytestingCard.Full, {
-    project: "asc",
-    number: "asc",
-    version: "asc"
-});
+// Filter/sort-only fields - computed server-side by CardsRepository's virtualFields, never stored on the card
+const CardFilterExtensions = {
+    reviews: Joi.object({ current: Joi.number(), total: Joi.number() }),
+    release: Joi.object({ position: Joi.number() })
+};
 
-function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boolean {
+const getQuerySchema = getRequestSchema<IPlaytestCardFilterable>(
+    Schemas.PlaytestingCard.Full.keys(CardFilterExtensions),
+    { project: "asc", number: "asc", version: "asc" }
+);
+
+function everyFilterHasLatest(filter: IGetRequest<IPlaytestCardFilterable>["filter"]): boolean {
     const filters = Array.isArray(filter) ? filter : [filter];
     return filters.length > 0 && filters.every((f) => f?.latest === true);
 }
 
 // Checks all filters to decide between READ_LATEST_CARDS and READ_CARDS being required
-const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(
+const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(
     (principal, req) => {
         if (hasPermission(principal, Permission.READ_CARDS)) {
             return true;
@@ -90,7 +96,7 @@ router.get(
     "/",
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     validateCardQueryPermission,
-    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getCards(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
@@ -105,7 +111,7 @@ router.get(
     loadProjectByParam,
     validateProjectAccess,
     validateCardQueryPermission,
-    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(async (req, res) => {
         const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
 
@@ -123,7 +129,7 @@ router.get(
     loadProjectByParam,
     validateProjectAccess,
     validateCardQueryPermission,
-    asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(
+    asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(
         async (req, res) => {
             const { project, number } = req.params;
             const { filter, orderBy, page, perPage } = req.query;
