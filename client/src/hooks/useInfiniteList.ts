@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
 export interface UseInfiniteListOptions<T> {
     /**
@@ -72,10 +72,13 @@ export default function useInfiniteList<T>({
         if (!currentData) {
             return;
         }
-        // Replaces (not appends) on page 1 - this is what actually swaps stale items for fresh ones once
-        // a refresh's first page lands, since nothing clears `items` up front any more.
-        setItems((prev) => (page === 1 ? currentData.items : [...prev, ...currentData.items]));
-        setTotal(currentData.total);
+        // A transition lets urgent updates (eg. typing) interrupt/deprioritize this expensive re-render.
+        startTransition(() => {
+            // Replaces (not appends) on page 1 - this is what actually swaps stale items for fresh ones
+            // once a refresh's first page lands, since nothing clears `items` up front any more.
+            setItems((prev) => (page === 1 ? currentData.items : [...prev, ...currentData.items]));
+            setTotal(currentData.total);
+        });
         loadedResetKeyRef.current = resetKey;
     }, [currentData, page, resetKey]);
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGetSuggestionsQuery } from "../../api";
 import CardGrid, { CardGridQueryState } from "../../components/cardGrid";
 import SortSelect from "../../components/sortSelect";
@@ -42,10 +42,27 @@ const SuggestionsGrid = ({
 }: SuggestionsGridProps) => {
     const { user } = useAuth();
     const isFilterActive = isSuggestionFilterActive(filter);
+
+    // Keystrokes live here, not in index.tsx's state, so typing doesn't re-render the whole dashboard.
+    const [rawSearch, setRawSearch] = useState(search);
+    // Re-seeds from the parent only on a fresh browse session (openAll bumps animationKey), adjusted
+    // during render per React's own reset-on-key-change pattern rather than clobbering mid-type via an effect.
+    const [prevAnimationKey, setPrevAnimationKey] = useState(animationKey);
+    if (animationKey !== prevAnimationKey) {
+        setPrevAnimationKey(animationKey);
+        setRawSearch(search);
+    }
+
     // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
     // search text stays visible in the (now tucked-away) search box but no longer applies
-    const { value: debouncedSearch, isPending: isSearchDebouncing } = useDebounce(search.trim(), SEARCH_DEBOUNCE_MS);
+    const { value: debouncedSearch, isPending: isSearchDebouncing } = useDebounce(rawSearch.trim(), SEARCH_DEBOUNCE_MS);
     const effectiveSearch = isFilterActive ? "" : debouncedSearch;
+
+    // Reports the settled value up to index.tsx (for the URL) once typing pauses - onSearchChange is
+    // `setSearch` from useState, which React guarantees is referentially stable, so this can't loop.
+    useEffect(() => {
+        onSearchChange(debouncedSearch);
+    }, [debouncedSearch, onSearchChange]);
 
     const serverFilter = useSuggestionServerFilter(filter, effectiveSearch, { currentUserId: user?.discordId });
     const orderBy = suggestionSortOrderBy[sortBy];
@@ -80,8 +97,8 @@ const SuggestionsGrid = ({
                 </button>
                 <div className="hidden sm:block flex-1" />
                 <SuggestionFilterSearchBar
-                    search={search}
-                    onSearchChange={onSearchChange}
+                    search={rawSearch}
+                    onSearchChange={setRawSearch}
                     filter={filter}
                     onFilterChange={onFilterChange}
                     traits={distinctTraits}

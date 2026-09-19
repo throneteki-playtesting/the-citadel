@@ -280,32 +280,31 @@ const questionsFields = {
     punishment: Joi.array()
         .items(Joi.string().valid(...PUNISHMENT_TYPES.map((p) => p.id)))
         .default([]),
-    abilityTypes: Joi.array().items(Joi.string().valid(...Cards.abilityTypes)),
-    triggerReliability: Joi.array().items(Joi.string().valid(...Cards.triggerReliabilities)),
+    // Most cards have none - 0 is a real, complete answer, so this defaults rather than forcing a confirmation.
+    triggeredAbilityCount: Joi.number().integer().min(0).default(0),
+    naturalTrigger: Joi.boolean(),
+    repeatabilityRestricted: Joi.boolean(),
     iconic: Joi.boolean()
 };
 
-const RepeatabilityShape = {
-    hardLimit: Joi.boolean(),
-    paidCost: Joi.boolean(),
-    oneTime: Joi.boolean()
-};
-
 const QuestionsPartial = Joi.object({
-    ...questionsFields,
-    repeatability: Joi.object(RepeatabilityShape)
+    ...questionsFields
 });
 
-// Only `iconic` is genuinely required - the others default to a safe "no answer yet" value
-// (`[]`/all-false) that `checklistRules()` itself flags rather than blocking submission on.
+// naturalTrigger/repeatabilityRestricted are required only once triggeredAbilityCount > 0 - the
+// `.required()` on `is` is load-bearing, or a missing count would itself satisfy `is`.
 const Questions = Joi.object({
     rewardTypes: questionsFields.rewardTypes,
     punishment: questionsFields.punishment,
-    abilityTypes: questionsFields.abilityTypes.default([]),
-    triggerReliability: questionsFields.triggerReliability.default([]),
-    repeatability: Joi.object(RepeatabilityShape).default({ hardLimit: false, paidCost: false, oneTime: false }),
-    // Forces a real answer - unlike reward/punishment, "iconic" has no meaningful default; the
-    // submitter has to say one way or the other rather than silently falling to a guessed value
+    triggeredAbilityCount: questionsFields.triggeredAbilityCount,
+    naturalTrigger: Joi.when("triggeredAbilityCount", {
+        is: Joi.number().greater(0).required(),
+        then: Joi.boolean().required()
+    }),
+    repeatabilityRestricted: Joi.when("triggeredAbilityCount", {
+        is: Joi.number().greater(0).required(),
+        then: Joi.boolean().required()
+    }),
     iconic: Joi.boolean().required()
 });
 
@@ -370,7 +369,9 @@ const suggestionSharedFields = {
     pivotPoints: Joi.array().items(Joi.string().max(PIVOT_POINT_MAX_LENGTH)),
     comparableCards: Joi.array().items(Joi.string()),
     combosWith: Joi.array().items(Joi.string()),
-    notes: Joi.string().allow("")
+    // Now edited as rich text (RichTextArea), same sanitise-at-the-boundary rule every other rich
+    // text field uses - was a plain string when it was a plain Textarea.
+    notes: RichText
 };
 
 export const CardSuggestion = {

@@ -104,9 +104,17 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
         }
 
         case "array": {
-            return Joi.alternatives()
-                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
-                .optional();
+            const itemsDesc = (desc.items ?? [])[0] as Joi.Description | undefined;
+            const operators: Record<string, Joi.Schema> = { $exists: Joi.boolean() };
+            // A string-item array (eg. card.traits) is matched elementwise by Mongo when the query
+            // value isn't itself an array, so it gets the same text operators a plain string field does.
+            if (itemsDesc?.type === "string") {
+                operators.$regex = Joi.string();
+                operators.$in = Joi.array().items(Joi.string());
+                operators.$nin = Joi.array().items(Joi.string());
+                operators.$ne = Joi.string();
+            }
+            return Joi.alternatives().try(fieldSchema, Joi.object(operators)).optional();
         }
 
         case "object": {

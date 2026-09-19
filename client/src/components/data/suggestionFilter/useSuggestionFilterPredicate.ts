@@ -9,7 +9,7 @@ export type SuggestionFilterContext = {
     currentUserId?: string;
 };
 
-function countLikes(reactions?: Record<string, { type: ReactionType; reactedAt: Date }>) {
+function countLikes(reactions?: Record<string, { type: ReactionType; reactedAt: Date | string }>) {
     return Object.values(reactions ?? {}).filter((entry) => entry.type === "like").length;
 }
 
@@ -28,7 +28,8 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         rewardTypes,
         punishment,
-        abilityTypes,
+        naturalTrigger,
+        repeatabilityRestricted,
         iconic,
         ...explodable
     } = value;
@@ -101,10 +102,12 @@ export default function useSuggestionFilterPredicate(
             ) {
                 return false;
             }
+            if (naturalTrigger !== undefined && !!suggestion.questions?.naturalTrigger !== naturalTrigger) {
+                return false;
+            }
             if (
-                abilityTypes &&
-                abilityTypes.length > 0 &&
-                !abilityTypes.some((entry) => suggestion.questions?.abilityTypes?.includes(entry))
+                repeatabilityRestricted !== undefined &&
+                !!suggestion.questions?.repeatabilityRestricted !== repeatabilityRestricted
             ) {
                 return false;
             }
@@ -123,7 +126,8 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         rewardTypes,
         punishment,
-        abilityTypes,
+        naturalTrigger,
+        repeatabilityRestricted,
         iconic,
         context
     ]);

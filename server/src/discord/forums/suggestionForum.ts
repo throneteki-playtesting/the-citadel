@@ -22,15 +22,15 @@ import {
 import { Mutex } from "async-mutex";
 import { isEqual, merge } from "lodash-es";
 import { colors, extractFromURL } from "../utils";
-import { Code, countReactionsByType, ICardSuggestion, IRepeatability } from "common/models/cards";
+import { Code, countReactionsByType, ICardSuggestion } from "common/models/cards";
 import { dataService, discordService, logger, thronesDbCardPoolService } from "@/services";
 import { factionNames, renderCardSuggestion, THRONESDB_URL } from "common/utils";
 import { asPNG } from "@/rendering";
 import { REWARD_TYPES } from "common/designGuidelines/rewardTypes";
 import { PUNISHMENT_TYPES } from "common/designGuidelines/punishmentTypes";
-import { TRIGGER_RELIABILITIES } from "common/designGuidelines/computeStrength";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { createSyncEmitter } from "@/services/sseService";
+import { toDiscord } from "common/richText/toDiscord";
 
 const FORUM_NAME = "suggestion-forum";
 // Discord's own cap on a thread's name
@@ -426,17 +426,6 @@ function updatedNotice(suggestion: ICardSuggestion, changed: string[]) {
     return notice(suggestion, heading, ["users"]);
 }
 
-const REPEATABILITY_LABELS: Record<keyof IRepeatability, string> = {
-    hardLimit: "Hard Limit",
-    paidCost: "Paid Cost",
-    oneTime: "One-Time"
-};
-function repeatabilityLabels(repeatability: IRepeatability): string[] {
-    return (Object.keys(REPEATABILITY_LABELS) as (keyof IRepeatability)[])
-        .filter((key) => repeatability[key])
-        .map((key) => REPEATABILITY_LABELS[key]);
-}
-
 function labelsFor(options: { id: string; label: string }[], ids: string[]): string[] {
     return ids.map((id) => options.find((option) => option.id === id)?.label ?? id);
 }
@@ -491,13 +480,11 @@ async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICa
     if (punishmentLabels.length > 0) {
         answers.push(`⚠️ **Punishment:** ${punishmentLabels.join(", ")}`);
     }
-    const reliabilityLabels = labelsFor(TRIGGER_RELIABILITIES, suggestion.questions.triggerReliability);
-    if (reliabilityLabels.length > 0) {
-        answers.push(`🎯 **Trigger Reliability:** ${reliabilityLabels.join(", ")}`);
+    if (suggestion.questions.naturalTrigger !== undefined) {
+        answers.push(`🎯 **Natural Trigger:** ${suggestion.questions.naturalTrigger ? "Yes" : "No"}`);
     }
-    const repeatLabels = repeatabilityLabels(suggestion.questions.repeatability);
-    if (repeatLabels.length > 0) {
-        answers.push(`🔁 **Repeatability:** ${repeatLabels.join(", ")}`);
+    if (suggestion.questions.repeatabilityRestricted !== undefined) {
+        answers.push(`🔁 **Safely Limited:** ${suggestion.questions.repeatabilityRestricted ? "Yes" : "No"}`);
     }
 
     const context: string[] = [];
@@ -562,7 +549,10 @@ export async function buildContainer(suggestion: ICardSuggestion, filename: stri
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading));
 
     if (suggestion.notes) {
-        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(suggestion.notes));
+        const emojis = await discordService.getEmojiMap();
+        container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(toDiscord(suggestion.notes, { emojis }))
+        );
     }
 
     container

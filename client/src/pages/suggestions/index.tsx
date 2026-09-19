@@ -25,9 +25,12 @@ import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components
 import usePageTitle from "../../hooks/usePageTitle";
 import { usePermission } from "../../hooks/usePermission";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowRight, faFileLines, faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCircleQuestion, faFileLines, faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import SuggestionsGuideModal from "./suggestionsGuideModal";
 import LoadingCard from "../../components/loadingCard";
 import { rowCapClasses } from "../../utils";
+
+const SUGGESTIONS_GUIDE_SEEN_KEY = "suggestions-guide-seen";
 // Every key the "all suggestions" scope might write - declared up front so a cleared field's key
 // is dropped rather than left stale, same convention projectContent.tsx/projectArtworks.tsx use.
 const URL_OWNED_KEYS = [
@@ -57,7 +60,8 @@ const URL_OWNED_KEYS = [
     "myReactions",
     "rewardTypes",
     "punishment",
-    "abilityTypes",
+    "naturalTrigger",
+    "repeatabilityRestricted",
     "iconic"
 ];
 
@@ -83,6 +87,26 @@ function SuggestionsContent() {
     const { data: feed, isLoading } = useGetSuggestionsFeedQuery();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
     const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+    // Auto-opens the first time this browser ever lands on this page - no role/eligibility condition
+    // beyond that (unlike the playtest onboarding guide), so a plain "seen it" flag is all this needs.
+    const [isGuideOpen, setIsGuideOpen] = useState(() => {
+        try {
+            return localStorage.getItem(SUGGESTIONS_GUIDE_SEEN_KEY) !== "true";
+        } catch {
+            return false;
+        }
+    });
+    // Marked "seen" the moment it's shown (first-visit or the manual re-open button), not on close.
+    useEffect(() => {
+        if (!isGuideOpen) {
+            return;
+        }
+        try {
+            localStorage.setItem(SUGGESTIONS_GUIDE_SEEN_KEY, "true");
+        } catch {
+            // Nothing to do if storage is unavailable - it'll just show again next visit.
+        }
+    }, [isGuideOpen]);
     const myDraftsCount = feed?.stats.myDrafts;
 
     // A draft's own detail page has nowhere to render itself - it redirects here with the already-
@@ -113,6 +137,7 @@ function SuggestionsContent() {
     // list on this so arriving with a filter already applied snaps straight in, no reorder animation.
     const [browseSessionKey, setBrowseSessionKey] = useState(0);
 
+    // `search` only changes here once per settled search (see suggestionsGrid.tsx) or via openAll's reset.
     const scopeParams = useMemo((): ScopeParams => {
         const params: ScopeParams = Object.fromEntries(URL_OWNED_KEYS.map((key) => [key, undefined]));
         if (!isBrowsingAll) {
@@ -150,6 +175,16 @@ function SuggestionsContent() {
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
                         Suggestions
                     </div>
+                    <Button
+                        color="primary"
+                        variant="flat"
+                        size="sm"
+                        startContent={<FontAwesomeIcon icon={faCircleQuestion} />}
+                        onPress={() => setIsGuideOpen(true)}
+                        className="font-cinzel shrink-0 font-semibold"
+                    >
+                        How do suggestions work?
+                    </Button>
                 </div>
                 <div className="flex items-center justify-between gap-2 py-1">
                     <div className="text-sm lg:text-medium text-foreground/70 italic">
@@ -315,6 +350,13 @@ function SuggestionsContent() {
                 isOpen={isDraftsOpen}
                 onClose={() => setIsDraftsOpen(false)}
                 onSelectDraft={(draft) => setEditing(draft)}
+            />
+
+            <SuggestionsGuideModal
+                isOpen={isGuideOpen}
+                onClose={() => setIsGuideOpen(false)}
+                onCreateSuggestion={canCreate ? () => setEditing({}) : undefined}
+                onViewAll={() => openAll()}
             />
 
             {canCreate && !!myDraftsCount && (

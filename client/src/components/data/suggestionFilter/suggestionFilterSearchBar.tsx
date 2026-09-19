@@ -14,6 +14,7 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     onFilterChange: (value: SuggestionFilterValue) => void;
     traits: string[];
     users: { discordId: string; displayname: string }[];
+    // Applies to the Advanced button only - disabling the search input itself would blur it mid-type.
     isDisabled?: boolean;
     // While debouncing or the resulting server search is in flight - shown in place of the clear button
     isSearching?: boolean;
@@ -66,7 +67,7 @@ const SuggestionFilterSearchBar = ({
                     size="sm"
                     className="w-full"
                     classNames={{ inputWrapper: "rounded-r-none" }}
-                    isDisabled={isDisabled || isFiltering}
+                    isDisabled={isFiltering}
                 />
             </div>
             <Badge

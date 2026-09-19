@@ -156,31 +156,18 @@ export interface ILabeledCard extends ICard {
     workInProgress: boolean;
 }
 
-export const triggerReliabilities = ["natural", "discretionary", "dependent"] as const;
-export type TriggerReliability = (typeof triggerReliabilities)[number];
-
-/** Three independent toggles - see common/designGuidelines for the full rationale. `paidCost` also
- *  covers keyword-driven costs (Bestow, Limited); `oneTime` moved here from `TriggerReliability`. */
-export interface IRepeatability {
-    hardLimit: boolean;
-    paidCost: boolean;
-    oneTime: boolean;
-}
-
-export const abilityTypes = ["triggered", "passive"] as const;
-export type AbilityType = (typeof abilityTypes)[number];
-
 /** Questions asked of a suggestion's submitter - distinct from `IDerivedFields`, which is computed
  *  automatically from `card.text` and never asked of anyone. */
 export interface ISuggestionQuestions {
     rewardTypes: RewardType[];
     punishment: PunishmentType[];
-    /** 0-many; seeded from the text (see deriveFields.hasTriggeredAbility/hasPassiveAbility) but
-     *  always overridable - gates Trigger Reliability/Repeatability. */
-    abilityTypes: AbilityType[];
-    /** all card types; feeds the strength calc only for characters, otherwise a plain filter */
-    triggerReliability: TriggerReliability[];
-    repeatability: IRepeatability;
+    /** Manual count of triggered abilities - gates naturalTrigger/repeatabilityRestricted and the
+     *  triggeredAbilityFocus checklist rule. */
+    triggeredAbilityCount?: number;
+    /** Whether any ability can trigger through normal rules alone, not only via another card's effect. */
+    naturalTrigger?: boolean;
+    /** Whether every recurring ability is kept in check (a one-time trigger, hard limit, or paid cost). */
+    repeatabilityRestricted?: boolean;
     /** all card types - feeds the strength calc only for characters, otherwise a plain filter */
     iconic?: boolean;
 }
@@ -217,6 +204,7 @@ export const checklistRuleIds = [
     "rewardFocus",
     "punishmentFocus",
     "loyaltyConsistency",
+    "triggeredAbilityFocus",
     "repeatabilityControl",
     "plotBudget",
     "pivotPointBalance"
@@ -261,11 +249,17 @@ export interface ICardSuggestion extends IAuditable {
             lastSyncedSnapshot?: Record<string, unknown>;
         };
         /** Never client-writable (see the dedicated /:id/reaction routes) - lives under `_metadata`
-         *  rather than top-level so reacting/approving never bumps `updated` (see stripAudit). */
+         *  rather than top-level so reacting/approving never bumps `updated` (see stripAudit).
+         *  `reactedAt`/`approvedAt` take `Date | string` rather than just `Date` - genuinely a `Date`
+         *  server-side (Mongo's own BSON type) before Mongo serialises it, but only ever a plain ISO
+         *  string once it crosses the wire as JSON, including the client's own optimistic patches
+         *  (see api/index.ts) - Redux Toolkit's serializability check rejects a real `Date` instance
+         *  in the store, and every consumer already re-wraps this in `new Date(...)` before calling
+         *  any Date method, so the string form was always the one actually flowing through. */
         engagement?: {
-            reactions: Record<string, { type: ReactionType; reactedAt: Date }>;
+            reactions: Record<string, { type: ReactionType; reactedAt: Date | string }>;
             approvedBy?: string;
-            approvedAt?: Date;
+            approvedAt?: Date | string;
         };
     };
     /** Present only once archived - see IArchivedInfo */

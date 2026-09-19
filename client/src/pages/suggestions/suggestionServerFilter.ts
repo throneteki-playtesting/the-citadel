@@ -80,8 +80,18 @@ export default function useSuggestionServerFilter(
     search: string,
     context: SuggestionFilterContext
 ): SingleOrArray<Filter<ICardSuggestionFilterable>> | undefined {
-    const { traits, mine, byUsers, approvedFilter, rewardTypes, punishment, abilityTypes, iconic, ...cardExplodable } =
-        value;
+    const {
+        traits,
+        mine,
+        byUsers,
+        approvedFilter,
+        rewardTypes,
+        punishment,
+        naturalTrigger,
+        repeatabilityRestricted,
+        iconic,
+        ...cardExplodable
+    } = value;
     const { currentUserId } = context;
 
     const combined = useMemo(() => {
@@ -120,7 +130,12 @@ export default function useSuggestionServerFilter(
         const questions: Record<string, unknown> = {};
         setNonEmpty(questions, "rewardTypes", rewardTypes);
         setNonEmpty(questions, "punishment", punishment);
-        setNonEmpty(questions, "abilityTypes", abilityTypes);
+        if (naturalTrigger !== undefined) {
+            questions.naturalTrigger = naturalTrigger;
+        }
+        if (repeatabilityRestricted !== undefined) {
+            questions.repeatabilityRestricted = repeatabilityRestricted;
+        }
         if (iconic !== undefined) {
             questions.iconic = iconic;
         }
@@ -129,7 +144,19 @@ export default function useSuggestionServerFilter(
         }
 
         return base as Explodable<ICardSuggestionFilterable>;
-    }, [cardExplodable, traits, mine, byUsers, approvedFilter, rewardTypes, punishment, abilityTypes, iconic, currentUserId]);
+    }, [
+        cardExplodable,
+        traits,
+        mine,
+        byUsers,
+        approvedFilter,
+        rewardTypes,
+        punishment,
+        naturalTrigger,
+        repeatabilityRestricted,
+        iconic,
+        currentUserId
+    ]);
 
     const filters = useFilter<ICardSuggestionFilterable>(combined);
 
@@ -141,7 +168,9 @@ export default function useSuggestionServerFilter(
         const searchBranches = buildSearchBranches(term);
         const base = filters && filters.length > 0 ? filters : [{}];
         return base.flatMap((filterBranch) =>
-            searchBranches.map((searchBranch) => mergeBranch(filterBranch, searchBranch) as Filter<ICardSuggestionFilterable>)
+            searchBranches.map(
+                (searchBranch) => mergeBranch(filterBranch, searchBranch) as Filter<ICardSuggestionFilterable>
+            )
         );
     }, [filters, search]);
 }

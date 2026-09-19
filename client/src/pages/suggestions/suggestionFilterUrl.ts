@@ -1,4 +1,4 @@
-import { AbilityType, ChallengeIcon, challengeIcons, Faction, Icons, ReactionType, Type } from "common/models/cards";
+import { ChallengeIcon, challengeIcons, Faction, Icons, ReactionType, Type } from "common/models/cards";
 import { escapeRegExp } from "common/utils";
 import { RewardType } from "common/designGuidelines/rewardTypes";
 import { PunishmentType } from "common/designGuidelines/punishmentTypes";
@@ -33,6 +33,14 @@ function decodeText(raw: string | null): { $regex: string } | undefined {
     return raw ? { $regex: `(?i)${escapeRegExp(raw)}` } : undefined;
 }
 
+function encodeBoolean(value: unknown): string | undefined {
+    return value === undefined ? undefined : String(value);
+}
+
+function decodeBoolean(raw: string | null): boolean | undefined {
+    return raw === "true" ? true : raw === "false" ? false : undefined;
+}
+
 function encodeNumeric(value: unknown): string | undefined {
     const decoded = decodeNumericOperators(value);
     return decoded ? `${decoded.operator}:${decoded.value}` : undefined;
@@ -61,8 +69,8 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
 
     set("type", encodeArray(filter.type as string[] | undefined));
     set("faction", encodeArray(filter.faction as string[] | undefined));
-    set("loyal", filter.loyal === undefined ? undefined : String(filter.loyal));
-    set("unique", filter.unique === undefined ? undefined : String(filter.unique));
+    set("loyal", encodeBoolean(filter.loyal));
+    set("unique", encodeBoolean(filter.unique));
     set("icons", encodeArray(challengeIcons.filter((icon) => filter.icons?.[icon] === true)));
     set("cost", encodeNumeric(filter.cost));
     set("strength", encodeNumeric(filter.strength));
@@ -82,8 +90,9 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
     set("myReactions", encodeArray(filter.myReactions));
     set("rewardTypes", encodeArray(filter.rewardTypes));
     set("punishment", encodeArray(filter.punishment));
-    set("abilityTypes", encodeArray(filter.abilityTypes));
-    set("iconic", filter.iconic === undefined ? undefined : String(filter.iconic));
+    set("naturalTrigger", encodeBoolean(filter.naturalTrigger));
+    set("repeatabilityRestricted", encodeBoolean(filter.repeatabilityRestricted));
+    set("iconic", encodeBoolean(filter.iconic));
     return params;
 }
 
@@ -106,9 +115,10 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     const traits = decodeArray(params.get("traits"));
     const rewardTypes = decodeArray(params.get("rewardTypes")) as RewardType[];
     const punishment = decodeArray(params.get("punishment")) as PunishmentType[];
-    const abilityTypes = decodeArray(params.get("abilityTypes")) as AbilityType[];
     const loyalRaw = params.get("loyal");
     const uniqueRaw = params.get("unique");
+    const naturalTriggerRaw = params.get("naturalTrigger");
+    const repeatabilityRestrictedRaw = params.get("repeatabilityRestricted");
     const iconicRaw = params.get("iconic");
     const approvedFilterRaw = params.get("approvedFilter");
     const myReactions = decodeArray(params.get("myReactions")).filter(
@@ -120,8 +130,8 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     return {
         type: types.length > 0 ? types : undefined,
         faction: factions.length > 0 ? factions : undefined,
-        loyal: loyalRaw === "true" ? true : loyalRaw === "false" ? false : undefined,
-        unique: uniqueRaw === "true" ? true : uniqueRaw === "false" ? false : undefined,
+        loyal: decodeBoolean(loyalRaw),
+        unique: decodeBoolean(uniqueRaw),
         icons: icons.length > 0 ? iconsValue : undefined,
         cost: decodeNumeric(params.get("cost")) as SuggestionFilterValue["cost"],
         strength: decodeNumeric(params.get("strength")) as SuggestionFilterValue["strength"],
@@ -140,7 +150,8 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
         myReactions: myReactions.length > 0 ? myReactions : undefined,
         rewardTypes: rewardTypes.length > 0 ? rewardTypes : undefined,
         punishment: punishment.length > 0 ? punishment : undefined,
-        abilityTypes: abilityTypes.length > 0 ? abilityTypes : undefined,
-        iconic: iconicRaw === "true" ? true : iconicRaw === "false" ? false : undefined
+        naturalTrigger: decodeBoolean(naturalTriggerRaw),
+        repeatabilityRestricted: decodeBoolean(repeatabilityRestrictedRaw),
+        iconic: decodeBoolean(iconicRaw)
     };
 }

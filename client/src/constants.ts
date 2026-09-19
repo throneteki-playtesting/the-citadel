@@ -77,8 +77,8 @@ export const stepperSizeClasses = {
 
 export type StepperSize = keyof typeof stepperSizeClasses;
 
-// The suggestion editor's toggle-tile look (border + tint, no motion) - shared by every option tile
-// (AbilityTypeToggle, IconicSwitch, RepeatabilityTiles, TriggerReliabilityCards).
+// The suggestion editor's toggle-tile look (border + tint, no motion) - only used by the
+// read-only suggestion detail page's RepeatabilityTiles; the editor itself uses BooleanSwitchQuestion.
 export function answerTileClasses(isOn: boolean, isDisabled?: boolean) {
     return classNames(
         isDisabled ? "cursor-default" : "cursor-pointer",

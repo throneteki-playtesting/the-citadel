@@ -1,4 +1,4 @@
-import { AbilityType, challengeIcons, ICard, ReactionType } from "common/models/cards";
+import { challengeIcons, ICard, ReactionType } from "common/models/cards";
 import { Explodable } from "common/types";
 import { RewardType } from "common/designGuidelines/rewardTypes";
 import { PunishmentType } from "common/designGuidelines/punishmentTypes";
@@ -20,7 +20,8 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     myReactions?: ReactionType[];
     rewardTypes?: RewardType[];
     punishment?: PunishmentType[];
-    abilityTypes?: AbilityType[];
+    naturalTrigger?: boolean;
+    repeatabilityRestricted?: boolean;
     iconic?: boolean;
 };
 
@@ -55,7 +56,8 @@ export function countActiveSuggestionFilters(value: SuggestionFilterValue): numb
     if (value.myReactions && value.myReactions.length > 0) count++;
     if (value.rewardTypes && value.rewardTypes.length > 0) count++;
     if (value.punishment && value.punishment.length > 0) count++;
-    if (value.abilityTypes && value.abilityTypes.length > 0) count++;
+    if (value.naturalTrigger !== undefined) count++;
+    if (value.repeatabilityRestricted !== undefined) count++;
     if (value.iconic !== undefined) count++;
     return count;
 }

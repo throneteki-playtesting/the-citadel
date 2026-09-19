@@ -1,15 +1,20 @@
 import { memo } from "react";
-import { ICONIC_OPTIONS } from "common/designGuidelines/iconic";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 import { answerTileClasses } from "../../constants";
 
-/** Two tiles, only one can ever be on. Starts with neither selected (`undefined` is a real third
- *  state here) so a submitter has to make the call themselves rather than inherit a default. */
-const IconicSwitch = ({ className, style, value, onChange, isDisabled }: IconicSwitchProps) => {
+interface BooleanTileOption {
+    value: boolean;
+    label: string;
+    description: string;
+}
+
+/** Two large answer tiles, label + description each - the shared shape behind the Iconic, Natural
+ *  Trigger and Safely Limited questions. */
+const BooleanTileGroup = ({ className, style, options, value, onChange, isDisabled }: BooleanTileGroupProps) => {
     return (
         <div className={classNames("grid grid-cols-1 sm:grid-cols-2 gap-2", className)} style={style}>
-            {ICONIC_OPTIONS.map((option) => {
+            {options.map((option) => {
                 const isOn = value !== undefined && value === option.value;
                 return (
                     <button
@@ -31,9 +36,7 @@ const IconicSwitch = ({ className, style, value, onChange, isDisabled }: IconicS
                         >
                             {option.label}
                         </span>
-                        <span className="text-xs text-foreground/60">
-                            {option.description} Eg. {option.examples.join(", ")}.
-                        </span>
+                        <span className="text-xs text-foreground/60">{option.description}</span>
                     </button>
                 );
             })}
@@ -41,10 +44,11 @@ const IconicSwitch = ({ className, style, value, onChange, isDisabled }: IconicS
     );
 };
 
-type IconicSwitchProps = Omit<BaseElementProps, "children"> & {
+type BooleanTileGroupProps = Omit<BaseElementProps, "children"> & {
+    options: BooleanTileOption[];
     value: boolean | undefined;
     onChange: (value: boolean) => void;
     isDisabled?: boolean;
 };
 
-export default memo(IconicSwitch);
+export default memo(BooleanTileGroup);

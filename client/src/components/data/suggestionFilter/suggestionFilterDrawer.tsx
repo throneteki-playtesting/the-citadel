@@ -10,8 +10,6 @@ import {
 } from "@heroui/react";
 import { useMemo, useState } from "react";
 import {
-    AbilityType,
-    abilityTypes,
     ChallengeIcon,
     challengeIcons,
     Faction,
@@ -62,7 +60,8 @@ type InternalState = {
     myReactions: ReactionType[];
     rewardTypes: RewardType[];
     punishment: PunishmentType[];
-    abilityTypes: AbilityType[];
+    naturalTrigger?: boolean;
+    repeatabilityRestricted?: boolean;
     iconic?: boolean;
 };
 
@@ -106,7 +105,8 @@ function decode(value: SuggestionFilterValue): InternalState {
         myReactions: value.myReactions ?? [],
         rewardTypes: value.rewardTypes ?? [],
         punishment: value.punishment ?? [],
-        abilityTypes: value.abilityTypes ?? [],
+        naturalTrigger: value.naturalTrigger,
+        repeatabilityRestricted: value.repeatabilityRestricted,
         iconic: value.iconic
     };
 }
@@ -153,7 +153,8 @@ function compose(state: InternalState): SuggestionFilterValue {
         myReactions: state.myReactions.length > 0 ? state.myReactions : undefined,
         rewardTypes: state.rewardTypes.length > 0 ? state.rewardTypes : undefined,
         punishment: state.punishment.length > 0 ? state.punishment : undefined,
-        abilityTypes: state.abilityTypes.length > 0 ? state.abilityTypes : undefined,
+        naturalTrigger: state.naturalTrigger,
+        repeatabilityRestricted: state.repeatabilityRestricted,
         iconic: state.iconic
     };
 }
@@ -440,16 +441,23 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                         onChange={(punishment) => update({ punishment: punishment as PunishmentType[] })}
                     />
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        <ToggleButtonGroup
-                            options={abilityTypes.map((entry) => ({ key: entry, label: entry }))}
-                            value={internal.abilityTypes}
-                            onChange={(abilityTypes) => update({ abilityTypes })}
-                        />
                         <BooleanToggle
                             trueLabel="Iconic"
                             falseLabel="Not Iconic"
                             value={internal.iconic}
                             onChange={(iconic) => update({ iconic })}
+                        />
+                        <BooleanToggle
+                            trueLabel="Natural Trigger"
+                            falseLabel="No Natural Trigger"
+                            value={internal.naturalTrigger}
+                            onChange={(naturalTrigger) => update({ naturalTrigger })}
+                        />
+                        <BooleanToggle
+                            trueLabel="Safely Limited"
+                            falseLabel="Not Safely Limited"
+                            value={internal.repeatabilityRestricted}
+                            onChange={(repeatabilityRestricted) => update({ repeatabilityRestricted })}
                         />
                     </div>
                 </div>

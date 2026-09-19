@@ -29,18 +29,12 @@ import {
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-    faArrowsRotate,
     faAngleLeft,
     faCheckCircle,
     faCircleQuestion,
-    faCoins,
-    faCopy,
+    faClone,
     faEyeSlash,
     faFileImage,
-    faHandPointer,
-    faHourglassEnd,
-    faLink,
-    faLock,
     faPencil,
     faPlus,
     faThumbsDown,
@@ -69,13 +63,12 @@ import { checklistRules } from "common/designGuidelines/checklistRules";
 import { SlimChecklistNotice } from "../../components/designGuidelines/suggestionChecklist";
 import { REWARD_TYPES } from "common/designGuidelines/rewardTypes";
 import { PUNISHMENT_TYPES } from "common/designGuidelines/punishmentTypes";
-import { TRIGGER_RELIABILITIES, TriggerReliabilityIcon } from "common/designGuidelines/computeStrength";
-import { REPEATABILITY_TILES } from "../../components/designGuidelines/repeatabilityTiles";
-import { SUGGESTION_SECTION_DESCRIPTIONS } from "common/designGuidelines/sectionDescriptions";
+import { SUGGESTION_QUESTIONS, SuggestionQuestionMeta } from "common/designGuidelines/suggestionQuestions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import PermissionedLink from "../../components/permissionedLink";
 import SectionTitle from "../../components/sectionTitle";
 import SectionBlurb from "../../components/sectionBlurb";
+import RichText from "../../components/richText";
 import { UserRow } from "../../components/userAvatar";
 import Reveal from "../../components/reveal";
 import Timestamp from "../../components/timestamp";
@@ -91,20 +84,6 @@ const REACTION_OPTIONS: { type: ReactionType; label: string; icon: typeof faThum
     { type: "dislike", label: "Dislike", icon: faThumbsDown },
     { type: "ignore", label: "Ignore", icon: faEyeSlash }
 ];
-
-const RELIABILITY_ICONS: Record<TriggerReliabilityIcon, IconDefinition> = {
-    recur: faArrowsRotate,
-    pointer: faHandPointer,
-    link: faLink
-};
-
-// Only the three repeatability toggles get a fixed icon map here - reward/punishment definitions
-// carry no icon at all (see rewardTypes.ts/punishmentTypes.ts), so their own tile omits one.
-const REPEATABILITY_ICON_OVERRIDE: Record<string, IconDefinition> = {
-    oneTime: faHourglassEnd,
-    hardLimit: faLock,
-    paidCost: faCoins
-};
 
 // Pops once whenever this specific button becomes the active reaction - `initial={false}` skips
 // the pop on first paint (already-active on load isn't an action), same feel as ReactionCount.
@@ -198,29 +177,25 @@ function ApproveButtonContent({ approved }: { approved: boolean }) {
     );
 }
 
-/** One answer, read-only, styled like the editor's own answer tiles at rest - not something to
- *  highlight as if still an active choice. Reused for all four question types as one family. */
-function AnswerTile({
-    icon,
-    label,
-    description,
-    example
-}: {
-    icon?: IconDefinition;
-    label: string;
-    description: string;
-    example?: string;
-}) {
+/** One answer, read-only, styled like the editor's own answer tiles at rest - reused for every
+ *  question type as one family. */
+function AnswerTile({ icon, label, description }: { icon?: IconDefinition; label: string; description: string }) {
     return (
         <div className="flex items-start gap-2 rounded-md border border-content3 bg-content1 p-2">
             {icon && <FontAwesomeIcon icon={icon} className="mt-0.5 shrink-0 text-foreground/50" />}
             <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-sm font-semibold text-foreground/90">{label}</span>
                 <span className="text-xs text-foreground/60">{description}</span>
-                {example && <span className="text-xs italic text-foreground/40">{example}</span>}
             </span>
         </div>
     );
+}
+
+// Shared by naturalTrigger/repeatabilityRestricted - both are plain yes/no questions rendered as a
+// single read-only AnswerTile for whichever answer was actually given.
+function answerTileForBoolean(question: SuggestionQuestionMeta, value: boolean | undefined) {
+    const option = question.options?.find((entry) => entry.value === value);
+    return option ? <AnswerTile label={option.label} description={option.description} /> : null;
 }
 
 // A vertical card's box is w-28 (7rem) at aspect-[240/333]. A plot is the same footprint transposed -
@@ -401,7 +376,7 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
                 {comparableCards.length > 0 && (
                     <CardCodesGroup
                         title="Comparable Cards"
-                        description={SUGGESTION_SECTION_DESCRIPTIONS.comparableCards}
+                        description={SUGGESTION_QUESTIONS.comparableCards.blurb}
                         codes={comparableCards}
                         cardsByCode={cardsByCode}
                         isLoading={isLoading}
@@ -411,7 +386,7 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
                 {combosWith.length > 0 && (
                     <CardCodesGroup
                         title="Combos With"
-                        description={SUGGESTION_SECTION_DESCRIPTIONS.combosWith}
+                        description={SUGGESTION_QUESTIONS.combosWith.blurb}
                         codes={combosWith}
                         cardsByCode={cardsByCode}
                         isLoading={isLoading}
@@ -598,34 +573,14 @@ const SuggestionDetail = () => {
         const punishment = PUNISHMENT_TYPES.find((p) => p.id === id);
         return <AnswerTile key={id} label={punishment?.label ?? id} description={punishment?.description ?? ""} />;
     });
-    const reliabilityTiles = suggestion.questions.triggerReliability.map((id) => {
-        const reliability = TRIGGER_RELIABILITIES.find((r) => r.id === id);
-        if (!reliability) {
-            return null;
-        }
-        return (
-            <AnswerTile
-                key={id}
-                icon={RELIABILITY_ICONS[reliability.icon]}
-                label={reliability.label}
-                description={reliability.description}
-                example={reliability.example}
-            />
-        );
-    });
-    const repeatabilityTiles = REPEATABILITY_TILES.filter((tile) => suggestion.questions.repeatability[tile.key]).map(
-        (tile) => (
-            <AnswerTile
-                key={tile.key}
-                icon={REPEATABILITY_ICON_OVERRIDE[tile.key]}
-                label={tile.label}
-                description={tile.description}
-                example={tile.example}
-            />
-        )
+    const naturalTriggerTile = answerTileForBoolean(
+        SUGGESTION_QUESTIONS.naturalTrigger,
+        suggestion.questions.naturalTrigger
     );
-    const hasReliability = reliabilityTiles.length > 0;
-    const hasRepeatability = repeatabilityTiles.length > 0;
+    const repeatabilityTile = answerTileForBoolean(
+        SUGGESTION_QUESTIONS.repeatabilityRestricted,
+        suggestion.questions.repeatabilityRestricted
+    );
 
     // Bundled into HeaderActions' items - isDropdownOnly keeps it out of the desktop row entirely,
     // since desktop gets its own always-labelled standalone button instead (see below).
@@ -719,15 +674,15 @@ const SuggestionDetail = () => {
                                 statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
                                 canRenderCard && {
                                     key: "export-png",
-                                    title: "Export PNG",
+                                    title: "Download Image",
                                     icon: <FontAwesomeIcon icon={faFileImage} />,
                                     onPress: onExportPNG,
                                     isLoading: isRenderingImage
                                 },
                                 canCreate && {
                                     key: "copy",
-                                    title: "Copy / Duplicate",
-                                    icon: <FontAwesomeIcon icon={faCopy} />,
+                                    title: "Clone",
+                                    icon: <FontAwesomeIcon icon={faClone} />,
                                     onPress: () => setEditing({ card: suggestion.card })
                                 },
                                 canEdit && {
@@ -891,7 +846,7 @@ const SuggestionDetail = () => {
                 <Reveal
                     index={sectionIndex++}
                     className={classNames(
-                        "w-full shrink-0 flex flex-col lg:sticky lg:top-4 lg:self-start",
+                        "w-full shrink-0 flex flex-col lg:sticky lg:top-[calc(var(--nav-height)+1rem)] lg:self-start",
                         // A plot's box is a portrait's box rotated - its width is what a portrait's
                         // height would be at the same base size, or it reads squashed into a
                         // portrait's narrower width footprint instead of its own landscape shape.
@@ -912,6 +867,11 @@ const SuggestionDetail = () => {
                             rounded
                         />
                     </div>
+                    {suggestion.card.flavor && (
+                        <div className="mt-2 px-2 text-center font-crimson text-sm italic text-foreground/60">
+                            {suggestion.card.flavor}
+                        </div>
+                    )}
                     {/* Mirrors artworkTab.tsx's own "Ready to sign off" notice - same shape, same
                         AnimatePresence. Only shown to someone who can act, never once they already have. */}
                     <AnimatePresence initial={false}>
@@ -982,8 +942,9 @@ const SuggestionDetail = () => {
                     {suggestion.notes && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Editor Notes</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.editorNotes}</SectionBlurb>
-                            <div className="text-sm text-foreground/70 whitespace-pre-wrap">{suggestion.notes}</div>
+                            <div className="text-sm text-foreground/70">
+                                <RichText html={suggestion.notes} />
+                            </div>
                         </div>
                     )}
 
@@ -1011,7 +972,7 @@ const SuggestionDetail = () => {
                     {rewardTiles.length > 0 && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Reward Types</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.rewardTypes}</SectionBlurb>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.rewardTypes.blurb}</SectionBlurb>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{rewardTiles}</div>
                         </div>
                     )}
@@ -1019,25 +980,25 @@ const SuggestionDetail = () => {
                     {punishmentTiles.length > 0 && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Punishment</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.punishment}</SectionBlurb>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.punishment.blurb}</SectionBlurb>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{punishmentTiles}</div>
                         </div>
                     )}
 
-                    {(hasReliability || hasRepeatability) && (
+                    {(naturalTriggerTile || repeatabilityTile) && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {hasReliability && (
+                            {naturalTriggerTile && (
                                 <div className="flex flex-col gap-2">
-                                    <SectionTitle size="sm">Trigger Reliability</SectionTitle>
-                                    <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.triggerReliability}</SectionBlurb>
-                                    <div className="flex flex-col gap-2">{reliabilityTiles}</div>
+                                    <SectionTitle size="sm">Natural Trigger</SectionTitle>
+                                    <SectionBlurb>{SUGGESTION_QUESTIONS.naturalTrigger.blurb}</SectionBlurb>
+                                    <div className="flex flex-col gap-2">{naturalTriggerTile}</div>
                                 </div>
                             )}
-                            {hasRepeatability && (
+                            {repeatabilityTile && (
                                 <div className="flex flex-col gap-2">
-                                    <SectionTitle size="sm">Trigger Repeatability</SectionTitle>
-                                    <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.triggerRepeatability}</SectionBlurb>
-                                    <div className="flex flex-col gap-2">{repeatabilityTiles}</div>
+                                    <SectionTitle size="sm">Safely Limited</SectionTitle>
+                                    <SectionBlurb>{SUGGESTION_QUESTIONS.repeatabilityRestricted.blurb}</SectionBlurb>
+                                    <div className="flex flex-col gap-2">{repeatabilityTile}</div>
                                 </div>
                             )}
                         </div>
@@ -1046,7 +1007,7 @@ const SuggestionDetail = () => {
                     {suggestion.pivotPoints.length > 0 && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Pivot Points</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_SECTION_DESCRIPTIONS.pivotPoints}</SectionBlurb>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.pivotPoints.blurb}</SectionBlurb>
                             <div className="flex flex-col gap-2">
                                 {suggestion.pivotPoints.map((point, index) => (
                                     <div

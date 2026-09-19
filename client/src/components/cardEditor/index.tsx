@@ -183,25 +183,26 @@ const CardEditor = ({
     return (
         <FieldPrefixContext.Provider value={fieldFor}>
             <div className={classNames("space-y-2 w-full", className)} style={style}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:flex-col lg:flex-row lg:flex-wrap">
-                    <div className="flex gap-2 w-full">
-                        {isVisible("faction") && (
-                            <FactionSelect
-                                value={card.faction}
-                                setValue={(value) => handleChange("faction", value)}
-                                isDisabled={isDisabled("faction")}
-                            />
-                        )}
-                        {isVisible("loyal") && (
-                            <LoyalButton
-                                value={card.loyal}
-                                setValue={(value) => handleChange("loyal", value)}
-                                isDisabled={isDisabled("loyal")}
-                            />
-                        )}
-                    </div>
+                <div className="flex flex-wrap gap-2">
+                    {isVisible("faction") && (
+                        <FactionSelect
+                            className="min-w-48 flex-1"
+                            value={card.faction}
+                            setValue={(value) => handleChange("faction", value)}
+                            isDisabled={isDisabled("faction")}
+                        />
+                    )}
+                    {isVisible("loyal") && (
+                        <LoyalButton
+                            className="shrink-0"
+                            value={card.loyal}
+                            setValue={(value) => handleChange("loyal", value)}
+                            isDisabled={isDisabled("loyal")}
+                        />
+                    )}
                     {isVisible("type") && (
                         <TypeSelect
+                            className="min-w-40 flex-1"
                             value={card.type}
                             setValue={(value) => handleChange("type", value)}
                             isDisabled={isDisabled("type")}

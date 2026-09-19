@@ -1,48 +1,19 @@
-import { ICard, ISuggestionQuestions, TriggerReliability } from "../models/cards";
-
-// A semantic key rather than an imported icon component - common/ has no UI dependency.
-export type TriggerReliabilityIcon = "recur" | "pointer" | "link";
-
-export interface TriggerReliabilityDefinition {
-    id: TriggerReliability;
-    label: string;
-    description: string;
-    /** a short, realistic phrase - shown under the description as a concrete anchor */
-    example: string;
-    icon: TriggerReliabilityIcon;
-}
-
-export const TRIGGER_RELIABILITIES: TriggerReliabilityDefinition[] = [
-    {
-        id: "natural",
-        label: "Natural Gameplay",
-        description: "Triggers from normal gameplay.",
-        example: "Reaction: After you win a challenge...",
-        icon: "recur"
-    },
-    {
-        id: "discretionary",
-        label: "At Player's Discretion",
-        description: "Player can trigger, when available.",
-        example: "Action: Kneel this character to...",
-        icon: "pointer"
-    },
-    {
-        id: "dependent",
-        label: "Dependent",
-        description: "Requires an unnatural effect to trigger.",
-        example: "Interrupt: When a character is removed from a challenge...",
-        icon: "link"
-    }
-];
+import { ICard, ISuggestionQuestions } from "../models/cards";
 
 /** Returns `undefined` when there's no guideline strength to compute against - non-character cards,
- *  a non-numeric cost, or `iconic` not yet answered (the calculation depends on it). */
+ *  a non-numeric cost, `iconic` not yet answered, or a triggered ability declared but its
+ *  `naturalTrigger` answer not yet given (the calculation depends on both). */
 export function computeStrength(
     card: Pick<ICard, "type" | "cost" | "icons">,
-    questions: Pick<ISuggestionQuestions, "triggerReliability" | "iconic">
+    questions: Pick<ISuggestionQuestions, "triggeredAbilityCount" | "naturalTrigger" | "iconic">
 ): number | undefined {
-    if (card.type !== "character" || typeof card.cost !== "number" || questions.iconic === undefined) {
+    const naturalTriggerPending = (questions.triggeredAbilityCount ?? 0) > 0 && questions.naturalTrigger === undefined;
+    if (
+        card.type !== "character" ||
+        typeof card.cost !== "number" ||
+        questions.iconic === undefined ||
+        naturalTriggerPending
+    ) {
         return undefined;
     }
 
@@ -55,10 +26,7 @@ export function computeStrength(
         strength -= 1;
     }
 
-    if (questions.triggerReliability?.includes("natural")) {
-        strength -= 1;
-    }
-    if (questions.triggerReliability?.includes("discretionary")) {
+    if (questions.naturalTrigger) {
         strength -= 1;
     }
 

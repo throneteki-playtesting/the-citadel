@@ -7,9 +7,6 @@ export const ABILITY_TEXT_SOURCE =
     "(?:(?:Forced )?(?:Reaction|Interrupt)|(?:When Revealed)|(?:(?:Plot |Draw |Marshaling |Challenges |Dominance |Standing |Taxation )?Action)):";
 
 const TRIGGER_TYPE_REGEX = new RegExp(`<b>\\s*(${ABILITY_TEXT_SOURCE})\\s*</b>`, "g");
-// Anchored to a line's own start, unlike TRIGGER_TYPE_REGEX above - used to ask "is this
-// particular line a triggered-ability line" rather than "does the text contain one anywhere"
-const TRIGGER_LINE_REGEX = new RegExp(`^<b>\\s*(?:${ABILITY_TEXT_SOURCE})\\s*</b>`);
 
 // Mirrors how the card renderer matches modifiers (see Ability in @agot/card-preview) and
 // plotModifiers.ts, which imports this rather than keeping its own copy.
@@ -18,17 +15,6 @@ const PLOT_MODIFIER_LINE_REGEX = new RegExp(`^(?:\\s*([+-])(\\d+) (${plotStats.j
 /** A line the card renderer would draw as modifier shapes rather than as ability text */
 export function isPlotModifierLine(line: string): boolean {
     return PLOT_MODIFIER_LINE_REGEX.test(line);
-}
-
-/** True only when a line is entirely keyword declarations with nothing left over once stripped - not
- *  merely a line that mentions a keyword-sounding word in passing. */
-function isPureKeywordLine(line: string): boolean {
-    let stripped = line;
-    for (const { regex } of KEYWORD_PATTERNS) {
-        const global = new RegExp(regex.source, regex.flags.includes("g") ? regex.flags : `${regex.flags}g`);
-        stripped = stripped.replace(global, "");
-    }
-    return stripped.replace(/[.,\s]+/g, "").length === 0;
 }
 
 interface KeywordPattern {
@@ -79,32 +65,4 @@ export function deriveFields(cardTextHtml: string): IDerivedFields {
     }
 
     return { triggerTypes, keywords };
-}
-
-/** Deliberately not `TRIGGER_TYPE_REGEX.test(...)` directly - `.test()` on a shared global-flagged
- *  regex mutates `lastIndex` between calls, wrongly missing matches on repeated calls. */
-export function hasTriggeredAbility(cardTextHtml: string): boolean {
-    return deriveFields(cardTextHtml).triggerTypes.length > 0;
-}
-
-/** True when a line survives after the first-row keyword and trailing plot-modifier line (if
- *  present) are set aside, and it isn't itself a triggered-ability line - a static, always-on effect. */
-export function hasPassiveAbility(cardTextHtml: string): boolean {
-    const html = cardTextHtml ?? "";
-    const rawLines = html.split("\n");
-    const plainLines = toPlain(html).split("\n");
-
-    return rawLines.some((rawLine, index) => {
-        const plainLine = plainLines[index] ?? "";
-        if (!plainLine.trim()) {
-            return false;
-        }
-        if (index === 0 && isPureKeywordLine(plainLine)) {
-            return false;
-        }
-        if (index === rawLines.length - 1 && isPlotModifierLine(plainLine)) {
-            return false;
-        }
-        return !TRIGGER_LINE_REGEX.test(rawLine);
-    });
 }

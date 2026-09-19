@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from "react";
-import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Input } from "@heroui/react";
+import { Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Input } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faFilter, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
@@ -45,71 +45,11 @@ function categoryLabel(category: string) {
     return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-/** The chips for whatever's currently selected, pulled out of `SearchTagPicker` so a caller can
- *  place them somewhere the picker's own search/list doesn't reach (eg. outside a collapsed section). */
-export function SelectedTagChips({
-    className,
-    style,
-    options,
-    value,
-    onChange,
-    isDisabled,
-    emptyLabel
-}: SelectedTagChipsProps) {
-    if (value.length === 0) {
-        // `min-h-6` matches a `size="sm"` Chip's own height, so the section reads the same height
-        // whether or not anything's selected, growing only once chips wrap onto a second line.
-        return emptyLabel ? (
-            <span
-                className={classNames("flex min-h-6 items-center text-xs text-foreground/40", className)}
-                style={style}
-            >
-                {emptyLabel}
-            </span>
-        ) : null;
-    }
-    return (
-        <div className={classNames("flex min-h-6 flex-wrap items-center gap-1", className)} style={style}>
-            <AnimatePresence initial={false}>
-                {value.map((id) => {
-                    const option = options.find((o) => o.id === id);
-                    return (
-                        <motion.div
-                            key={id}
-                            layout
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={ROW_TRANSITION}
-                        >
-                            <Chip
-                                size="sm"
-                                radius="sm"
-                                color="primary"
-                                variant="flat"
-                                onClose={isDisabled ? undefined : () => onChange(value.filter((v) => v !== id))}
-                            >
-                                {option?.label ?? id}
-                            </Chip>
-                        </motion.div>
-                    );
-                })}
-            </AnimatePresence>
-        </div>
-    );
-}
-
-type SelectedTagChipsProps = Omit<BaseElementProps, "children"> & {
-    options: SearchTagOption[];
-    value: string[];
-    onChange: (value: string[]) => void;
-    isDisabled?: boolean;
-    /** shown in place of the chip row when nothing is selected, eg. "No rewards selected." */
-    emptyLabel?: string;
-};
-
 /** Search + tag picker for a small fixed taxonomy - not a plain Select, since 30+ options is too
- *  many to browse cold. Memoized (its rows carry a `layout` animation); needs stable value/onChange. */
+ *  many to browse cold. Memoized (its rows carry a `layout` animation); needs stable value/onChange.
+ *  A checked row is the "selection", so it reads that way directly - floated to the top of the list
+ *  rather than duplicated into a separate chip row above it. Unchecking drops it back to wherever it
+ *  naturally sorts among the rest, and `layout` animates both moves. */
 const SearchTagPicker = memo(function SearchTagPicker({
     className,
     style,
@@ -117,7 +57,6 @@ const SearchTagPicker = memo(function SearchTagPicker({
     value,
     onChange,
     isDisabled,
-    showChips = true,
     placeholder = "Search…"
 }: SearchTagPickerProps) {
     const [query, setQuery] = useState("");
@@ -136,6 +75,22 @@ const SearchTagPicker = memo(function SearchTagPicker({
             }),
         [options, query, activeCategories]
     );
+
+    // Checked rows float to the top, in check order (`value` grows by appending - see toggleValue).
+    const ordered = useMemo(
+        () =>
+            [...filtered].sort((a, b) => {
+                const aOn = value.includes(a.id);
+                const bOn = value.includes(b.id);
+                if (aOn && bOn) {
+                    return value.indexOf(a.id) - value.indexOf(b.id);
+                }
+                return Number(bOn) - Number(aOn);
+            }),
+        [filtered, value]
+    );
+    const checkedCount = useMemo(() => ordered.filter((o) => value.includes(o.id)).length, [ordered, value]);
+    const showDivider = checkedCount > 0 && checkedCount < ordered.length;
 
     const toggleValue = (id: string) => {
         onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
@@ -186,33 +141,28 @@ const SearchTagPicker = memo(function SearchTagPicker({
                     </Dropdown>
                 )}
             </div>
-            {showChips && (
-                <AnimatePresence initial={false}>
-                    {value.length > 0 && (
-                        <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={ROW_TRANSITION}
-                            className="overflow-hidden"
-                        >
-                            <SelectedTagChips
-                                options={options}
-                                value={value}
-                                onChange={onChange}
-                                isDisabled={isDisabled}
-                                className="pb-0.5"
-                            />
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            )}
             <div className="flex flex-col gap-1 max-h-64 overflow-y-auto rounded-lg border border-content3 p-1">
-                {filtered.length === 0 && <div className="p-3 text-xs text-foreground/50">No matches.</div>}
+                {ordered.length === 0 && <div className="p-3 text-xs text-foreground/50">No matches.</div>}
                 <AnimatePresence initial={false} mode="popLayout">
-                    {filtered.map((option) => {
+                    {ordered.flatMap((option, index) => {
                         const isOn = value.includes(option.id);
-                        return (
+                        const rows = [];
+                        // Between the checked group and the rest - only meaningful once both groups
+                        // are non-empty, and `layout` carries it along as either group's size changes.
+                        if (showDivider && index === checkedCount) {
+                            rows.push(
+                                <motion.div
+                                    key="__divider"
+                                    layout
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={ROW_TRANSITION}
+                                    className="my-1 h-px shrink-0 bg-content3"
+                                />
+                            );
+                        }
+                        rows.push(
                             <motion.button
                                 type="button"
                                 layout
@@ -248,6 +198,7 @@ const SearchTagPicker = memo(function SearchTagPicker({
                                 )}
                             </motion.button>
                         );
+                        return rows;
                     })}
                 </AnimatePresence>
             </div>
@@ -260,8 +211,6 @@ type SearchTagPickerProps = Omit<BaseElementProps, "children"> & {
     value: string[];
     onChange: (value: string[]) => void;
     isDisabled?: boolean;
-    /** false when a caller renders `SelectedTagChips` separately - see editSuggestionModal.tsx */
-    showChips?: boolean;
     placeholder?: string;
 };
 

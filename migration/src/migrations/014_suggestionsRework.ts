@@ -30,9 +30,6 @@ export const migration: Migration = {
                 questions: {
                     rewardTypes: [],
                     punishment: [],
-                    abilityTypes: [],
-                    triggerReliability: [],
-                    repeatability: { hardLimit: false, paidCost: false, oneTime: false },
                     iconic: false
                 },
                 derived: deriveFields(doc.card?.text ?? ""),

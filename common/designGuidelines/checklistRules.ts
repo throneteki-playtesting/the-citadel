@@ -59,6 +59,7 @@ const ECONOMIC_REWARD_TYPES = [
 export function checklistRules(input: {
     card: ICard;
     questions: ISuggestionQuestions;
+    /** Server-computed from `card.text`, never asked of anyone - not currently read by any rule here. */
     derived: IDerivedFields;
     pivotPoints: string[];
     /** only needed for plot-type suggestions */
@@ -70,11 +71,19 @@ export function checklistRules(input: {
     if (card.type === "character") {
         const guideline = computeStrength(card, questions);
         if (guideline === undefined) {
+            // Same priority order computeStrength itself checks in, so the reason given always
+            // matches the actual first thing blocking the calculation.
+            const reason =
+                typeof card.cost !== "number"
+                    ? "this card has a numeric cost"
+                    : questions.iconic === undefined
+                      ? "you've answered whether this design is iconic"
+                      : "you've answered whether it triggers naturally";
             results.push({
                 rule: "strGuideline",
                 status: "indeterminate",
                 label: "Printed STR aligns with card stats",
-                description: "Cannot be evaluated until this card has a numeric cost.",
+                description: `Cannot be evaluated until ${reason}.`,
                 tooltip: "Calculated from the card's cost, icon count, and how reliably its ability triggers."
             });
         } else {
@@ -129,24 +138,37 @@ export function checklistRules(input: {
         });
     }
 
-    // `oneTime` isn't an exemption from this rule - it's one of the ways an ability answers it, same
-    // as a hard limit or a paid cost.
-    if (card.type !== "event" && questions.abilityTypes?.includes("triggered")) {
-        const { hardLimit, paidCost, oneTime } = questions.repeatability ?? {};
-        const mechanisms = [
-            oneTime && "a one-time trigger",
-            hardLimit && "a hard limit",
-            paidCost && "a paid cost"
-        ].filter(Boolean) as string[];
+    const triggeredAbilityCount = questions.triggeredAbilityCount ?? 0;
+    if (triggeredAbilityCount > 0) {
+        const focusPass = triggeredAbilityCount === 1;
         results.push({
-            rule: "repeatabilityControl",
-            status: mechanisms.length > 0 ? "pass" : "warn",
-            label: "Abilities are safely limited",
-            description:
-                mechanisms.length > 0
-                    ? `This ability is safely limited by ${joinWithAnd(mechanisms)}.`
-                    : "This ability can recur across a game with no hard limit or paid cost restricting it."
+            rule: "triggeredAbilityFocus",
+            status: focusPass ? "pass" : "warn",
+            label: "Triggered abilities are clear and narrow",
+            description: focusPass
+                ? "This card has 1 triggered ability, a clear and narrow focus."
+                : `This card has ${triggeredAbilityCount} triggered abilities - more than one spreads this design's focus thin.`
         });
+
+        const isRestricted = questions.repeatabilityRestricted;
+        if (isRestricted === undefined) {
+            results.push({
+                rule: "repeatabilityControl",
+                status: "indeterminate",
+                label: "Abilities are safely limited",
+                description:
+                    "Cannot be evaluated until you've answered whether this card's abilities are safely limited."
+            });
+        } else {
+            results.push({
+                rule: "repeatabilityControl",
+                status: isRestricted ? "pass" : "warn",
+                label: "Abilities are safely limited",
+                description: isRestricted
+                    ? "This card's abilities are kept in check by occurring at most once per round or game, a hard limit, or a paid cost."
+                    : "This card's abilities can recur across a game with nothing restricting them."
+            });
+        }
     }
 
     if (card.type === "plot") {
