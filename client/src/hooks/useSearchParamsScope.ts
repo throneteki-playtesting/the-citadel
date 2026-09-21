@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useLayoutEffect } from "react";
 
 export type ScopeParams = Record<string, string | undefined>;
 export type ScopeEntry = { isActive: boolean; params: ScopeParams };
@@ -16,7 +16,7 @@ export function useSearchParamsScope(id: string, isActive: boolean, params: Scop
         throw new Error("useSearchParamsScope must be used within a ScopedSearchParamsProvider");
     }
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         setScope(id, { isActive, params });
         return () => setScope(id, null);
     }, [id, isActive, params, setScope]);

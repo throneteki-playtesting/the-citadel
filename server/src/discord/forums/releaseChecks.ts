@@ -276,7 +276,7 @@ function readyMessage(slot: ISlot, entry: IReleaseCheck) {
     return {
         components: [container],
         flags: MessageFlags.IsComponentsV2 as const,
-        allowedMentions: { parse: [] as const }
+        allowedMentions: { parse: ["roles"] as const }
     };
 }
 
@@ -304,6 +304,6 @@ function objectionMessage(slot: ISlot, entry: IReleaseCheck, withdrawn: boolean,
     return {
         components: [container],
         flags: MessageFlags.IsComponentsV2 as const,
-        allowedMentions: { parse: [] as const }
+        allowedMentions: { parse: ["roles"] as const }
     };
 }

@@ -374,8 +374,6 @@ function openingMessage(
     return {
         components: [container],
         flags: MessageFlags.IsComponentsV2 as const,
-        // The role is the point of the post - it is what puts a new question in front of the people who
-        // answer them. The two people named are already involved, so neither is pinged
         allowedMentions: { parse: ["roles"] as const }
     };
 }
@@ -389,6 +387,6 @@ function notice(color: number, heading: string, body: string, slot: ISlot) {
     return {
         components: [container],
         flags: MessageFlags.IsComponentsV2 as const,
-        allowedMentions: { parse: [] as const }
+        allowedMentions: { parse: ["roles"] as const }
     };
 }

@@ -125,7 +125,7 @@ async function postOrEdit(
     const announcement = messages.announcement(project, release, cards, participation, context.taggedRole);
     if (existing) {
         const message = await fetchMessage(context, existing);
-        await message.edit({ ...announcement, allowedMentions: { parse: [] } });
+        await message.edit({ ...announcement, allowedMentions: { parse: ["roles"] } });
         logger.verbose(`[Discord] Updated release check announcement for ${release.code}`);
         return;
     }

@@ -23,7 +23,8 @@ import {
 } from "../../../constants";
 import ProgressRing from "../../../components/progressRing";
 import UserAvatar from "../../../components/userAvatar";
-import SectionTitle from "../../../components/sectionTitle";
+import TabGuideHeader from "../../../components/tabGuideHeader";
+import DataRowSkeleton from "../../../components/dataRowSkeleton";
 import { FilterChip, FilterRow } from "../../../components/filterChips";
 import SortSelect from "../../../components/sortSelect";
 import ThronesIcon from "../../../components/thronesIcon";
@@ -36,8 +37,12 @@ import { ChecklistDots } from "../../../components/checklist";
 import SlidingPages from "../../../components/slidingPages";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
 import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
+import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
+import { useUrlListFilter } from "../../../hooks/useUrlListFilter";
+import ArtworksGuideModal from "./artworksGuideModal";
 
 const UNASSIGNED = "unassigned";
+const ARTWORKS_GUIDE_SEEN_KEY = "artworks-guide-seen";
 
 // Freely reuses Development's own url param names - each tab is its own search-param scope, so only
 // the active one's values reach the url even with both registered at once (see ScopedSearchParamsProvider)
@@ -82,9 +87,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
         const raw = searchParams.get("type");
         return raw && artworkTypes.includes(raw as ArtworkType) ? (raw as ArtworkType) : "all";
     });
-    const [releases, setReleases] = useState<string[]>(
-        () => searchParams.get("releases")?.split(",").filter(Boolean) ?? []
-    );
+    const [releases, setReleases] = useUrlListFilter(searchParams, "releases");
     const [attentionOnly, setAttentionOnly] = useState(() => searchParams.get("attention") === "true");
     const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
@@ -96,6 +99,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
         return Number.isInteger(raw) && raw > 0 ? raw : undefined;
     });
     const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
+    const guide = useTabGuideModal(ARTWORKS_GUIDE_SEEN_KEY, isActive);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -278,36 +282,43 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
             ]);
     }, [visible, releases, releasesByCode]);
 
-    if (isLoading) {
-        return <ArtworksSkeleton project={project} />;
-    }
-
     // The editor is a place you travel to and come back from, rather than a layer over the list - the
     // artwork detail is far too tall to sit in a dialog comfortably
     return (
-        <div ref={containerRef} className="scroll-mt-20">
-            <SlidingPages currentPage={isEditing ? 2 : 1}>
-                {renderList()}
-                <div>
-                    {editingNumber !== undefined && (
-                        <ArtworkTab
-                            key={editingNumber}
-                            project={project.number}
-                            number={editingNumber}
-                            showTrack
-                            onBack={() => setIsEditing(false)}
-                        />
-                    )}
+        <>
+            {isLoading ? (
+                <ArtworksSkeleton project={project} onOpenGuide={guide.open} />
+            ) : (
+                <div ref={containerRef} className="scroll-mt-20">
+                    <SlidingPages currentPage={isEditing ? 2 : 1}>
+                        {renderList()}
+                        <div>
+                            {editingNumber !== undefined && (
+                                <ArtworkTab
+                                    key={editingNumber}
+                                    project={project.number}
+                                    number={editingNumber}
+                                    showTrack
+                                    onBack={() => setIsEditing(false)}
+                                />
+                            )}
+                        </div>
+                    </SlidingPages>
                 </div>
-            </SlidingPages>
-        </div>
+            )}
+            <ArtworksGuideModal isOpen={guide.isOpen} onClose={guide.close} />
+        </>
     );
 
     function renderList() {
         return (
             <div className="flex flex-col gap-3">
-                <div className="text-sm text-foreground/50">{ARTWORKS_DESCRIPTION}</div>
-                <SectionTitle size="lg">Artworks</SectionTitle>
+                <TabGuideHeader
+                    description={ARTWORKS_DESCRIPTION}
+                    title="Artworks"
+                    guideLabel="Artwork Guide"
+                    onOpenGuide={guide.open}
+                />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
                         {artworkStatuses.map((entry) => (
@@ -436,18 +447,22 @@ type ProjectArtworksProps = { project: IProject; isActive: boolean };
 
 // The page's own shape while the slots load, sized from the project's cached slot tally so the list
 // settles into the space it was already holding rather than shoving the page down as it arrives
-function ArtworksSkeleton({ project }: { project: IProject }) {
+function ArtworksSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
         <div className="flex flex-col gap-3">
-            <div className="text-sm text-foreground/50">{ARTWORKS_DESCRIPTION}</div>
-            <SectionTitle size="lg">Artworks</SectionTitle>
+            <TabGuideHeader
+                description={ARTWORKS_DESCRIPTION}
+                title="Artworks"
+                guideLabel="Artwork Guide"
+                onOpenGuide={onOpenGuide}
+            />
             <div className="flex flex-col gap-1.5">
                 {[artworkStatuses.length, artworkTypes.length, project.releases.length].map((chips, row) =>
                     chips > 0 ? (
                         <div key={row} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                            <Skeleton className="h-3 w-14 shrink-0 rounded-sm" />
+                            <Skeleton className="h-3 w-14 sm:w-16 shrink-0 rounded-sm" />
                             <div className="flex gap-1.5">
                                 {Array.from({ length: chips }, (_, chip) => (
                                     <Skeleton key={chip} className="h-6 w-24 rounded-full" />
@@ -459,20 +474,38 @@ function ArtworksSkeleton({ project }: { project: IProject }) {
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 border-b border-content3 pb-2">
                 <Skeleton className="h-10 w-full sm:flex-1 sm:max-w-96 rounded-md" />
-                <div className="flex items-center justify-between gap-2 sm:shrink-0">
-                    <Skeleton className="h-6 w-32 rounded-md" />
+                <div className="flex-1 flex items-center flex-wrap justify-between gap-2 sm:shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Skeleton className="h-6 w-28 rounded-md" />
+                        <Skeleton className="h-6 w-32 rounded-md" />
+                    </div>
                     <Skeleton className="h-8 w-40 sm:w-44 rounded-md" />
                 </div>
             </div>
             <div className="flex flex-col gap-1.5">
                 {Array.from({ length: rowCount }, (_, row) => (
-                    <Skeleton key={row} className="h-14 w-full rounded-md" />
+                    <ArtworkRowSkeleton key={row} />
                 ))}
             </div>
             <div className="border-t border-content3 pt-1.5 flex justify-center">
                 <Skeleton className="h-3 w-24 rounded-sm" />
             </div>
         </div>
+    );
+}
+
+/** Same shape as `ArtworkRow`, so the swap to real rows doesn't shift anything on screen */
+function ArtworkRowSkeleton() {
+    return (
+        <DataRowSkeleton>
+            <div className="shrink-0 flex items-center gap-2 justify-start sm:justify-end">
+                <Skeleton className="size-6 shrink-0 rounded-full" />
+                <Skeleton className="h-4 w-16 rounded-sm" />
+            </div>
+            <Divider orientation="vertical" className="hidden sm:block self-stretch h-auto w-px shrink-0" />
+            <Skeleton className="h-3 flex-1 min-w-16 rounded-sm" />
+            <Skeleton className="h-2 w-10 shrink-0 rounded-full" />
+        </DataRowSkeleton>
     );
 }
 

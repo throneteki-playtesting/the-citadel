@@ -769,7 +769,7 @@ const messages = {
 
         return {
             flags: MessageFlags.IsComponentsV2,
-            allowedMentions: { parse: [] },
+            allowedMentions: { parse: ["roles"] },
             components: [container, buttonRow]
         };
     },
@@ -805,7 +805,7 @@ const messages = {
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents([newVersionButton]);
         return {
             flags: MessageFlags.IsComponentsV2,
-            allowedMentions: { parse: [] },
+            allowedMentions: { parse: ["roles"] },
             components: [container, buttonRow]
         };
     },
@@ -822,7 +822,7 @@ const messages = {
         const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(button);
         return {
             flags: MessageFlags.IsComponentsV2,
-            allowedMentions: { parse: [] },
+            allowedMentions: { parse: ["roles"] },
             components: [container, buttonRow]
         };
     }

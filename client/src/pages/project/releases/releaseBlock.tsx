@@ -14,13 +14,17 @@ import {
     faFileArrowDown,
     faEllipsisVertical,
     faGripVertical,
+    faMagnifyingGlass,
+    faPaintbrush,
     faPencil,
     faTrash
 } from "@fortawesome/free-solid-svg-icons";
 import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import { getPositionFaction, getReleaseCodeMappings } from "common/utils";
+import Permission from "common/models/permissions";
 import { useDeleteReleaseMutation, useGetReleasePackMutation } from "../../../api";
+import { usePermission } from "../../../hooks/usePermission";
 import ConfirmModal from "../../../components/confirmModal";
 import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
@@ -121,6 +125,20 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
     dragHandleListeners,
     dragHandleAttributes
 }: ReleaseBlockHeaderProps) {
+    const navigate = useNavigate();
+    const canReadArtworks = usePermission(Permission.READ_ARTWORKS) && projectNumber !== undefined;
+    const canReadRefinement = usePermission(Permission.READ_REFINEMENT) && projectNumber !== undefined;
+    // Ordered releases-then-tab to match the order ScopedSearchParamsProvider itself settles on, so
+    // there's nothing left for it to visibly reorder once the scopes above catch up
+    const goToArtworks = useCallback(
+        () => navigate(`/project/${projectNumber}?releases=${release.code}&tab=artworks`),
+        [navigate, projectNumber, release.code]
+    );
+    const goToRefinements = useCallback(
+        () => navigate(`/project/${projectNumber}?releases=${release.code}&tab=refinements`),
+        [navigate, projectNumber, release.code]
+    );
+
     const isLocked = !!release.releasedDate;
     const displayStatus = isLocked ? "released" : release.status;
     const canCopyCodes = canEditReleases && areReleaseChecksClosed(release.status);
@@ -224,6 +242,8 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
             {(canCopyCodes ||
                 canDownloadJson ||
                 !!dataStatus ||
+                canReadArtworks ||
+                canReadRefinement ||
                 (!isLocked && (canEditReleases || canDeleteReleases))) && (
                 <div
                     className={classNames(
@@ -261,10 +281,36 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                                     } else if (dataStatus?.href) {
                                         window.open(dataStatus.href, "_blank", "noreferrer");
                                     }
+                                } else if (key === "artworks") {
+                                    goToArtworks();
+                                } else if (key === "refinements") {
+                                    goToRefinements();
                                 }
                             }}
                         >
                             {[
+                                ...(canReadArtworks
+                                    ? [
+                                          <DropdownItem
+                                              key="artworks"
+                                              color="secondary"
+                                              startContent={<FontAwesomeIcon icon={faPaintbrush} />}
+                                          >
+                                              View in Artworks
+                                          </DropdownItem>
+                                      ]
+                                    : []),
+                                ...(canReadRefinement
+                                    ? [
+                                          <DropdownItem
+                                              key="refinements"
+                                              color="secondary"
+                                              startContent={<FontAwesomeIcon icon={faMagnifyingGlass} />}
+                                          >
+                                              View in Refinements
+                                          </DropdownItem>
+                                      ]
+                                    : []),
                                 ...(canCopyCodes
                                     ? [
                                           <DropdownItem key="copy" startContent={<FontAwesomeIcon icon={faCopy} />}>
@@ -319,6 +365,20 @@ const ReleaseBlockHeader = memo(function ReleaseBlockHeader({
                         </DropdownMenu>
                     </Dropdown>
                     <div className="hidden sm:flex gap-1">
+                        {canReadArtworks && (
+                            <Tooltip content="View in Artworks">
+                                <Button isIconOnly size="sm" variant="flat" color="secondary" onPress={goToArtworks}>
+                                    <FontAwesomeIcon icon={faPaintbrush} />
+                                </Button>
+                            </Tooltip>
+                        )}
+                        {canReadRefinement && (
+                            <Tooltip content="View in Refinements">
+                                <Button isIconOnly size="sm" variant="flat" color="secondary" onPress={goToRefinements}>
+                                    <FontAwesomeIcon icon={faMagnifyingGlass} />
+                                </Button>
+                            </Tooltip>
+                        )}
                         {canCopyCodes && (
                             <Tooltip content="Copy Code Mappings">
                                 <Button isIconOnly size="sm" variant="flat" onPress={onCopyCodes}>

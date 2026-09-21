@@ -128,8 +128,7 @@ async function postOrEdit(project: IProject, playtestingUpdate: IPlaytestingUpda
 
     if (existing) {
         const message = await fetchMessage(context, existing);
-        // Edits never re-notify, but suppressing mentions keeps that true regardless of Discord's mood
-        await message.edit({ ...announcement, allowedMentions: { parse: [] } });
+        await message.edit({ ...announcement, allowedMentions: { parse: ["roles"] } });
         logger.verbose(`[Discord] Updated announcement for ${project.code} v${playtestingUpdate.version}`);
         return;
     }
