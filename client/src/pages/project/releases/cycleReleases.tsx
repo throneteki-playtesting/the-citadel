@@ -49,12 +49,13 @@ import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
 import { finalCardsByNumber, getPositionFaction } from "common/utils";
 import SectionTitle from "../../../components/sectionTitle";
+import ReleaseHeaderSkeleton from "../../../components/releaseHeaderSkeleton";
 import { highlightTarget } from "../../../constants";
 import useHistoryState from "../../../hooks/useHistoryState";
 
 const isSameCodes = (a: string[], b: string[]) => a.length === b.length && a.every((code) => b.includes(code));
 
-export default function CycleReleases({ project, isActive }: CycleReleasesProps) {
+export default function CycleReleases({ project, isActive, guideButton, guideIconButton }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
     // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
@@ -437,11 +438,26 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
 
     if (isLoadingSlots || isLoadingCards) {
         return (
-            <div className="space-y-2">
-                <Skeleton className="w-full h-32 rounded-md" />
-                {releases.map((release) => (
-                    <Skeleton key={release.code} className="w-full h-48 rounded-md" />
-                ))}
+            <div className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm text-foreground/50">
+                        {canMoveCapsules
+                            ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
+                            : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                    </div>
+                    {guideButton}
+                </div>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <SectionTitle size="lg" className="flex-1">
+                        Releases
+                    </SectionTitle>
+                    {guideIconButton}
+                </div>
+                <div className="space-y-2">
+                    {releases.map((release) => (
+                        <ReleaseSkeleton key={release.code} release={release} />
+                    ))}
+                </div>
             </div>
         );
     }
@@ -457,10 +473,13 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
             onDragCancel={resetDragState}
         >
             <div className="flex flex-col gap-2">
-                <div className="text-sm text-foreground/50">
-                    {canMoveCapsules
-                        ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
-                        : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm text-foreground/50">
+                        {canMoveCapsules
+                            ? "Drag cards between the development pool and release packs to plan each release. Publishing a pack locks its contents permanently."
+                            : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                    </div>
+                    {guideButton}
                 </div>
                 {canMoveCapsules && isActive && (
                     <DevelopmentOverlay
@@ -478,6 +497,7 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
                         <SectionTitle size="lg" className="flex-1">
                             Releases
                         </SectionTitle>
+                        {guideIconButton}
                         {canMoveCapsules && (
                             <DevelopmentPoolButton count={poolCount} isOpen={isPoolOpen} onOpen={openPool} />
                         )}
@@ -587,6 +607,27 @@ export default function CycleReleases({ project, isActive }: CycleReleasesProps)
     );
 }
 
+/** Same shape as a `ReleaseBlock` - collapsed (header only) for a published release, since that's how
+ *  it lands by default, and full height with a placeholder grid for everything still being planned */
+function ReleaseSkeleton({ release }: { release: IProjectRelease }) {
+    const isPublished = !!release.releasedDate;
+
+    return (
+        <div className="border border-content3 bg-content1">
+            <ReleaseHeaderSkeleton extraChip={isPublished} />
+            {!isPublished && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 p-3">
+                    {Array.from({ length: release.capacity }).map((_, index) => (
+                        <div key={index} className="relative h-11">
+                            <Skeleton className="absolute inset-1 rounded-md" />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // Sizes the dragged card to a pool chip (pool open) or a release slot (pool closed), never to whatever it's hovering (eg. a release header is much bigger)
 function SizeMatchedDragOverlay({
     activeCard,
@@ -638,4 +679,6 @@ type SizeMatchedDragOverlayProps = {
 type CycleReleasesProps = {
     project: IProject;
     isActive: boolean;
+    guideButton?: ReactNode;
+    guideIconButton?: ReactNode;
 };

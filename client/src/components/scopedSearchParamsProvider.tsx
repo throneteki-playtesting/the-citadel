@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { ReactNode, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { ScopedSearchParamsContext, ScopeEntry } from "../hooks/useSearchParamsScope";
 
@@ -24,7 +24,8 @@ export default function ScopedSearchParamsProvider({ children }: { children: Rea
         });
     }, []);
 
-    useEffect(() => {
+    // Layout effect, so the url settles in the same pass as the scope registrations, before paint
+    useLayoutEffect(() => {
         const next = new URLSearchParams(window.location.search);
         // Cleared first so an inactive scope's key can't retain a stale value
         for (const { params } of scopes.values()) {

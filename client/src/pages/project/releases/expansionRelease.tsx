@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import {
     addToast,
     Button,
@@ -22,8 +22,15 @@ import {
     useSensors
 } from "@dnd-kit/core";
 import { SortableContext } from "@dnd-kit/sortable";
+import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faEllipsisVertical, faPencil } from "@fortawesome/free-solid-svg-icons";
+import {
+    faCheck,
+    faEllipsisVertical,
+    faMagnifyingGlass,
+    faPaintbrush,
+    faPencil
+} from "@fortawesome/free-solid-svg-icons";
 import { areReleaseChecksClosed, IProject, IProjectRelease } from "common/models/projects";
 import { IPlaytestCard } from "common/models/cards";
 import { finalCardsByNumber, getPositionFaction } from "common/utils";
@@ -35,6 +42,7 @@ import PublishReleaseModal from "./publishReleaseModal";
 import CapsuleVisual from "./capsuleVisual";
 import { ReleasePositionSlot } from "./releaseBlock";
 import ReleaseProgressMeter from "./releaseProgressMeter";
+import ReleaseHeaderSkeleton from "../../../components/releaseHeaderSkeleton";
 import {
     buildContainers,
     collisionDetection,
@@ -50,7 +58,7 @@ import { TouchTooltip } from "../../../components/touchTooltip";
 
 // An expansion ships as one fixed release containing every card - no development pool, no
 // adding/deleting/reordering releases; only editing, rearranging within factions, and publishing
-export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
+export default function ExpansionRelease({ project, guideButton, guideIconButton }: ExpansionReleaseProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
     // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
@@ -66,6 +74,9 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     const canEditSlots = usePermission(Permission.EDIT_SLOTS);
     // Moving capsules touches both the slot and the release - see server-side PATCH /slots/:slot/release
     const canMoveCapsules = canEditSlots && canEditReleases;
+    const canReadArtworks = usePermission(Permission.READ_ARTWORKS);
+    const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+    const navigate = useNavigate();
 
     const [editing, setEditing] = useState<DeepPartial<IProjectRelease>>();
     const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
@@ -97,7 +108,29 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     );
 
     if (isLoadingSlots || isLoadingCards) {
-        return <Skeleton className="w-full h-98 rounded-md" />;
+        return (
+            <div className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm text-foreground/50">
+                        {canMoveCapsules
+                            ? "Rearrange cards within their faction's slots to plan the release. Publishing locks its contents permanently."
+                            : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                    </div>
+                    {guideButton}
+                    {guideIconButton}
+                </div>
+                <div className="border border-content3 bg-content1">
+                    <ReleaseHeaderSkeleton />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 p-3">
+                        {Array.from({ length: project.releases[0]?.capacity ?? 0 }).map((_, index) => (
+                            <div key={index} className="relative h-11">
+                                <Skeleton className="absolute inset-1 rounded-md" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (!release) {
@@ -115,6 +148,10 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
 
     const isLocked = !!release.releasedDate;
     const displayStatus = isLocked ? "released" : release.status;
+    // Ordered releases-then-tab to match the order ScopedSearchParamsProvider itself settles on, so
+    // there's nothing left for it to visibly reorder once the scopes above catch up
+    const goToArtworks = () => navigate(`/project/${project.number}?releases=${release.code}&tab=artworks`);
+    const goToRefinements = () => navigate(`/project/${project.number}?releases=${release.code}&tab=refinements`);
     const filledCount = itemIds.filter((id) => slotNumberFromItemId(id) !== undefined).length;
     const isComplete = filledCount >= release.capacity;
     const disabled = isLocked || areReleaseChecksClosed(release.status) || !canMoveCapsules;
@@ -172,10 +209,13 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
             onDragCancel={() => setActiveId(undefined)}
         >
             <div className="flex flex-col gap-2">
-                <div className="text-sm text-foreground/50">
-                    {canMoveCapsules && !isLocked
-                        ? "Rearrange cards within their faction's slots to plan the release. Publishing locks its contents permanently."
-                        : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm text-foreground/50">
+                        {canMoveCapsules && !isLocked
+                            ? "Rearrange cards within their faction's slots to plan the release. Publishing locks its contents permanently."
+                            : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
+                    </div>
+                    {guideButton}
                 </div>
                 <div className="border border-content3 bg-content1">
                     <div className="flex items-center gap-2 px-4 py-3 bg-content2 border-b border-content3">
@@ -240,6 +280,37 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
                                 />
                             </div>
                         </div>
+                        {guideIconButton}
+                        {(canReadArtworks || canReadRefinement) && (
+                            <div className="flex gap-1">
+                                {canReadArtworks && (
+                                    <Tooltip content="View in Artworks">
+                                        <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="flat"
+                                            color="secondary"
+                                            onPress={goToArtworks}
+                                        >
+                                            <FontAwesomeIcon icon={faPaintbrush} />
+                                        </Button>
+                                    </Tooltip>
+                                )}
+                                {canReadRefinement && (
+                                    <Tooltip content="View in Refinements">
+                                        <Button
+                                            isIconOnly
+                                            size="sm"
+                                            variant="flat"
+                                            color="secondary"
+                                            onPress={goToRefinements}
+                                        >
+                                            <FontAwesomeIcon icon={faMagnifyingGlass} />
+                                        </Button>
+                                    </Tooltip>
+                                )}
+                            </div>
+                        )}
                         {!isLocked && canEditReleases && (
                             <div className="flex gap-1">
                                 <Dropdown>
@@ -355,4 +426,4 @@ export default function ExpansionRelease({ project }: ExpansionReleaseProps) {
     );
 }
 
-type ExpansionReleaseProps = { project: IProject };
+type ExpansionReleaseProps = { project: IProject; guideButton?: ReactNode; guideIconButton?: ReactNode };

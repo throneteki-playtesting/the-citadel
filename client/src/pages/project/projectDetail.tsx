@@ -1,10 +1,10 @@
 import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
 import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
 import EditProjectModal from "./editProjectModal";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
@@ -143,6 +143,22 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
     const tabParams = useMemo(() => ({ tab: tab === "development" ? undefined : tab }), [tab]);
     useSearchParamsScope("tab", true, tabParams);
     const tabsRef = useSelectedTabInView(tab);
+
+    // Every tab panel stays mounted, so a link to another tab needs this to notice a url change on its
+    // own. Ignores our own REPLACE writes (the scope above) to avoid a state <-> url feedback loop.
+    const navigationType = useNavigationType();
+    useLayoutEffect(() => {
+        if (navigationType === "REPLACE") {
+            return;
+        }
+        const urlTab = searchParams.get("tab");
+        if (
+            urlTab !== tab &&
+            (urlTab === "development" || urlTab === "artworks" || urlTab === "refinements" || urlTab === "releases")
+        ) {
+            setTab(urlTab);
+        }
+    }, [searchParams, navigationType, tab]);
 
     const canViewReleases = usePermission(Permission.READ_RELEASES);
     const canViewArtworks = usePermission(Permission.READ_ARTWORKS);

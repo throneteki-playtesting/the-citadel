@@ -23,7 +23,8 @@ import { IPlaytestCard } from "common/models/cards";
 import { useGetCardsQuery, useGetSlotRefinementsQuery } from "../../../api";
 import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
 import { designLane, factionAccentClasses, inquirySeverityMeta, reorderTransition } from "../../../constants";
-import SectionTitle from "../../../components/sectionTitle";
+import TabGuideHeader from "../../../components/tabGuideHeader";
+import DataRowSkeleton from "../../../components/dataRowSkeleton";
 import { FilterChip, FilterRow } from "../../../components/filterChips";
 import SortSelect from "../../../components/sortSelect";
 import SlidingPages from "../../../components/slidingPages";
@@ -37,10 +38,14 @@ import { RefinementChecklistItems } from "../../card/refinement/refinementCheckl
 import { ChecklistDots } from "../../../components/checklist";
 import RefinementTab from "../../card/refinement/refinementTab";
 import { useAuth } from "../../../hooks/useAuth";
+import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
+import { useUrlListFilter } from "../../../hooks/useUrlListFilter";
+import RefinementsGuideModal from "./refinementsGuideModal";
 
 const URL_OWNED_KEYS = ["status", "severity", "releases", "attention", "mine", "sort", "q", "editing"];
 const UNASSIGNED = "unassigned";
 const FAQ_PREVIEW_LENGTH = 240;
+const REFINEMENTS_GUIDE_SEEN_KEY = "refinements-guide-seen";
 
 const sortOptions = {
     number: "Card Number",
@@ -82,9 +87,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
         const raw = searchParams.get("severity");
         return raw && inquirySeverities.includes(raw as InquirySeverity) ? (raw as InquirySeverity) : "all";
     });
-    const [releases, setReleases] = useState<string[]>(
-        () => searchParams.get("releases")?.split(",").filter(Boolean) ?? []
-    );
+    const [releases, setReleases] = useUrlListFilter(searchParams, "releases");
     const [attentionOnly, setAttentionOnly] = useState(() => searchParams.get("attention") === "true");
     const [mineOnly, setMineOnly] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
@@ -95,6 +98,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
     });
     const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
     const [highlightInquiry, setHighlightInquiry] = useState<number>();
+    const guide = useTabGuideModal(REFINEMENTS_GUIDE_SEEN_KEY, isActive);
 
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -274,36 +278,42 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
         containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     };
 
-    if (isLoading) {
-        return <RefinementsSkeleton project={project} />;
-    }
-
     return (
-        <div ref={containerRef} className="scroll-mt-20">
-            <SlidingPages currentPage={isEditing ? 2 : 1}>
-                {renderList()}
-                <div>
-                    {editingNumber !== undefined && (
-                        <RefinementTab
-                            key={editingNumber}
-                            project={project.number}
-                            number={editingNumber}
-                            highlightInquiry={highlightInquiry}
-                            showTrack
-                            onBack={() => setIsEditing(false)}
-                        />
-                    )}
+        <>
+            {isLoading ? (
+                <RefinementsSkeleton project={project} onOpenGuide={guide.open} />
+            ) : (
+                <div ref={containerRef} className="scroll-mt-20">
+                    <SlidingPages currentPage={isEditing ? 2 : 1}>
+                        {renderList()}
+                        <div>
+                            {editingNumber !== undefined && (
+                                <RefinementTab
+                                    key={editingNumber}
+                                    project={project.number}
+                                    number={editingNumber}
+                                    highlightInquiry={highlightInquiry}
+                                    showTrack
+                                    onBack={() => setIsEditing(false)}
+                                />
+                            )}
+                        </div>
+                    </SlidingPages>
                 </div>
-            </SlidingPages>
-        </div>
+            )}
+            <RefinementsGuideModal isOpen={guide.isOpen} onClose={guide.close} />
+        </>
     );
 
     function renderList() {
         return (
             <div className="flex flex-col gap-3">
-                <div className="text-sm text-foreground/50">{REFINEMENTS_DESCRIPTION}</div>
-                <SectionTitle size="lg">Refinements</SectionTitle>
-
+                <TabGuideHeader
+                    description={REFINEMENTS_DESCRIPTION}
+                    title="Refinements"
+                    guideLabel="Refinement Guide"
+                    onOpenGuide={guide.open}
+                />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
                         {designStatuses.map((entry) => (
@@ -587,16 +597,57 @@ function RefinementRowView({ row, release, showFinalNumber, project, onEdit }: R
     );
 }
 
-function RefinementsSkeleton({ project }: { project: IProject }) {
+/** Same shape as `RefinementRowView`, so the swap to real rows doesn't shift anything on screen */
+function RefinementRowSkeleton() {
+    return (
+        <DataRowSkeleton>
+            <div className="shrink-0 flex items-center gap-1.5 justify-start sm:justify-end sm:w-20">
+                <Skeleton className="size-6 shrink-0 rounded-full" />
+            </div>
+            <Divider orientation="vertical" className="hidden sm:block self-stretch h-auto w-px shrink-0" />
+            <Skeleton className="h-3 flex-1 min-w-16 rounded-sm" />
+            <Divider orientation="vertical" className="hidden sm:block self-stretch h-auto w-px shrink-0" />
+            <Skeleton className="h-2 w-8 shrink-0 rounded-full" />
+        </DataRowSkeleton>
+    );
+}
+
+function RefinementsSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
         <div className="flex flex-col gap-3">
-            <Skeleton className="h-8 w-48 rounded-lg" />
-            <Skeleton className="h-20 rounded-lg" />
+            <TabGuideHeader
+                description={REFINEMENTS_DESCRIPTION}
+                title="Refinements"
+                guideLabel="Refinement Guide"
+                onOpenGuide={onOpenGuide}
+            />
             <div className="flex flex-col gap-1.5">
-                {Array.from({ length: Math.min(rowCount, 12) }).map((_, index) => (
-                    <Skeleton key={index} className="h-14 rounded-md" />
+                {[designStatuses.length, inquirySeverities.length, project.releases.length].map((chips, row) => (
+                    <div key={row} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <Skeleton className="h-3 w-14 sm:w-16 shrink-0 rounded-sm" />
+                        <div className="flex gap-1.5">
+                            {Array.from({ length: chips }, (_, chip) => (
+                                <Skeleton key={chip} className="h-6 w-24 rounded-full" />
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <Skeleton className="h-10 w-full sm:flex-1 sm:max-w-96 rounded-md" />
+                <div className="flex-1 flex flex-wrap items-center justify-between gap-2 sm:shrink-0">
+                    <div className="flex items-center gap-3">
+                        <Skeleton className="h-6 w-24 rounded-md" />
+                        <Skeleton className="h-6 w-16 rounded-md" />
+                    </div>
+                    <Skeleton className="h-8 w-40 sm:w-44 rounded-md" />
+                </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+                {Array.from({ length: rowCount }).map((_, index) => (
+                    <RefinementRowSkeleton key={index} />
                 ))}
             </div>
         </div>
