@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { omit } from "lodash-es";
 import { ICardSuggestionFilterable, ISuggestionsListQuery } from "common/models/cards";
 import { Explodable, Filter, SingleOrArray, Sort } from "common/types";
 import { escapeRegExp, factionNames, typeNames } from "common/utils";
@@ -62,10 +63,8 @@ function setNonEmpty(target: Record<string, unknown>, key: string, value: unknow
     }
 }
 
-// `unseen`/`myReactions` touch `_metadata.engagement.reactions`, a Joi `.pattern()`-keyed object (keyed
-// by discord id) that the generic filter-schema deriver can't validate arbitrary keys against - GET
-// /suggestions handles these itself via dedicated query params, resolved against the caller's own
-// principal server-side, rather than through the generic `filter` param.
+// `unseen`/`myReactions` touch a Joi `.pattern()`-keyed object the generic filter deriver can't validate -
+// GET /suggestions resolves these itself via dedicated query params against the caller's own principal.
 export function suggestionListQueryExtras(value: SuggestionFilterValue): ISuggestionsListQuery {
     return {
         unseen: value.unseen || undefined,
@@ -80,26 +79,17 @@ export default function useSuggestionServerFilter(
     search: string,
     context: SuggestionFilterContext
 ): SingleOrArray<Filter<ICardSuggestionFilterable>> | undefined {
-    const {
-        traits,
-        mine,
-        byUsers,
-        approvedFilter,
-        rewardTypes,
-        punishment,
-        naturalTrigger,
-        repeatabilityRestricted,
-        iconic,
-        ...cardExplodable
-    } = value;
+    // unseen/myReactions must never reach cardExplodable - handled separately via
+    // suggestionListQueryExtras; leaking either into `card.*` fails ICard filter validation.
+    const { traits, mine, byUsers, approvedFilter, tags, iconic, ...rest } = value;
+    const cardExplodable = omit(rest, ["unseen", "myReactions"]);
     const { currentUserId } = context;
 
     const combined = useMemo(() => {
         const base: Record<string, unknown> = {};
 
-        // An empty `card` object must never be sent - isOperatorObject({}) is vacuously true (Object.keys([]).every
-        // on an empty array), so buildFilterQuery/cartesianProduct would treat `{}` as a literal equality operator
-        // rather than "nothing set here", producing `{ card: {} }` - a filter matching no document at all.
+        // An empty `card` object must never be sent - isOperatorObject({}) is vacuously true, so it'd be
+        // treated as a literal equality operator (`{ card: {} }`) matching no document at all.
         const cardFilter: Record<string, unknown> = { ...cardExplodable };
         setNonEmpty(cardFilter, "traits", traits);
         if (Object.keys(cardFilter).length > 0) {
@@ -127,36 +117,16 @@ export default function useSuggestionServerFilter(
             base._metadata = { engagement };
         }
 
-        const questions: Record<string, unknown> = {};
-        setNonEmpty(questions, "rewardTypes", rewardTypes);
-        setNonEmpty(questions, "punishment", punishment);
-        if (naturalTrigger !== undefined) {
-            questions.naturalTrigger = naturalTrigger;
-        }
-        if (repeatabilityRestricted !== undefined) {
-            questions.repeatabilityRestricted = repeatabilityRestricted;
-        }
+        // `tags` is a plain top-level string-array field (denormalized from rewards/punishments), so it
+        // filters exactly like `card.traits`'s own elementwise match.
+        setNonEmpty(base, "tags", tags);
+
         if (iconic !== undefined) {
-            questions.iconic = iconic;
-        }
-        if (Object.keys(questions).length > 0) {
-            base.questions = questions;
+            base.questions = { iconic };
         }
 
         return base as Explodable<ICardSuggestionFilterable>;
-    }, [
-        cardExplodable,
-        traits,
-        mine,
-        byUsers,
-        approvedFilter,
-        rewardTypes,
-        punishment,
-        naturalTrigger,
-        repeatabilityRestricted,
-        iconic,
-        currentUserId
-    ]);
+    }, [cardExplodable, traits, mine, byUsers, approvedFilter, tags, iconic, currentUserId]);
 
     const filters = useFilter<ICardSuggestionFilterable>(combined);
 

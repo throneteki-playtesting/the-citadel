@@ -40,6 +40,7 @@ import {
     SlotStatuses
 } from "common/models/slots";
 import { IArtist, IArtworkProgress } from "common/models/artwork";
+import { ISettingsMap, SettingsType } from "common/models/settings";
 import { InquirySeverity } from "common/models/refinement";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
@@ -493,6 +494,17 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
+        // Full-universe traits/submitters for the advanced filter drawer - server-cached (short TTL),
+        // so a stale value just waits out the cache rather than needing its own invalidation wiring.
+        getSuggestionFilterOptions: builder.query<
+            { traits: string[]; submitters: { discordId: string; displayname: string }[] },
+            void
+        >({
+            query: () => {
+                const url = buildUrl("suggestions/filter-options");
+                return { url, method: "GET" };
+            }
+        }),
         getSuggestionsFeed: builder.query<SuggestionsFeed, void>({
             query: () => {
                 const url = buildUrl("suggestions/feed");
@@ -633,6 +645,29 @@ const api = createApi({
                 return { url, method: "DELETE" };
             },
             invalidatesTags: (result) => generateFor(result, "artist")
+        }),
+        // One document per SettingsType, tag keyed directly by type. `includeUsage` is opt-in (only the
+        // settings modal's delete-guard needs it), keeping a separate cache entry for label-only callers.
+        getSettings: builder.query<ISettingsMap[SettingsType], SettingsType | { type: SettingsType; includeUsage: boolean }>({
+            query: (args) => {
+                const { type, includeUsage } = typeof args === "string" ? { type: args, includeUsage: false } : args;
+                const url = buildUrl(`settings/${type}`, includeUsage ? { includeUsage: true } : undefined);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, args) => {
+                const { type, includeUsage } = typeof args === "string" ? { type: args, includeUsage: false } : args;
+                return [
+                    { type: "setting" as ApiTag, id: type },
+                    ...(includeUsage ? [{ type: "suggestion" as ApiTag, id: "LIST" }] : [])
+                ];
+            }
+        }),
+        updateSettings: builder.mutation<
+            ISettingsMap[SettingsType],
+            { type: SettingsType; data: Partial<ISettingsMap[SettingsType]> }
+        >({
+            query: ({ type, data }) => ({ url: buildUrl(`settings/${type}`), method: "PATCH", body: data }),
+            invalidatesTags: (_result, _error, { type }) => [{ type: "setting" as ApiTag, id: type }]
         }),
         // Slots API
         getSlot: builder.query<ISlot, { project: number; number: number }>({
@@ -1206,6 +1241,7 @@ export const {
     useClearSuggestionReactionMutation,
     useApproveSuggestionMutation,
     useUnapproveSuggestionMutation,
+    useGetSuggestionFilterOptionsQuery,
     useGetSuggestionsFeedQuery,
     useGetSuggestionPlotMedianQuery,
     useSyncSuggestionDiscordMutation,
@@ -1228,6 +1264,8 @@ export const {
     useCreateArtistMutation,
     useUpdateArtistMutation,
     useDeleteArtistMutation,
+    useGetSettingsQuery,
+    useUpdateSettingsMutation,
 
     useGetSlotQuery,
     useGetSlotsQuery,

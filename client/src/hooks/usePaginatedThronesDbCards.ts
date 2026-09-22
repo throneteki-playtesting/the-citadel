@@ -63,19 +63,5 @@ export default function usePaginatedThronesDbCards() {
         }
     };
 
-    // Cheap re-filter for whatever's already loaded, so a keystroke doesn't wait on the debounce
-    // just to hide an obviously-non-matching row already on screen
-    const matches = useMemo(
-        () => (card: ILabeledCard, term: string) => {
-            const lower = term.toLowerCase();
-            return (
-                card.label.toLowerCase().includes(lower) ||
-                card.name.toLowerCase().includes(lower) ||
-                (card.code?.toLowerCase().includes(lower) ?? false)
-            );
-        },
-        []
-    );
-
-    return { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch, matches };
+    return { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch };
 }

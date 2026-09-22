@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useGetSuggestionsQuery } from "../../api";
+import { useGetSuggestionFilterOptionsQuery, useGetSuggestionsQuery } from "../../api";
 import CardGrid, { CardGridQueryState } from "../../components/cardGrid";
 import SortSelect from "../../components/sortSelect";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -14,7 +14,6 @@ import {
 } from "../../components/data/suggestionFilter";
 import { SortOption, sortOptions } from "./suggestionSortOptions";
 import useSuggestionServerFilter, { suggestionListQueryExtras, suggestionSortOrderBy } from "./suggestionServerFilter";
-import { useDistinctTraits, useDistinctUsers } from "./useFilteredSuggestionList";
 import { ICardSuggestionFilterable } from "common/models/cards";
 import type { IGetRequest } from "server/types";
 
@@ -68,20 +67,16 @@ const SuggestionsGrid = ({
     const orderBy = suggestionSortOrderBy[sortBy];
     const queryExtras = suggestionListQueryExtras(filter);
 
-    // CardGrid's `query` prop is typed generically against IGetRequest<T> alone - suggestions' own
-    // unseen/myReactions extras (ISuggestionsListQuery) are closed over here instead. Named with a `use`
-    // prefix (not wrapped in useCallback, which would make eslint-plugin-react-hooks treat the hook call
-    // inside it as happening in a plain callback) so it reads as the small custom hook it actually is -
-    // CardGrid calls it directly during its own render, which is exactly how any custom hook composes.
+    // CardGrid's `query` prop only takes IGetRequest<T> - suggestions' own unseen/myReactions extras are
+    // closed over here. Named with a `use` prefix (not useCallback) so it reads as the hook it is.
     function useSuggestionsQuery(arg: IGetRequest<ICardSuggestionFilterable>) {
         return useGetSuggestionsQuery({ ...arg, ...queryExtras });
     }
 
-    // Mirrored out of CardGrid (which now owns fetching/paging) - needed here for the filter dropdown's
-    // option lists and the search box's own loading spinner.
+    // Mirrored out of CardGrid (which owns fetching/paging) - needed here for the search box's spinner.
+    // The filter dropdown's own option lists come from a separate, full-universe query below.
     const [gridState, setGridState] = useState(EMPTY_GRID_STATE);
-    const distinctTraits = useDistinctTraits(gridState.items);
-    const distinctUsers = useDistinctUsers(gridState.items);
+    const { data: filterOptions } = useGetSuggestionFilterOptionsQuery();
     const isBusy = gridState.isInitialLoading || gridState.isRefreshing;
     const isSearching = isSearchDebouncing || (isBusy && gridState.isFetching && !!effectiveSearch);
 
@@ -101,8 +96,8 @@ const SuggestionsGrid = ({
                     onSearchChange={setRawSearch}
                     filter={filter}
                     onFilterChange={onFilterChange}
-                    traits={distinctTraits}
-                    users={distinctUsers}
+                    traits={filterOptions?.traits ?? []}
+                    users={filterOptions?.submitters ?? []}
                     isDisabled={isBusy}
                     isSearching={isSearching}
                     className="w-full sm:w-auto sm:min-w-40"

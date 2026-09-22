@@ -89,6 +89,8 @@ enum Permission {
     MANAGE_SUGGESTIONS_ARCHIVE = "MANAGE_SUGGESTIONS_ARCHIVE",
     /** Can sync suggestion discord forum threads */
     SYNC_SUGGESTIONS_DISCORD = "SYNC_SUGGESTIONS_DISCORD",
+    /** Can view and edit suggestion settings (minimum likes threshold, reward/punishment types, loyalty tags) */
+    EDIT_SETTINGS_SUGGESTIONS = "EDIT_SETTINGS_SUGGESTIONS",
     /** Can view a single user by ID */
     READ_USER = "READ_USER",
     /** Can view all users */
@@ -305,6 +307,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         group: "Suggestions",
         dependencies: Permission.READ_SUGGESTIONS
     },
+    [Permission.EDIT_SETTINGS_SUGGESTIONS]: { label: "Edit Settings", group: "Suggestions" },
     [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
     [Permission.MAKE_REVIEWS]: {
         label: "Make Own",

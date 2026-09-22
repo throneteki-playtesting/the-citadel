@@ -1,7 +1,5 @@
 import { challengeIcons, ICard, ReactionType } from "common/models/cards";
 import { Explodable } from "common/types";
-import { RewardType } from "common/designGuidelines/rewardTypes";
-import { PunishmentType } from "common/designGuidelines/punishmentTypes";
 
 // Mirrors CardFilterValue - every ICard field it exposes carries over unchanged, minus `releases`
 // (no release concept for a suggestion), plus suggestion-specific fields layered on top.
@@ -18,10 +16,9 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     // Which of the viewer's own reactions to filter to, not mutually exclusive - unset/empty still
     // excludes ignored-by-me by default, so this is the one field whose ABSENCE isn't a no-op.
     myReactions?: ReactionType[];
-    rewardTypes?: RewardType[];
-    punishment?: PunishmentType[];
-    naturalTrigger?: boolean;
-    repeatabilityRestricted?: boolean;
+    // A plain, denormalized server-side field (union of selected reward/punishment tags) - filters
+    // exactly like `traits`, rather than needing reward/punishment ids resolved client-side.
+    tags?: string[];
     iconic?: boolean;
 };
 
@@ -54,10 +51,7 @@ export function countActiveSuggestionFilters(value: SuggestionFilterValue): numb
     if (value.byUsers && value.byUsers.length > 0) count++;
     if (value.approvedFilter !== undefined) count++;
     if (value.myReactions && value.myReactions.length > 0) count++;
-    if (value.rewardTypes && value.rewardTypes.length > 0) count++;
-    if (value.punishment && value.punishment.length > 0) count++;
-    if (value.naturalTrigger !== undefined) count++;
-    if (value.repeatabilityRestricted !== undefined) count++;
+    if (value.tags && value.tags.length > 0) count++;
     if (value.iconic !== undefined) count++;
     return count;
 }

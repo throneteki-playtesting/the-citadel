@@ -43,8 +43,11 @@ export default function SuggestionsGuideModal({
             <ModalContent>
                 {(close) => (
                     <>
-                        <ModalHeader className="flex flex-col gap-1 font-cinzel text-lg sm:text-2xl">
-                            How do suggestions work?
+                        <ModalHeader className="flex flex-col gap-1">
+                            <span className="font-cinzel text-lg sm:text-2xl">Suggestions Guide</span>
+                            <span className="text-sm font-normal text-foreground/60">
+                                Card designs proposed by the design team, refined through community feedback.
+                            </span>
                         </ModalHeader>
                         <ModalBody className="pb-4 sm:pb-6">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">

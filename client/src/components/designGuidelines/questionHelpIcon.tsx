@@ -3,13 +3,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleQuestion } from "@fortawesome/free-regular-svg-icons";
 import { TouchTooltip } from "../touchTooltip";
 
-/** Title, then intent, then examples set off behind their own "Examples" label - so a reader can
- *  tell at a glance which lines are explanation and which are concrete instances. */
+/** Title, then intent, then note, then examples set off behind their own "Examples" label, so a
+ *  reader can tell explanation from aside from concrete instance at a glance. */
 function QuestionHelpTooltip({ question }: { question: SuggestionQuestionMeta }) {
     return (
         <div className="flex max-w-96 flex-col gap-2.5 p-1">
             <div className="text-sm font-semibold text-foreground/90">{question.title}</div>
             {question.intent && <div className="text-xs leading-relaxed text-foreground/80">{question.intent}</div>}
+            {question.note && <div className="text-xs leading-relaxed text-foreground/60 italic">{question.note}</div>}
             {question.examples && question.examples.length > 0 && (
                 <div className="flex flex-col gap-1.5 rounded-md bg-content2 p-2">
                     <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-foreground/50">

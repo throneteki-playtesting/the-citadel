@@ -4,6 +4,7 @@ import {
     useApproveSuggestionMutation,
     useClearSuggestionReactionMutation,
     useDeleteSuggestionMutation,
+    useGetSettingsQuery,
     useGetSuggestionPlotMedianQuery,
     useGetSuggestionQuery,
     useGetUserQuery,
@@ -61,8 +62,6 @@ import { Code, ICardSuggestion, ILabeledCard, ReactionType, suggestionReactionBl
 import { DeepPartial } from "common/types";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { SlimChecklistNotice } from "../../components/designGuidelines/suggestionChecklist";
-import { REWARD_TYPES } from "common/designGuidelines/rewardTypes";
-import { PUNISHMENT_TYPES } from "common/designGuidelines/punishmentTypes";
 import { SUGGESTION_QUESTIONS, SuggestionQuestionMeta } from "common/designGuidelines/suggestionQuestions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import PermissionedLink from "../../components/permissionedLink";
@@ -78,6 +77,11 @@ import StatusNotice from "../../components/statusNotice";
 import { EASE_STANDARD } from "../../constants";
 import { useSearchTDBCardsQuery } from "../../api/thronesdb";
 import ArtworkFocus from "../../components/artwork/artworkFocus";
+import { IRewardPunishmentOption } from "common/models/settings";
+
+// Shared reference rather than a fresh `?? []` every render, matching editSuggestionModal.tsx's own use
+const EMPTY_STRINGS: string[] = [];
+const EMPTY_REWARD_PUNISHMENT_TYPES: IRewardPunishmentOption[] = [];
 
 const REACTION_OPTIONS: { type: ReactionType; label: string; icon: typeof faThumbsUp }[] = [
     { type: "like", label: "Like", icon: faThumbsUp },
@@ -278,8 +282,6 @@ function CardCodesGroup({
     return (
         <div className={classNames("flex flex-col gap-2", fullWidth ? "w-full" : "flex-1 min-w-0")}>
             <SectionTitle size="sm">{title}</SectionTitle>
-            {/* Capped to keep the SIDE-BY-SIDE width from being driven by an unwrapped sentence - moot
-                once stacked full-width, where the description fills it the same as the title does. */}
             <SectionBlurb className={fullWidth ? undefined : "max-w-80"}>{description}</SectionBlurb>
             {!isLoading && (
                 <div className="flex flex-wrap gap-2">
@@ -440,6 +442,11 @@ const SuggestionDetail = () => {
     const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
         skip: suggestion?.card.type !== "plot"
     });
+    // Reward/punishment types and loyalty tags now live in settings - a safe empty default keeps the
+    // checklist and answer tiles rendering while the query is still loading.
+    const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
+    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
+    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
 
     if (!id) {
         return <Navigate to="/suggestions" />;
@@ -470,7 +477,10 @@ const SuggestionDetail = () => {
         questions: suggestion.questions,
         derived: suggestion.derived,
         pivotPoints: suggestion.pivotPoints,
-        plotMedian: plotPoolMedian?.median
+        plotMedian: plotPoolMedian?.median,
+        rewardTypes: rewardTypeOptions,
+        punishmentTypes: punishmentTypeOptions,
+        loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
     });
 
     const onExportPNG = async () => {
@@ -566,11 +576,11 @@ const SuggestionDetail = () => {
     const canIgnore = !reactionBlockReason;
 
     const rewardTiles = suggestion.questions.rewardTypes.map((id) => {
-        const reward = REWARD_TYPES.find((r) => r.id === id);
+        const reward = rewardTypeOptions.find((r) => r.id === id);
         return <AnswerTile key={id} label={reward?.label ?? id} description={reward?.description ?? ""} />;
     });
     const punishmentTiles = suggestion.questions.punishment.map((id) => {
-        const punishment = PUNISHMENT_TYPES.find((p) => p.id === id);
+        const punishment = punishmentTypeOptions.find((p) => p.id === id);
         return <AnswerTile key={id} label={punishment?.label ?? id} description={punishment?.description ?? ""} />;
     });
     const naturalTriggerTile = answerTileForBoolean(
@@ -606,8 +616,6 @@ const SuggestionDetail = () => {
                     >
                         <FontAwesomeIcon icon={faAngleLeft} /> All Suggestions
                     </PermissionedLink>
-                    {/* Approved is a permanent chip beside the name, not a full-width alert - stacked
-                        below the name on mobile, beside it on desktop (sm:flex-row). */}
                     <div className="order-2 sm:basis-full flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                         <div className="text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
                             {suggestion.card.name}
@@ -637,8 +645,6 @@ const SuggestionDetail = () => {
                             <span className="text-foreground/50 shrink-0">Suggested by</span>
                             <UserRow discordId={suggestion.user.discordId} className="shrink-0 max-w-full" />
                         </div>
-                        {/* The original submitter never changes server-side, so a later edit by
-                            someone else is called out via `updatedBy`, the generic audit stamp. */}
                         {suggestion.updatedBy && suggestion.updatedBy !== suggestion.user.discordId && (
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span className="text-foreground/50 shrink-0">Edited by</span>
@@ -648,12 +654,8 @@ const SuggestionDetail = () => {
                     </div>
                 </div>
 
-                {/* Actions and reactions sit as one tight right-anchored cluster, reactions directly
-                    underneath, rather than a separate full-width row further down the page. */}
                 <div className="flex flex-col items-end gap-2 self-end sm:self-start">
                     <div className="flex items-center gap-2">
-                        {/* Always a labelled button, not folded into HeaderActions' icon-only row -
-                            worth reading at a glance. Mobile drops it for the "..." dropdown copy instead. */}
                         {canApprove && (
                             <Button
                                 className="hidden sm:inline-flex"
@@ -787,7 +789,6 @@ const SuggestionDetail = () => {
                 </div>
             </Reveal>
 
-            {/* Draft flag - its own row, on every breakpoint. */}
             {suggestion.draft && (
                 <div className="px-2 md:px-0">
                     <Chip size="sm" color="default" variant="flat">
@@ -796,8 +797,6 @@ const SuggestionDetail = () => {
                 </div>
             )}
 
-            {/* Mobile's stand-in for the reactions ButtonGroup above - a floating bubble opening the
-                same three options as a dropdown. Absent entirely (not disabled) when reacting is blocked. */}
             {user && !reactionBlockReason && (
                 <div className="sm:hidden fixed bottom-6 right-20 z-20">
                     <Dropdown placement="top-end">
@@ -841,15 +840,11 @@ const SuggestionDetail = () => {
             )}
 
             <div className="flex flex-col lg:flex-row gap-6 px-2 lg:px-0">
-                {/* No `gap` here (unlike most stacks in this file) - a flex `gap` doesn't collapse
-                    smoothly as an animated notice exits, so each block owns its own margin instead. */}
                 <Reveal
                     index={sectionIndex++}
                     className={classNames(
                         "w-full shrink-0 flex flex-col lg:sticky lg:top-[calc(var(--nav-height)+1rem)] lg:self-start",
-                        // A plot's box is a portrait's box rotated - its width is what a portrait's
-                        // height would be at the same base size, or it reads squashed into a
-                        // portrait's narrower width footprint instead of its own landscape shape.
+                        // A plot's box is a portrait's box rotated - its width is a portrait's height.
                         suggestion.card.type === "plot" ? "lg:w-[calc(18rem*333/240)]" : "lg:w-72"
                     )}
                 >
@@ -872,8 +867,6 @@ const SuggestionDetail = () => {
                             {suggestion.card.flavor}
                         </div>
                     )}
-                    {/* Mirrors artworkTab.tsx's own "Ready to sign off" notice - same shape, same
-                        AnimatePresence. Only shown to someone who can act, never once they already have. */}
                     <AnimatePresence initial={false}>
                         {isPendingDecision && (
                             <motion.div
@@ -911,8 +904,6 @@ const SuggestionDetail = () => {
                                                 >
                                                     Approve
                                                 </Button>
-                                                {/* Can't react to your own suggestion - an approver
-                                                    who's also the submitter only gets Approve. */}
                                                 {canIgnore && (
                                                     <Button
                                                         size="sm"

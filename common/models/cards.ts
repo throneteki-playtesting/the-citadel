@@ -1,8 +1,6 @@
 import { SemanticVersion } from "../utils";
 import * as Projects from "./projects";
 import { IAuditable } from "./shared";
-import { RewardType } from "../designGuidelines/rewardTypes";
-import { PunishmentType } from "../designGuidelines/punishmentTypes";
 
 export const factions = [
     "baratheon",
@@ -159,8 +157,9 @@ export interface ILabeledCard extends ICard {
 /** Questions asked of a suggestion's submitter - distinct from `IDerivedFields`, which is computed
  *  automatically from `card.text` and never asked of anyone. */
 export interface ISuggestionQuestions {
-    rewardTypes: RewardType[];
-    punishment: PunishmentType[];
+    // Ids are dynamic/DB-driven (see common/models/settings.ts), not a compile-time-known union
+    rewardTypes: string[];
+    punishment: string[];
     /** Manual count of triggered abilities - gates naturalTrigger/repeatabilityRestricted and the
      *  triggeredAbilityFocus checklist rule. */
     triggeredAbilityCount?: number;
@@ -248,14 +247,8 @@ export interface ICardSuggestion extends IAuditable {
             /** shallow snapshot of watched fields as of the last sync, for the "what changed" edit message */
             lastSyncedSnapshot?: Record<string, unknown>;
         };
-        /** Never client-writable (see the dedicated /:id/reaction routes) - lives under `_metadata`
-         *  rather than top-level so reacting/approving never bumps `updated` (see stripAudit).
-         *  `reactedAt`/`approvedAt` take `Date | string` rather than just `Date` - genuinely a `Date`
-         *  server-side (Mongo's own BSON type) before Mongo serialises it, but only ever a plain ISO
-         *  string once it crosses the wire as JSON, including the client's own optimistic patches
-         *  (see api/index.ts) - Redux Toolkit's serializability check rejects a real `Date` instance
-         *  in the store, and every consumer already re-wraps this in `new Date(...)` before calling
-         *  any Date method, so the string form was always the one actually flowing through. */
+        /** Never client-writable - lives under `_metadata` so reacting/approving never bumps `updated`.
+         *  `Date | string` since it's a plain ISO string once it crosses the wire as JSON. */
         engagement?: {
             reactions: Record<string, { type: ReactionType; reactedAt: Date | string }>;
             approvedBy?: string;
@@ -271,6 +264,9 @@ export interface ICardSuggestion extends IAuditable {
     questions: ISuggestionQuestions;
     /** always server-computed from card.text, never client-supplied */
     derived: IDerivedFields;
+    /** Union of tags carried by every currently-selected reward/punishment type - denormalized here so
+     *  filtering by tag is a plain string-array field. Always server-computed, never client-supplied. */
+    tags: string[];
     /** justification text per rule the submitter has explained - see ChecklistJustifications */
     checklistJustifications: ChecklistJustifications;
     /** 0-many short callouts, each capped at PIVOT_POINT_MAX_LENGTH - see common/designGuidelines/pivotPoints */
@@ -282,15 +278,12 @@ export interface ICardSuggestion extends IAuditable {
     notes?: string;
 }
 
-// Filter/sort-only field - a like tally computed server-side from the stored reactions map, never itself
-// stored. Shared here (rather than declared only in suggestionsRepository.ts) so the client can also
-// type filters/sorts against it when querying GET /suggestions.
+// Filter/sort-only field - a like tally computed server-side from the stored reactions map, never
+// itself stored. Shared here so the client can also type filters/sorts against it.
 export type ICardSuggestionFilterable = ICardSuggestion & { likes?: number };
 
-// GET /suggestions extras handled by dedicated server-side middleware rather than the generic `filter`
-// param - `_metadata.engagement.reactions` is a Joi `.pattern()`-keyed object (keyed by discord id), which
-// the generic filter-schema deriver can't validate arbitrary keys against. The server resolves these
-// against the *authenticated* principal's own discordId rather than trusting one from the client.
+// GET /suggestions extras handled by dedicated server-side middleware, not the generic `filter` param -
+// `_metadata.engagement.reactions` is a Joi `.pattern()`-keyed object the generic deriver can't validate.
 export type ISuggestionsListQuery = {
     unseen?: boolean;
     /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */

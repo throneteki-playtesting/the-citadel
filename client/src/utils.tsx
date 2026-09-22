@@ -5,6 +5,28 @@ import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 import classNames from "classnames";
 
+/** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce".
+ *  Shared by SearchTagPicker and the suggestion settings reward/punishment search. */
+export function fuzzyMatch(text: string, query: string) {
+    const t = text.toLowerCase();
+    const q = query.toLowerCase().trim();
+    if (!q) {
+        return true;
+    }
+    let ti = 0;
+    for (const c of q) {
+        if (c === " ") {
+            continue;
+        }
+        ti = t.indexOf(c, ti);
+        if (ti === -1) {
+            return false;
+        }
+        ti++;
+    }
+    return true;
+}
+
 /** Strips a leading http(s):// (or protocol-relative //) and any leading/trailing slashes, for display. */
 export function stripUrlProtocol(url: string): string {
     return url.replace(/^(?:https?:)?\/\/+/i, "").replace(/\/+$/, "");
@@ -64,8 +86,7 @@ export function formatCurrency(amount: number, currency: string, options?: Intl.
 }
 
 /** Caps a row of children to `max` visible per breakpoint, hiding the rest outright rather than
- *  collapsing them to 0 height - `steps` in ascending breakpoint order, eg.
- *  `[{ max: 4 }, { prefix: "sm", max: 6 }, { prefix: "lg", max: 10 }]`. */
+ *  collapsing to 0 height - `steps` in ascending breakpoint order. */
 export function rowCapClasses(steps: { prefix?: string; max: number }[]): string {
     return classNames(
         steps.map(({ prefix, max }, i) => {

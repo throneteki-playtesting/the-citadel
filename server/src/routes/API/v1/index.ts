@@ -14,6 +14,7 @@ import render from "./render";
 import suggestions from "./suggestions";
 import broadcast from "./broadcast";
 import logs from "./logs";
+import settings from "./settings";
 import impersonation from "./impersonation";
 import stats from "./stats";
 import { parseAPIRequest } from "@/middleware/filters";
@@ -46,6 +47,7 @@ router.use("/render", parseAPIRequest, blockMutationsWhileImpersonating, render)
 router.use("/suggestions", parseAPIRequest, blockMutationsWhileImpersonating, suggestions);
 router.use("/broadcast", parseAPIRequest, blockMutationsWhileImpersonating, broadcast);
 router.use("/logs", parseAPIRequest, blockMutationsWhileImpersonating, logs);
+router.use("/settings", parseAPIRequest, blockMutationsWhileImpersonating, settings);
 router.use("/impersonation", impersonation);
 router.use("/stats", parseAPIRequest, blockMutationsWhileImpersonating, stats);
 

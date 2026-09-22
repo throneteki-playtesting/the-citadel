@@ -1,4 +1,5 @@
 import { ICard, ICardSuggestion, ChecklistRuleId, ChecklistJustifications, IDerivedFields } from "common/models/cards";
+import { IRewardPunishmentOption } from "common/models/settings";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import SuggestionEditorGuide, { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuide";
@@ -7,6 +8,7 @@ import RichTextArea from "../../components/richTextArea";
 import {
     useCreateSuggestionMutation,
     useDeleteSuggestionMutation,
+    useGetSettingsQuery,
     useGetSuggestionPlotMedianQuery,
     useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation
@@ -20,12 +22,10 @@ import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { useWizard } from "../../components/wizard/context";
 import { CardSuggestion } from "common/models/schemas";
-import CardMultiSelect from "../../components/data/cardMultiSelect";
-import SelectedCardChips from "../../components/data/selectedCardChips";
+import CardImageGrid from "../../components/data/cardImageGrid";
+import SelectedCardImages from "../../components/data/selectedCardImages";
 import { useAuth } from "../../hooks/useAuth";
 import { showApiErrorToast } from "../../api/errors";
-import { REWARD_TYPES } from "common/designGuidelines/rewardTypes";
-import { PUNISHMENT_TYPES } from "common/designGuidelines/punishmentTypes";
 import { deriveFields } from "common/designGuidelines/deriveFields";
 import { checklistRules, RuleResult } from "common/designGuidelines/checklistRules";
 import SearchTagPicker from "../../components/designGuidelines/searchTagPicker";
@@ -60,6 +60,9 @@ const CARD_EDITOR_INPUT_OPTIONS = { designer: "hidden" } as const;
 // A `?? []` fallback creates a new array every render, defeating a memoized child's memo just as
 // surely as an unstable callback would - one shared empty reference instead.
 const EMPTY_STRINGS: string[] = [];
+
+// Same reasoning, for the settings query's reward/punishment lists while they're still loading
+const EMPTY_REWARD_PUNISHMENT_TYPES: IRewardPunishmentOption[] = [];
 
 // Same "shared reference, not a fresh `?? {}` every render" reasoning as EMPTY_STRINGS above.
 const EMPTY_JUSTIFICATIONS: DeepPartial<ChecklistJustifications> = {};
@@ -481,6 +484,29 @@ const EditSuggestionModal = ({
         skip: deferredCard?.type !== "plot"
     });
 
+    // Reward/punishment types and loyalty tags now live in settings rather than a static import - a
+    // safe empty default keeps the checklist rendering while the query is still loading.
+    const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
+    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
+    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
+
+    // Disabled options stay picked wherever they already were, but drop out of what's offered for a
+    // new selection - matches IRewardPunishmentOption.enabled's contract in common/models/settings.ts.
+    const rewardTypeSelectableOptions = useMemo(
+        () =>
+            rewardTypeOptions.filter(
+                (option) => option.enabled || (suggestion.questions?.rewardTypes ?? EMPTY_STRINGS).includes(option.id)
+            ),
+        [rewardTypeOptions, suggestion.questions?.rewardTypes]
+    );
+    const punishmentTypeSelectableOptions = useMemo(
+        () =>
+            punishmentTypeOptions.filter(
+                (option) => option.enabled || (suggestion.questions?.punishment ?? EMPTY_STRINGS).includes(option.id)
+            ),
+        [punishmentTypeOptions, suggestion.questions?.punishment]
+    );
+
     // Narrowed to only what checklistRules() actually reads - a whole-object dependency was
     // recomputing (and re-rendering every row) on every Notes/justification keystroke too.
     const checklistResults = useMemo(() => {
@@ -499,9 +525,21 @@ const EditSuggestionModal = ({
             },
             derived: (deferredDerived as IDerivedFields) ?? { triggerTypes: [], keywords: [] },
             pivotPoints: (deferredPivotPoints ?? []).filter((p): p is string => !!p),
-            plotMedian: plotPoolMedian?.median
+            plotMedian: plotPoolMedian?.median,
+            rewardTypes: rewardTypeOptions,
+            punishmentTypes: punishmentTypeOptions,
+            loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
         });
-    }, [deferredCard, deferredQuestions, deferredDerived, deferredPivotPoints, plotPoolMedian]);
+    }, [
+        deferredCard,
+        deferredQuestions,
+        deferredDerived,
+        deferredPivotPoints,
+        plotPoolMedian,
+        rewardTypeOptions,
+        punishmentTypeOptions,
+        suggestionSettings?.loyaltyTags
+    ]);
 
     // Nothing worth saving or moving on from until the design has at least these two basics -
     // Save Draft/Next stay disabled rather than letting either commit an unusably bare suggestion.
@@ -834,12 +872,12 @@ const EditSuggestionModal = ({
                                                                 question={SUGGESTION_QUESTIONS.rewardTypes}
                                                             />
                                                             <SearchTagPicker
-                                                                options={REWARD_TYPES}
+                                                                options={rewardTypeSelectableOptions}
                                                                 value={
                                                                     suggestion.questions?.rewardTypes ?? EMPTY_STRINGS
                                                                 }
                                                                 onChange={onRewardTypesChange}
-                                                                placeholder="Search reward types by name or category…"
+                                                                placeholder="Search reward types by name or tag…"
                                                             />
                                                         </div>
 
@@ -848,12 +886,12 @@ const EditSuggestionModal = ({
                                                                 question={SUGGESTION_QUESTIONS.punishment}
                                                             />
                                                             <SearchTagPicker
-                                                                options={PUNISHMENT_TYPES}
+                                                                options={punishmentTypeSelectableOptions}
                                                                 value={
                                                                     suggestion.questions?.punishment ?? EMPTY_STRINGS
                                                                 }
                                                                 onChange={onPunishmentChange}
-                                                                placeholder="Search punishment types…"
+                                                                placeholder="Search punishment types by name or tag…"
                                                             />
                                                         </div>
                                                     </div>
@@ -881,12 +919,12 @@ const EditSuggestionModal = ({
                                                             <QuestionHeader
                                                                 question={SUGGESTION_QUESTIONS.comparableCards}
                                                             />
-                                                            <SelectedCardChips
+                                                            <SelectedCardImages
                                                                 value={comparableCardsValue}
                                                                 onChange={onComparableCardsChange}
                                                                 emptyLabel="No comparable cards selected."
                                                             />
-                                                            <CardMultiSelect
+                                                            <CardImageGrid
                                                                 className="w-full"
                                                                 ariaLabel="Comparable Cards"
                                                                 placeholder="Search released cards…"
@@ -898,12 +936,12 @@ const EditSuggestionModal = ({
                                                             <QuestionHeader
                                                                 question={SUGGESTION_QUESTIONS.combosWith}
                                                             />
-                                                            <SelectedCardChips
+                                                            <SelectedCardImages
                                                                 value={combosWithValue}
                                                                 onChange={onCombosWithChange}
                                                                 emptyLabel="No combos selected."
                                                             />
-                                                            <CardMultiSelect
+                                                            <CardImageGrid
                                                                 className="w-full"
                                                                 ariaLabel="Combos With"
                                                                 placeholder="Search released cards…"
@@ -955,11 +993,11 @@ const EditSuggestionModal = ({
                                         </div>
                                         <div
                                             className={classNames(
-                                                "hidden md:flex md:shrink-0 md:min-h-0 md:flex-col gap-3 md:pr-6",
+                                                "hidden md:flex md:shrink-0 md:min-h-0 md:flex-col md:pr-6",
                                                 isPlot ? "md:w-[calc(18rem*333/240)]" : "md:w-72"
                                             )}
                                         >
-                                            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto">
+                                            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-2 pb-3">
                                                 <div
                                                     className={classNames(
                                                         "w-full mx-auto",

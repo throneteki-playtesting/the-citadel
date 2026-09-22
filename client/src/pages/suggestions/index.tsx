@@ -25,10 +25,12 @@ import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components
 import usePageTitle from "../../hooks/usePageTitle";
 import { usePermission } from "../../hooks/usePermission";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowRight, faCircleQuestion, faFileLines, faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faCircleQuestion, faFileLines, faGear, faLightbulb } from "@fortawesome/free-solid-svg-icons";
 import SuggestionsGuideModal from "./suggestionsGuideModal";
+import SuggestionSettingsModal from "./suggestionSettingsModal";
 import LoadingCard from "../../components/loadingCard";
 import { rowCapClasses } from "../../utils";
+import PermissionGate from "../../components/permissionGate";
 
 const SUGGESTIONS_GUIDE_SEEN_KEY = "suggestions-guide-seen";
 // Every key the "all suggestions" scope might write - declared up front so a cleared field's key
@@ -87,6 +89,7 @@ function SuggestionsContent() {
     const { data: feed, isLoading } = useGetSuggestionsFeedQuery();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
     const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     // Auto-opens the first time this browser ever lands on this page - no role/eligibility condition
     // beyond that (unlike the playtest onboarding guide), so a plain "seen it" flag is all this needs.
     const [isGuideOpen, setIsGuideOpen] = useState(() => {
@@ -121,10 +124,8 @@ function SuggestionsContent() {
         }
     }, [location.state, location.pathname, location.search, navigate]);
 
-    // All "browse everything" state is shareable via the url, seeded once on mount - a later in-page
-    // jump updates this state directly rather than relying on a url change, since nothing unmounts
-    // once opened. Sticky rather than tracking isBrowsingAll directly - SuggestionsGrid stays mounted
-    // (and keeps its own fetch/filter state) once opened, but isn't built at all before that.
+    // All "browse everything" state is shareable via the url, seeded once on mount. `hasOpenedAll` is
+    // sticky (unlike `isBrowsingAll`) so SuggestionsGrid mounts once and keeps its own state thereafter.
     const [searchParams] = useSearchParams();
     const [isBrowsingAll, setIsBrowsingAll] = useState(() => searchParams.get("all") === "true");
     const [hasOpenedAll, setHasOpenedAll] = useState(isBrowsingAll);
@@ -171,19 +172,20 @@ function SuggestionsContent() {
     return (
         <div className="flex flex-col gap-5">
             <div className="px-4 md:px-0 space-y-2 md:space-y-4">
-                <div className="flex flex-row items-end justify-between gap-6">
+                <div className="flex items-center gap-2">
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
                         Suggestions
                     </div>
                     <Button
+                        isIconOnly
                         color="primary"
                         variant="flat"
                         size="sm"
-                        startContent={<FontAwesomeIcon icon={faCircleQuestion} />}
+                        aria-label="Suggestions Guide"
                         onPress={() => setIsGuideOpen(true)}
-                        className="font-cinzel shrink-0 font-semibold"
+                        className="sm:hidden shrink-0"
                     >
-                        How do suggestions work?
+                        <FontAwesomeIcon icon={faCircleQuestion} />
                     </Button>
                 </div>
                 <div className="flex items-center justify-between gap-2 py-1">
@@ -191,6 +193,16 @@ function SuggestionsContent() {
                         Card designs proposed by the design team.
                     </div>
                     <div className="flex items-center gap-3">
+                        <Button
+                            color="primary"
+                            variant="flat"
+                            size="sm"
+                            startContent={<FontAwesomeIcon icon={faCircleQuestion} />}
+                            onPress={() => setIsGuideOpen(true)}
+                            className="hidden sm:flex font-cinzel shrink-0 font-semibold"
+                        >
+                            Suggestions Guide
+                        </Button>
                         {canCreate && (
                             <Button
                                 className="hidden sm:inline-flex"
@@ -222,6 +234,18 @@ function SuggestionsContent() {
                                 </Button>
                             </Badge>
                         )}
+                        <PermissionGate requires={Permission.EDIT_SETTINGS_SUGGESTIONS}>
+                            <Button
+                                isIconOnly
+                                className="hidden sm:inline-flex"
+                                size="sm"
+                                variant="flat"
+                                aria-label="Settings"
+                                onPress={() => setIsSettingsOpen(true)}
+                            >
+                                <FontAwesomeIcon icon={faGear} />
+                            </Button>
+                        </PermissionGate>
                     </div>
                 </div>
             </div>
@@ -359,6 +383,28 @@ function SuggestionsContent() {
                 onViewAll={() => openAll()}
             />
 
+            <SuggestionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+            <PermissionGate requires={Permission.EDIT_SETTINGS_SUGGESTIONS}>
+                <div
+                    className={classNames("sm:hidden fixed bottom-6 z-20", {
+                        "right-36": canCreate && !!myDraftsCount,
+                        "right-20": !(canCreate && !!myDraftsCount)
+                    })}
+                >
+                    <Button
+                        isIconOnly
+                        radius="full"
+                        size="lg"
+                        color="default"
+                        className="shadow-lg"
+                        aria-label="Settings"
+                        onPress={() => setIsSettingsOpen(true)}
+                    >
+                        <FontAwesomeIcon icon={faGear} />
+                    </Button>
+                </div>
+            </PermissionGate>
             {canCreate && !!myDraftsCount && (
                 <div className="sm:hidden fixed bottom-6 right-20 z-20">
                     <Badge content={myDraftsCount} color="primary" showOutline={false}>

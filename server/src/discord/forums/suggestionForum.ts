@@ -26,8 +26,6 @@ import { Code, countReactionsByType, ICardSuggestion } from "common/models/cards
 import { dataService, discordService, logger, thronesDbCardPoolService } from "@/services";
 import { factionNames, renderCardSuggestion, THRONESDB_URL } from "common/utils";
 import { asPNG } from "@/rendering";
-import { REWARD_TYPES } from "common/designGuidelines/rewardTypes";
-import { PUNISHMENT_TYPES } from "common/designGuidelines/punishmentTypes";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { createSyncEmitter } from "@/services/sseService";
 import { toDiscord } from "common/richText/toDiscord";
@@ -79,10 +77,8 @@ function diffSnapshot(previous: Record<string, unknown> | undefined, current: Re
         .map((key) => WATCHED_LABELS[key]);
 }
 
-/**
- * Syncs a batch of submitted suggestions to their forum threads - creating one where none exists yet,
- * otherwise refreshing the starter message in place and posting a changed-fields notice when warranted.
- */
+/** Syncs a batch of submitted suggestions to their forum threads - creating one where none exists yet,
+ *  otherwise refreshing the starter message and posting a changed-fields notice when warranted. */
 export async function syncSuggestionForum(
     suggestions: ICardSuggestion[],
     forced?: boolean
@@ -252,10 +248,8 @@ export async function onSuggestionDeleted(suggestion: ICardSuggestion) {
     });
 }
 
-/**
- * Silently archives the threads of suggestions that have just been archived (eg. consumed by a project at
- * initialise time) - no notice, unlike every other transition here.
- */
+/** Silently archives the threads of suggestions that have just been archived - no notice, unlike every
+ *  other transition here. */
 export async function closeSuggestionThreads(suggestions: ICardSuggestion[]) {
     const release = await syncSuggestionForumMutex.acquire();
     try {
@@ -339,10 +333,8 @@ async function getSuggestionForumContext(): Promise<SuggestionForumContext> {
     return { guild, channel, factionTags };
 }
 
-/**
- * Runs something against a suggestion's thread, if it has one. Every caller is following a decision
- * already saved, so a failure is logged and swallowed rather than refusing what it was recording.
- */
+/** Runs something against a suggestion's thread, if it has one - failures are logged and swallowed
+ *  rather than refusing the decision the caller already saved. */
 async function withSuggestionThread(suggestion: ICardSuggestion, action: (thread: ThreadChannel) => Promise<void>) {
     const messageUrl = suggestion._metadata?.discord?.messageUrl;
     if (!messageUrl) {
@@ -451,13 +443,19 @@ async function resolveCardLinks(codes: string[]): Promise<string[]> {
 
 /** One plain count rather than a per-rule breakdown - `SlimChecklistNotice` already owns the detailed view */
 async function checklistSummary(suggestion: ICardSuggestion): Promise<string | undefined> {
-    const plotMedian = await thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type);
+    const [plotMedian, settings] = await Promise.all([
+        thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type),
+        dataService.settings.getByType("suggestions")
+    ]);
     const results = checklistRules({
         card: suggestion.card,
         questions: suggestion.questions,
         derived: suggestion.derived,
         pivotPoints: suggestion.pivotPoints,
-        plotMedian
+        plotMedian,
+        rewardTypes: settings?.rewardTypes ?? [],
+        punishmentTypes: settings?.punishmentTypes ?? [],
+        loyaltyTags: settings?.loyaltyTags ?? []
     });
     if (results.length === 0) {
         return undefined;
@@ -472,11 +470,12 @@ async function checklistSummary(suggestion: ICardSuggestion): Promise<string | u
  *  each only shown when it has content. */
 async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICardSuggestion): Promise<void> {
     const answers: string[] = [];
-    const rewardLabels = labelsFor(REWARD_TYPES, suggestion.questions.rewardTypes);
+    const settings = await dataService.settings.getByType("suggestions");
+    const rewardLabels = labelsFor(settings?.rewardTypes ?? [], suggestion.questions.rewardTypes);
     if (rewardLabels.length > 0) {
         answers.push(`🎁 **Reward Types:** ${rewardLabels.join(", ")}`);
     }
-    const punishmentLabels = labelsFor(PUNISHMENT_TYPES, suggestion.questions.punishment);
+    const punishmentLabels = labelsFor(settings?.punishmentTypes ?? [], suggestion.questions.punishment);
     if (punishmentLabels.length > 0) {
         answers.push(`⚠️ **Punishment:** ${punishmentLabels.join(", ")}`);
     }

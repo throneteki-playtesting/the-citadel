@@ -1,11 +1,12 @@
 import { memo, useMemo, useState } from "react";
-import { Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Input } from "@heroui/react";
+import { Input } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheck, faFilter, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
 import { EASE_STANDARD } from "../../constants";
+import { fuzzyMatch } from "../../utils";
 
 const ROW_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 
@@ -13,43 +14,18 @@ export interface SearchTagOption {
     id: string;
     label: string;
     description: string;
-    categories?: string[];
-    /** hidden synonyms the search also matches against - never rendered */
-    tags?: string[];
+    /** Both a hidden search target and a user-visible label on the row itself */
+    tags: string[];
 }
 
-/** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce" */
-function fuzzyMatch(text: string, query: string) {
-    const t = text.toLowerCase();
-    const q = query.toLowerCase().trim();
-    if (!q) {
-        return true;
-    }
-    let ti = 0;
-    for (const c of q) {
-        if (c === " ") {
-            continue;
-        }
-        ti = t.indexOf(c, ti);
-        if (ti === -1) {
-            return false;
-        }
-        ti++;
-    }
-    return true;
+/** "card advantage" -> "Card advantage" - tags are already free-text phrases, not camelCase keys, so
+ *  this only needs to capitalize the first letter rather than split words apart. */
+function tagLabel(tag: string) {
+    return tag.charAt(0).toUpperCase() + tag.slice(1);
 }
 
-/** "cardAdvantage" -> "Card Advantage" - the registry's ids are camelCase keys, not display labels */
-function categoryLabel(category: string) {
-    const spaced = category.replace(/([a-z])([A-Z])/g, "$1 $2");
-    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-/** Search + tag picker for a small fixed taxonomy - not a plain Select, since 30+ options is too
- *  many to browse cold. Memoized (its rows carry a `layout` animation); needs stable value/onChange.
- *  A checked row is the "selection", so it reads that way directly - floated to the top of the list
- *  rather than duplicated into a separate chip row above it. Unchecking drops it back to wherever it
- *  naturally sorts among the rest, and `layout` animates both moves. */
+/** Search + tag picker for a small fixed taxonomy - too many options (30+) to browse cold via a plain
+ *  Select. A checked row floats to the top as the "selection" rather than duplicating into a chip row. */
 const SearchTagPicker = memo(function SearchTagPicker({
     className,
     style,
@@ -60,20 +36,14 @@ const SearchTagPicker = memo(function SearchTagPicker({
     placeholder = "Search…"
 }: SearchTagPickerProps) {
     const [query, setQuery] = useState("");
-    const [activeCategories, setActiveCategories] = useState<Set<string>>(new Set());
-
-    const categories = useMemo(() => [...new Set(options.flatMap((o) => o.categories ?? []))], [options]);
 
     const filtered = useMemo(
         () =>
             options.filter((o) => {
-                if (activeCategories.size > 0 && !(o.categories ?? []).some((c) => activeCategories.has(c))) {
-                    return false;
-                }
-                const haystack = [o.label, ...(o.categories ?? []), ...(o.tags ?? [])].join(" ");
+                const haystack = [o.label, ...o.tags].join(" ");
                 return fuzzyMatch(haystack, query);
             }),
-        [options, query, activeCategories]
+        [options, query]
     );
 
     // Checked rows float to the top, in check order (`value` grows by appending - see toggleValue).
@@ -98,49 +68,14 @@ const SearchTagPicker = memo(function SearchTagPicker({
 
     return (
         <div className={classNames("flex flex-col gap-2", className)} style={style}>
-            <div className="flex gap-2">
-                <Input
-                    size="sm"
-                    className="flex-[2]"
-                    placeholder={placeholder}
-                    value={query}
-                    onValueChange={setQuery}
-                    isDisabled={isDisabled}
-                    startContent={<FontAwesomeIcon icon={faMagnifyingGlass} className="text-foreground/40" />}
-                />
-                {categories.length > 0 && (
-                    <Dropdown>
-                        <DropdownTrigger>
-                            <Button
-                                size="sm"
-                                variant="flat"
-                                className="relative shrink-0 px-0 w-10 sm:w-auto sm:flex-1 sm:px-3"
-                                isDisabled={isDisabled}
-                                aria-label="Filter by category"
-                            >
-                                <FontAwesomeIcon icon={faFilter} />
-                                <span className="hidden sm:inline">Categories</span>
-                                {activeCategories.size > 0 && (
-                                    <span className="absolute -top-1.5 -right-1.5 sm:static px-1.5 text-xs tabular-nums rounded-full bg-foreground/10">
-                                        {activeCategories.size}
-                                    </span>
-                                )}
-                            </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu
-                            aria-label="Filter by category"
-                            selectionMode="multiple"
-                            closeOnSelect={false}
-                            selectedKeys={activeCategories}
-                            onSelectionChange={(keys) => setActiveCategories(new Set(keys as Set<string>))}
-                        >
-                            {categories.map((category) => (
-                                <DropdownItem key={category}>{categoryLabel(category)}</DropdownItem>
-                            ))}
-                        </DropdownMenu>
-                    </Dropdown>
-                )}
-            </div>
+            <Input
+                size="sm"
+                placeholder={placeholder}
+                value={query}
+                onValueChange={setQuery}
+                isDisabled={isDisabled}
+                startContent={<FontAwesomeIcon icon={faMagnifyingGlass} className="text-foreground/40" />}
+            />
             <div className="flex flex-col gap-1 max-h-64 overflow-y-auto rounded-lg border border-content3 p-1">
                 {ordered.length === 0 && <div className="p-3 text-xs text-foreground/50">No matches.</div>}
                 <AnimatePresence initial={false} mode="popLayout">
@@ -191,9 +126,12 @@ const SearchTagPicker = memo(function SearchTagPicker({
                                     <span className="text-sm font-medium">{option.label}</span>
                                     <span className="text-xs text-foreground/50">{option.description}</span>
                                 </span>
-                                {option.categories && option.categories.length > 0 && (
-                                    <span className="ml-auto text-xxs uppercase tracking-wide text-foreground/40 shrink-0">
-                                        {categoryLabel(option.categories[0])}
+                                {option.tags.length > 0 && (
+                                    <span
+                                        className="ml-auto max-w-[40%] truncate text-xxs uppercase tracking-wide text-foreground/40 shrink-0"
+                                        title={option.tags.join(", ")}
+                                    >
+                                        {option.tags.map(tagLabel).join(", ")}
                                     </span>
                                 )}
                             </motion.button>

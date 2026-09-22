@@ -1,14 +1,6 @@
-import {
-    Button,
-    ButtonGroup,
-    Chip,
-    DrawerBody,
-    DrawerFooter,
-    DrawerHeader,
-    Input,
-    SharedSelection
-} from "@heroui/react";
+import { Button, ButtonGroup, DrawerBody, DrawerFooter, DrawerHeader, Input, SharedSelection } from "@heroui/react";
 import { useMemo, useState } from "react";
+import classNames from "classnames";
 import {
     ChallengeIcon,
     challengeIcons,
@@ -20,15 +12,18 @@ import {
     types
 } from "common/models/cards";
 import { factionNames, typeNames, escapeRegExp } from "common/utils";
-import { REWARD_TYPES, RewardType } from "common/designGuidelines/rewardTypes";
-import { PUNISHMENT_TYPES, PunishmentType } from "common/designGuidelines/punishmentTypes";
+import { useGetSettingsQuery } from "../../../api";
+import { IRewardPunishmentOption } from "common/models/settings";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEyeSlash, faThumbsDown, faThumbsUp, IconDefinition } from "@fortawesome/free-solid-svg-icons";
 import ThronesIcon from "../../thronesIcon";
+import UserAvatar from "../../userAvatar";
 import SearchableMultiSelect from "../searchableMultiSelect";
 import { ToggleButtonGroup, BooleanToggle, NumericFilterInput } from "../filters";
 import { NumericFilterValue, decodeNumericOperators, numericOperators } from "../filters/numeric";
 import { EMPTY_SUGGESTION_FILTER, isSuggestionFilterActive, SuggestionFilterValue } from "./types";
+
+const EMPTY_OPTIONS: IRewardPunishmentOption[] = [];
 
 const REACTION_FILTER_OPTIONS: { key: ReactionType; label: string; icon: IconDefinition }[] = [
     { key: "like", label: "Liked", icon: faThumbsUp },
@@ -58,10 +53,7 @@ type InternalState = {
     byUsers: string[];
     approvedFilter?: "awaiting" | "only" | "none";
     myReactions: ReactionType[];
-    rewardTypes: RewardType[];
-    punishment: PunishmentType[];
-    naturalTrigger?: boolean;
-    repeatabilityRestricted?: boolean;
+    tags: string[];
     iconic?: boolean;
 };
 
@@ -103,10 +95,7 @@ function decode(value: SuggestionFilterValue): InternalState {
         byUsers: value.byUsers ?? [],
         approvedFilter: value.approvedFilter,
         myReactions: value.myReactions ?? [],
-        rewardTypes: value.rewardTypes ?? [],
-        punishment: value.punishment ?? [],
-        naturalTrigger: value.naturalTrigger,
-        repeatabilityRestricted: value.repeatabilityRestricted,
+        tags: value.tags ?? [],
         iconic: value.iconic
     };
 }
@@ -151,38 +140,24 @@ function compose(state: InternalState): SuggestionFilterValue {
         byUsers: state.byUsers.length > 0 ? state.byUsers : undefined,
         approvedFilter: state.approvedFilter,
         myReactions: state.myReactions.length > 0 ? state.myReactions : undefined,
-        rewardTypes: state.rewardTypes.length > 0 ? state.rewardTypes : undefined,
-        punishment: state.punishment.length > 0 ? state.punishment : undefined,
-        naturalTrigger: state.naturalTrigger,
-        repeatabilityRestricted: state.repeatabilityRestricted,
+        tags: state.tags.length > 0 ? state.tags : undefined,
         iconic: state.iconic
     };
 }
 
-function renderChips(items: string[], onRemove: (item: string) => void) {
-    return (
-        <div className="flex flex-wrap gap-1 py-1">
-            {items.map((item) => (
-                <Chip key={item} variant="flat" onClose={() => onRemove(item)}>
-                    {item}
-                </Chip>
-            ))}
-        </div>
-    );
-}
-
-// Same search+chips pattern cardFilterDrawer.tsx's private MultiSelectField uses, generalised to
-// id/label pairs so it also covers the reward/punishment registries below (not just bare strings).
+// Same search+chips pattern as cardFilterDrawer.tsx's MultiSelectField, generalised to id/label pairs
+// so it also covers the tags list below (not just bare strings).
 type KeyedOption = { key: string; label: string };
 type KeyedMultiSelectFieldProps = {
-    label?: string;
     placeholder: string;
     options: KeyedOption[];
     value: string[];
     onChange: (value: string[]) => void;
+    /** Tags are free-text phrases with no natural casing of their own - true for that field only. */
+    uppercase?: boolean;
 };
 
-function KeyedMultiSelectField({ label, placeholder, options, value, onChange }: KeyedMultiSelectFieldProps) {
+function KeyedMultiSelectField({ placeholder, options, value, onChange, uppercase }: KeyedMultiSelectFieldProps) {
     const [search, setSearch] = useState("");
 
     const items = useMemo(() => {
@@ -198,50 +173,84 @@ function KeyedMultiSelectField({ label, placeholder, options, value, onChange }:
         onChange(keys === "all" ? items.map((item) => item.key) : ([...keys] as string[]));
     };
 
-    const selectedLabels = (keys: string[]) =>
-        keys.map((key) => options.find((option) => option.key === key)?.label ?? key);
+    return (
+        <SearchableMultiSelect
+            size="md"
+            radius="sm"
+            placeholder={placeholder}
+            items={items}
+            getKey={(item) => item.key}
+            renderItem={(item) => <span className={classNames(uppercase && "uppercase")}>{item.label}</span>}
+            getChipLabel={(item) => <span className={classNames(uppercase && "uppercase")}>{item.label}</span>}
+            selectedKeys={value}
+            onSelectionChange={handleSelectionChange}
+            search={search}
+            onSearchChange={setSearch}
+            hasMore={false}
+            onLoadMore={() => undefined}
+        />
+    );
+}
+
+// Same shape as KeyedMultiSelectField, but for discordId/displayname pairs, so each row/chip can carry
+// the submitter's avatar (fetched by UserAvatar itself, keyed off discordId).
+type UserOption = { discordId: string; displayname: string };
+type UserMultiSelectFieldProps = {
+    placeholder: string;
+    options: UserOption[];
+    value: string[];
+    onChange: (value: string[]) => void;
+};
+
+function UserMultiSelectField({ placeholder, options, value, onChange }: UserMultiSelectFieldProps) {
+    const [search, setSearch] = useState("");
+
+    const items = useMemo(() => {
+        const term = search.trim().toLowerCase();
+        const filtered = term
+            ? options.filter((option) => option.displayname.toLowerCase().includes(term))
+            : options;
+        const missingSelected = options.filter(
+            (option) => value.includes(option.discordId) && !filtered.some((f) => f.discordId === option.discordId)
+        );
+        return [...missingSelected, ...filtered];
+    }, [options, search, value]);
+
+    const handleSelectionChange = (keys: SharedSelection) => {
+        onChange(keys === "all" ? items.map((item) => item.discordId) : ([...keys] as string[]));
+    };
 
     return (
-        <div className="flex flex-col gap-1">
-            {(label || value.length > 0) && (
-                <div className="flex items-center justify-between">
-                    <div className="text-xs text-default-500">{label}</div>
-                    {value.length > 0 && (
-                        <button
-                            type="button"
-                            className="text-xs text-primary hover:underline"
-                            onClick={() => onChange([])}
-                        >
-                            Clear
-                        </button>
-                    )}
+        <SearchableMultiSelect
+            size="md"
+            radius="sm"
+            placeholder={placeholder}
+            items={items}
+            getKey={(item) => item.discordId}
+            renderItem={(item) => (
+                <div className="flex items-center gap-2 w-full min-w-0">
+                    <UserAvatar discordId={item.discordId} size="sm" />
+                    <span className="truncate text-small">{item.displayname}</span>
                 </div>
             )}
-            <SearchableMultiSelect
-                size="sm"
-                placeholder={placeholder}
-                items={items}
-                getKey={(item) => item.key}
-                renderItem={(item) => item.label}
-                renderSelected={() =>
-                    renderChips(selectedLabels(value), (label) => {
-                        const key = options.find((option) => option.label === label)?.key;
-                        onChange(value.filter((v) => v !== key));
-                    })
-                }
-                selectedKeys={value}
-                onSelectionChange={handleSelectionChange}
-                search={search}
-                onSearchChange={setSearch}
-                hasMore={false}
-                onLoadMore={() => undefined}
-            />
-        </div>
+            getChipLabel={(item) => (
+                <span className="flex items-center gap-1.5">
+                    <UserAvatar discordId={item.discordId} className="!size-4" />
+                    {item.displayname}
+                </span>
+            )}
+            selectedKeys={value}
+            onSelectionChange={handleSelectionChange}
+            search={search}
+            onSearchChange={setSearch}
+            hasMore={false}
+            onLoadMore={() => undefined}
+        />
     );
 }
 
 // A ToggleButtonGroup toggles independently per key - resolving the picked key here (rather than
-// teaching it a new "exclusive" mode) gives the approval row radio-like behaviour instead.
+// teaching it a new "exclusive" mode) gives a row radio-like behaviour instead.
 function pickExclusive<T extends string>(next: T[], previous?: T): T | undefined {
     return next.find((key) => key !== previous);
 }
@@ -256,6 +265,14 @@ type SuggestionFilterDrawerProps = {
 
 const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: SuggestionFilterDrawerProps) => {
     const [internal, setInternal] = useState<InternalState>(() => decode(value));
+    const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
+    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_OPTIONS;
+    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_OPTIONS;
+    // Every tag defined across either registry - the only way left to reach reward/punishment ids.
+    const tagOptions = useMemo(
+        () => [...new Set([...rewardTypeOptions, ...punishmentTypeOptions].flatMap((option) => option.tags))],
+        [rewardTypeOptions, punishmentTypeOptions]
+    );
 
     const update = (patch: Partial<InternalState>) => {
         const next = { ...internal, ...patch };
@@ -268,39 +285,34 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
         onChange(EMPTY_SUGGESTION_FILTER);
     };
 
+    // mine/unseen are two "which suggestions" angles on the same underlying set - exclusive of each
+    // other, so they share one group (pickExclusive) rather than toggling independently.
+    const suggestionScope: ("mine" | "unseen")[] = internal.mine ? ["mine"] : internal.unseen ? ["unseen"] : [];
+
     return (
         <>
             <DrawerHeader>Filter Suggestions</DrawerHeader>
             <DrawerBody className="gap-2 py-2">
+                <div className="text-xs font-semibold text-default-500">Suggestion Filters</div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    {/* Mutually exclusive - separate button groups since these are independent
-                        "which suggestions" angles, not two options on the same axis. */}
                     <ToggleButtonGroup
-                        options={[{ key: "mine", label: "My Suggestions" }]}
-                        value={internal.mine ? ["mine"] : []}
+                        options={[
+                            { key: "mine", label: "My Suggestions" },
+                            { key: "unseen", label: "Unseen Only" }
+                        ]}
+                        value={suggestionScope}
                         onChange={(next) => {
-                            const mine = next.includes("mine");
-                            update({ mine, unseen: mine ? false : internal.unseen });
+                            const picked = pickExclusive(next, suggestionScope[0]);
+                            update({ mine: picked === "mine", unseen: picked === "unseen" });
                         }}
                     />
-                    <ToggleButtonGroup
-                        options={[{ key: "unseen", label: "Unseen Only" }]}
-                        value={internal.unseen ? ["unseen"] : []}
-                        onChange={(next) => {
-                            const unseen = next.includes("unseen");
-                            update({ unseen, mine: unseen ? false : internal.mine });
-                        }}
+                    <BooleanToggle
+                        trueLabel="Iconic"
+                        falseLabel="Not Iconic"
+                        value={internal.iconic}
+                        onChange={(iconic) => update({ iconic })}
                     />
                 </div>
-                {/* Independent of `mine` (always the signed-in viewer) - a multiselect, since several
-                    specific people at once is a real case unlike the single-choice fields above. */}
-                <KeyedMultiSelectField
-                    label="Submitted By"
-                    placeholder="Search users..."
-                    options={users.map((entry) => ({ key: entry.discordId, label: entry.displayname }))}
-                    value={internal.byUsers}
-                    onChange={(byUsers) => update({ byUsers })}
-                />
                 <ToggleButtonGroup
                     options={[
                         { key: "awaiting", label: "Awaiting Approval" },
@@ -313,8 +325,6 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                         update({ approvedFilter });
                     }}
                 />
-                {/* A bespoke group, not ToggleButtonGroup - that treats an option carrying an icon as
-                    icon-only, wrong here where both icon and label need to stay visible. */}
                 <ButtonGroup size="sm" className="flex-wrap self-start">
                     {REACTION_FILTER_OPTIONS.map(({ key, label, icon }) => {
                         const isSelected = internal.myReactions.includes(key);
@@ -337,129 +347,115 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                         );
                     })}
                 </ButtonGroup>
-                <Input label="Name" size="sm" value={internal.name} onValueChange={(name) => update({ name })} />
                 <KeyedMultiSelectField
-                    placeholder="Search traits..."
-                    options={traits.map((trait) => ({ key: trait, label: trait }))}
-                    value={internal.traits}
-                    onChange={(traits) => update({ traits })}
+                    placeholder="Search tags..."
+                    options={tagOptions.map((tag) => ({ key: tag, label: tag }))}
+                    value={internal.tags}
+                    onChange={(tags) => update({ tags })}
+                    uppercase
                 />
-                <ToggleButtonGroup
-                    options={factions.map((faction) => ({
-                        key: faction,
-                        label: factionNames[faction],
-                        icon: <ThronesIcon name={faction} />
-                    }))}
-                    value={internal.factions}
-                    onChange={(factions) => update({ factions })}
+                <UserMultiSelectField
+                    placeholder="Search users..."
+                    options={users}
+                    value={internal.byUsers}
+                    onChange={(byUsers) => update({ byUsers })}
                 />
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                    <ToggleButtonGroup
-                        options={types.map((type) => ({
-                            key: type,
-                            label: typeNames[type],
-                            icon: <ThronesIcon name={type} />
-                        }))}
-                        value={internal.types}
-                        onChange={(types) => update({ types })}
-                    />
-                    <ToggleButtonGroup
-                        options={challengeIcons.map((icon) => ({
-                            key: icon,
-                            label: icon,
-                            icon: <ThronesIcon name={icon} />
-                        }))}
-                        value={internal.icons}
-                        onChange={(icons) => update({ icons })}
-                    />
-                </div>
-                <div className="flex flex-wrap gap-x-4 gap-y-2">
-                    <BooleanToggle
-                        trueLabel="Loyal"
-                        falseLabel="Non-Loyal"
-                        value={internal.loyal}
-                        onChange={(loyal) => update({ loyal })}
-                    />
-                    <BooleanToggle
-                        trueLabel="Unique"
-                        falseLabel="Non-Unique"
-                        value={internal.unique}
-                        onChange={(unique) => update({ unique })}
-                    />
-                </div>
-                <Input label="Text" size="sm" value={internal.text} onValueChange={(text) => update({ text })} />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <NumericFilterInput label="Cost" value={internal.cost} onChange={(cost) => update({ cost })} />
-                    <NumericFilterInput
-                        label="Strength"
-                        value={internal.strength}
-                        onChange={(strength) => update({ strength })}
-                    />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <NumericFilterInput
-                        label="Income"
-                        value={internal.income}
-                        onChange={(income) => update({ income })}
-                    />
-                    <NumericFilterInput
-                        label="Initiative"
-                        value={internal.initiative}
-                        onChange={(initiative) => update({ initiative })}
-                    />
-                    <NumericFilterInput label="Claim" value={internal.claim} onChange={(claim) => update({ claim })} />
-                    <NumericFilterInput
-                        label="Reserve"
-                        value={internal.reserve}
-                        onChange={(reserve) => update({ reserve })}
-                    />
-                </div>
-                <Input
-                    label="Flavor"
-                    size="sm"
-                    value={internal.flavor}
-                    onValueChange={(flavor) => update({ flavor })}
-                />
-                <Input
-                    label="Designer"
-                    size="sm"
-                    value={internal.designer}
-                    onValueChange={(designer) => update({ designer })}
-                />
+
                 <div className="border-t border-content3 pt-2 flex flex-col gap-2">
-                    <div className="text-xs text-default-500">Design</div>
+                    <div className="text-xs font-semibold text-default-500">Card Filters</div>
+                    <Input label="Name" size="sm" value={internal.name} onValueChange={(name) => update({ name })} />
                     <KeyedMultiSelectField
-                        placeholder="Search reward types..."
-                        options={REWARD_TYPES.map((entry) => ({ key: entry.id, label: entry.label }))}
-                        value={internal.rewardTypes}
-                        onChange={(rewardTypes) => update({ rewardTypes: rewardTypes as RewardType[] })}
+                        placeholder="Search traits..."
+                        options={traits.map((trait) => ({ key: trait, label: trait }))}
+                        value={internal.traits}
+                        onChange={(traits) => update({ traits })}
                     />
-                    <KeyedMultiSelectField
-                        placeholder="Search punishment..."
-                        options={PUNISHMENT_TYPES.map((entry) => ({ key: entry.id, label: entry.label }))}
-                        value={internal.punishment}
-                        onChange={(punishment) => update({ punishment: punishment as PunishmentType[] })}
+                    <ToggleButtonGroup
+                        options={factions.map((faction) => ({
+                            key: faction,
+                            label: factionNames[faction],
+                            icon: <ThronesIcon name={faction} />
+                        }))}
+                        value={internal.factions}
+                        onChange={(factions) => update({ factions })}
                     />
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
-                        <BooleanToggle
-                            trueLabel="Iconic"
-                            falseLabel="Not Iconic"
-                            value={internal.iconic}
-                            onChange={(iconic) => update({ iconic })}
+                        <ToggleButtonGroup
+                            options={types.map((type) => ({
+                                key: type,
+                                label: typeNames[type],
+                                icon: <ThronesIcon name={type} />
+                            }))}
+                            value={internal.types}
+                            onChange={(types) => update({ types })}
                         />
-                        <BooleanToggle
-                            trueLabel="Natural Trigger"
-                            falseLabel="No Natural Trigger"
-                            value={internal.naturalTrigger}
-                            onChange={(naturalTrigger) => update({ naturalTrigger })}
-                        />
-                        <BooleanToggle
-                            trueLabel="Safely Limited"
-                            falseLabel="Not Safely Limited"
-                            value={internal.repeatabilityRestricted}
-                            onChange={(repeatabilityRestricted) => update({ repeatabilityRestricted })}
+                        <ToggleButtonGroup
+                            options={challengeIcons.map((icon) => ({
+                                key: icon,
+                                label: icon,
+                                icon: <ThronesIcon name={icon} />
+                            }))}
+                            value={internal.icons}
+                            onChange={(icons) => update({ icons })}
                         />
                     </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                        <BooleanToggle
+                            trueLabel="Loyal"
+                            falseLabel="Non-Loyal"
+                            value={internal.loyal}
+                            onChange={(loyal) => update({ loyal })}
+                        />
+                        <BooleanToggle
+                            trueLabel="Unique"
+                            falseLabel="Non-Unique"
+                            value={internal.unique}
+                            onChange={(unique) => update({ unique })}
+                        />
+                    </div>
+                    <Input label="Text" size="sm" value={internal.text} onValueChange={(text) => update({ text })} />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <NumericFilterInput label="Cost" value={internal.cost} onChange={(cost) => update({ cost })} />
+                        <NumericFilterInput
+                            label="Strength"
+                            value={internal.strength}
+                            onChange={(strength) => update({ strength })}
+                        />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <NumericFilterInput
+                            label="Income"
+                            value={internal.income}
+                            onChange={(income) => update({ income })}
+                        />
+                        <NumericFilterInput
+                            label="Initiative"
+                            value={internal.initiative}
+                            onChange={(initiative) => update({ initiative })}
+                        />
+                        <NumericFilterInput
+                            label="Claim"
+                            value={internal.claim}
+                            onChange={(claim) => update({ claim })}
+                        />
+                        <NumericFilterInput
+                            label="Reserve"
+                            value={internal.reserve}
+                            onChange={(reserve) => update({ reserve })}
+                        />
+                    </div>
+                    <Input
+                        label="Flavor"
+                        size="sm"
+                        value={internal.flavor}
+                        onValueChange={(flavor) => update({ flavor })}
+                    />
+                    <Input
+                        label="Designer"
+                        size="sm"
+                        value={internal.designer}
+                        onValueChange={(designer) => update({ designer })}
+                    />
                 </div>
             </DrawerBody>
             <DrawerFooter>

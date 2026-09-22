@@ -25,6 +25,7 @@ import { getRequestSchema } from "@/schemas";
 import { cardSnapshot, logActivity } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { deriveFields } from "common/designGuidelines/deriveFields";
+import { computeSuggestionTags } from "common/designGuidelines/suggestionTags";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { ApiFieldError } from "@/types";
@@ -60,9 +61,8 @@ const getQuerySchema = (
     myReactions: Joi.string()
 });
 
-// Resolves `unseen`/`myReactions` against the *authenticated* principal's own discordId - never a
-// client-supplied one - and merges the result into `req.query.filter`, the same way
-// restrictListDraftVisibility below merges its own server-known conditions in.
+// Resolves unseen/myReactions against the principal's discordId, merged into `req.query.filter` - NOT
+// via applyToFilter's shallow spread, which would clobber approvedFilter's own `_metadata` condition.
 const applyReactionVisibilityFilter = asyncHandler<
     unknown,
     unknown,
@@ -83,9 +83,18 @@ const applyReactionVisibilityFilter = asyncHandler<
           ? { type: { $in: myReactions.split(",") } }
           : { type: { $ne: "ignore" } }; // default: ignored-by-me stays hidden unless asked for
 
-    req.query.filter = applyToFilter(req.query.filter, {
-        _metadata: { engagement: { reactions: { [discordId]: reactionCondition } } },
-        ...(unseen ? { user: { discordId: { $ne: discordId } } } : {})
+    const branches = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter ?? {}];
+    req.query.filter = branches.map((branch): Filter<ICardSuggestionFilterable> => {
+        const existingMetadata = branch._metadata as Record<string, unknown> | undefined;
+        const existingEngagement = existingMetadata?.engagement as Record<string, unknown> | undefined;
+        return {
+            ...branch,
+            _metadata: {
+                ...existingMetadata,
+                engagement: { ...existingEngagement, reactions: { [discordId]: reactionCondition } }
+            },
+            ...(unseen ? { user: { discordId: { $ne: discordId } } } : {})
+        };
     });
     next();
 });
@@ -161,6 +170,18 @@ function forceDerived(req: Request, _res: Response, next: NextFunction) {
     next();
 }
 
+// Same server-computed convention as forceDerived - a settings save bulk-resyncs `tags` separately
+// (resyncSuggestionTags), but the suggestion's own reward/punishment picks changing is only caught here.
+const forceTags = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+    const settings = await dataService.settings.getByType("suggestions");
+    req.body.tags = computeSuggestionTags(
+        req.body?.questions ?? {},
+        settings?.rewardTypes ?? [],
+        settings?.punishmentTypes ?? []
+    );
+    next();
+});
+
 // Create (POST /) always starts a fresh draft with no engagement yet - there's nothing to preserve
 // or clear, since nothing has been submitted for anyone to react to or approve.
 function prepareCreateBody(req: Request, _res: Response, next: NextFunction) {
@@ -192,13 +213,19 @@ function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
 // Recomputes checklistRules() server-side and requires justification for every rule failing - not
 // declared in the Joi schema, since that depends on card/questions/derived/pivotPoints together.
 async function checklistJustificationErrors(suggestion: ICardSuggestion): Promise<ApiFieldError[]> {
-    const plotMedian = await thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type);
+    const [plotMedian, settings] = await Promise.all([
+        thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type),
+        dataService.settings.getByType("suggestions")
+    ]);
     const results = checklistRules({
         card: suggestion.card,
         questions: suggestion.questions,
         derived: suggestion.derived,
         pivotPoints: suggestion.pivotPoints ?? [],
-        plotMedian
+        plotMedian,
+        rewardTypes: settings?.rewardTypes ?? [],
+        punishmentTypes: settings?.punishmentTypes ?? [],
+        loyaltyTags: settings?.loyaltyTags ?? []
     });
 
     return results
@@ -331,6 +358,29 @@ router.get(
     })
 );
 
+// Full-universe traits/submitters for the advanced filter drawer, aggregated over the whole collection.
+// Redis-cached with a short TTL, or it's a full-collection scan every time the drawer opens.
+const FILTER_OPTIONS_REDIS_KEY = "suggestions:filterOptions";
+const FILTER_OPTIONS_CACHE_SECONDS = 60;
+
+router.get(
+    "/filter-options",
+    validateRequest(Permission.READ_SUGGESTIONS),
+    asyncHandler(async (_req, res) => {
+        const cached = await dataService.redis.get(FILTER_OPTIONS_REDIS_KEY);
+        if (cached) {
+            res.status(StatusCodes.OK).json(JSON.parse(String(cached)));
+            return;
+        }
+
+        const options = await dataService.suggestions.distinctFilterOptions();
+        await dataService.redis.set(FILTER_OPTIONS_REDIS_KEY, JSON.stringify(options), {
+            EX: FILTER_OPTIONS_CACHE_SECONDS
+        });
+        res.status(StatusCodes.OK).json(options);
+    })
+);
+
 router.get(
     "/:id",
     validateRequest(Permission.READ_SUGGESTIONS),
@@ -353,6 +403,7 @@ router.post(
     "/",
     validateRequest(Permission.MAKE_SUGGESTIONS),
     forceDerived,
+    forceTags,
     prepareCreateBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.DraftSave }),
     asyncHandler<unknown, unknown, Omit<ICardSuggestion, "id" | "updated" | "created">, unknown>(async (req, res) => {
@@ -393,6 +444,7 @@ router.put(
         next();
     },
     forceDerived,
+    forceTags,
     prepareDraftSaveBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.DraftSave }),
     asyncHandler<{ id: string }, unknown, ICardSuggestion, unknown>(async (req, res) => {
@@ -422,6 +474,7 @@ router.put(
     loadSuggestionForOwnershipCheck,
     validateRequest(requiresEditOrOwnership),
     forceDerived,
+    forceTags,
     prepareLiveSaveBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
     asyncHandler<{ id: string }, unknown, ICardSuggestion, unknown>(async (req, res) => {

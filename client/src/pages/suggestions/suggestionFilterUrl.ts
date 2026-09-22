@@ -1,7 +1,5 @@
 import { ChallengeIcon, challengeIcons, Faction, Icons, ReactionType, Type } from "common/models/cards";
 import { escapeRegExp } from "common/utils";
-import { RewardType } from "common/designGuidelines/rewardTypes";
-import { PunishmentType } from "common/designGuidelines/punishmentTypes";
 import { SuggestionFilterValue } from "../../components/data/suggestionFilter";
 import {
     NumericFilterValue,
@@ -88,10 +86,7 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
     set("byUsers", encodeArray(filter.byUsers));
     set("approvedFilter", filter.approvedFilter);
     set("myReactions", encodeArray(filter.myReactions));
-    set("rewardTypes", encodeArray(filter.rewardTypes));
-    set("punishment", encodeArray(filter.punishment));
-    set("naturalTrigger", encodeBoolean(filter.naturalTrigger));
-    set("repeatabilityRestricted", encodeBoolean(filter.repeatabilityRestricted));
+    set("tags", encodeArray(filter.tags));
     set("iconic", encodeBoolean(filter.iconic));
     return params;
 }
@@ -113,12 +108,9 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     const types = decodeArray(params.get("type")) as Type[];
     const factions = decodeArray(params.get("faction")) as Faction[];
     const traits = decodeArray(params.get("traits"));
-    const rewardTypes = decodeArray(params.get("rewardTypes")) as RewardType[];
-    const punishment = decodeArray(params.get("punishment")) as PunishmentType[];
+    const tags = decodeArray(params.get("tags"));
     const loyalRaw = params.get("loyal");
     const uniqueRaw = params.get("unique");
-    const naturalTriggerRaw = params.get("naturalTrigger");
-    const repeatabilityRestrictedRaw = params.get("repeatabilityRestricted");
     const iconicRaw = params.get("iconic");
     const approvedFilterRaw = params.get("approvedFilter");
     const myReactions = decodeArray(params.get("myReactions")).filter(
@@ -148,10 +140,7 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
         byUsers: byUsers.length > 0 ? byUsers : undefined,
         approvedFilter: asApprovalFilter(approvedFilterRaw),
         myReactions: myReactions.length > 0 ? myReactions : undefined,
-        rewardTypes: rewardTypes.length > 0 ? rewardTypes : undefined,
-        punishment: punishment.length > 0 ? punishment : undefined,
-        naturalTrigger: decodeBoolean(naturalTriggerRaw),
-        repeatabilityRestricted: decodeBoolean(repeatabilityRestrictedRaw),
+        tags: tags.length > 0 ? tags : undefined,
         iconic: decodeBoolean(iconicRaw)
     };
 }

@@ -106,15 +106,19 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
         case "array": {
             const itemsDesc = (desc.items ?? [])[0] as Joi.Description | undefined;
             const operators: Record<string, Joi.Schema> = { $exists: Joi.boolean() };
-            // A string-item array (eg. card.traits) is matched elementwise by Mongo when the query
-            // value isn't itself an array, so it gets the same text operators a plain string field does.
+            const alternatives: Joi.Schema[] = [fieldSchema];
+            // A string-item array (eg. card.traits) is matched elementwise by Mongo against a bare
+            // scalar, so it gets the same text operators plus that scalar shape (useFilter's own OR'd-branch explosion sends exactly that).
             if (itemsDesc?.type === "string") {
                 operators.$regex = Joi.string();
                 operators.$in = Joi.array().items(Joi.string());
                 operators.$nin = Joi.array().items(Joi.string());
                 operators.$ne = Joi.string();
+                alternatives.push(Joi.string());
             }
-            return Joi.alternatives().try(fieldSchema, Joi.object(operators)).optional();
+            return Joi.alternatives()
+                .try(...alternatives, Joi.object(operators))
+                .optional();
         }
 
         case "object": {
@@ -142,6 +146,30 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
         }
 
         default: {
+            // A bare `Joi.when()` (eg. icons/plotStats) describes as "any" with no shape of its own -
+            // rebuild the object-shaped then/otherwise branch's fields from their Description instead.
+            const whens = desc.whens as { then?: Joi.Description; otherwise?: Joi.Description }[] | undefined;
+            if (whens) {
+                const nestedShape: Record<string, Joi.Schema> = {};
+                for (const when of whens) {
+                    for (const branch of [when.then, when.otherwise]) {
+                        if (branch?.type !== "object" || !branch.keys) {
+                            continue;
+                        }
+                        for (const [key, childDesc] of Object.entries(branch.keys)) {
+                            // First branch wins - icons/plotStats only ever have one object-shaped branch.
+                            if (!(key in nestedShape)) {
+                                nestedShape[key] = buildFieldFilterSchema(Joi.build(childDesc as Joi.Description));
+                            }
+                        }
+                    }
+                }
+                if (Object.keys(nestedShape).length > 0) {
+                    return Joi.alternatives()
+                        .try(Joi.object(nestedShape), Joi.object({ $exists: Joi.boolean() }))
+                        .optional();
+                }
+            }
             return Joi.alternatives()
                 .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
                 .optional();

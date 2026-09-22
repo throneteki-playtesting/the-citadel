@@ -1,16 +1,16 @@
-import { Faction, ICardSuggestion, IPlaytestCard } from "common/models/cards";
+import { Faction, ICardSuggestion, ICardSuggestionFilterable, IPlaytestCard } from "common/models/cards";
 import { DeepPartial } from "common/types";
 import { BaseElementProps } from "../../../types";
 import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
 import { PlaytestingCard } from "common/models/schemas";
 import { CardPreview } from "@agot/card-preview";
 import { renderCardSuggestion, renderPlaytestingCard, suggestionToPlaytestCard } from "common/utils";
-import SuggestionsGrid from "../../suggestions/suggestionsGrid";
+import CardGrid from "../../../components/cardGrid";
 import classNames from "classnames";
 import CardEditor from "../../../components/cardEditor";
-import { usePutDraftCardMutation } from "../../../api";
+import { useGetSuggestionsQuery, usePutDraftCardMutation } from "../../../api";
 import ThronesIcon from "../../../components/thronesIcon";
 
 const SelectSuggestionModal = ({
@@ -25,6 +25,13 @@ const SelectSuggestionModal = ({
     const [putDraft, { isLoading: isPuttingDraft }] = usePutDraftCardMutation();
     const [selected, setSelected] = useState<ICardSuggestion>();
     const [card, setCard] = useState<DeepPartial<IPlaytestCard>>();
+
+    // A picker for one project slot - no search/sort/filter chrome needed, just the pool of
+    // suggestions for this slot's faction (SuggestionsGrid now owns that full dashboard experience).
+    const suggestionsQueryArgs = useMemo(
+        () => ({ filter: faction ? [{ card: { faction } }] : undefined }),
+        [faction]
+    );
 
     useEffect(() => {
         setSelected(undefined);
@@ -56,9 +63,13 @@ const SelectSuggestionModal = ({
                             <ValidationSummary />
                             <WizardPages>
                                 <WizardPage>
-                                    <SuggestionsGrid
-                                        filter={{ faction: faction ? [faction] : undefined }}
-                                        hideFilters={{ faction: true }}
+                                    <CardGrid<ICardSuggestionFilterable>
+                                        query={useGetSuggestionsQuery}
+                                        queryArgs={suggestionsQueryArgs}
+                                        perPage={20}
+                                        keyExtractor={(suggestion) => suggestion.id ?? ""}
+                                        emptyContent="No suggestions match this faction."
+                                        errorContent="Something went wrong loading suggestions."
                                     >
                                         {(suggestion) => (
                                             <CardPreview
@@ -85,7 +96,7 @@ const SelectSuggestionModal = ({
                                                 }}
                                             />
                                         )}
-                                    </SuggestionsGrid>
+                                    </CardGrid>
                                 </WizardPage>
                                 <WizardPage controlledData={card}>
                                     <div className="flex flex-col md:flex-row gap-2">

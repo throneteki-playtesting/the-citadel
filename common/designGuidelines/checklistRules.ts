@@ -7,8 +7,6 @@ import {
 } from "../models/cards";
 import { computeStrength } from "./computeStrength";
 import { computePlotBudget } from "./computePlotBudget";
-import { REWARD_TYPES } from "./rewardTypes";
-import { PUNISHMENT_TYPES } from "./punishmentTypes";
 import { PIVOT_POINT_HEALTHY_MIN } from "./pivotPoints";
 
 export interface RuleResult {
@@ -43,17 +41,6 @@ function pluralize(count: number, singular: string, plural: string = `${singular
     return count === 1 ? singular : plural;
 }
 
-// Economic-flavored reward types the guide names as "economic" - modifyInitiative/modifyClaim are
-// deliberately excluded, since the guide only calls income/reserve "economic"
-const ECONOMIC_REWARD_TYPES = [
-    "gainsGold",
-    "drawsCards",
-    "modifyIncome",
-    "modifyReserve",
-    "reducesCosts",
-    "goldOnCards"
-];
-
 /** Returns only the rules applicable right now - a rule with nothing to say yet is omitted entirely,
  *  not shown as a forced pass. Must agree byte-for-byte across every client and server caller. */
 export function checklistRules(input: {
@@ -64,8 +51,12 @@ export function checklistRules(input: {
     pivotPoints: string[];
     /** only needed for plot-type suggestions */
     plotMedian?: number;
+    rewardTypes: { id: string; label: string; tags: string[] }[];
+    punishmentTypes: { id: string; label: string }[];
+    /** Tags which, when present on a selected reward, trigger the loyaltyConsistency rule below */
+    loyaltyTags: string[];
 }): RuleResult[] {
-    const { card, questions, pivotPoints, plotMedian } = input;
+    const { card, questions, pivotPoints, plotMedian, rewardTypes, punishmentTypes, loyaltyTags } = input;
     const results: RuleResult[] = [];
 
     if (card.type === "character") {
@@ -108,8 +99,8 @@ export function checklistRules(input: {
             status: warn ? "warn" : "pass",
             label: "Reward types are clear and narrow",
             description: warn
-                ? `You've selected ${count} reward types (${listLabels(REWARD_TYPES, questions.rewardTypes)}) - three or more spreads this ability's focus thin.`
-                : `You've selected ${count} ${pluralize(count, "reward type")} (${listLabels(REWARD_TYPES, questions.rewardTypes)}), a clear and narrow focus.`
+                ? `You've selected ${count} reward types (${listLabels(rewardTypes, questions.rewardTypes)}) - three or more spreads this ability's focus thin.`
+                : `You've selected ${count} ${pluralize(count, "reward type")} (${listLabels(rewardTypes, questions.rewardTypes)}), a clear and narrow focus.`
         });
     }
 
@@ -121,20 +112,24 @@ export function checklistRules(input: {
             status: warn ? "warn" : "pass",
             label: "Punishments are clear and narrow",
             description: warn
-                ? `You've selected ${count} punishment types (${listLabels(PUNISHMENT_TYPES, questions.punishment)}) - stacking multiple punishments can overly penalize this card.`
-                : `You've selected ${count} ${pluralize(count, "punishment type")} (${listLabels(PUNISHMENT_TYPES, questions.punishment)}), a clear and narrow focus.`
+                ? `You've selected ${count} punishment types (${listLabels(punishmentTypes, questions.punishment)}) - stacking multiple punishments can overly penalize this card.`
+                : `You've selected ${count} ${pluralize(count, "punishment type")} (${listLabels(punishmentTypes, questions.punishment)}), a clear and narrow focus.`
         });
     }
 
-    const economicRewards = questions.rewardTypes?.filter((type) => ECONOMIC_REWARD_TYPES.includes(type)) ?? [];
-    if (card.faction !== "neutral" && economicRewards.length > 0) {
+    const loyaltyTaggedRewards =
+        questions.rewardTypes?.filter((id) =>
+            rewardTypes.find((r) => r.id === id)?.tags.some((t) => loyaltyTags.includes(t))
+        ) ?? [];
+    if (card.faction !== "neutral" && loyaltyTaggedRewards.length > 0) {
         results.push({
             rule: "loyaltyConsistency",
             status: card.loyal ? "pass" : "warn",
-            label: "Economic rewards are paired with loyalty",
+            label: "Chosen rewards suggest loyalty",
             description: card.loyal
-                ? `This card grants ${listLabels(REWARD_TYPES, economicRewards)} and is correctly marked Loyal.`
-                : `This card grants ${listLabels(REWARD_TYPES, economicRewards)} but isn't marked Loyal.`
+                ? `This card grants ${listLabels(rewardTypes, loyaltyTaggedRewards)} and is correctly marked Loyal.`
+                : `This card grants ${listLabels(rewardTypes, loyaltyTaggedRewards)} but isn't marked Loyal.`,
+            tooltip: `Triggered by: ${listLabels(rewardTypes, loyaltyTaggedRewards)}.`
         });
     }
 

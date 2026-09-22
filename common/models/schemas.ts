@@ -9,8 +9,6 @@ import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
 import { logCategories, logSeverities } from "./logs";
 import { sanitiseHtml } from "../richText/sanitise";
-import { REWARD_TYPES } from "../designGuidelines/rewardTypes";
-import { PUNISHMENT_TYPES } from "../designGuidelines/punishmentTypes";
 import { PIVOT_POINT_MAX_LENGTH } from "../designGuidelines/pivotPoints";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
@@ -272,14 +270,10 @@ const ArchivedInfo = Joi.object({
 
 // Shared field definitions between the strict (submit-time) and partial (draft-time) Questions schemas
 const questionsFields = {
-    // Most cards have neither - absent is "none", not "not yet answered", so these default rather
-    // than require an explicit empty array from every submitter
-    rewardTypes: Joi.array()
-        .items(Joi.string().valid(...REWARD_TYPES.map((r) => r.id)))
-        .default([]),
-    punishment: Joi.array()
-        .items(Joi.string().valid(...PUNISHMENT_TYPES.map((p) => p.id)))
-        .default([]),
+    // Most cards have neither - absent is "none", so these default rather than require an explicit
+    // empty array. Ids are dynamic/DB-driven (see settings), so only shape is validated here.
+    rewardTypes: Joi.array().items(Joi.string()).default([]),
+    punishment: Joi.array().items(Joi.string()).default([]),
     // Most cards have none - 0 is a real, complete answer, so this defaults rather than forcing a confirmation.
     triggeredAbilityCount: Joi.number().integer().min(0).default(0),
     naturalTrigger: Joi.boolean(),
@@ -321,6 +315,10 @@ const Derived = Joi.object({
         )
         .default([])
 }).default({ triggerTypes: [], keywords: [] });
+
+// Denormalized onto the document and kept in sync server-side (see forceTags in suggestions.ts and
+// settingsRepository.ts's resyncSuggestionTags) - same server-computed convention as `derived`.
+const SuggestionTags = Joi.array().items(Joi.string()).default([]);
 
 // Whether a rule currently NEEDS a justification isn't checked here (beyond Joi's `.when()`) -
 // POST /:id/submit recomputes checklistRules() itself and reports any gap as a field error.
@@ -365,6 +363,7 @@ const suggestionSharedFields = {
     // Deliberately NOT `.required()` here too - `.default()` doesn't make the key optional, and
     // chaining `.required()` after it re-imposes the exact check the default exists to avoid.
     derived: Derived,
+    tags: SuggestionTags,
     checklistJustifications: ChecklistJustifications,
     pivotPoints: Joi.array().items(Joi.string().max(PIVOT_POINT_MAX_LENGTH)),
     comparableCards: Joi.array().items(Joi.string()),
@@ -551,6 +550,39 @@ const artistPayment = Joi.object({
     )
 });
 
+// Generic - not suggestions-specific, just currently only used there. No Full variant: exactly one
+// document per type, so nothing ever reads it through a filterable GET query.
+export const RewardPunishmentOption = {
+    // Body for create/edit within a settings PATCH - id is still supplied here (unlike Artist.Draft),
+    // since the option lives inside an array the caller sends whole rather than one row at a time
+    Draft: Joi.object({
+        id: Joi.string().required(),
+        label: Joi.string().trim().required().messages({
+            "any.required": "Provide a label",
+            "string.empty": "Provide a label"
+        }),
+        description: Joi.string().trim().required().messages({
+            "any.required": "Provide a description",
+            "string.empty": "Provide a description"
+        }),
+        examples: Joi.array().items(Joi.string().trim()).default([]),
+        tags: Joi.array().items(Joi.string().trim()).default([]),
+        enabled: Joi.boolean().default(true)
+    })
+};
+
+// No Full variant here either, for the same reason as RewardPunishmentOption above.
+export const Settings = {
+    Suggestions: {
+        Draft: Joi.object({
+            minimumLikesThreshold: Joi.number().integer().min(1).default(3),
+            rewardTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
+            punishmentTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
+            loyaltyTags: Joi.array().items(Joi.string().trim()).default([])
+        })
+    }
+};
+
 export const Artist = {
     Full: Joi.object({
         id: Joi.string().required(),
@@ -674,10 +706,8 @@ const refinementCheck = (isFull: boolean) =>
         ...auditKeys(isFull)
     });
 
-/**
- * Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
- * already answered for the inquiry, where the change's own note already stands as the record.
- */
+/** Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
+ *  already answered for the inquiry, where the change's own note already stands as the record. */
 export const inquiryResolution = (isAddressed: boolean) =>
     Joi.object({
         // Closing is one route. `rejected` remains readable in stored data but is no longer produced -

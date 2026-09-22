@@ -230,6 +230,26 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
         return suggestion;
     }
 
+    // Full-universe options for the advanced filter drawer - a paginated list route only ever reflects
+    // the current page, hence its own aggregation over the whole collection.
+    public async distinctFilterOptions(): Promise<{
+        traits: string[];
+        submitters: { discordId: string; displayname: string }[];
+    }> {
+        const [traits, submitters] = await Promise.all([
+            this.database.collection.distinct("card.traits", { draft: false }),
+            this.database.collection
+                .aggregate<{ discordId: string; displayname: string }>([
+                    { $match: { draft: false } },
+                    { $group: { _id: "$user.discordId", displayname: { $first: "$user.displayname" } } },
+                    { $project: { _id: 0, discordId: "$_id", displayname: 1 } },
+                    { $sort: { displayname: 1 } }
+                ])
+                .toArray()
+        ]);
+        return { traits: (traits as string[]).sort(), submitters };
+    }
+
     public async setApproval(id: string, approvedBy: string | undefined): Promise<ICardSuggestion | undefined> {
         const update: UpdateFilter<ICardSuggestion> = approvedBy
             ? {

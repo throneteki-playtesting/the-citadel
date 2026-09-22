@@ -1,4 +1,4 @@
-import { Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
+import { Chip, Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
 import { useInfiniteScroll } from "@heroui/use-infinite-scroll";
 import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
@@ -13,7 +13,8 @@ function SearchableMultiSelect<T extends object>({
     style,
     label,
     ariaLabel,
-    size,
+    size = "md",
+    radius,
     variant,
     placeholder = "Search...",
     items,
@@ -21,6 +22,8 @@ function SearchableMultiSelect<T extends object>({
     matches,
     renderItem,
     renderSelected,
+    getChipLabel,
+    chipClassName,
     hideChipsInInput,
     keepSearchOnSelect,
     selectedKeys,
@@ -53,6 +56,27 @@ function SearchableMultiSelect<T extends object>({
         return () => cancelAnimationFrame(handle);
     }, [isOpen, selectedKeys]);
 
+    // The shared "list of labeled things" chip look (matches TraitsInput) - only used when the caller
+    // hasn't supplied its own renderSelected (eg. userSelect's avatar rows stay fully custom).
+    const defaultRenderSelected = (selectedItems: T[]) => (
+        <div className="flex flex-wrap gap-1 py-1">
+            {selectedItems.map((item) => {
+                const key = getKey(item);
+                return (
+                    <Chip
+                        key={key}
+                        variant="flat"
+                        color="default"
+                        className={classNames("rounded-sm p-0 pr-0.5 border-1 border-content2", chipClassName)}
+                        onClose={() => onSelectionChange(new Set(selectedKeys.filter((k) => k !== key)))}
+                    >
+                        {getChipLabel!(item)}
+                    </Chip>
+                );
+            })}
+        </div>
+    );
+
     const handleSelectionChange = (keys: SharedSelection) => {
         // Picking a result clears the search so the next keystroke starts fresh, unless the caller
         // wants to keep browsing the same result set (eg. picking several matches for one term).
@@ -79,7 +103,8 @@ function SearchableMultiSelect<T extends object>({
                     setIsOpen(true);
                 }}
             >
-                {!hideChipsInInput && renderSelected?.(selectedItems)}
+                {!hideChipsInInput &&
+                    (renderSelected ?? (getChipLabel ? defaultRenderSelected : undefined))?.(selectedItems)}
                 <input
                     ref={inputRef}
                     aria-label={label ? `${label} search` : "Search"}
@@ -98,8 +123,6 @@ function SearchableMultiSelect<T extends object>({
                     placeholder={hideChipsInInput || selectedItems.length === 0 ? placeholder : undefined}
                     className="flex-1 min-w-[80px] bg-transparent outline-none text-foreground mx-1"
                 />
-                {/* A bare `<input>`, not a HeroUI `Input`, so there's no `endContent` slot - positioned
-                as its last flex sibling instead, landing in the same spot `endContent` would. */}
                 {search && (
                     <button
                         type="button"
@@ -124,6 +147,7 @@ function SearchableMultiSelect<T extends object>({
             label={label}
             aria-label={ariaLabel ?? label ?? "Search select"}
             size={size}
+            radius={radius}
             variant={variant}
             selectionMode="multiple"
             isMultiline
@@ -137,6 +161,10 @@ function SearchableMultiSelect<T extends object>({
             selectedKeys={selectedKeysWithSentinel}
             renderValue={renderValue}
             onSelectionChange={handleSelectionChange}
+            // The sentinel item is always "selected", so Select's own isClearable check would show the
+            // clear button permanently - gate it on the real selection instead.
+            isClearable={selectedKeys.length > 0}
+            onClear={() => onSelectionChange(new Set())}
             className={className}
             style={style}
         >
@@ -167,6 +195,9 @@ type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     /** Names the field where there is no room for a visible label */
     ariaLabel?: string;
     size?: SelectProps["size"];
+    /** Independent of `size` - `isMultiline` mode decouples radius from size too, so pass this
+     *  explicitly to keep rounded corners matching a sibling field. */
+    radius?: SelectProps["radius"];
     variant?: SelectProps["variant"];
     placeholder?: string;
     items: T[];
@@ -176,6 +207,12 @@ type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     renderItem: (item: T) => ReactNode;
     /** Not called at all when `hideChipsInInput` is set - a caller showing selections elsewhere doesn't need it */
     renderSelected?: (items: T[]) => ReactNode;
+    /** Enables the shared default chip UI in place of `renderSelected`, showing this label per selected
+     *  item with its own remove (x). Leave unset for a caller needing custom chip content. */
+    getChipLabel?: (item: T) => ReactNode;
+    /** Extra classes merged onto each default chip - eg. "uppercase tracking-wide" for a tag list.
+     *  Only applies alongside `getChipLabel`; a custom `renderSelected` owns its own styling. */
+    chipClassName?: string;
     /** Keeps the field a pure search-and-pick control with no inline chips, for a caller that
      *  renders the selection itself somewhere else (eg. above the field) */
     hideChipsInInput?: boolean;

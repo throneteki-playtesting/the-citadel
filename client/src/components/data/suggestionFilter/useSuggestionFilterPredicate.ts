@@ -26,10 +26,7 @@ export default function useSuggestionFilterPredicate(
         byUsers,
         approvedFilter,
         myReactions,
-        rewardTypes,
-        punishment,
-        naturalTrigger,
-        repeatabilityRestricted,
+        tags,
         iconic,
         ...explodable
     } = value;
@@ -86,31 +83,11 @@ export default function useSuggestionFilterPredicate(
                 // changes behaviour by its ABSENCE, everything else only filters when set.
                 return false;
             }
+            if (tags && tags.length > 0 && !tags.some((tag) => suggestion.tags?.includes(tag))) {
+                return false;
+            }
             // `questions` is only guaranteed valid once fully submitted - a draft guarantees nothing
             // but `card`, so optional-chain every access rather than trust the type here.
-            if (
-                rewardTypes &&
-                rewardTypes.length > 0 &&
-                !rewardTypes.some((reward) => suggestion.questions?.rewardTypes?.includes(reward))
-            ) {
-                return false;
-            }
-            if (
-                punishment &&
-                punishment.length > 0 &&
-                !punishment.some((entry) => suggestion.questions?.punishment?.includes(entry))
-            ) {
-                return false;
-            }
-            if (naturalTrigger !== undefined && !!suggestion.questions?.naturalTrigger !== naturalTrigger) {
-                return false;
-            }
-            if (
-                repeatabilityRestricted !== undefined &&
-                !!suggestion.questions?.repeatabilityRestricted !== repeatabilityRestricted
-            ) {
-                return false;
-            }
             if (iconic !== undefined && !!suggestion.questions?.iconic !== iconic) {
                 return false;
             }
@@ -124,10 +101,7 @@ export default function useSuggestionFilterPredicate(
         byUsers,
         approvedFilter,
         myReactions,
-        rewardTypes,
-        punishment,
-        naturalTrigger,
-        repeatabilityRestricted,
+        tags,
         iconic,
         context
     ]);
