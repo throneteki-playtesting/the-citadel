@@ -84,8 +84,8 @@ export default function SuggestionsGuideModal({
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 border border-content3 bg-content2 rounded-lg p-3">
                                 <div className="flex-1 text-sm text-foreground/70">
-                                    Not interested in a suggestion? Ignoring it hides it from your view - ignored
-                                    suggestions can always be found again via the advanced filter.
+                                    Not interested in a suggestion? Ignoring it hides it from your view, and you can
+                                    view it again via the advanced filter.
                                 </div>
                             </div>
                         </ModalBody>

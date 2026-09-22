@@ -22,7 +22,7 @@ import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { useWizard } from "../../components/wizard/context";
 import { CardSuggestion } from "common/models/schemas";
-import CardImageGrid from "../../components/data/cardImageGrid";
+import CardPickerDropdown from "../../components/data/cardPickerDropdown";
 import SelectedCardImages from "../../components/data/selectedCardImages";
 import { useAuth } from "../../hooks/useAuth";
 import { showApiErrorToast } from "../../api/errors";
@@ -435,12 +435,18 @@ const EditSuggestionModal = ({
     // the checklist + card. See the AnimatePresence block near the footer for the fade choreography.
     const [railExpanded, setRailExpanded] = useState(false);
 
+    // Lifted here since the Wizard unmounts (and loses its own page state) behind the guide/delete-confirm.
+    const [wizardPage, setWizardPage] = useState(1);
+
     // Re-checked on every open (not just first mount) - a dismissal from a past session should stick,
     // but the guide icon in the header can always bring it back mid-session regardless.
     const [showGuide, setShowGuide] = useState(() => !isSuggestionEditorGuideDismissed());
+    // Whether the guide is showing because of the header icon, not the automatic first-open.
+    const [guideOpenedManually, setGuideOpenedManually] = useState(false);
     useEffect(() => {
         if (isOpen) {
             setShowGuide(!isSuggestionEditorGuideDismissed());
+            setGuideOpenedManually(false);
         }
     }, [isOpen]);
 
@@ -457,6 +463,9 @@ const EditSuggestionModal = ({
             ...initial,
             ...(initialIsNew && user && { user: { discordId: user.discordId, displayname: user.displayname } })
         });
+        if (initialIsNew) {
+            setWizardPage(1);
+        }
     }, [initial]);
 
     // `derived` is kept live client-side too, mirroring the server's own recompute on save - lets
@@ -679,23 +688,32 @@ const EditSuggestionModal = ({
     return (
         <>
             <Modal
-                // Hides the Modal without closing it - onOpenChange only fires on a genuine close.
                 isOpen={isOpen && !isConfirmingDeleteDraft && !showGuide}
                 placement="top-center"
                 onOpenChange={(isOpen) => !isOpen && closeEditor()}
+                isDismissable={false}
                 size="5xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     {(onClose) => (
-                        <Wizard schema={CardSuggestion.Full} onSubmit={onSubmit} data={suggestion}>
+                        <Wizard
+                            schema={CardSuggestion.Full}
+                            onSubmit={onSubmit}
+                            data={suggestion}
+                            page={wizardPage}
+                            onPageChange={setWizardPage}
+                        >
                             <ModalHeader className="flex items-center gap-2">
                                 <span className="flex-1 min-w-0">
                                     {isSavedDraft ? "Draft Suggestion Editor" : "Suggestion Editor"}
                                     <button
                                         type="button"
                                         aria-label="Show the suggestion editor guide"
-                                        onClick={() => setShowGuide(true)}
+                                        onClick={() => {
+                                            setShowGuide(true);
+                                            setGuideOpenedManually(true);
+                                        }}
                                         className="ml-2 inline-flex align-middle text-primary/70 hover:text-primary"
                                     >
                                         <FontAwesomeIcon icon={faCircleQuestion} className="text-lg" />
@@ -712,13 +730,15 @@ const EditSuggestionModal = ({
                                                 color="info"
                                                 label="Editing Another User's Suggestion"
                                                 detail={
-                                                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                        You are amending
+                                                    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                                                        <span>You are amending</span>
                                                         <UserRow
                                                             discordId={suggestion.user!.discordId!}
-                                                            className="inline-flex w-auto"
-                                                            trailing="'s suggestion on their behalf."
+                                                            className="w-auto"
+                                                            avatarClassName="!size-4"
+                                                            textClassName="text-xs"
                                                         />
+                                                        <span>'s suggestion on their behalf.</span>
                                                     </span>
                                                 }
                                                 className="mb-2 shrink-0"
@@ -924,10 +944,9 @@ const EditSuggestionModal = ({
                                                                 onChange={onComparableCardsChange}
                                                                 emptyLabel="No comparable cards selected."
                                                             />
-                                                            <CardImageGrid
-                                                                className="w-full"
-                                                                ariaLabel="Comparable Cards"
-                                                                placeholder="Search released cards…"
+                                                            <CardPickerDropdown
+                                                                ariaLabel="Search comparable cards"
+                                                                placeholder="Search by name or trait…"
                                                                 value={comparableCardsValue}
                                                                 onChange={onComparableCardsChange}
                                                             />
@@ -941,10 +960,9 @@ const EditSuggestionModal = ({
                                                                 onChange={onCombosWithChange}
                                                                 emptyLabel="No combos selected."
                                                             />
-                                                            <CardImageGrid
-                                                                className="w-full"
-                                                                ariaLabel="Combos With"
-                                                                placeholder="Search released cards…"
+                                                            <CardPickerDropdown
+                                                                ariaLabel="Search combo cards"
+                                                                placeholder="Search by name or trait…"
                                                                 value={combosWithValue}
                                                                 onChange={onCombosWithChange}
                                                             />
@@ -1114,6 +1132,7 @@ const EditSuggestionModal = ({
             </Modal>
             <SuggestionEditorGuide
                 isOpen={isOpen && showGuide}
+                isReturningToEditor={guideOpenedManually}
                 onDismiss={() => setShowGuide(false)}
                 onClose={closeEditor}
             />

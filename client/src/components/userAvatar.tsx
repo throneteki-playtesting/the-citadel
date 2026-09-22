@@ -24,12 +24,19 @@ export default function UserAvatar({ className, style, discordId, title, size = 
 }
 
 // Avatar, display name, and whatever the caller wants pinned to the right of the row
-export function UserRow({ className, style, discordId, trailing }: UserRowProps) {
+export function UserRow({
+    className,
+    style,
+    discordId,
+    trailing,
+    avatarClassName,
+    textClassName = "text-sm"
+}: UserRowProps) {
     const { data: user } = useGetUserQuery({ discordId });
     return (
         <div className={classNames("flex items-center gap-2 min-w-0", className)} style={style}>
-            <UserAvatar discordId={discordId} />
-            <span className="text-sm min-w-0 truncate" title={user?.displayname}>
+            <UserAvatar discordId={discordId} className={avatarClassName} />
+            <span className={classNames("min-w-0 truncate", textClassName)} title={user?.displayname}>
                 {user?.displayname ?? "…"}
             </span>
             {trailing}
@@ -51,4 +58,8 @@ type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "childr
 type UserRowProps = Omit<BaseElementProps, "children"> & {
     discordId: string;
     trailing?: ReactNode;
+    /** Overrides the avatar's size classes - eg. shrinking it to match a smaller line of text. */
+    avatarClassName?: string;
+    /** Overrides the name's text size - defaults to text-sm. */
+    textClassName?: string;
 };

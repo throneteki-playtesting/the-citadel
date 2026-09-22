@@ -41,6 +41,7 @@ export function Wizard<T>({
     page: initialPage = 1,
     onSubmit = () => undefined,
     onValidationError = () => true,
+    onPageChange,
     children
 }: WizardProps<T>) {
     const [internalData, setInternalData] = useState(initial ?? ({} as DeepPartial<T>));
@@ -64,6 +65,12 @@ export function Wizard<T>({
     useEffect(() => {
         setCurrentPage(initialPage);
     }, [initialPage]);
+
+    const onPageChangeRef = useRef(onPageChange);
+    onPageChangeRef.current = onPageChange;
+    useEffect(() => {
+        onPageChangeRef.current?.(currentPage);
+    }, [currentPage]);
 
     const setError = useCallback((path: string, message: string) => {
         setFieldErrors((prev) => ({ ...prev, [path]: { message, source: "external" } }));
@@ -253,6 +260,9 @@ type WizardProps<T> = {
     data?: DeepPartial<T>;
     onSubmit?: (data: T, isValidationError: (err: unknown) => boolean) => void | Promise<void>;
     page?: number;
+    /** Fires on every page change, including the initial mount - lets a caller keep its own page number
+     *  in sync with a Wizard that may unmount/remount (eg. behind a Modal that closes and reopens). */
+    onPageChange?: (page: number) => void;
     onValidationError?: (errors: Record<string, string>, partial: boolean) => void;
     children: ReactNode | ReactNode[];
 };

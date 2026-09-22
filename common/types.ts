@@ -115,13 +115,15 @@ function matchesIn(value: unknown, operands: unknown[]): boolean {
 }
 
 function matchesRegex(value: unknown, pattern: string): boolean {
-    if (typeof value !== "string") {
-        return false;
-    }
     // Mongo's PCRE engine supports inline "(?i)" flags; JS RegExp doesn't, so translate it
     const caseInsensitive = pattern.startsWith("(?i)");
     const source = caseInsensitive ? pattern.slice(4) : pattern;
-    return new RegExp(source, caseInsensitive ? "i" : undefined).test(value);
+    const regex = new RegExp(source, caseInsensitive ? "i" : undefined);
+    // Mongo's own $regex matches an array field elementwise, same as matchesIn does for $in below.
+    if (isIterable(value)) {
+        return Array.from(value).some((v) => typeof v === "string" && regex.test(v));
+    }
+    return typeof value === "string" && regex.test(value);
 }
 
 function matchesOperators(value: unknown, operators: Record<string, unknown>): boolean {

@@ -61,7 +61,13 @@ export default function EditCardModal({
     }, [card]);
 
     return (
-        <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose()} size="3xl">
+        <Modal
+            isOpen={isOpen}
+            placement="top-center"
+            onOpenChange={(isOpen) => !isOpen && onModalClose()}
+            isDismissable={false}
+            size="3xl"
+        >
             <ModalContent>
                 {(onClose) => (
                     <Wizard schema={PlaytestingCard.Draft} onSubmit={onSubmit} data={card}>

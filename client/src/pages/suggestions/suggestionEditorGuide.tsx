@@ -60,7 +60,12 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
 
 /** A static step-by-step overview shown before the suggestion wizard - its own standalone Modal,
  *  soft-closing the editor's behind it rather than a screen swapped into the same one. */
-export default function SuggestionEditorGuide({ isOpen, onDismiss, onClose }: SuggestionEditorGuideProps) {
+export default function SuggestionEditorGuide({
+    isOpen,
+    isReturningToEditor,
+    onDismiss,
+    onClose
+}: SuggestionEditorGuideProps) {
     const [dontShowAgain, setDontShowAgain] = useState(isSuggestionEditorGuideDismissed);
     // Re-syncs on every open since this component stays mounted, so the lazy initializer only runs once.
     useEffect(() => {
@@ -136,7 +141,7 @@ export default function SuggestionEditorGuide({ isOpen, onDismiss, onClose }: Su
                             className="font-cinzel font-semibold flex-1 sm:flex-none"
                             onPress={getStarted}
                         >
-                            Get Started
+                            {isReturningToEditor ? "Back to Editing" : "Get Started"}
                         </Button>
                     </div>
                 </ModalFooter>
@@ -147,7 +152,10 @@ export default function SuggestionEditorGuide({ isOpen, onDismiss, onClose }: Su
 
 type SuggestionEditorGuideProps = Omit<BaseElementProps, "children"> & {
     isOpen: boolean;
-    /** Dismisses the guide alone, revealing the editor underneath - "Get Started". */
+    /** Whether this showing was triggered by the header's own icon rather than the automatic
+     *  first-open - flips the primary button between "Back to Editing" and "Get Started". */
+    isReturningToEditor: boolean;
+    /** Dismisses the guide alone, revealing the editor underneath. */
     onDismiss: () => void;
     /** Closes the whole editor flow, guide included - "Close". */
     onClose: () => void;
