@@ -206,6 +206,7 @@ export const checklistRuleIds = [
     "triggeredAbilityFocus",
     "repeatabilityControl",
     "plotBudget",
+    "textBoxLines",
     "pivotPointBalance"
 ] as const;
 export type ChecklistRuleId = (typeof checklistRuleIds)[number];

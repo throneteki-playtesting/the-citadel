@@ -7,6 +7,7 @@ import {
 } from "../models/cards";
 import { computeStrength } from "./computeStrength";
 import { computePlotBudget } from "./computePlotBudget";
+import { computeTextBoxLines, TEXT_BOX_LINE_WEIGHTS } from "./computeTextBoxLines";
 import { PIVOT_POINT_HEALTHY_MIN } from "./pivotPoints";
 
 export interface RuleResult {
@@ -201,6 +202,18 @@ export function checklistRules(input: {
             });
         }
     }
+
+    const linesWarn = computeTextBoxLines(card) > TEXT_BOX_LINE_WEIGHTS.acceptableLines[card.type];
+    results.push({
+        rule: "textBoxLines",
+        status: linesWarn ? "warn" : "pass",
+        label: "Text area fits comfortably",
+        description: linesWarn
+            ? "This card's ability text is estimated to not comfortably fit on a printed card of this type."
+            : "This card's ability text is estimated to comfortably fit on a printed card of this type.",
+        tooltip:
+            "A calculated estimation of whether the text area on this card would fit well on a printed card. This is not reflective of what you see in the card preview."
+    });
 
     const pivotCount = pivotPoints.length;
     const warnPivots = pivotCount < PIVOT_POINT_HEALTHY_MIN;
