@@ -6,8 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
 import { PlaytestingCard } from "common/models/schemas";
 import { CardPreview } from "@agot/card-preview";
-import { renderCardSuggestion, renderPlaytestingCard, suggestionToPlaytestCard } from "common/utils";
+import { renderPlaytestingCard, suggestionToPlaytestCard } from "common/utils";
 import CardGrid from "../../../components/cardGrid";
+import SuggestionCardPreview from "../../../components/suggestionCardPreview";
 import classNames from "classnames";
 import CardEditor from "../../../components/cardEditor";
 import { useGetSuggestionsQuery, usePutDraftCardMutation } from "../../../api";
@@ -72,9 +73,9 @@ const SelectSuggestionModal = ({
                                         errorContent="Something went wrong loading suggestions."
                                     >
                                         {(suggestion) => (
-                                            <CardPreview
+                                            <SuggestionCardPreview
                                                 key={suggestion.id}
-                                                card={renderCardSuggestion(suggestion)}
+                                                suggestion={suggestion}
                                                 orientation="vertical"
                                                 rounded={true}
                                                 className={classNames(

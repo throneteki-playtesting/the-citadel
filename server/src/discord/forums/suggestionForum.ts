@@ -148,12 +148,13 @@ async function createSuggestionThread(
     suggestion: ICardSuggestion,
     context: SuggestionForumContext
 ): Promise<ICardSuggestion> {
-    const { options, snapshot } = await buildStarterMessage(suggestion);
+    const submitter = await submitterName(suggestion);
+    const { options, snapshot } = await buildStarterMessage(suggestion, submitter);
     const tag = context.factionTags[suggestion.card.faction];
 
     const thread = await context.channel.threads.create({
         name: threadNameFor(suggestion),
-        reason: `Suggestion discussion for ${suggestion.card.name} (submitted by ${suggestion.user.displayname})`,
+        reason: `Suggestion discussion for ${suggestion.card.name} (submitted by ${submitter ?? suggestion.createdBy})`,
         message: options,
         appliedTags: tag ? [tag.id] : [],
         autoArchiveDuration: context.channel.defaultAutoArchiveDuration
@@ -182,7 +183,7 @@ async function refreshSuggestionThread(
     }
 
     const message = await channel.messages.fetch(messageId);
-    const { options, snapshot } = await buildStarterMessage(suggestion);
+    const { options, snapshot } = await buildStarterMessage(suggestion, await submitterName(suggestion));
     await message.edit(options as MessageEditOptions);
 
     const changed = diffSnapshot(suggestion._metadata?.discord?.lastSyncedSnapshot, snapshot);
@@ -542,7 +543,7 @@ function buildReactionRow(suggestion: ICardSuggestion): ActionRowBuilder<ButtonB
 /** Everything but the rendered card image - lets a reaction-only change refresh the button labels
  *  without re-rendering/re-uploading the PNG. */
 export async function buildContainer(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder> {
-    const heading = `## Card Suggestion\n<@${suggestion.user.discordId}> has submitted **${suggestion.card.name}** for consideration.`;
+    const heading = `## Card Suggestion\n<@${suggestion.createdBy}> has submitted **${suggestion.card.name}** for consideration.`;
     const container = new ContainerBuilder()
         .setAccentColor(resolveColor(colors[suggestion.card.faction]))
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading));
@@ -571,11 +572,17 @@ export async function buildContainer(suggestion: ICardSuggestion, filename: stri
     return container;
 }
 
+async function submitterName(suggestion: ICardSuggestion) {
+    const [user] = await dataService.users.read({ discordId: suggestion.createdBy });
+    return user?.displayname;
+}
+
 async function buildStarterMessage(
-    suggestion: ICardSuggestion
+    suggestion: ICardSuggestion,
+    submitter?: string
 ): Promise<{ options: GuildForumThreadMessageCreateOptions; snapshot: Record<string, unknown> }> {
     const filename = suggestionImageFilename(suggestion);
-    const render = renderCardSuggestion(suggestion);
+    const render = renderCardSuggestion(suggestion, submitter);
     const { buffer } = await asPNG(render);
     const attachment = new AttachmentBuilder(buffer, { name: filename });
 

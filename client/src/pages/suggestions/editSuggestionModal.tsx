@@ -14,7 +14,7 @@ import {
     useUpdateSuggestionMutation
 } from "../../api";
 import ConfirmModal from "../../components/confirmModal";
-import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import { getBaseCardValues, renderCardSuggestion } from "common/utils";
@@ -50,6 +50,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@fortawesome/free-solid-svg-icons";
 import { faCircleQuestion } from "@fortawesome/free-regular-svg-icons";
 import { UserRow } from "../../components/userAvatar";
+import useUser from "../../hooks/useUser";
 
 const RAIL_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -420,10 +421,6 @@ const EditSuggestionModal = ({
     onReturnToDrafts = () => true
 }: EditSuggestionModalProps) => {
     const { user } = useAuth();
-    // Read via a ref inside the load effect below, so that effect can depend on `initial` alone -
-    // `user` changing identity for unrelated reasons shouldn't re-run a "load this suggestion" effect.
-    const userRef = useRef(user);
-    userRef.current = user;
     const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
     const [updateSuggestion, { isLoading: isSubmitting }] = useUpdateSuggestionMutation();
     const [deleteSuggestion, { isLoading: isDeletingDraft }] = useDeleteSuggestionMutation();
@@ -450,20 +447,13 @@ const EditSuggestionModal = ({
         }
     }, [isOpen]);
 
-    // A new suggestion is always your own (see the load effect's `initialIsNew`) - this only fires
-    // for an existing one whose submitter isn't you (EDIT_SUGGESTIONS lets anyone amend anyone's).
-    const isEditingOthersSuggestion = !!suggestion.id && !!user && suggestion.user?.discordId !== user.discordId;
+    // An unsaved suggestion has no `createdBy` yet, but is always your own
+    const isEditingOthersSuggestion = !!suggestion.id && !!user && suggestion.createdBy !== user.discordId;
+    const submitterName = useUser(suggestion.createdBy ?? user?.discordId).user?.displayname;
 
     useEffect(() => {
-        // Whether THIS incoming `initial` is new - reading `suggestion` state instead (still last
-        // render's value here) attributed every suggestion's first edit in a session to the editor.
-        const initialIsNew = !initial?.id;
-        const user = userRef.current;
-        setSuggestion({
-            ...initial,
-            ...(initialIsNew && user && { user: { discordId: user.discordId, displayname: user.displayname } })
-        });
-        if (initialIsNew) {
+        setSuggestion({ ...initial });
+        if (!initial?.id) {
             setWizardPage(1);
         }
     }, [initial]);
@@ -678,8 +668,8 @@ const EditSuggestionModal = ({
     // CardPreview is itself memoized - a fresh object here would defeat that, forcing a full relayout
     // on every unrelated keystroke. Reads off `deferredCard` for the same reason as checklistResults.
     const renderedCard = useMemo(
-        () => renderCardSuggestion({ card: deferredCard, id: suggestion.id, user: suggestion.user }),
-        [deferredCard, suggestion.id, suggestion.user]
+        () => renderCardSuggestion({ card: deferredCard, id: suggestion.id }, submitterName),
+        [deferredCard, suggestion.id, submitterName]
     );
     // Reads off `deferredCard` like `renderedCard` above, or the frame's orientation flips a paint ahead
     // of the card content actually catching up to the new type.
@@ -733,7 +723,7 @@ const EditSuggestionModal = ({
                                                     <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                                         <span>You are amending</span>
                                                         <UserRow
-                                                            discordId={suggestion.user!.discordId!}
+                                                            discordId={suggestion.createdBy!}
                                                             className="w-auto"
                                                             avatarClassName="!size-4"
                                                             textClassName="text-xs"

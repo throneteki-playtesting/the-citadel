@@ -39,13 +39,12 @@ function buildSearchBranches(term: string): Branch[] {
         textBranch("name", pattern),
         textBranch("text", pattern),
         textBranch("traits", pattern),
-        { user: { displayname: { $regex: pattern } } },
         ...enumBranches(factionNames, "faction", term),
         ...enumBranches(typeNames, "type", term)
     ];
 }
 
-// Search branches only ever touch `card.*`/`user.*` one leaf at a time, so a shallow per-key merge (not a
+// Search branches only ever touch `card.*` one leaf at a time, so a shallow per-key merge (not a
 // full deep merge) is enough to combine one with an existing advanced-filter branch without losing fields
 function mergeBranch(filterBranch: Record<string, unknown>, searchBranch: Branch): Record<string, unknown> {
     const merged = { ...filterBranch };
@@ -97,9 +96,9 @@ export default function useSuggestionServerFilter(
         }
 
         if (mine && currentUserId) {
-            base.user = { discordId: currentUserId };
+            base.createdBy = currentUserId;
         } else if (byUsers && byUsers.length > 0) {
-            base.user = { discordId: byUsers };
+            base.createdBy = byUsers;
         }
 
         // unseen/myReactions are NOT built here - see suggestionListQueryExtras above

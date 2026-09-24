@@ -2,13 +2,11 @@ import { ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import Permission from "common/models/permissions";
-import { renderCardSuggestion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheckCircle, faCircleQuestion, faImage, faThumbsDown, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
 import { Chip } from "@heroui/react";
-import { CardPreview } from "@agot/card-preview";
 import classNames from "classnames";
-import { useGetUserQuery, useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../api";
+import { useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../api";
 import { showApiErrorToast } from "../api/errors";
 import { useAuth } from "../hooks/useAuth";
 import ThronesIcon from "./thronesIcon";
@@ -17,6 +15,8 @@ import Timestamp from "./timestamp";
 import PermissionedLink from "./permissionedLink";
 import ReactionCount from "./reactionCount";
 import { TouchTooltip } from "./touchTooltip";
+import SuggestionCardPreview from "./suggestionCardPreview";
+import useUser from "../hooks/useUser";
 import { watermarkClasses } from "../constants";
 
 // A row's own link is the whole row, so a reaction toggle/Approve/Ignore has to actively cancel that
@@ -106,7 +106,8 @@ export default function SuggestionRow({
     // Only fetched where the caller wants the approver's name (Recently Approved) - every other list
     // shows the plain "Approved" chip instead, no lookup needed.
     const skipApproverLookup = !showInlineStatus || !approvedBy;
-    const { data: approver } = useGetUserQuery({ discordId: approvedBy as string }, { skip: skipApproverLookup });
+    const { user: approver } = useUser(skipApproverLookup ? undefined : approvedBy);
+    const submitterName = useUser(suggestion.createdBy).user?.displayname;
 
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
@@ -160,7 +161,7 @@ export default function SuggestionRow({
                                     <TouchTooltip
                                         content={
                                             <div className="w-56">
-                                                <CardPreview card={renderCardSuggestion(suggestion)} rounded />
+                                                <SuggestionCardPreview suggestion={suggestion} rounded />
                                             </div>
                                         }
                                     >
@@ -205,7 +206,7 @@ export default function SuggestionRow({
                                 )}
                             </div>
                             <div className="text-xs font-crimson italic text-foreground/40">
-                                Suggestion by {suggestion.user.displayname}
+                                Suggestion by {submitterName ?? "…"}
                             </div>
                         </div>
                         <div

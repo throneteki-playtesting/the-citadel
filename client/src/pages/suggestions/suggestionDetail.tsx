@@ -7,7 +7,6 @@ import {
     useGetSettingsQuery,
     useGetSuggestionPlotMedianQuery,
     useGetSuggestionQuery,
-    useGetUserQuery,
     useReactToSuggestionMutation,
     useRenderImageMutation,
     useUnapproveSuggestionMutation,
@@ -15,7 +14,6 @@ import {
 } from "../../api";
 import Permission from "common/models/permissions";
 import { hasPermission, renderCardSuggestion } from "common/utils";
-import { CardPreview } from "@agot/card-preview";
 import {
     addToast,
     Button,
@@ -69,6 +67,8 @@ import SectionTitle from "../../components/sectionTitle";
 import SectionBlurb from "../../components/sectionBlurb";
 import RichText from "../../components/richText";
 import { UserRow } from "../../components/userAvatar";
+import SuggestionCardPreview from "../../components/suggestionCardPreview";
+import useUser from "../../hooks/useUser";
 import Reveal from "../../components/reveal";
 import Timestamp from "../../components/timestamp";
 import ReactionCount from "../../components/reactionCount";
@@ -421,13 +421,13 @@ const SuggestionDetail = () => {
     const canEdit = usePermission(
         (u: User) =>
             !!suggestion &&
-            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.user.discordId) ||
+            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.createdBy) ||
                 hasPermission(u, Permission.EDIT_SUGGESTIONS))
     );
     const canDelete = usePermission(
         (u: User) =>
             !!suggestion &&
-            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.user.discordId) ||
+            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.createdBy) ||
                 hasPermission(u, Permission.DELETE_SUGGESTIONS))
     );
     const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
@@ -436,7 +436,8 @@ const SuggestionDetail = () => {
     const canApprove = usePermission(Permission.APPROVE_SUGGESTIONS);
 
     const approvedBy = suggestion?._metadata?.engagement?.approvedBy;
-    const { data: approver } = useGetUserQuery({ discordId: approvedBy as string }, { skip: !approvedBy });
+    const { user: approver } = useUser(approvedBy);
+    const submitterName = useUser(suggestion?.createdBy).user?.displayname;
     const { data: discordStatus } = useDiscordSuggestionStatus(id ?? "");
     // Only fetched for a plot - checklistRules() ignores it entirely for every other type.
     const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
@@ -485,7 +486,7 @@ const SuggestionDetail = () => {
 
     const onExportPNG = async () => {
         try {
-            const blob = await renderImage(renderCardSuggestion(suggestion)).unwrap();
+            const blob = await renderImage(renderCardSuggestion(suggestion, submitterName)).unwrap();
             downloadBlob(blob, `${suggestion.id}.png`);
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Download" });
@@ -643,9 +644,9 @@ const SuggestionDetail = () => {
                     <div className="order-3 basis-full flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="text-foreground/50 shrink-0">Suggested by</span>
-                            <UserRow discordId={suggestion.user.discordId} className="shrink-0 max-w-full" />
+                            <UserRow discordId={suggestion.createdBy} className="shrink-0 max-w-full" />
                         </div>
-                        {suggestion.updatedBy && suggestion.updatedBy !== suggestion.user.discordId && (
+                        {suggestion.updatedBy && suggestion.updatedBy !== suggestion.createdBy && (
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span className="text-foreground/50 shrink-0">Edited by</span>
                                 <UserRow discordId={suggestion.updatedBy} className="shrink-0 max-w-full" />
@@ -856,8 +857,8 @@ const SuggestionDetail = () => {
                                 : "max-w-72 aspect-[240/333]"
                         )}
                     >
-                        <CardPreview
-                            card={renderCardSuggestion(suggestion)}
+                        <SuggestionCardPreview
+                            suggestion={suggestion}
                             orientation={suggestion.card.type === "plot" ? "horizontal" : "vertical"}
                             rounded
                         />

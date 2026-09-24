@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
-import { renderCardSuggestion } from "common/utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCheck,
@@ -10,14 +9,15 @@ import {
     faThumbsUp,
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
-import { CardPreview } from "@agot/card-preview";
 import { Spinner } from "@heroui/react";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
 import ReactionCount from "../../components/reactionCount";
+import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { useAuth } from "../../hooks/useAuth";
-import { useClearSuggestionReactionMutation, useGetUserQuery, useReactToSuggestionMutation } from "../../api";
+import { useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../../api";
+import useUser from "../../hooks/useUser";
 import { showApiErrorToast } from "../../api/errors";
 
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
@@ -104,7 +104,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
     const likeCount = Object.values(reactions).filter((entry) => entry.type === "like").length;
     const dislikeCount = Object.values(reactions).filter((entry) => entry.type === "dislike").length;
     const approvedBy = suggestion._metadata?.engagement?.approvedBy;
-    const { data: approver } = useGetUserQuery({ discordId: approvedBy as string }, { skip: !approvedBy });
+    const { user: approver } = useUser(approvedBy);
     const myReaction = user ? reactions[user.discordId]?.type : undefined;
     // Plots are landscape everywhere - the grid cell around this card (see suggestionCardLink.tsx)
     // is also sized for it, so both need to agree on the same isPlot check explicitly.
@@ -295,8 +295,8 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                     </motion.div>
                 )}
             </AnimatePresence>
-            <CardPreview
-                card={renderCardSuggestion(suggestion)}
+            <SuggestionCardPreview
+                suggestion={suggestion}
                 orientation={isPlot ? "horizontal" : "vertical"}
                 rounded={true}
             />

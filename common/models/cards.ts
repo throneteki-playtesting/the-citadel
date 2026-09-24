@@ -236,11 +236,6 @@ export interface IArchivedInfo {
 export interface ICardSuggestion extends IAuditable {
     /** Unique Id of this saved suggestion (undefined for new) */
     id?: string;
-    /** User who suggested */
-    user: {
-        discordId: string;
-        displayname: string;
-    };
     _metadata?: {
         discord?: {
             messageUrl?: string;
@@ -293,17 +288,17 @@ export type ISuggestionsListQuery = {
 
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who
  *  created it, with no permission able to override that. */
-export function canViewSuggestion(suggestion: Pick<ICardSuggestion, "draft" | "user">, viewerDiscordId?: string) {
-    return !suggestion.draft || suggestion.user.discordId === viewerDiscordId;
+export function canViewSuggestion(suggestion: Pick<ICardSuggestion, "draft" | "createdBy">, viewerDiscordId?: string) {
+    return !suggestion.draft || suggestion.createdBy === viewerDiscordId;
 }
 
 /** Shared by the server route (the actual gate) and the client (to hide the affordance) - mirrors
  *  artworkBlocker's shape. Says nothing about drafts; that falls out of canViewSuggestion alone. */
 export function suggestionReactionBlockReason(
-    suggestion: Pick<ICardSuggestion, "user">,
+    suggestion: Pick<ICardSuggestion, "createdBy">,
     reactorDiscordId?: string
 ): string | undefined {
-    return !reactorDiscordId || suggestion.user.discordId === reactorDiscordId
+    return !reactorDiscordId || suggestion.createdBy === reactorDiscordId
         ? "You cannot react to your own suggestion"
         : undefined;
 }

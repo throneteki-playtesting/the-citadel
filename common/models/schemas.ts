@@ -346,10 +346,6 @@ const SuggestionEngagement = Joi.object({
 
 const suggestionSharedFields = {
     id: Joi.string(),
-    user: Joi.object({
-        discordId: Joi.string().required(),
-        displayname: Joi.string().required()
-    }).required(),
     created: Joi.date(),
     createdBy: Joi.string(),
     updated: Joi.date(),
@@ -386,16 +382,12 @@ export const CardSuggestion = {
     }),
     Partial: Joi.object({
         ...suggestionSharedFields,
-        user: Joi.object({
-            discordId: Joi.string(),
-            displayname: Joi.string()
-        }),
         card: Card.Partial,
         derived: Derived,
         draft: Joi.boolean(),
         questions: QuestionsPartial
     }),
-    /** the permissive, in-progress-save schema - only `user` + a fully valid `card` are required */
+    /** the permissive, in-progress-save schema - only a fully valid `card` is required */
     DraftSave: Joi.object({
         ...suggestionSharedFields,
         draft: Joi.boolean(),

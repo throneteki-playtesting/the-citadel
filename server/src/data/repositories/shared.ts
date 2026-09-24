@@ -134,11 +134,15 @@ async function doApplyAudit<T extends IAuditable>(
     return items.map((data) => {
         const key = pks.map((pk) => String(data[pk])).join("|");
         const current = byKey.get(key);
+        // Creation is only ever recorded once - an update can't rewrite who or when, whatever its body says
+        const creation = current
+            ? { created: current.created, createdBy: current.createdBy }
+            : { created: now, createdBy: principal.id };
         if (current && isEqual(stripAudit(data as object), stripAudit(current as object))) {
             // Only _metadata (or nothing) changed — preserve existing audit timestamps
-            return { ...data, updated: current.updated, updatedBy: current.updatedBy } as T;
+            return { ...data, ...creation, updated: current.updated, updatedBy: current.updatedBy } as T;
         }
-        return { ...data, updated: now, updatedBy: principal.id } as T;
+        return { ...data, ...creation, updated: now, updatedBy: principal.id } as T;
     });
 }
 

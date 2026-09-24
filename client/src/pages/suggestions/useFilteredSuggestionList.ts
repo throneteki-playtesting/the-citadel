@@ -15,8 +15,7 @@ function matchesSearch(suggestion: ICardSuggestion, term: string) {
         !!card.text?.toLowerCase().includes(term) ||
         !!factionNames[card.faction]?.toLowerCase().includes(term) ||
         !!typeNames[card.type]?.toLowerCase().includes(term) ||
-        !!card.traits?.some((trait) => trait.toLowerCase().includes(term)) ||
-        suggestion.user.displayname.toLowerCase().includes(term)
+        !!card.traits?.some((trait) => trait.toLowerCase().includes(term))
     );
 }
 
@@ -42,20 +41,6 @@ export function useDistinctTraits(suggestions: ICardSuggestion[]) {
         () => [...new Set(suggestions.flatMap((suggestion) => suggestion.card.traits))].sort(),
         [suggestions]
     );
-}
-
-// One entry per distinct submitter actually present in the given set - options come from what's
-// really there, not a separate user lookup.
-export function useDistinctUsers(suggestions: ICardSuggestion[]) {
-    return useMemo(() => {
-        const byId = new Map<string, string>();
-        for (const suggestion of suggestions) {
-            byId.set(suggestion.user.discordId, suggestion.user.displayname);
-        }
-        return [...byId.entries()]
-            .map(([discordId, displayname]) => ({ discordId, displayname }))
-            .sort((a, b) => a.displayname.localeCompare(b.displayname));
-    }, [suggestions]);
 }
 
 export default function useFilteredSuggestionList(

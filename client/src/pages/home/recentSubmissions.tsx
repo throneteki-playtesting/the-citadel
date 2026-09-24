@@ -1,4 +1,5 @@
-import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery, useGetUserQuery } from "../../api";
+import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery } from "../../api";
+import useUser from "../../hooks/useUser";
 import Permission from "common/models/permissions";
 import { useMemo } from "react";
 import { ICardSuggestion } from "common/models/cards";
@@ -95,7 +96,7 @@ function SubmissionRow({ submission }: SubmissionRowProps) {
 type SubmissionRowProps = { submission: Submission };
 
 function ReviewRow({ review }: ReviewRowProps) {
-    const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
+    const { user, isLoading: isUserLoading } = useUser(review.reviewer);
     const { data: card, isLoading: isCardLoading } = useGetCardQuery({
         project: review.project,
         number: review.number,

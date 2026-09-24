@@ -241,8 +241,10 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
             this.database.collection
                 .aggregate<{ discordId: string; displayname: string }>([
                     { $match: { draft: false } },
-                    { $group: { _id: "$user.discordId", displayname: { $first: "$user.displayname" } } },
-                    { $project: { _id: 0, discordId: "$_id", displayname: 1 } },
+                    { $group: { _id: "$createdBy" } },
+                    { $lookup: { from: "users", localField: "_id", foreignField: "discordId", as: "user" } },
+                    { $unwind: "$user" },
+                    { $project: { _id: 0, discordId: "$_id", displayname: "$user.displayname" } },
                     { $sort: { displayname: 1 } }
                 ])
                 .toArray()

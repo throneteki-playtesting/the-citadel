@@ -587,15 +587,18 @@ export function renderPlaytestingCard(card: DeepPartial<Cards.IPlaytestCard>, wa
     } as DeepPartial<Cards.IRenderCard>;
 }
 
-export function renderCardSuggestion(suggestion: Cards.ICardSuggestion): Cards.IRenderCard;
-export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggestion>): DeepPartial<Cards.IRenderCard>;
-export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggestion>) {
+export function renderCardSuggestion(suggestion: Cards.ICardSuggestion, submitterName?: string): Cards.IRenderCard;
+export function renderCardSuggestion(
+    suggestion: DeepPartial<Cards.ICardSuggestion>,
+    submitterName?: string
+): DeepPartial<Cards.IRenderCard>;
+export function renderCardSuggestion(suggestion: DeepPartial<Cards.ICardSuggestion>, submitterName?: string) {
     return {
         ...(suggestion.card ? getBaseCardValues(suggestion.card) : {}),
         text: suggestion.card?.text ? toThronetekiText(suggestion.card.text) : suggestion.card?.text,
         key: suggestion.id,
         watermark: {
-            top: suggestion.user?.displayname,
+            top: submitterName,
             middle: "Custom",
             bottom: "Card Suggestion"
         }

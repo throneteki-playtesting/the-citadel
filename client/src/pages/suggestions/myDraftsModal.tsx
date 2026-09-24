@@ -2,14 +2,13 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import { ICardSuggestion } from "common/models/cards";
 import { Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
-import { renderCardSuggestion } from "common/utils";
-import { CardPreview } from "@agot/card-preview";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGetSuggestionsQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import CardGrid from "../../components/cardGrid";
 import SortSelect from "../../components/sortSelect";
+import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import {
     isSuggestionFilterActive,
     SuggestionFilterSearchBar,
@@ -18,7 +17,7 @@ import {
 import { EMPTY_SUGGESTION_FILTER } from "../../components/data/suggestionFilter/types";
 import { reorderTransition } from "../../constants";
 import { SortOption, sortOptions } from "./suggestionSortOptions";
-import useFilteredSuggestionList, { useDistinctTraits, useDistinctUsers } from "./useFilteredSuggestionList";
+import useFilteredSuggestionList, { useDistinctTraits } from "./useFilteredSuggestionList";
 
 // A draft card, click-only - unlike SuggestionCardLink there's no reactions/badges to show (nobody
 // but the owner can even see a draft), and clicking hands the draft up rather than opening its own
@@ -33,8 +32,8 @@ function DraftCard({ suggestion, onSelect }: { suggestion: ICardSuggestion; onSe
                 className="group block w-full h-full hover:z-20 relative cursor-pointer text-left"
             >
                 <div className="w-full h-full scale-[0.98] transition-transform duration-200 ease-out group-hover:scale-100">
-                    <CardPreview
-                        card={renderCardSuggestion(suggestion)}
+                    <SuggestionCardPreview
+                        suggestion={suggestion}
                         orientation={isPlot ? "horizontal" : "vertical"}
                         rounded
                     />
@@ -60,7 +59,11 @@ export default function MyDraftsModal({ isOpen, onClose, onSelectDraft }: MyDraf
     const effectiveSearch = isFilterActive ? "" : deferredSearch;
 
     const distinctTraits = useDistinctTraits(drafts);
-    const distinctUsers = useDistinctUsers(drafts);
+    // Every draft is the viewer's own - see canViewSuggestion
+    const distinctUsers = useMemo(
+        () => (user ? [{ discordId: user.discordId, displayname: user.displayname }] : []),
+        [user]
+    );
     const filtered = useFilteredSuggestionList(drafts, {
         filter,
         search: effectiveSearch,

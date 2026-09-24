@@ -42,17 +42,17 @@ export default function useSuggestionFilterPredicate(
             if (traits && traits.length > 0 && !traits.some((trait) => card.traits.includes(trait))) {
                 return false;
             }
-            if (mine && suggestion.user.discordId !== context?.currentUserId) {
+            if (mine && suggestion.createdBy !== context?.currentUserId) {
                 return false;
             }
-            if (byUsers && byUsers.length > 0 && !byUsers.includes(suggestion.user.discordId)) {
+            if (byUsers && byUsers.length > 0 && !byUsers.includes(suggestion.createdBy)) {
                 return false;
             }
             // No reaction from the current user at all (Ignore counts as "seen") - mirrors the /feed
             // route's own `unreacted` stat, excluding the viewer's own suggestions too.
             if (
                 unseen &&
-                (suggestion.user.discordId === context?.currentUserId ||
+                (suggestion.createdBy === context?.currentUserId ||
                     suggestion._metadata?.engagement?.reactions?.[context?.currentUserId ?? ""])
             ) {
                 return false;

@@ -47,7 +47,8 @@ import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { Link as RouterLink } from "react-router-dom";
-import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery, useGetUserQuery } from "../../api";
+import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery } from "../../api";
+import useUser from "../../hooks/useUser";
 import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { BaseElementProps } from "../../types";
@@ -366,7 +367,7 @@ type ReviewSummariesProps = Omit<BaseElementProps, "children"> & {
 };
 
 function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: ReviewSummaryProps) {
-    const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
+    const { user, isLoading: isUserLoading } = useUser(review.reviewer);
     const { data: card, isLoading: isCardLoading } = useGetCardQuery({
         project: review.project,
         number: review.number,

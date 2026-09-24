@@ -93,7 +93,7 @@ const applyReactionVisibilityFilter = asyncHandler<
                 ...existingMetadata,
                 engagement: { ...existingEngagement, reactions: { [discordId]: reactionCondition } }
             },
-            ...(unseen ? { user: { discordId: { $ne: discordId } } } : {})
+            ...(unseen ? { createdBy: { $ne: discordId } } : {})
         };
     });
     next();
@@ -130,7 +130,7 @@ const restrictDraftVisibility = asyncHandler<unknown, unknown, unknown, IGetRequ
         req.query.filter = branches.flatMap((branch): Filter<ICardSuggestion>[] => {
             const visible: Filter<ICardSuggestion>[] = [{ ...branch, draft: false }];
             if (discordId) {
-                visible.push({ ...branch, draft: true, user: { discordId } });
+                visible.push({ ...branch, draft: true, createdBy: discordId });
             }
             return visible;
         });
@@ -148,7 +148,7 @@ const restrictListDraftVisibility = asyncHandler<unknown, unknown, unknown, IGet
         const branches = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter ?? {}];
         req.query.filter = branches.map((branch): Filter<ICardSuggestion> => {
             if (branch.draft === true && discordId) {
-                return { ...branch, draft: true, user: { discordId } };
+                return { ...branch, draft: true, createdBy: discordId };
             }
             return { ...branch, draft: false };
         });
@@ -195,17 +195,14 @@ function prepareCreateBody(req: Request, _res: Response, next: NextFunction) {
 function prepareDraftSaveBody(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = true;
-    req.body.user = existing.user;
     req.body._metadata = { ...req.body._metadata, engagement: existing._metadata?.engagement ?? EMPTY_ENGAGEMENT };
     next();
 }
 
 // Always clears reactions/approval unconditionally - an edit invalidates them rather than letting
-// them carry over. `user` is forced from the stored record too - not whoever's editing right now.
-function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
-    const existing = res.locals.suggestion as ICardSuggestion;
+// them carry over.
+function prepareLiveSaveBody(req: Request, _res: Response, next: NextFunction) {
     req.body.draft = false;
-    req.body.user = existing.user;
     req.body._metadata = { ...req.body._metadata, engagement: EMPTY_ENGAGEMENT };
     next();
 }
@@ -268,7 +265,7 @@ function requiresEditOrOwnership(principal: Principal, req: Request, res: Respon
         validate(
             principal,
             Permission.MAKE_SUGGESTIONS,
-            (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId
+            (principal) => "discordId" in principal && principal.discordId === suggestion.createdBy
         )
     );
 }
@@ -312,7 +309,7 @@ router.get(
             FEED_WORKING_SET_SIZE
         );
 
-        const myDrafts = discordId ? await dataService.suggestions.count({ draft: true, user: { discordId } }) : 0;
+        const myDrafts = discordId ? await dataService.suggestions.count({ draft: true, createdBy: discordId }) : 0;
 
         // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail.
         // Stats below are unaffected: they're aggregate counts, not a personalised "look at this" list.
@@ -324,7 +321,7 @@ router.get(
             recent: recentCandidates.slice(0, FEED_RAIL_SIZE), // allActive is already sorted `updated: desc`
             stats: {
                 total: allActive.length,
-                totalSubmitters: new Set(allActive.map((s) => s.user.discordId)).size,
+                totalSubmitters: new Set(allActive.map((s) => s.createdBy)).size,
                 // Mirrors suggestionApprovalPanel.tsx's own `awaiting` filter exactly - an already-ignored
                 // suggestion is excluded here too, or this stat and that panel's own list would disagree.
                 awaitingApproval: allActive.filter(
@@ -337,10 +334,10 @@ router.get(
                 // reacted at all", and also excludes the viewer's own suggestions ("new to you" is moot).
                 unreacted: discordId
                     ? allActive.filter(
-                          (s) => s.user.discordId !== discordId && !s._metadata?.engagement?.reactions?.[discordId]
+                          (s) => s.createdBy !== discordId && !s._metadata?.engagement?.reactions?.[discordId]
                       ).length
                     : allActive.length,
-                mine: discordId ? allActive.filter((s) => s.user.discordId === discordId).length : 0,
+                mine: discordId ? allActive.filter((s) => s.createdBy === discordId).length : 0,
                 myDrafts
             }
         });
@@ -406,11 +403,8 @@ router.post(
     forceTags,
     prepareCreateBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.DraftSave }),
-    asyncHandler<unknown, unknown, Omit<ICardSuggestion, "id" | "updated" | "created">, unknown>(async (req, res) => {
-        const body = req.body;
-        const created = new Date();
-        let suggestion = { ...body, created, updated: created } as ICardSuggestion;
-        suggestion = await dataService.suggestions.create(suggestion);
+    asyncHandler<unknown, unknown, ICardSuggestion, unknown>(async (req, res) => {
+        const suggestion = await dataService.suggestions.create(req.body);
 
         await logActivity(LogCategory.SUGGESTION, "suggestion.created", "<principal> created suggestion <suggestion>", {
             context: { suggestion: cardSnapshot(suggestion.id, suggestion.card) }
@@ -694,7 +688,7 @@ router.delete(
             validate(
                 principal,
                 Permission.MAKE_SUGGESTIONS,
-                (principal) => "discordId" in principal && principal.discordId === suggestion.user.discordId
+                (principal) => "discordId" in principal && principal.discordId === suggestion.createdBy
             )
         );
     }),
