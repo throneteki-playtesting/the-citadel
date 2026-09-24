@@ -84,7 +84,7 @@ const CardEditor = ({
             delete card.unique;
         }
 
-        if (card.faction && card.faction !== "neutral") {
+        if (card.faction && card.faction !== "neutral" && card.type !== "agenda") {
             defaults.loyal = card.loyal ?? false;
         } else {
             delete card.loyal;
@@ -173,7 +173,7 @@ const CardEditor = ({
                     updated.plotStats = true;
             }
 
-            if (card.faction && card.faction !== "neutral") {
+            if (card.faction && card.faction !== "neutral" && card.type !== "agenda") {
                 updated.loyal = true;
             }
         }

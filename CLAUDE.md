@@ -134,7 +134,7 @@ The main orchestrator component. Manages `DeepPartial<ICard>` state and controls
 - **`inputOptions`** prop: per-field `"disabled"` or `"hidden"` override
 - **`visibility` state**: computed from `card.type` and `card.faction` — determines which fields are structurally applicable
 
-Key behavior: `applyDefaults()` adds/removes fields based on type (e.g. `icons` only on `character`, `unique` on `char/attach/location`, `loyal` only for non-neutral factions).
+Key behavior: `applyDefaults()` adds/removes fields based on type (e.g. `icons` only on `character`, `unique` on `char/attach/location`, `loyal` only for non-neutral factions, never on `agenda`).
 
 ---
 
@@ -231,7 +231,7 @@ Maps icon name → ThronesDB font Unicode character. Valid icon names (used in b
 | `FactionSelect`        | `faction`   | Dropdown with thrones icons                          |
 | `TypeSelect`           | `type`      | Dropdown with type icons                             |
 | `UniqueButton`         | `unique`    | Toggle, only shown for char/attach/location          |
-| `LoyalButton`          | `loyal`     | Toggle, only shown for non-neutral factions          |
+| `LoyalButton`          | `loyal`     | Toggle, only shown for non-neutral non-agendas       |
 | `CostInput`            | `cost`      | Parses number, `"X"`, or `"-"`                       |
 | `StrengthInput`        | `strength`  | Parses number or `"X"`                               |
 | `ChallengeIconButtons` | `icons`     | Three-button toggle group, character only            |

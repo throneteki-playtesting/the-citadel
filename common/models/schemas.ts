@@ -61,9 +61,13 @@ export const Card = {
         type: Joi.string()
             .required()
             .valid(...Cards.types),
-        loyal: Joi.when("faction", {
-            is: Joi.not("neutral"),
-            then: Joi.boolean().required()
+        loyal: Joi.when("type", {
+            is: "agenda",
+            then: Joi.forbidden(),
+            otherwise: Joi.when("faction", {
+                is: Joi.not("neutral"),
+                then: Joi.boolean().required()
+            })
         }),
         traits: Joi.array().items(Joi.string()),
         text: Joi.string(),

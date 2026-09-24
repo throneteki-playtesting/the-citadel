@@ -119,7 +119,7 @@ export function convertTDBCard(obj: any): ILabeledCard {
             icons: { military: obj.is_military, intrigue: obj.is_intrigue, power: obj.is_power }
         }),
         illustrator: obj.illustrator,
-        ...(obj.faction_code !== "neutral" && { loyal: obj.is_loyal }),
+        ...(obj.faction_code !== "neutral" && obj.type_code !== "agenda" && { loyal: obj.is_loyal }),
         name: obj.name,
         ...(obj.type_code === "plot" && {
             plotStats: { income: obj.income, initiative: obj.initiative, claim: obj.claim, reserve: obj.reserve }
