@@ -54,10 +54,6 @@ import useUser from "../../hooks/useUser";
 
 const RAIL_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
-// Hoisted so CardEditor (memoized) sees a stable reference - an inline literal here would recreate
-// every render and defeat the memo, re-rendering the whole editor on any unrelated keystroke.
-const CARD_EDITOR_INPUT_OPTIONS = { designer: "hidden" } as const;
-
 // A `?? []` fallback creates a new array every render, defeating a memoized child's memo just as
 // surely as an unstable callback would - one shared empty reference instead.
 const EMPTY_STRINGS: string[] = [];
@@ -747,7 +743,6 @@ const EditSuggestionModal = ({
                                                         className="w-full"
                                                         card={suggestion.card}
                                                         onUpdate={onCardUpdate}
-                                                        inputOptions={CARD_EDITOR_INPUT_OPTIONS}
                                                         for="card"
                                                     />
                                                 </WizardPage>
