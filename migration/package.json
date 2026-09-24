@@ -8,6 +8,7 @@
         "build": "tsc",
         "migrate": "npx ts-node src/index.ts",
         "refresh": "npx ts-node src/refresh.ts",
+        "import-suggestions": "npx ts-node src/importSuggestions.ts",
         "start": "node dist/migration/src/index.js"
     },
     "keywords": [],
@@ -16,6 +17,8 @@
     "dependencies": {
         "discord.js": "^14.26.4",
         "dotenv": "^17.4.2",
+        "exceljs": "^4.4.0",
+        "jszip": "^3.10.2",
         "mongodb": "^7.2.0",
         "octokit": "^5.0.5"
     },

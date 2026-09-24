@@ -17,3 +17,8 @@ server/public/css/*.css.map
 
 # Migration data
 unresolved-users.json
+# Suggestion import (unreleased designs, designer identities)
+migration/*.xlsx
+migration/designers.json
+migration/import-suggestions-errors.txt
+migration/card-names.json
