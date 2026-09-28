@@ -3,16 +3,31 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import readline from "readline/promises";
-import ExcelJS from "exceljs";
-import JSZip from "jszip";
 import { Db, MongoClient } from "mongodb";
 import { log } from "./lib/logger";
+import {
+    Column,
+    COLUMNS,
+    findSheet,
+    isBlank,
+    loadWorkbook,
+    normalise,
+    plain,
+    readSheet,
+    rowValues,
+    RowValues,
+    Run,
+    SheetCells,
+    SHEET_NAME
+} from "./lib/futureCardsSheet";
+import { DAY_MS, linkRows, readSheetDates, SHEET_DATES_PATH, SheetDates } from "./lib/sheetDates";
 import { getArgValue } from "./lib/args";
 import { ENVIRONMENTS, isEnvironment, resolveDatabase } from "./lib/environments";
 import { destroyDiscordClient, fetchAllGuildMembers } from "./lib/discord";
 import { CardSuggestion } from "../../common/models/schemas";
 import { ABILITY_TEXT_SOURCE, deriveFields } from "../../common/designGuidelines/deriveFields";
 import { encodeEntities } from "../../common/richText/format";
+import { toPlain } from "../../common/richText/toPlain";
 import { abilityIcons } from "../../common/utils";
 import {
     ChallengeIcon,
@@ -26,30 +41,11 @@ import {
     types
 } from "../../common/models/cards";
 
-// One-off import of the design team's "Future Cards" sheet into draft suggestions. Nothing is written
-// unless every row converts cleanly and the summary is confirmed at the prompt.
+// One-off import of the design team's "Future Cards" sheet into legacy suggestions. Nothing is written unless
+// every row converts cleanly and the summary is confirmed at the prompt.
 
-const SHEET_NAME = "Future Cards";
 const DESIGNERS_PATH = path.resolve(process.cwd(), "designers.json");
-const CARD_NAMES_PATH = path.resolve(process.cwd(), "card-names.json");
 const ERRORS_PATH = path.resolve(process.cwd(), "import-suggestions-errors.txt");
-
-const COLUMNS = {
-    faction: "Faction",
-    name: "Card Name",
-    type: "Type",
-    loyal: "Loyal",
-    uniqueIncome: "Unique / Income",
-    costInitiative: "Cost / Initiative",
-    strengthClaim: "STR / Claim",
-    iconsReserve: "Icons / Reserve",
-    traits: "Traits",
-    text: "Text",
-    flavor: "Flavor Text",
-    deckLimit: "Deck Limit",
-    designer: "Designer"
-} as const;
-type Column = keyof typeof COLUMNS;
 
 const ABILITY_LINE_REGEX = new RegExp(`^(\\s*)(${ABILITY_TEXT_SOURCE})`);
 const ABILITY_KEYWORD_REGEX = new RegExp(`^(${ABILITY_TEXT_SOURCE})$`);
@@ -68,7 +64,6 @@ const ICON_ALIASES: Record<string, ChallengeIcon> = {
     power: "power"
 };
 
-type Run = { text: string; bold: boolean; italic: boolean; strike: boolean };
 type RowError = { column: string; message: string };
 
 interface RowResult {
@@ -77,80 +72,26 @@ interface RowResult {
     designer: string;
     errors: RowError[];
     card?: ICard;
-    /** Struck through in the sheet - already taken into a project, so imported as archived */
-    struck: boolean;
-    archivedTo?: ProjectCardRef;
+    values: RowValues;
 }
 
-type ProjectCardRef = { code: string; number: number };
-type FirstVersion = ProjectCardRef & { name: string; faction: string };
+type DateSource = "history" | "predatesHistory" | "notInHistory";
+
+interface CreatedDate {
+    date: Date;
+    source: DateSource;
+    /** For a date from the history, how long the window it was changed in is */
+    spanMs?: number;
+}
+
+interface ProjectCard {
+    project: { number: number; code: string; isDraft: boolean };
+    number: number;
+    /** A draft project's slot holds each version as a separate card, so one there is matched by its version */
+    version?: string;
+}
 
 const args = process.argv.slice(2);
-
-// Google's export spells "not bold" as <b val="0"/>, which exceljs reads as bold (it only checks the
-// element is present) - so every explicitly-off flag is removed before exceljs ever sees the file
-const DISABLED_FONT_FLAG_REGEX = /<(b|i|strike)\s+val="(?:0|false)"\s*\/>/g;
-
-async function loadWorkbook(file: string) {
-    const zip = await JSZip.loadAsync(fs.readFileSync(file));
-    for (const entry of Object.values(zip.files)) {
-        if (entry.name.startsWith("xl/") && entry.name.endsWith(".xml")) {
-            const xml = await entry.async("string");
-            zip.file(entry.name, xml.replace(DISABLED_FONT_FLAG_REGEX, ""));
-        }
-    }
-
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await zip.generateAsync({ type: "arraybuffer" }));
-    return workbook;
-}
-
-function normalise(text: string) {
-    return text.replace(/\r\n?/g, "\n").replace(/[’‘]/g, "'").replace(/[“”]/g, '"');
-}
-
-function readRuns(cell: ExcelJS.Cell): Run[] {
-    const value = cell.value;
-    const cellFont = cell.font ?? {};
-    // A run's own bold/italic are authoritative (Google styles the cell after its first character, so the
-    // cell font would bleed a leading trait across the whole text), but strikethrough is only ever set on
-    // the cell, so that one is merged
-    const run = (text: string, font: Partial<ExcelJS.Font> = cellFont): Run => ({
-        text: normalise(text),
-        bold: !!font.bold,
-        italic: !!font.italic,
-        strike: !!(font.strike || cellFont.strike)
-    });
-
-    if (value === null || value === undefined) {
-        return [];
-    }
-    if (typeof value === "object" && "richText" in value) {
-        return value.richText.map((part) => run(part.text, part.font));
-    }
-    if (typeof value === "object" && "text" in value) {
-        return [run(String(value.text))];
-    }
-    if (typeof value === "object" && "result" in value) {
-        return value.result === undefined ? [] : [run(String(value.result))];
-    }
-    return [run(String(value))];
-}
-
-function plain(runs: Run[]) {
-    return runs
-        .map((run) => run.text)
-        .join("")
-        .trim();
-}
-
-function isStruck(runs: Run[]) {
-    return runs.some((run) => run.strike && run.text.trim() !== "");
-}
-
-function isBlank(value: string) {
-    return value === "" || value === "-";
-}
 
 function parseNumber(value: string, allowX: boolean): number | "X" | undefined {
     if (/^\d+$/.test(value)) {
@@ -231,7 +172,7 @@ function truncate(value: string, length = 60) {
     return flat.length > length ? `${flat.slice(0, length)}…` : flat;
 }
 
-function convertRow(cells: Record<Column, Run[]>, errors: RowError[]): ICard | undefined {
+function convertRow(cells: SheetCells, errors: RowError[]): ICard | undefined {
     const value = (column: Column) => plain(cells[column]);
     const fail = (column: Column, message: string) => {
         errors.push({ column: COLUMNS[column], message });
@@ -428,121 +369,200 @@ async function resolveDiscordIds(ids: string[], db: Db) {
     return { names, unresolved };
 }
 
-function nameKey(name: string) {
-    return normalise(name).toLowerCase().replace(/\s+/g, " ").trim();
+function matchKey(name: string, text?: string) {
+    const flatten = (value: string) => normalise(value).replace(/\s+/g, " ").trim().toLowerCase();
+    return `${flatten(name)}\u0000${flatten(toPlain(text ?? ""))}`;
 }
 
-function compareVersions(a: string, b: string) {
-    const [left, right] = [a, b].map((version) => version.split(".").map(Number));
-    for (let index = 0; index < Math.max(left.length, right.length); index++) {
-        const difference = (left[index] ?? 0) - (right[index] ?? 0);
-        if (difference !== 0) {
-            return difference;
-        }
-    }
-    return 0;
-}
+// A row whose name and text exactly match a project card's version is that card, but only when the match is
+// one-to-one both ways - anything less certain is left to be settled on the suggestion's own page
+async function findCardMatches(db: Db, results: RowResult[]) {
+    const [projects, cards, archived] = await Promise.all([
+        db
+            .collection("projects")
+            .find({}, { projection: { _id: 0, number: 1, code: 1, draft: 1 } })
+            .toArray(),
+        db
+            .collection("cards")
+            .find({}, { projection: { _id: 0, project: 1, number: 1, version: 1, name: 1, text: 1, suggestionId: 1 } })
+            .toArray(),
+        db
+            .collection("suggestions")
+            .find({ "archived.project": { $exists: true } }, { projection: { _id: 0, archived: 1 } })
+            .toArray()
+    ]);
+    const projectsByNumber = new Map(projects.map((project) => [project.number as number, project]));
+    const claimedByArchive = new Set(
+        archived.map((suggestion) => `${suggestion.archived.project.code}#${suggestion.archived.project.number}`)
+    );
 
-// Every card's first version, keyed by its name - that is the name it was taken into the project under
-async function loadFirstVersions(db: Db) {
-    const projects = await db
-        .collection("projects")
-        .find({}, { projection: { _id: 0, number: 1, code: 1 } })
-        .toArray();
-    const codes = new Map(projects.map((project) => [project.number as number, project.code as string]));
-
-    const cards = await db
-        .collection("cards")
-        .find({}, { projection: { _id: 0, project: 1, number: 1, version: 1, name: 1, faction: 1 } })
-        .toArray();
-
-    const firsts = new Map<string, { version: string; card: FirstVersion }>();
-    const versionNames = new Map<string, Set<string>>();
+    const cardsByKey = new Map<string, Map<string, ProjectCard>>();
+    const claimed = new Set<string>();
     for (const card of cards) {
-        const code = codes.get(card.project) ?? `project ${card.project}`;
-        const key = refKey(code, card.number);
-        const existing = firsts.get(key);
-        if (!existing || compareVersions(card.version, existing.version) < 0) {
-            firsts.set(key, {
-                version: card.version,
-                card: { code, number: card.number, name: card.name, faction: card.faction }
-            });
+        const project = projectsByNumber.get(card.project);
+        if (!project) {
+            continue;
         }
-        versionNames.set(key, (versionNames.get(key) ?? new Set()).add(nameKey(card.name)));
+        const version: string | undefined = project.draft ? card.version : undefined;
+        const id = version ? `${project.number}|${card.number}|${version}` : `${project.number}|${card.number}`;
+        if (card.suggestionId || claimedByArchive.has(`${project.code}#${card.number}`)) {
+            claimed.add(id);
+        }
+        const key = matchKey(card.name, card.text);
+        const matching = cardsByKey.get(key) ?? new Map<string, ProjectCard>();
+        matching.set(id, {
+            project: { number: project.number, code: project.code, isDraft: !!project.draft },
+            number: card.number,
+            version
+        });
+        cardsByKey.set(key, matching);
     }
 
-    const byRef = new Map<string, FirstVersion>();
-    const byName = new Map<string, FirstVersion[]>();
-    const byAnyVersionName = new Map<string, FirstVersion[]>();
-    for (const [key, { card }] of firsts) {
-        byRef.set(key, card);
-        byName.set(nameKey(card.name), [...(byName.get(nameKey(card.name)) ?? []), card]);
-        for (const name of versionNames.get(key)!) {
-            byAnyVersionName.set(name, [...(byAnyVersionName.get(name) ?? []), card]);
+    const candidates = new Map<RowResult, { id: string; card: ProjectCard }[]>();
+    const rowsByCard = new Map<string, number>();
+    for (const result of results) {
+        if (!result.card) {
+            continue;
+        }
+        const matching = [...(cardsByKey.get(matchKey(result.card.name, result.card.text))?.entries() ?? [])]
+            .filter(([id]) => !claimed.has(id))
+            .map(([id, card]) => ({ id, card }));
+        if (matching.length === 0) {
+            continue;
+        }
+        candidates.set(result, matching);
+        for (const { id } of matching) {
+            rowsByCard.set(id, (rowsByCard.get(id) ?? 0) + 1);
         }
     }
-    return { byRef, byName, byAnyVersionName };
-}
 
-function refKey(code: string, number: number) {
-    return `${code.toLowerCase()}#${number}`;
-}
-
-function describeCard(card: FirstVersion) {
-    return `${card.code} #${card.number} "${card.name}" (${card.faction})`;
-}
-
-// A card-names.json entry is either the name the card went on to have (in any version), or "CODE #number"
-// for when that name alone is still ambiguous. Returns false when there is no match to archive against.
-function matchStruckCard(
-    result: RowResult,
-    firstVersions: Awaited<ReturnType<typeof loadFirstVersions>>,
-    cardNames: Record<string, string>
-) {
-    const fail = (message: string) => {
-        result.errors.push({ column: COLUMNS.name, message });
-        return false;
-    };
-
-    const mapped = cardNames[result.name]?.trim();
-    let candidates: FirstVersion[];
-    if (mapped) {
-        const ref = mapped.match(/^(.+?)\s*#(\d+)$/);
-        if (ref) {
-            const card = firstVersions.byRef.get(refKey(ref[1], parseInt(ref[2], 10)));
-            if (!card) {
-                return fail(`Mapped to "${mapped}" in card-names.json, but no such card exists`);
-            }
-            candidates = [card];
+    const matches = new Map<RowResult, ProjectCard>();
+    let ambiguous = 0;
+    for (const [result, matching] of candidates) {
+        if (matching.length === 1 && rowsByCard.get(matching[0].id) === 1) {
+            matches.set(result, matching[0].card);
         } else {
-            candidates = firstVersions.byAnyVersionName.get(nameKey(mapped)) ?? [];
-            if (candidates.length === 0) {
-                return fail(`Mapped to "${mapped}" in card-names.json, but no version of any card has that name`);
-            }
+            ambiguous++;
         }
-    } else {
-        candidates = firstVersions.byName.get(nameKey(result.name)) ?? [];
-        if (candidates.length === 0) {
-            const renamed = firstVersions.byAnyVersionName.get(nameKey(result.name)) ?? [];
-            return fail(
-                renamed.length > 0
-                    ? `Struck through, but no card's first version is named "${result.name}" - a later version of ${renamed.map(describeCard).join(", ")} is. Map it in card-names.json`
-                    : `Struck through, but no card named "${result.name}" exists in the cards database. Map it in card-names.json`
-            );
+    }
+    return { matches, ambiguous };
+}
+
+// A row predating the history is spread evenly, by sheet position, across its designer's window - from the later of
+// the sheet's creation and their joining the Discord, up to the first revision - so no one day takes their backlog.
+// A row missing from the history arrived after it was analysed, so it is dated to now.
+function assignCreatedDates(
+    results: RowResult[],
+    dates: SheetDates,
+    joinedAt: Map<string, Date>,
+    designerMap: Record<string, string>,
+    now: Date
+) {
+    const assigned = new Map<RowResult, CreatedDate>();
+    const estimated = new Map<string, { result: RowResult; source: DateSource }[]>();
+    // Paired the way the history pairs one version with the next, so a row fixed only here still finds its idea there
+    const links = linkRows(
+        dates.rows.map((row) => row.values),
+        results.map((result) => result.values),
+        dates.columns
+    );
+
+    for (const [index, result] of results.entries()) {
+        const link = links[index];
+        if (link === undefined) {
+            assigned.set(result, { date: now, source: "notInHistory" });
+            continue;
         }
+        const entry = dates.rows[link];
+        if (entry.after) {
+            assigned.set(result, {
+                date: new Date(entry.date),
+                source: "history",
+                spanMs: Date.parse(entry.date) - Date.parse(entry.after)
+            });
+            continue;
+        }
+        const waiting = estimated.get(result.designer) ?? [];
+        waiting.push({ result, source: "predatesHistory" });
+        estimated.set(result.designer, waiting);
     }
 
-    if (candidates.length > 1 && result.card) {
-        const sameFaction = candidates.filter((card) => card.faction === result.card!.faction);
-        candidates = sameFaction.length > 0 ? sameFaction : candidates;
+    const end = Date.parse(dates.firstRevision);
+    const floor = dates.fileCreated ? Math.min(Date.parse(dates.fileCreated), end) : end;
+    for (const [designer, waiting] of estimated) {
+        const joined = joinedAt.get(designerMap[designer])?.getTime();
+        const start = joined !== undefined && joined > floor && joined < end ? joined : floor;
+        waiting.sort((a, b) => a.result.row - b.result.row);
+        waiting.forEach(({ result, source }, index) => {
+            assigned.set(result, {
+                date: new Date(start + ((end - start) * (index + 0.5)) / waiting.length),
+                source
+            });
+        });
     }
-    if (candidates.length > 1) {
-        return fail(
-            `Struck through, but "${mapped || result.name}" matches several cards: ${candidates.map(describeCard).join(", ")}. Map it to one as "CODE #number" in card-names.json`
+    return assigned;
+}
+
+// When each Discord member joined - where it can't be had, estimates start from the sheet's creation instead
+async function fetchJoinDates() {
+    const joinedAt = new Map<string, Date>();
+    try {
+        for (const member of await fetchAllGuildMembers()) {
+            if (member.joinedAt) {
+                joinedAt.set(member.user.id, member.joinedAt);
+            }
+        }
+    } catch (err) {
+        log.warn(
+            `Discord join dates unavailable - estimates start from the sheet's creation (${(err as Error).message})`
         );
     }
-    result.archivedTo = { code: candidates[0].code, number: candidates[0].number };
-    return true;
+    return joinedAt;
+}
+
+function printCreatedDates(ready: RowResult[], createdDates: Map<RowResult, CreatedDate>, dates?: SheetDates) {
+    if (!dates) {
+        log.warn("Created dates: none - every suggestion is dated to now (--without-dates)");
+        return;
+    }
+    const entries = ready.map((result) => createdDates.get(result)!);
+    const of = (source: DateSource) => entries.filter((entry) => entry.source === source);
+    const share = (part: number) => `${part} (${((part / Math.max(entries.length, 1)) * 100).toFixed(1)}%)`;
+    const fromHistory = of("history");
+    const spans = fromHistory.map((entry) => entry.spanMs!).sort((a, b) => a - b);
+    log.info(`Created dates (sheet history ${dates.firstRevision.slice(0, 10)} → ${dates.lastRevision.slice(0, 10)}):`);
+    log.info(`    from the sheet's history:            ${share(fromHistory.length)}`);
+    if (spans.length > 0) {
+        // How tightly each date is pinned down - the gap between the snapshots either side of its arrival, which
+        // says nothing about how long ago that was
+        const bands = [7, 30, 90].map((days, index, all) => {
+            const lower = index === 0 ? 0 : all[index - 1] * DAY_MS;
+            return `${spans.filter((span) => span > lower && span <= days * DAY_MS).length} to ${days} days`;
+        });
+        log.info(`        accuracy, per date:              ${bands.join(" · ")}`);
+        log.info(
+            `        median accuracy:                 ${(spans[Math.floor(spans.length / 2)] / DAY_MS).toFixed(1)} days`
+        );
+    }
+    const byYear = new Map<string, number>();
+    for (const entry of entries) {
+        const year = String(entry.date.getUTCFullYear());
+        byYear.set(year, (byYear.get(year) ?? 0) + 1);
+    }
+    log.info(
+        `    created, by year:                    ${[...byYear.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([year, total]) => `${year} ${total}`)
+            .join(" · ")}`
+    );
+    log.info(`    estimated - predates the history:    ${share(of("predatesHistory").length)}`);
+    log.info(`    dated to now - not found in history: ${share(of("notInHistory").length)}`);
+    if (of("notInHistory").length > 0) {
+        log.warn(
+            "Rows not found in the history couldn't be matched to any row of the sheet's latest analysed version, even " +
+                "by name - re-run analyse-sheet-history if they were added since, or check whether they were renamed here"
+        );
+    }
 }
 
 function tally(results: { key: string }[]) {
@@ -576,6 +596,15 @@ async function main() {
         return process.exit(1);
     }
 
+    const withoutDates = args.includes("--without-dates");
+    const sheetDates = withoutDates ? undefined : readSheetDates();
+    if (!withoutDates && !sheetDates) {
+        log.error(
+            `No ${SHEET_DATES_PATH} - run analyse-sheet-history first, or pass --without-dates to date every suggestion to now`
+        );
+        return process.exit(1);
+    }
+
     const { url, name: dbName } = resolveDatabase(environment);
 
     log.section("The Citadel - Import Suggestions");
@@ -583,37 +612,18 @@ async function main() {
     log.info(`Environment: ${environment} (${dbName})`);
 
     const workbook = await loadWorkbook(file);
-    const sheet = workbook.getWorksheet(SHEET_NAME);
+    const sheet = findSheet(workbook);
     if (!sheet) {
-        log.error(`Sheet "${SHEET_NAME}" not found`);
+        log.error(`Sheet "${SHEET_NAME}" not found, and no other sheet has a "${COLUMNS.name}" header row`);
         return process.exit(1);
     }
-
-    let headerRow: number | undefined;
-    const columnIndex = {} as Record<Column, number>;
-    sheet.eachRow((row, rowNumber) => {
-        if (headerRow !== undefined) {
-            return;
-        }
-        const headers = new Map<string, number>();
-        row.eachCell((cell, col) => {
-            headers.set(plain(readRuns(cell)), col);
-        });
-        if (headers.has(COLUMNS.name)) {
-            headerRow = rowNumber;
-            for (const [key, header] of Object.entries(COLUMNS) as [Column, string][]) {
-                columnIndex[key] = headers.get(header) ?? -1;
-            }
-        }
-    });
-
-    if (headerRow === undefined) {
+    const read = readSheet(sheet);
+    if (!read) {
         log.error(`No header row containing "${COLUMNS.name}" found`);
         return process.exit(1);
     }
-    const missingHeaders = (Object.keys(COLUMNS) as Column[]).filter((key) => columnIndex[key] === -1);
-    if (missingHeaders.length > 0) {
-        log.error(`Missing column(s): ${missingHeaders.map((key) => COLUMNS[key]).join(", ")}`);
+    if (read.missing.length > 0) {
+        log.error(`Missing column(s): ${read.missing.map((key) => COLUMNS[key]).join(", ")}`);
         return process.exit(1);
     }
 
@@ -621,16 +631,8 @@ async function main() {
     const titles: { row: number; name: string; designer: string }[] = [];
     const noDesigner: { row: number; name: string }[] = [];
 
-    for (let rowNumber = headerRow + 1; rowNumber <= sheet.rowCount; rowNumber++) {
-        const row = sheet.getRow(rowNumber);
-        const cells = Object.fromEntries(
-            (Object.keys(COLUMNS) as Column[]).map((key) => [key, readRuns(row.getCell(columnIndex[key]))])
-        ) as Record<Column, Run[]>;
-
+    for (const { row: rowNumber, cells } of read.rows) {
         const name = plain(cells.name);
-        if (name === "") {
-            continue;
-        }
         const designer = plain(cells.designer);
 
         if (plain(cells.type).toLowerCase() === IGNORED_TYPE) {
@@ -644,9 +646,8 @@ async function main() {
 
         const errors: RowError[] = [];
         const card = convertRow(cells, errors);
-        results.push({ row: rowNumber, name, designer, errors, card, struck: isStruck(cells.name) });
+        results.push({ row: rowNumber, name, designer, errors, card, values: rowValues(cells) });
     }
-    const struck = results.filter((result) => result.struck);
 
     const designers = [...new Set(results.map((result) => result.designer))];
     const designerMap = readMapping(DESIGNERS_PATH);
@@ -657,23 +658,29 @@ async function main() {
         await client.connect();
         const db = client.db(dbName);
 
+        // Every row is inserted under a fresh id, so a second run would duplicate the whole sheet
+        const alreadyImported = await db.collection("suggestions").countDocuments({ legacy: true });
+        if (alreadyImported > 0) {
+            log.error(
+                `${environment} already holds ${alreadyImported} legacy suggestion(s) - the import has already run`
+            );
+            process.exitCode = 1;
+            return;
+        }
+
         const ids = [...new Set(designers.map((designer) => designerMap[designer]).filter((id) => !!id))];
         const { names: designerNames, unresolved } = await resolveDiscordIds(ids, db);
 
-        if (struck.length > 0) {
-            const firstVersions = await loadFirstVersions(db);
-            const cardNames = readMapping(CARD_NAMES_PATH);
-            const unmatched = struck.filter((result) => !matchStruckCard(result, firstVersions, cardNames));
-            addMissingMappings(
-                CARD_NAMES_PATH,
-                cardNames,
-                unmatched.map((result) => result.name),
-                'fill in the name each card went on to have, or "CODE #number"'
-            );
-        }
+        const { matches, ambiguous } = await findCardMatches(db, results);
 
         const now = new Date();
+        const createdDates = sheetDates
+            ? assignCreatedDates(results, sheetDates, await fetchJoinDates(), designerMap, now)
+            : new Map<RowResult, CreatedDate>();
         const documents: ICardSuggestion[] = [];
+        // Written once the suggestions exist and have ids - a draft project's card names its suggestion instead,
+        // and beginning the project archives it
+        const draftLinks: { document: ICardSuggestion; card: ProjectCard }[] = [];
         for (const result of results) {
             const discordId = designerMap[result.designer];
             if (!discordId) {
@@ -690,21 +697,33 @@ async function main() {
             if (!result.card || result.errors.length > 0) {
                 continue;
             }
+            const match = matches.get(result);
+            const created = createdDates.get(result)?.date ?? now;
 
             const { value, error } = CardSuggestion.DraftSave.validate(
                 {
-                    created: now,
+                    created,
                     createdBy: discordId,
-                    updated: now,
+                    updated: created,
                     updatedBy: discordId,
-                    draft: true,
+                    draft: false,
+                    legacy: true,
                     card: result.card,
                     derived: deriveFields(result.card.text ?? ""),
                     tags: [],
+                    // What any submitted suggestion carries - only `questions` is left for completing it to fill
+                    pivotPoints: [],
+                    comparableCards: [],
+                    combosWith: [],
                     _metadata: { engagement: { reactions: {} } },
-                    ...(result.archivedTo && {
-                        archived: { reason: "usedInProject", project: result.archivedTo, archivedAt: now }
-                    })
+                    ...(match &&
+                        !match.project.isDraft && {
+                            archived: {
+                                reason: "usedInProject",
+                                project: { code: match.project.code, number: match.number },
+                                archivedAt: now
+                            }
+                        })
                 },
                 { abortEarly: false }
             );
@@ -715,6 +734,9 @@ async function main() {
                 continue;
             }
             documents.push(value as ICardSuggestion);
+            if (match?.project.isDraft) {
+                draftLinks.push({ document: value as ICardSuggestion, card: match });
+            }
         }
 
         const failed = results.filter((result) => result.errors.length > 0);
@@ -736,14 +758,18 @@ async function main() {
         }
 
         log.section("Summary");
-        const readyArchived = ready.filter((result) => result.struck);
         log.info(`Cards found:                  ${results.length + titles.length + noDesigner.length}`);
         log.info(`Ignored (Title):              ${titles.length}`);
         log.info(`Skipped (no designer):        ${noDesigner.length}`);
         log.info(`Failed:                       ${failed.length}`);
+        log.info(`Ready to import:              ${ready.length}`);
         log.info(
-            `Ready to import:              ${ready.length} (${readyArchived.length} archived as used in a project)`
+            `    archived (used in a project):        ${documents.filter((document) => document.archived).length}`
         );
+        log.info(`    linked from a draft project's card:  ${draftLinks.length}`);
+        log.info(`    ambiguous, left to settle on site:   ${ambiguous}`);
+        log.info("");
+        printCreatedDates(ready, createdDates, sheetDates);
         log.info("");
         const readyCards = ready.map((result) => ({ result, card: result.card! }));
         printTally("By faction", tally(readyCards.map(({ card }) => ({ key: card.faction }))));
@@ -751,10 +777,6 @@ async function main() {
         printTally(
             "By designer",
             tally(readyCards.map(({ result }) => ({ key: designerNames.get(designerMap[result.designer])! })))
-        );
-        printTally(
-            "Archived (struck through) by project",
-            tally(readyArchived.map(({ archivedTo }) => ({ key: archivedTo!.code })))
         );
         if (titles.length > 0) {
             log.info(
@@ -796,9 +818,20 @@ async function main() {
             document.id = crypto.randomUUID();
         }
         const inserted = await db.collection("suggestions").insertMany(documents);
-        log.success(
-            `Inserted ${inserted.insertedCount} draft suggestion(s) into ${environment}, ${readyArchived.length} of them archived`
-        );
+        log.success(`Inserted ${inserted.insertedCount} legacy suggestion(s) into ${environment}`);
+        for (const { document, card } of draftLinks) {
+            await db.collection("cards").updateMany(
+                {
+                    project: card.project.number,
+                    number: card.number,
+                    ...(card.version && { version: card.version })
+                },
+                { $set: { suggestionId: document.id } }
+            );
+        }
+        if (draftLinks.length > 0) {
+            log.success(`Linked ${draftLinks.length} draft project card(s) to their suggestion`);
+        }
     } finally {
         await client.close();
         await destroyDiscordClient();

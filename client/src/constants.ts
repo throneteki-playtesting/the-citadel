@@ -57,6 +57,20 @@ export const stackedAvatarClasses =
 export const avatarBubbleClasses =
     "shrink-0 size-10 rounded-full bg-content2 border border-content3 text-foreground/60 flex items-center justify-center cursor-pointer transition-all hover:scale-105";
 
+// A card-corner badge steps back while the card under it is hovered, and forward again when it is itself
+export const cornerBadgeFadeClasses = "transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100";
+
+// Reads as disabled without isDisabled, whose pointer-events-none would stop a tooltip explaining why
+export const inertButtonClasses = "opacity-disabled cursor-default data-[hover=true]:!opacity-disabled";
+
+export const LEGACY_SUGGESTION_DESCRIPTION =
+    "Imported from the old suggestion spreadsheet, still waiting to be completed";
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+// A vertical card's thumbnail width (w-28) - a plot's is derived from it, see cardThumbnailWidthRem
+export const VERTICAL_CARD_WIDTH_REM = 7;
+
 export const stepperSizeClasses = {
     sm: {
         node: "size-6 sm:size-7",

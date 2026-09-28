@@ -4,10 +4,11 @@ import Reveal from "../../components/reveal";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { DeepPartial } from "common/types";
 import { ICardSuggestion } from "common/models/cards";
-import { useGetSuggestionsFeedQuery } from "../../api";
+import { SuggestionMigration, useGetSuggestionMigrationQuery, useGetSuggestionsFeedQuery } from "../../api";
+import { showApiErrorToast } from "../../api/errors";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import { addToast, Badge, Button, Skeleton } from "@heroui/react";
+import { addToast, Badge, Button, Modal, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
 import SectionTitle from "../../components/sectionTitle";
 import CardGrid from "../../components/cardGrid";
 import StatsGrid from "../../components/statsGrid";
@@ -17,15 +18,22 @@ import { ScopeParams, useSearchParamsScope } from "../../hooks/useSearchParamsSc
 import SuggestionCardLink from "./suggestionCardLink";
 import SuggestionsGrid from "./suggestionsGrid";
 import MyDraftsModal from "./myDraftsModal";
+import MyStashDropdown from "./myStashDropdown";
 import { SortOption } from "./suggestionSortOptions";
-import SuggestionSpread from "./suggestionSpread";
-import SuggestionApprovalPanel from "./suggestionApprovalPanel";
+import SuggestionStatistics from "./suggestionStatistics";
 import { suggestionFilterFromParams, suggestionFilterToParams } from "./suggestionFilterUrl";
 import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components/data/suggestionFilter";
 import usePageTitle from "../../hooks/usePageTitle";
 import { usePermission } from "../../hooks/usePermission";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowRight, faCircleQuestion, faFileLines, faGear, faLightbulb } from "@fortawesome/free-solid-svg-icons";
+import {
+    faArrowRight,
+    faBoxOpen,
+    faCircleQuestion,
+    faFileLines,
+    faGear,
+    faLightbulb
+} from "@fortawesome/free-solid-svg-icons";
 import SuggestionsGuideModal from "./suggestionsGuideModal";
 import SuggestionSettingsModal from "./suggestionSettingsModal";
 import LoadingCard from "../../components/loadingCard";
@@ -64,8 +72,15 @@ const URL_OWNED_KEYS = [
     "punishment",
     "naturalTrigger",
     "repeatabilityRestricted",
-    "iconic"
+    "iconic",
+    "legacy",
+    "archived",
+    "developed",
+    "segments"
 ];
+
+// The phone floating column, filling leftwards from the page FAB (Create) - literal classes, so Tailwind finds them
+const FAB_SLOTS = ["right-20", "right-36", "right-52"];
 
 // Caps the Recent Suggestions rail at 2 rows per breakpoint (grid-cols-2/3/4/5) - see the grid below.
 const RECENT_RAIL_ROW_CAP_CLASSES = rowCapClasses([
@@ -86,8 +101,11 @@ export default function Suggestions() {
 function SuggestionsContent() {
     usePageTitle("Suggestions");
     const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
+    const canEditSettings = usePermission(Permission.EDIT_SETTINGS_SUGGESTIONS);
     const { data: feed, isLoading } = useGetSuggestionsFeedQuery();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
+    // Set while the editor is migrating an old forum thread, rather than creating or editing
+    const [migration, setMigration] = useState<SuggestionMigration & { threadId: string }>();
     const [isDraftsOpen, setIsDraftsOpen] = useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     // Auto-opens the first time this browser ever lands on this page - no role/eligibility condition
@@ -111,6 +129,7 @@ function SuggestionsContent() {
         }
     }, [isGuideOpen]);
     const myDraftsCount = feed?.stats.myDrafts;
+    const myLegacyCount = feed?.stats.myLegacy;
 
     // A draft's own detail page has nowhere to render itself - it redirects here with the already-
     // loaded suggestion via router state, consumed once and cleared so a refresh can't reopen it.
@@ -123,6 +142,32 @@ function SuggestionsContent() {
             navigate(location.pathname + location.search, { replace: true, state: null });
         }
     }, [location.state, location.pathname, location.search, navigate]);
+
+    // Discord's /migrate links here with the thread's id - looked up once, then dropped from the url so a
+    // refresh can't start the same migration over
+    const [migrateThreadId, setMigrateThreadId] = useState(
+        () => new URLSearchParams(location.search).get("migrate") ?? undefined
+    );
+    const { data: migrationData, error: migrationError } = useGetSuggestionMigrationQuery(migrateThreadId ?? "", {
+        skip: !migrateThreadId
+    });
+    useEffect(() => {
+        if (!migrateThreadId || (!migrationData && !migrationError)) {
+            return;
+        }
+        if (migrationData) {
+            const { thread } = migrationData;
+            setMigration({ ...migrationData, threadId: migrateThreadId });
+            // Submitted straight away, never a draft - and the thread gives what it can of the card to start from
+            setEditing({ draft: false, card: { name: thread.name, faction: thread.faction, type: thread.type } });
+        } else {
+            showApiErrorToast(migrationError, { title: "Can't migrate this thread" });
+        }
+        setMigrateThreadId(undefined);
+        const params = new URLSearchParams(location.search);
+        params.delete("migrate");
+        navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }, [migrateThreadId, migrationData, migrationError, location.pathname, location.search, navigate]);
 
     // All "browse everything" state is shareable via the url, seeded once on mount. `hasOpenedAll` is
     // sticky (unlike `isBrowsingAll`) so SuggestionsGrid mounts once and keeps its own state thereafter.
@@ -166,6 +211,27 @@ function SuggestionsContent() {
         setHasOpenedAll(true);
         setBrowseSessionKey((key) => key + 1);
     };
+
+    // Legacy suggestions are submitted rather than drafts, so they live in the browse page, not a modal
+    const openMyLegacy = () => openAll({ filter: { mine: true, legacy: true } });
+
+    // With any legacy suggestions to hand, drafts and legacy share one "My Stash" menu - otherwise My Drafts
+    // stays exactly as it was, for the many who never had a legacy suggestion at all
+    const hasStash = canCreate && !!myLegacyCount;
+    const stashCount = (myDraftsCount ?? 0) + (myLegacyCount ?? 0);
+    const stashDropdownProps = {
+        draftsCount: myDraftsCount ?? 0,
+        legacyCount: myLegacyCount ?? 0,
+        onOpenDrafts: () => setIsDraftsOpen(true),
+        onOpenLegacy: openMyLegacy
+    };
+
+    // Only the buttons actually shown take a slot, so the column never leaves a gap
+    const floatingButtons = [
+        (hasStash || (canCreate && !!myDraftsCount)) && "drafts",
+        canEditSettings && "settings"
+    ].filter((key): key is string => !!key);
+    const fabSlot = (key: string) => FAB_SLOTS[floatingButtons.indexOf(key)];
 
     let sectionIndex = 0;
 
@@ -214,7 +280,21 @@ function SuggestionsContent() {
                                 Create Suggestion
                             </Button>
                         )}
-                        {canCreate && (
+                        {hasStash && (
+                            <Badge content={stashCount} color="primary" showOutline={false} className="hidden sm:flex">
+                                <MyStashDropdown {...stashDropdownProps}>
+                                    <Button
+                                        className="hidden sm:inline-flex"
+                                        size="sm"
+                                        variant="flat"
+                                        startContent={<FontAwesomeIcon icon={faBoxOpen} />}
+                                    >
+                                        My Stash
+                                    </Button>
+                                </MyStashDropdown>
+                            </Badge>
+                        )}
+                        {canCreate && !hasStash && (
                             <Badge
                                 content={myDraftsCount}
                                 color="primary"
@@ -257,7 +337,11 @@ function SuggestionsContent() {
                             <StatCard
                                 label="Active Suggestions"
                                 value={feed?.stats.total}
-                                footer={feed && `across ${feed.stats.totalSubmitters} users`}
+                                footer={
+                                    feed &&
+                                    `across ${feed.stats.totalSubmitters} users` +
+                                        (feed.stats.legacy > 0 ? `, including ${feed.stats.legacy} legacy` : "")
+                                }
                                 isLoading={isLoading}
                                 onPress={() => openAll()}
                             />
@@ -271,9 +355,9 @@ function SuggestionsContent() {
                             <StatCard
                                 label="New Suggestions"
                                 value={feed?.stats.unreacted}
-                                footer="you haven't reacted to yet"
+                                footer="this week you haven't reacted to"
                                 isLoading={isLoading}
-                                onPress={() => openAll({ filter: { unseen: true }, sort: "updated" })}
+                                onPress={() => openAll({ filter: { unseen: true }, sort: "created" })}
                             />
                             <StatCard
                                 label="My Suggestions"
@@ -330,13 +414,11 @@ function SuggestionsContent() {
                         </Reveal>
                     )}
 
-                    <Reveal index={sectionIndex++} className="flex flex-col md:flex-row gap-2 md:gap-4">
-                        <div className="md:flex-1 min-w-0 space-y-2">
-                            <SuggestionSpread
-                                onSelect={(preset) => openAll({ filter: { ...EMPTY_SUGGESTION_FILTER, ...preset } })}
-                            />
-                        </div>
-                        <SuggestionApprovalPanel className="md:flex-1 min-w-0 flex flex-col gap-2" />
+                    <Reveal index={sectionIndex++}>
+                        <SuggestionStatistics
+                            isActive={!isBrowsingAll}
+                            onOpen={(preset) => openAll({ filter: { ...EMPTY_SUGGESTION_FILTER, ...preset } })}
+                        />
                     </Reveal>
                 </div>
                 {hasOpenedAll ? (
@@ -358,7 +440,11 @@ function SuggestionsContent() {
             <EditSuggestionModal
                 isOpen={!!editing}
                 suggestion={editing}
-                onClose={() => setEditing(undefined)}
+                migration={migration}
+                onClose={() => {
+                    setEditing(undefined);
+                    setMigration(undefined);
+                }}
                 onSave={(suggestion) =>
                     addToast({
                         title: "Successfully saved",
@@ -369,6 +455,15 @@ function SuggestionsContent() {
                 // Reopens "My Drafts" behind the now-closed editor when it was an existing draft.
                 onReturnToDrafts={() => setIsDraftsOpen(true)}
             />
+
+            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} placement="center" size="sm">
+                <ModalContent>
+                    <ModalBody className="flex flex-row items-center gap-3 py-6">
+                        <Spinner size="sm" />
+                        <span className="text-sm text-foreground/70">Looking up your Discord thread...</span>
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
 
             <MyDraftsModal
                 isOpen={isDraftsOpen}
@@ -385,13 +480,8 @@ function SuggestionsContent() {
 
             <SuggestionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
-            <PermissionGate requires={Permission.EDIT_SETTINGS_SUGGESTIONS}>
-                <div
-                    className={classNames("sm:hidden fixed bottom-6 z-20", {
-                        "right-36": canCreate && !!myDraftsCount,
-                        "right-20": !(canCreate && !!myDraftsCount)
-                    })}
-                >
+            {canEditSettings && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("settings"))}>
                     <Button
                         isIconOnly
                         radius="full"
@@ -404,9 +494,27 @@ function SuggestionsContent() {
                         <FontAwesomeIcon icon={faGear} />
                     </Button>
                 </div>
-            </PermissionGate>
-            {canCreate && !!myDraftsCount && (
-                <div className="sm:hidden fixed bottom-6 right-20 z-20">
+            )}
+            {hasStash && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <Badge content={stashCount} color="primary" showOutline={false}>
+                        <MyStashDropdown {...stashDropdownProps}>
+                            <Button
+                                isIconOnly
+                                radius="full"
+                                size="lg"
+                                color="default"
+                                className="shadow-lg"
+                                aria-label="My Stash"
+                            >
+                                <FontAwesomeIcon icon={faBoxOpen} />
+                            </Button>
+                        </MyStashDropdown>
+                    </Badge>
+                </div>
+            )}
+            {canCreate && !hasStash && !!myDraftsCount && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
                     <Badge content={myDraftsCount} color="primary" showOutline={false}>
                         <Button
                             isIconOnly

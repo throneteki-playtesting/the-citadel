@@ -7,7 +7,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import { IRewardPunishmentOption, ISettingsMap, ISuggestionsSettings, SettingsType } from "common/models/settings";
 import { dataService } from "@/services";
 import { getContext } from "@/middleware/context";
-import { validateRequest } from "@/middleware/permissions";
+import { PermissionErrorResponse, validateRequest } from "@/middleware/permissions";
 import { hasPermission } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
@@ -16,23 +16,30 @@ import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
 
-// A settings document is per-`type`, so its permission is derived - an unrecognised `:type` is refused
-// rather than 500ing or silently bypassing auth.
-function permissionFor(type: string): Permission | undefined {
-    const candidate = `EDIT_SETTINGS_${type.toUpperCase()}`;
-    return Object.values(Permission).includes(candidate as Permission) ? (candidate as Permission) : undefined;
+type Access = "read" | "edit";
+
+// Reading a settings document is for anything which draws with it, so it follows its area's own read permission;
+// changing it takes the settings permission alone. An unrecognised `:type` has neither, so it's refused rather
+// than 500ing or silently bypassing auth.
+const SETTINGS_PERMISSIONS: Record<SettingsType, Record<Access, Permission>> = {
+    suggestions: { read: Permission.READ_SUGGESTIONS, edit: Permission.EDIT_SETTINGS_SUGGESTIONS }
+};
+
+function permissionsFor(type: string) {
+    return Object.hasOwn(SETTINGS_PERMISSIONS, type) ? SETTINGS_PERMISSIONS[type as SettingsType] : undefined;
 }
 
 function validateType(type: string): asserts type is SettingsType {
-    if (!permissionFor(type)) {
+    if (!permissionsFor(type)) {
         throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Unknown settings type "${type}"`);
     }
 }
 
-const validateSettingsPermission = validateRequest<{ type: string }, unknown, unknown, unknown>((principal, req) => {
-    const permission = permissionFor(req.params.type);
-    return !!permission && hasPermission(principal, permission);
-});
+const validateSettingsPermission = (access: Access) =>
+    validateRequest<{ type: string }, unknown, unknown, unknown>((principal, req) => {
+        const permission = permissionsFor(req.params.type)?.[access];
+        return !!permission && hasPermission(principal, permission);
+    });
 
 function draftSchemaFor(type: SettingsType): SchemaType {
     switch (type) {
@@ -71,11 +78,7 @@ async function assertNoBlockedRemovals(current: ISuggestionsSettings | undefined
     }
 
     if (blocked.length > 0) {
-        throw new ApiErrorResponse(
-            StatusCodes.CONFLICT,
-            "Invalid Data",
-            `${blocked.join("; ")} - clear those first`
-        );
+        throw new ApiErrorResponse(StatusCodes.CONFLICT, "Invalid Data", `${blocked.join("; ")} - clear those first`);
     }
 }
 
@@ -105,11 +108,15 @@ function changedTagIds(current: IRewardPunishmentOption[] | undefined, next: IRe
 
 router.get(
     "/:type",
-    validateSettingsPermission,
+    validateSettingsPermission("read"),
     celebrate({ [Segments.QUERY]: { includeUsage: Joi.boolean().default(false) } }),
     asyncHandler<{ type: string }, unknown, unknown, { includeUsage: boolean }>(async (req, res) => {
         const { type } = req.params;
         validateType(type);
+        // Usage counts are the settings modal's delete-guard - tooling for editing, so reading alone doesn't reach them
+        if (req.query.includeUsage && !hasPermission(getContext().principal, SETTINGS_PERMISSIONS[type].edit)) {
+            throw new PermissionErrorResponse();
+        }
 
         const data = await dataService.settings.getByType(type);
         if (!data) {
@@ -141,7 +148,7 @@ router.get(
 
 router.patch(
     "/:type",
-    validateSettingsPermission,
+    validateSettingsPermission("edit"),
     asyncHandler<{ type: string }, unknown, Partial<ISettingsMap[SettingsType]>>(async (req, res) => {
         const { type } = req.params;
         validateType(type);

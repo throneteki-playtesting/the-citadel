@@ -1,4 +1,4 @@
-import { FormEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { omit } from "lodash-es";
 import {
     addToast,
@@ -23,9 +23,18 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faPencil, faPlus, faTrash, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { isDirty } from "common/utils";
-import { IRewardPunishmentOption, ISuggestionsSettings } from "common/models/settings";
+import {
+    DEFAULT_NEUTRAL_WEIGHT,
+    DEFAULT_TREND_RANGE,
+    IRewardPunishmentOption,
+    ISuggestionsSettings,
+    TrendRange
+} from "common/models/settings";
+import { isTrendRange, TREND_RANGES } from "./trendRange";
 import { RewardPunishmentOption } from "common/models/schemas";
 import { useGetSettingsQuery, useUpdateSettingsMutation } from "../../api";
+import Permission from "common/models/permissions";
+import { usePermission } from "../../hooks/usePermission";
 import { useFormValidation } from "../../hooks/useFormValidation";
 import FormValidationSummary from "../../components/formValidationSummary";
 import ComboBox from "../../components/combobox";
@@ -58,6 +67,8 @@ type Draft = IRewardPunishmentOption;
 type SettingsDraft = {
     minimumLikesThreshold: number;
     loyaltyTags: string[];
+    neutralWeight: number;
+    defaultTrendRange: TrendRange;
     rewardTypes: OptionWithUsage[];
     punishmentTypes: OptionWithUsage[];
 };
@@ -89,12 +100,17 @@ function hasChangedTags(original: OptionWithUsage[], current: OptionWithUsage[])
 /** Reward/punishment type settings, as a modal rather than its own page. One edit session: every row
  *  action and scalar field mutates a single local draft until the footer Save. */
 export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+    // Subscribed from the moment the page mounts this (closed) modal rather than from when it opens, so the settings
+    // are already cached by the time anyone does. Its tags keep that cache current - a save, or any change to a
+    // suggestion (which moves usage counts), refetches it in the background. Only an editor subscribes: nobody else
+    // can open the modal, and the usage counts are the edit permission's alone.
+    const canEditSettings = usePermission(Permission.EDIT_SETTINGS_SUGGESTIONS);
     const {
         data: rawData,
-        isLoading,
+        isFetching,
         isError,
         refetch
-    } = useGetSettingsQuery({ type: "suggestions", includeUsage: true }, { skip: !isOpen });
+    } = useGetSettingsQuery({ type: "suggestions", includeUsage: true }, { skip: !canEditSettings });
     const data = rawData as SettingsResponse | undefined;
     const [updateSettings, { isLoading: isSaving }] = useUpdateSettingsMutation();
 
@@ -108,22 +124,27 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
         }
     }, [tab]);
 
-    // Seeded once from the first successful load after opening, so a background refetch mid-edit can't
-    // clobber it. `original` is the frozen snapshot dirty comparisons run against.
+    // Seeded once per open, so a background refetch mid-edit can't clobber it - from the cache, unless a refetch is
+    // already under way. Reopening straight after a save is that case: the save invalidates the cache, whose refetch
+    // starts the moment the save lands, so the old values are never mistaken for the settled ones. A layout effect,
+    // so an open with the settings to hand paints the fields straight away rather than a frame of skeleton first.
+    // `original` is the frozen snapshot dirty comparisons run against.
     const [draft, setDraft] = useState<SettingsDraft | undefined>(undefined);
     const originalRef = useRef<SettingsDraft | undefined>(undefined);
-    useEffect(() => {
-        if (data && !draft) {
+    useLayoutEffect(() => {
+        if (isOpen && data && !draft && !isFetching) {
             const snapshot: SettingsDraft = {
                 minimumLikesThreshold: data.minimumLikesThreshold,
                 loyaltyTags: data.loyaltyTags,
+                neutralWeight: data.neutralWeight ?? DEFAULT_NEUTRAL_WEIGHT,
+                defaultTrendRange: isTrendRange(data.defaultTrendRange) ? data.defaultTrendRange : DEFAULT_TREND_RANGE,
                 rewardTypes: data.rewardTypes,
                 punishmentTypes: data.punishmentTypes
             };
             setDraft(snapshot);
             originalRef.current = snapshot;
         }
-    }, [data, draft]);
+    }, [isOpen, data, draft, isFetching]);
     useEffect(() => {
         if (!isOpen) {
             setDraft(undefined);
@@ -184,6 +205,8 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                 data: {
                     minimumLikesThreshold: draft.minimumLikesThreshold,
                     loyaltyTags: draft.loyaltyTags,
+                    neutralWeight: draft.neutralWeight,
+                    defaultTrendRange: draft.defaultTrendRange,
                     rewardTypes: stripUsage(draft.rewardTypes),
                     punishmentTypes: stripUsage(draft.punishmentTypes)
                 }
@@ -201,9 +224,7 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
             <ModalContent>
                 <ModalHeader>Suggestion Settings</ModalHeader>
                 <ModalBody className="gap-6 pb-6">
-                    {isLoading || !draft ? (
-                        <SettingsSkeleton />
-                    ) : isError ? (
+                    {isError && !draft ? (
                         <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
                             <FontAwesomeIcon icon={faTriangleExclamation} className="text-4xl text-warning" />
                             <div className="text-sm text-foreground/70">
@@ -213,6 +234,8 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                 Retry
                             </Button>
                         </div>
+                    ) : !draft ? (
+                        <SettingsSkeleton />
                     ) : (
                         <>
                             <div className="flex flex-col gap-3">
@@ -220,7 +243,7 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                     <Input
                                         type="number"
                                         label="Minimum likes threshold"
-                                        description="Likes a suggestion needs before it's flagged as awaiting approval"
+                                        description="Likes needed to await approval"
                                         min={1}
                                         value={String(draft.minimumLikesThreshold ?? "")}
                                         onValueChange={(value) =>
@@ -233,10 +256,47 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                             )
                                         }
                                     />
+                                    <Input
+                                        type="number"
+                                        label="Neutral weight"
+                                        description="Neutral's target size in Suggestion Spread, as a multiple of the average faction"
+                                        min={1}
+                                        max={10}
+                                        step={0.5}
+                                        value={String(draft.neutralWeight ?? "")}
+                                        onValueChange={(value) =>
+                                            setDraft(
+                                                (previous) =>
+                                                    previous && {
+                                                        ...previous,
+                                                        neutralWeight: value ? Number(value) : 0
+                                                    }
+                                            )
+                                        }
+                                    />
+                                    <Select
+                                        aria-label="Default chart range"
+                                        label="Default chart range"
+                                        description="The range Suggestion Statistics opens on"
+                                        disallowEmptySelection
+                                        selectedKeys={[draft.defaultTrendRange]}
+                                        onSelectionChange={(keys) => {
+                                            const picked = String([...keys][0]);
+                                            if (isTrendRange(picked)) {
+                                                setDraft(
+                                                    (previous) => previous && { ...previous, defaultTrendRange: picked }
+                                                );
+                                            }
+                                        }}
+                                    >
+                                        {TREND_RANGES.map((option) => (
+                                            <SelectItem key={option.key}>{option.label}</SelectItem>
+                                        ))}
+                                    </Select>
                                     <Select
                                         aria-label="Loyalty tags"
                                         label="Loyalty tags"
-                                        description="Tags which, when present on a selected reward, trigger the loyalty-consistency checklist rule"
+                                        description="Reward tags that trigger the loyalty checklist rule"
                                         selectionMode="multiple"
                                         placeholder="No loyalty tags selected"
                                         classNames={{ value: "uppercase tracking-wide" }}
@@ -334,23 +394,42 @@ function TabTitle({ label, isDirty }: { label: string; isDirty: boolean }) {
     );
 }
 
+// Shaped like what it stands in for: the four fields with their descriptions, the tabs, and a reward list's search,
+// add button and rows
 function SettingsSkeleton() {
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex flex-col gap-3">
-                <Skeleton className="h-6 w-32 rounded-lg" />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Skeleton className="h-14 w-full rounded-lg" />
-                    <Skeleton className="h-14 w-full rounded-lg" />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={index} className="flex flex-col gap-1.5">
+                        <Skeleton className="h-14 w-full rounded-medium" />
+                        <Skeleton className="h-3 w-2/3 rounded-full" />
+                    </div>
+                ))}
             </div>
             <div className="flex flex-col gap-3">
-                <Skeleton className="h-6 w-56 rounded-lg" />
-                <Skeleton className="h-10 w-full rounded-lg" />
-                <div className="flex flex-col gap-2">
-                    {Array.from({ length: 4 }).map((_, index) => (
-                        <Skeleton key={index} className="h-16 w-full rounded-lg" />
-                    ))}
+                <div className="flex items-center gap-6 h-12">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-24 rounded-full" />
+                </div>
+                <div className="flex flex-col gap-3 pt-3">
+                    <div className="flex gap-2">
+                        <Skeleton className="h-8 flex-1 rounded-small" />
+                        <Skeleton className="h-8 w-36 rounded-small" />
+                    </div>
+                    <div className="flex flex-col divide-y divide-divider rounded-lg border border-content3 px-3">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                            <div key={index} className="flex items-center gap-3 py-2.5">
+                                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                    <Skeleton className="h-4 w-40 max-w-full rounded-full" />
+                                    <Skeleton className="h-3 w-2/3 rounded-full" />
+                                </div>
+                                <Skeleton className="h-5 w-10 rounded-full shrink-0" />
+                                <Skeleton className="size-8 rounded-small shrink-0" />
+                                <Skeleton className="size-8 rounded-small shrink-0" />
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
@@ -458,10 +537,10 @@ function RewardPunishmentList({
         }
     }, []);
 
-    const toggleEnabledRow = useCallback((id: string) => guardExisting(id, onToggleEnabled), [
-        guardExisting,
-        onToggleEnabled
-    ]);
+    const toggleEnabledRow = useCallback(
+        (id: string) => guardExisting(id, onToggleEnabled),
+        [guardExisting, onToggleEnabled]
+    );
 
     const deleteRow = useCallback((id: string) => guardExisting(id, onDelete), [guardExisting, onDelete]);
 
@@ -714,12 +793,7 @@ function RowSummary({
 
     const actions = (
         <div className="flex items-center gap-1 shrink-0">
-            <Switch
-                size="sm"
-                isSelected={option.enabled}
-                isDisabled={isOtherEditing}
-                onValueChange={onToggleEnabled}
-            />
+            <Switch size="sm" isSelected={option.enabled} isDisabled={isOtherEditing} onValueChange={onToggleEnabled} />
             <Button
                 isIconOnly
                 size="sm"

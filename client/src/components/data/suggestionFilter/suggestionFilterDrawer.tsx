@@ -1,6 +1,16 @@
-import { Button, ButtonGroup, DrawerBody, DrawerFooter, DrawerHeader, Input, SharedSelection } from "@heroui/react";
+import {
+    Button,
+    ButtonGroup,
+    Divider,
+    DrawerBody,
+    DrawerFooter,
+    DrawerHeader,
+    Input,
+    SharedSelection
+} from "@heroui/react";
 import { useMemo, useState } from "react";
 import classNames from "classnames";
+import { AnimatePresence, motion } from "framer-motion";
 import {
     ChallengeIcon,
     challengeIcons,
@@ -12,18 +22,37 @@ import {
     types
 } from "common/models/cards";
 import { factionNames, typeNames, escapeRegExp } from "common/utils";
-import { useGetSettingsQuery } from "../../../api";
+import { EASE_STANDARD, factionBgClasses, factionBorderClasses } from "../../../constants";
+import { useGetSettingsQuery, useGetSuggestionsFeedQuery } from "../../../api";
+import Permission from "common/models/permissions";
+import { usePermission } from "../../../hooks/usePermission";
 import { IRewardPunishmentOption } from "common/models/settings";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEyeSlash, faThumbsDown, faThumbsUp, IconDefinition } from "@fortawesome/free-solid-svg-icons";
+import { faEyeSlash, faThumbsDown, faThumbsUp, faXmark, IconDefinition } from "@fortawesome/free-solid-svg-icons";
 import ThronesIcon from "../../thronesIcon";
 import UserAvatar from "../../userAvatar";
 import SearchableMultiSelect from "../searchableMultiSelect";
 import { ToggleButtonGroup, BooleanToggle, NumericFilterInput } from "../filters";
 import { NumericFilterValue, decodeNumericOperators, numericOperators } from "../filters/numeric";
-import { EMPTY_SUGGESTION_FILTER, isSuggestionFilterActive, SuggestionFilterValue } from "./types";
+import { EMPTY_SUGGESTION_FILTER, isSuggestionFilterActive, SuggestionFilterValue, SuggestionSegment } from "./types";
 
 const EMPTY_OPTIONS: IRewardPunishmentOption[] = [];
+
+const SEGMENT_SECTION_FOLD = { duration: 0.25, ease: EASE_STANDARD } as const;
+
+// One chip per faction, in the order first picked - its types in words, or "All Cards" when it's whole
+function segmentChips(segments: SuggestionSegment[]) {
+    const byFaction = new Map<Faction, SuggestionSegment[]>();
+    for (const segment of segments) {
+        byFaction.set(segment.faction, [...(byFaction.get(segment.faction) ?? []), segment]);
+    }
+    return [...byFaction.entries()].map(([faction, picked]) => ({
+        faction,
+        label: picked.some((segment) => !segment.type)
+            ? "All Cards"
+            : picked.map((segment) => typeNames[segment.type!]).join(", ")
+    }));
+}
 
 const REACTION_FILTER_OPTIONS: { key: ReactionType; label: string; icon: IconDefinition }[] = [
     { key: "like", label: "Liked", icon: faThumbsUp },
@@ -55,6 +84,10 @@ type InternalState = {
     myReactions: ReactionType[];
     tags: string[];
     iconic?: boolean;
+    legacy?: boolean;
+    archived: boolean;
+    developed: boolean;
+    segments: SuggestionSegment[];
 };
 
 function decodeText(value: unknown): string {
@@ -96,7 +129,11 @@ function decode(value: SuggestionFilterValue): InternalState {
         approvedFilter: value.approvedFilter,
         myReactions: value.myReactions ?? [],
         tags: value.tags ?? [],
-        iconic: value.iconic
+        iconic: value.iconic,
+        legacy: value.legacy,
+        archived: value.archived === true,
+        developed: value.developed === true,
+        segments: value.segments ?? []
     };
 }
 
@@ -141,7 +178,11 @@ function compose(state: InternalState): SuggestionFilterValue {
         approvedFilter: state.approvedFilter,
         myReactions: state.myReactions.length > 0 ? state.myReactions : undefined,
         tags: state.tags.length > 0 ? state.tags : undefined,
-        iconic: state.iconic
+        iconic: state.iconic,
+        legacy: state.legacy,
+        archived: state.archived || undefined,
+        developed: state.developed || undefined,
+        segments: state.segments.length > 0 ? state.segments : undefined
     };
 }
 
@@ -207,9 +248,7 @@ function UserMultiSelectField({ placeholder, options, value, onChange }: UserMul
 
     const items = useMemo(() => {
         const term = search.trim().toLowerCase();
-        const filtered = term
-            ? options.filter((option) => option.displayname.toLowerCase().includes(term))
-            : options;
+        const filtered = term ? options.filter((option) => option.displayname.toLowerCase().includes(term)) : options;
         const missingSelected = options.filter(
             (option) => value.includes(option.discordId) && !filtered.some((f) => f.discordId === option.discordId)
         );
@@ -265,6 +304,9 @@ type SuggestionFilterDrawerProps = {
 
 const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: SuggestionFilterDrawerProps) => {
     const [internal, setInternal] = useState<InternalState>(() => decode(value));
+    const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
+    const { data: feed } = useGetSuggestionsFeedQuery(undefined, { skip: !canManageArchive });
+    const hasPossiblyDeveloped = (feed?.stats.possiblyDeveloped ?? 0) > 0;
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
     const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_OPTIONS;
     const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_OPTIONS;
@@ -293,6 +335,57 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
         <>
             <DrawerHeader>Filter Suggestions</DrawerHeader>
             <DrawerBody className="gap-2 py-2">
+                {/* A Suggestion Statistics selection - pairs the faction and type pickers below can't express, so
+                    they get their own section, and picking either below replaces them. It folds away once its last
+                    chip goes; the negative margin cancels the body's gap, so a folded section leaves no trace. */}
+                <AnimatePresence initial={false}>
+                    {internal.segments.length > 0 && (
+                        <motion.div
+                            key="segments"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={SEGMENT_SECTION_FOLD}
+                            className="-mb-2 overflow-hidden"
+                        >
+                            <div className="flex flex-col gap-2 pb-4">
+                                <div className="text-xs font-semibold text-default-500">Statistics Segment Filter</div>
+                                <div className="flex flex-wrap gap-1">
+                                    {/* CardBadge's look (faction tint and border), with the faction's icon in
+                                        place of a card's type */}
+                                    {segmentChips(internal.segments).map(({ faction, label }) => (
+                                        <span
+                                            key={faction}
+                                            className={classNames(
+                                                "inline-flex items-center gap-1 align-middle pl-2 pr-1 py-0.5 rounded-full border text-xs font-medium min-w-0",
+                                                factionBgClasses[faction],
+                                                factionBorderClasses[faction]
+                                            )}
+                                        >
+                                            <ThronesIcon name={faction} className="shrink-0" />
+                                            <span className="truncate">{label}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    update({
+                                                        segments: internal.segments.filter(
+                                                            (segment) => segment.faction !== faction
+                                                        )
+                                                    })
+                                                }
+                                                aria-label={`Remove ${factionNames[faction]}`}
+                                                className="shrink-0 ml-0.5 cursor-pointer text-foreground/50 hover:text-danger"
+                                            >
+                                                <FontAwesomeIcon icon={faXmark} className="text-[0.6rem]" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <Divider className="mt-2" />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
                 <div className="text-xs font-semibold text-default-500">Suggestion Filters</div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <ToggleButtonGroup
@@ -312,6 +405,26 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                         value={internal.iconic}
                         onChange={(iconic) => update({ iconic })}
                     />
+                    <BooleanToggle
+                        trueLabel="Legacy"
+                        falseLabel="Not Legacy"
+                        value={internal.legacy}
+                        onChange={(legacy) => update({ legacy })}
+                    />
+                    {canManageArchive && (
+                        <ToggleButtonGroup
+                            options={[{ key: "archived", label: "Archived" }]}
+                            value={internal.archived ? ["archived"] : []}
+                            onChange={(next) => update({ archived: next.includes("archived") })}
+                        />
+                    )}
+                    {canManageArchive && (hasPossiblyDeveloped || internal.developed) && (
+                        <ToggleButtonGroup
+                            options={[{ key: "developed", label: "May Be Developed" }]}
+                            value={internal.developed ? ["developed"] : []}
+                            onChange={(next) => update({ developed: next.includes("developed") })}
+                        />
+                    )}
                 </div>
                 <ToggleButtonGroup
                     options={[
@@ -377,7 +490,7 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                             icon: <ThronesIcon name={faction} />
                         }))}
                         value={internal.factions}
-                        onChange={(factions) => update({ factions })}
+                        onChange={(factions) => update({ factions, segments: [] })}
                     />
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                         <ToggleButtonGroup
@@ -387,7 +500,7 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                                 icon: <ThronesIcon name={type} />
                             }))}
                             value={internal.types}
-                            onChange={(types) => update({ types })}
+                            onChange={(types) => update({ types, segments: [] })}
                         />
                         <ToggleButtonGroup
                             options={challengeIcons.map((icon) => ({

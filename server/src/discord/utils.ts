@@ -33,6 +33,8 @@ export const labelEmojis = {
 
 export const colors = {
     review: "#660087",
+    // The site's own primary - for messages about the Citadel itself rather than a faction's card
+    citadel: "#C5A059",
     baratheon: "#e3d852",
     greyjoy: "#1d7a99",
     lannister: "#c00106",

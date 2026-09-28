@@ -1,8 +1,10 @@
 import {
     ActionRowBuilder,
+    AnyThreadChannel,
     AttachmentBuilder,
     ButtonBuilder,
     ButtonStyle,
+    Channel,
     ContainerBuilder,
     DiscordAPIError,
     ForumChannel,
@@ -29,12 +31,17 @@ import { asPNG } from "@/rendering";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { createSyncEmitter } from "@/services/sseService";
 import { toDiscord } from "common/richText/toDiscord";
+import { closeLegacyThread } from "./legacySuggestionThreads";
 
-const FORUM_NAME = "suggestion-forum";
+export const FORUM_NAME = "suggestion-forum";
 // Discord's own cap on a thread's name
 const THREAD_NAME_MAX = 100;
 // Shared with server/src/discord/buttons/, which routes a click back here by this customId prefix
 export const SUGGESTION_REACTION_PREFIX = "suggestion-reaction";
+
+export function isSuggestionForumThread(channel: Channel | null | undefined): channel is AnyThreadChannel {
+    return !!channel?.isThread() && !!channel.parent?.name.endsWith(FORUM_NAME);
+}
 
 const syncSuggestionForumMutex = new Mutex();
 
@@ -166,6 +173,11 @@ async function createSuggestionThread(
     merge(suggestion, {
         _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date(), lastSyncedSnapshot: snapshot } }
     });
+
+    const legacyUrl = suggestion._metadata?.discord?.legacyUrl;
+    if (legacyUrl) {
+        await closeLegacyThread(legacyUrl, thread.url);
+    }
     return suggestion;
 }
 
@@ -203,8 +215,7 @@ export async function onSuggestionReactionChanged(suggestion: ICardSuggestion) {
         if (!starter) {
             return;
         }
-        const container = await buildContainer(suggestion, suggestionImageFilename(suggestion));
-        await starter.edit({ components: [container] });
+        await starter.edit({ components: await buildComponents(suggestion, suggestionImageFilename(suggestion)) });
     });
 }
 
@@ -292,7 +303,9 @@ export async function onSuggestionForumMessageDeleted(messageUrl: string) {
 
     for (const suggestion of suggestions) {
         if (suggestion._metadata) {
-            delete suggestion._metadata.discord;
+            // Where it was migrated from is a fact about the suggestion, not about the thread just lost
+            const legacyUrl = suggestion._metadata.discord?.legacyUrl;
+            suggestion._metadata.discord = legacyUrl ? { legacyUrl } : undefined;
         }
     }
     suggestions = await dataService.suggestions.update(suggestions, true, false, false);
@@ -540,9 +553,28 @@ function buildReactionRow(suggestion: ICardSuggestion): ActionRowBuilder<ButtonB
     );
 }
 
+/** Sits above the card of a suggestion migrated from an older forum thread, pointing back at it */
+function legacyAlert(legacyUrl: string) {
+    return new ContainerBuilder()
+        .setAccentColor(resolveColor(colors.citadel))
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                "### 📜 Migrated from a previous thread\n" +
+                    `This suggestion was first posted and discussed in [an earlier thread](${legacyUrl}). ` +
+                    "Visit it for the previous conversation and context."
+            )
+        );
+}
+
 /** Everything but the rendered card image - lets a reaction-only change refresh the button labels
  *  without re-rendering/re-uploading the PNG. */
-export async function buildContainer(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder> {
+export async function buildComponents(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder[]> {
+    const legacyUrl = suggestion._metadata?.discord?.legacyUrl;
+    const container = await buildContainer(suggestion, filename);
+    return legacyUrl ? [legacyAlert(legacyUrl), container] : [container];
+}
+
+async function buildContainer(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder> {
     const heading = `## Card Suggestion\n<@${suggestion.createdBy}> has submitted **${suggestion.card.name}** for consideration.`;
     const container = new ContainerBuilder()
         .setAccentColor(resolveColor(colors[suggestion.card.faction]))
@@ -586,14 +618,12 @@ async function buildStarterMessage(
     const { buffer } = await asPNG(render);
     const attachment = new AttachmentBuilder(buffer, { name: filename });
 
-    const container = await buildContainer(suggestion, filename);
-
     return {
         options: {
             flags: MessageFlags.IsComponentsV2,
             allowedMentions: { parse: ["users"] },
             files: [attachment],
-            components: [container]
+            components: await buildComponents(suggestion, filename)
         },
         snapshot: watchedSnapshot(suggestion)
     };

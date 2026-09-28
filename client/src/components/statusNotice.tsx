@@ -20,6 +20,7 @@ export default function StatusNotice({
     label,
     detail,
     color = "neutral",
+    media,
     className,
     children
 }: StatusNoticeProps) {
@@ -32,6 +33,7 @@ export default function StatusNotice({
             )}
         >
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                {media}
                 {icon && iconPosition === "left" && <FontAwesomeIcon icon={icon} className="shrink-0 text-lg" />}
                 <div className="min-w-0 flex-1 flex flex-col sm:gap-2">
                     <span className="flex items-center gap-1.5 font-cinzel uppercase tracking-wide whitespace-nowrap text-sm">
@@ -56,4 +58,6 @@ type StatusNoticeProps = Omit<BaseElementProps, "style"> & {
     label: string;
     detail?: ReactNode;
     color?: StatusNoticeColor;
+    /** Leads the block the way a left icon does - eg. a thumbnail of what the notice is about */
+    media?: ReactNode;
 };

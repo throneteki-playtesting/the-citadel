@@ -1,5 +1,8 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from "react";
 
+// Stands for "no filter has loaded yet" - never equal to any resetKey, undefined included
+const NOT_LOADED = Symbol("not loaded");
+
 export interface UseInfiniteListOptions<T> {
     /** Pass the query's `currentData`, not its `data` - `data` keeps showing the previous page's result
      *  while the next page loads, so merging from it would double-add that page for one render. */
@@ -27,13 +30,13 @@ export default function useInfiniteList<T>({
     // Tracked separately from currentData.total - currentData itself goes back to undefined while the
     // next page is loading, but `hasMore` needs to keep answering from the last total actually seen.
     const [total, setTotal] = useState<number>();
-    // Which resetKey has actually received a first response - a fresh cache key doesn't necessarily
-    // flip isFetching to true on the very same render, so that heuristic alone can't be trusted here.
-    const loadedResetKeyRef = useRef<unknown>(undefined);
-    const hasLoadedCurrentFilter = loadedResetKeyRef.current === resetKey;
+    // Which resetKey has received a first response - state set in the same transition as `items`, so no
+    // render in between can read "loaded" while the items are still on their way.
+    const [loadedResetKey, setLoadedResetKey] = useState<unknown>(NOT_LOADED);
+    const hasLoadedCurrentFilter = loadedResetKey === resetKey;
     // Whether ANY filter has loaded, regardless of item count - a zero-result filter must never read
     // as "never loaded", or a later filter landing on zero again would flip back to the full skeleton.
-    const hasLoadedOnceRef = useRef(false);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
     // A callback ref, not a plain useRef - the sentinel only mounts once loading finishes, and a plain
     // ref's `.current` changing wouldn't re-run the observer-attaching effect below to notice that.
@@ -63,9 +66,10 @@ export default function useInfiniteList<T>({
             // once a refresh's first page lands, since nothing clears `items` up front any more.
             setItems((prev) => (page === 1 ? currentData.items : [...prev, ...currentData.items]));
             setTotal(currentData.total);
+            // A function, so a resetKey which happens to be one is stored rather than called
+            setLoadedResetKey(() => resetKey);
+            setHasLoadedOnce(true);
         });
-        loadedResetKeyRef.current = resetKey;
-        hasLoadedOnceRef.current = true;
     }, [currentData, page, resetKey]);
 
     // Loads the next page once the bottom sentinel scrolls into view
@@ -101,8 +105,6 @@ export default function useInfiniteList<T>({
             onLoadMoreRef.current();
         }
     }, [items, total, sentinelNode]);
-
-    const hasLoadedOnce = hasLoadedOnceRef.current;
 
     return {
         items,

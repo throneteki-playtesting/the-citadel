@@ -4,6 +4,7 @@ import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 import classNames from "classnames";
+import { VERTICAL_CARD_WIDTH_REM } from "./constants";
 
 /** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce".
  *  Shared by SearchTagPicker and the suggestion settings reward/punishment search. */
@@ -97,4 +98,9 @@ export function rowCapClasses(steps: { prefix?: string; max: number }[]): string
             );
         })
     );
+}
+
+// A plot is a vertical card's footprint transposed - as wide as one is tall, rather than squeezed
+export function cardThumbnailWidthRem(isPlot: boolean, widthRem = VERTICAL_CARD_WIDTH_REM) {
+    return isPlot ? (widthRem * 333) / 240 : widthRem;
 }

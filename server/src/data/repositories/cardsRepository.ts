@@ -1,4 +1,4 @@
-﻿import { BulkWriteOptions, DeleteOptions, Document, MongoClient } from "mongodb";
+﻿import { BulkWriteOptions, DeleteOptions, Document, Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
 import { asArray, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
@@ -107,6 +107,24 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
             data = await this.sync(data);
         }
         return Array.isArray(updating) ? data : data[0];
+    }
+
+    // Records which suggestion a card came from, on every version or just `version` (a draft project's slot) -
+    // not an edit, so it neither bumps `updated` nor syncs. Initialising the project archives that suggestion.
+    public async setSuggestionId(
+        project: number,
+        number: number,
+        suggestionId: string,
+        version?: SemanticVersion
+    ): Promise<IPlaytestCard[]> {
+        const filter = { project, number, ...(version && { version }) };
+        await this.database.collection.updateMany(
+            filter as MongoFilter<IPlaytestCard>,
+            { $set: { suggestionId } } as UpdateFilter<IPlaytestCard>
+        );
+        const cards = await this.read(filter);
+        this.broadcastUpdates(cards, { silent: true });
+        return cards;
     }
 
     public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>, sync: boolean = true) {

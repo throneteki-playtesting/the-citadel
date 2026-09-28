@@ -1,4 +1,5 @@
 import {
+    AnyThreadChannel,
     APIGuildMember,
     Client,
     ClientEvents,
@@ -16,7 +17,8 @@ import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
-import { onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
+import { isSuggestionForumThread, onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
+import { broadcastResourceChange } from "@/services/sseService";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
@@ -111,8 +113,19 @@ export function registerEvents(
     on(Events.GuildEmojiUpdate, (_oldEmoji, newEmoji) => onEmojiChanged(newEmoji.guild));
     on(Events.GuildEmojiDelete, (emoji) => onEmojiChanged(emoji.guild));
 
+    // Announces any change to the suggestion forum's threads, so an open search of them (a legacy suggestion
+    // being completed) picks up a thread started meanwhile. Silent, as it can't disrupt anybody's edit.
+    const announceSuggestionThread = (thread: AnyThreadChannel) => {
+        if (thread.guildId === guildId && isSuggestionForumThread(thread)) {
+            broadcastResourceChange("suggestionThread", { id: thread.id }, "update", { silent: true });
+        }
+    };
+    on(Events.ThreadCreate, async (thread) => announceSuggestionThread(thread));
+    on(Events.ThreadUpdate, async (_oldThread, newThread) => announceSuggestionThread(newThread));
+
     // Clears discord metadata from any card or review whose forum thread or message was deleted.
     on(Events.ThreadDelete, async (thread) => {
+        announceSuggestionThread(thread);
         if (thread.guildId !== guildId) return;
         if (!(thread.parent instanceof ForumChannel)) return;
 

@@ -61,6 +61,11 @@ export function titleCase(value: string) {
         .join(" ");
 }
 
+// Levels curly quotes, case and spacing, so two spellings of the same card name compare equal
+export function normaliseCardName(name: string) {
+    return name.replace(/[’‘]/g, "'").replace(/[“”]/g, '"').toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 export function cleanObject<T>(object: T) {
     for (const key in object) {
         if (object[key] === undefined) {

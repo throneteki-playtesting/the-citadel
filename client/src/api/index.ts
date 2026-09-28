@@ -4,7 +4,8 @@ import {
     FetchArgs,
     fetchBaseQuery,
     FetchBaseQueryError,
-    FetchBaseQueryMeta
+    FetchBaseQueryMeta,
+    TypedMutationOnQueryStarted
 } from "@reduxjs/toolkit/query/react";
 import {
     IPlaytestingUpdate,
@@ -24,6 +25,7 @@ import {
     ICardSuggestionFilterable,
     IPlaytestCard,
     IRenderCard,
+    ISuggestionCardMatches,
     ISuggestionsListQuery,
     ReactionType
 } from "common/models/cards";
@@ -55,6 +57,25 @@ import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
 import { refreshSession } from "./refresh";
 
+/** A suggestion forum thread from before the Citadel managed them, described for migrating it */
+export type LegacyThreadInfo = {
+    id: string;
+    url: string;
+    name: string;
+    createdAt: string;
+    ownerId: string;
+    faction?: ICardSuggestion["card"]["faction"];
+    type?: ICardSuggestion["card"]["type"];
+    /** 👍s on its opening post, its own author's left out */
+    likes: number;
+};
+
+export type SuggestionMigration = {
+    thread: LegacyThreadInfo;
+    /** The caller's own legacy suggestions that look like the thread's card - one may be merged into it */
+    candidates: ICardSuggestion[];
+};
+
 export type SuggestionsFeed = {
     recent: ICardSuggestion[];
     stats: {
@@ -65,6 +86,12 @@ export type SuggestionsFeed = {
         unreacted: number;
         mine: number;
         myDrafts: number;
+        /** Unarchived legacy suggestions, awaiting completion - counted apart from everything above */
+        legacy: number;
+        myLegacy: number;
+        /** Legacy suggestions a project card may already have been developed from - only counted for those who
+         *  can archive them as that card (MANAGE_SUGGESTIONS_ARCHIVE), otherwise always 0 */
+        possiblyDeveloped: number;
     };
 };
 
@@ -103,6 +130,21 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
     }
 
     return result;
+};
+
+// Every cached response belongs to the previous identity, including queries with no tags, so the whole cache is
+// reset. /me is restored from the response so nothing reads as signed out while mounted queries refetch.
+const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof baseQueryWithReauth> = async (
+    _arg,
+    { dispatch, queryFulfilled }
+) => {
+    try {
+        const { data } = await queryFulfilled;
+        dispatch(api.util.resetApiState());
+        dispatch(api.util.upsertQueryData("getMe", undefined, data));
+    } catch {
+        // Identity unchanged, so the cache is still valid
+    }
 };
 
 const api = createApi({
@@ -149,21 +191,21 @@ const api = createApi({
                 const url = buildUrl(`impersonation/role/${roleId}`);
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         impersonateUser: builder.mutation<MeResponse, { discordId: string }>({
             query: ({ discordId }) => {
                 const url = buildUrl(`impersonation/user/${discordId}`);
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         stopImpersonating: builder.mutation<MeResponse, void>({
             query: () => {
                 const url = buildUrl("impersonation/stop");
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         getUsers: builder.query<IGetResponse<User>, IGetRequest<User> | void>({
             query: (options) => {
@@ -387,20 +429,62 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
-        // General save - accepts a new/draft/already-submitted suggestion alike, always fully
-        // validates, and always results in a submitted (non-draft) suggestion.
-        updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
-            query: (suggestion) => {
-                const url = buildUrl(`suggestions/${suggestion.id}`);
+        // General save - always fully validates and results in a submitted suggestion. `legacyThread` carries
+        // one of a legacy suggestion's old forum threads over as it is completed.
+        updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion & { legacyThread?: string }>({
+            query: ({ legacyThread, ...suggestion }) => {
+                const url = buildUrl(`suggestions/${suggestion.id}`, { legacyThread });
                 const body = suggestion;
                 return { url, method: "PUT", body };
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
-        unarchiveSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
-            query: (options) => {
-                const url = buildUrl(`suggestions/${options.id}/unarchive`);
-                return { url, method: "POST" };
+        // The designer's old forum threads that look like this legacy suggestion's card, as it is completed
+        getSuggestionThreadMatches: builder.query<
+            LegacyThreadInfo[],
+            { id: string } & Partial<Pick<ICardSuggestion["card"], "name" | "faction" | "type">>
+        >({
+            query: ({ id, ...card }) => {
+                const url = buildUrl(`suggestions/${id}/thread-matches`, card);
+                return { url, method: "GET" };
+            },
+            // Refetched whenever the suggestion forum announces a thread started, changed or removed
+            providesTags: () => [{ type: "suggestionThread", id: "LIST" }]
+        }),
+        getSuggestionCardMatches: builder.query<ISuggestionCardMatches, string>({
+            query: (id) => {
+                const url = buildUrl(`suggestions/${id}/card-matches`);
+                return { url, method: "GET" };
+            },
+            // Anything a claim touches - another suggestion archived, or a card linked - can change what's on offer
+            providesTags: () => [
+                { type: "suggestion", id: "LIST" },
+                { type: "card", id: "LIST" }
+            ]
+        }),
+        markSuggestionDevelopedAs: builder.mutation<
+            ICardSuggestion,
+            { id: string; project: number; number: number; version?: SemanticVersion }
+        >({
+            query: ({ id, project, number, version }) => {
+                const url = buildUrl(`suggestions/${id}/developed-as`);
+                return { url, method: "POST", body: { project, number, version } };
+            },
+            invalidatesTags: (result) => [...generateFor(result, "suggestion"), { type: "card", id: "LIST" }]
+        }),
+        getSuggestionMigration: builder.query<SuggestionMigration, string>({
+            query: (threadId) => {
+                const url = buildUrl(`suggestions/migrate/${threadId}`);
+                return { url, method: "GET" };
+            }
+        }),
+        migrateSuggestion: builder.mutation<
+            ICardSuggestion,
+            { threadId: string; mergeId?: string; suggestion: ICardSuggestion }
+        >({
+            query: ({ threadId, mergeId, suggestion }) => {
+                const url = buildUrl(`suggestions/migrate/${threadId}`, { mergeId });
+                return { url, method: "POST", body: suggestion };
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
@@ -648,7 +732,10 @@ const api = createApi({
         }),
         // One document per SettingsType, tag keyed directly by type. `includeUsage` is opt-in (only the
         // settings modal's delete-guard needs it), keeping a separate cache entry for label-only callers.
-        getSettings: builder.query<ISettingsMap[SettingsType], SettingsType | { type: SettingsType; includeUsage: boolean }>({
+        getSettings: builder.query<
+            ISettingsMap[SettingsType],
+            SettingsType | { type: SettingsType; includeUsage: boolean }
+        >({
             query: (args) => {
                 const { type, includeUsage } = typeof args === "string" ? { type: args, includeUsage: false } : args;
                 const url = buildUrl(`settings/${type}`, includeUsage ? { includeUsage: true } : undefined);
@@ -1235,7 +1322,6 @@ export const {
     useCreateSuggestionMutation,
     useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation,
-    useUnarchiveSuggestionMutation,
     useDeleteSuggestionMutation,
     useReactToSuggestionMutation,
     useClearSuggestionReactionMutation,
@@ -1245,6 +1331,11 @@ export const {
     useGetSuggestionsFeedQuery,
     useGetSuggestionPlotMedianQuery,
     useSyncSuggestionDiscordMutation,
+    useLazyGetSuggestionThreadMatchesQuery,
+    useGetSuggestionMigrationQuery,
+    useMigrateSuggestionMutation,
+    useGetSuggestionCardMatchesQuery,
+    useMarkSuggestionDevelopedAsMutation,
 
     useRenderImageMutation,
     useRenderPrintSheetMutation,

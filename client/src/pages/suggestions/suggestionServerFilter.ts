@@ -67,7 +67,8 @@ function setNonEmpty(target: Record<string, unknown>, key: string, value: unknow
 export function suggestionListQueryExtras(value: SuggestionFilterValue): ISuggestionsListQuery {
     return {
         unseen: value.unseen || undefined,
-        myReactions: value.myReactions && value.myReactions.length > 0 ? value.myReactions.join(",") : undefined
+        myReactions: value.myReactions && value.myReactions.length > 0 ? value.myReactions.join(",") : undefined,
+        developed: value.developed || undefined
     };
 }
 
@@ -80,8 +81,8 @@ export default function useSuggestionServerFilter(
 ): SingleOrArray<Filter<ICardSuggestionFilterable>> | undefined {
     // unseen/myReactions must never reach cardExplodable - handled separately via
     // suggestionListQueryExtras; leaking either into `card.*` fails ICard filter validation.
-    const { traits, mine, byUsers, approvedFilter, tags, iconic, ...rest } = value;
-    const cardExplodable = omit(rest, ["unseen", "myReactions"]);
+    const { traits, mine, byUsers, approvedFilter, tags, iconic, legacy, archived, segments, ...rest } = value;
+    const cardExplodable = omit(rest, ["unseen", "myReactions", "developed"]);
     const { currentUserId } = context;
 
     const combined = useMemo(() => {
@@ -109,6 +110,8 @@ export default function useSuggestionServerFilter(
             engagement.approvedBy = { $exists: false };
         } else if (approvedFilter === "awaiting") {
             base.draft = false;
+            // Mirrors suggestionApprovalBlockReason - a legacy suggestion can never be approved
+            base.legacy = { $exists: false };
             engagement.approvedBy = { $exists: false };
             base.likes = { $gte: SUGGESTION_APPROVAL_VOTE_THRESHOLD };
         }
@@ -124,8 +127,39 @@ export default function useSuggestionServerFilter(
             base.questions = { iconic };
         }
 
-        return base as Explodable<ICardSuggestionFilterable>;
-    }, [cardExplodable, traits, mine, byUsers, approvedFilter, tags, iconic, currentUserId]);
+        // Completing a legacy suggestion removes the key rather than setting it false, and a boolean
+        // filter only takes an exact value or $exists - so "not legacy" is the key being absent
+        if (legacy !== undefined) {
+            base.legacy = legacy ? true : { $exists: false };
+        }
+
+        // Always sent, never left for the server to decide - archived suggestions are hidden unless asked for
+        base.archived = { $exists: !!archived };
+
+        if (!segments || segments.length === 0) {
+            return base as Explodable<ICardSuggestionFilterable>;
+        }
+        // One branch per pair, each carrying every other filter - the list endpoint matches any branch
+        return segments.map(
+            (segment) =>
+                ({
+                    ...base,
+                    card: { ...cardFilter, faction: segment.faction, ...(segment.type && { type: segment.type }) }
+                }) as Explodable<ICardSuggestionFilterable>
+        );
+    }, [
+        cardExplodable,
+        traits,
+        mine,
+        byUsers,
+        approvedFilter,
+        tags,
+        iconic,
+        legacy,
+        archived,
+        segments,
+        currentUserId
+    ]);
 
     const filters = useFilter<ICardSuggestionFilterable>(combined);
 

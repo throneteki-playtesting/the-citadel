@@ -21,4 +21,9 @@ unresolved-users.json
 migration/*.xlsx
 migration/designers.json
 migration/import-suggestions-errors.txt
-migration/card-names.json
+# Sheet history analysis (Google sign-in, cached copies of the sheet, and what was read from them)
+google-credentials.json
+google-token.json
+migration/sheet-history/
+migration/sheet-row-dates.json
+migration/sheet-history-report.txt

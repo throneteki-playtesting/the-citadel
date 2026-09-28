@@ -10,11 +10,14 @@ import {
     useDeleteSuggestionMutation,
     useGetSettingsQuery,
     useGetSuggestionPlotMedianQuery,
+    useLazyGetSuggestionThreadMatchesQuery,
+    useMigrateSuggestionMutation,
     useSaveDraftSuggestionMutation,
-    useUpdateSuggestionMutation
+    useUpdateSuggestionMutation,
+    SuggestionMigration
 } from "../../api";
 import ConfirmModal from "../../components/confirmModal";
-import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import { getBaseCardValues, renderCardSuggestion } from "common/utils";
@@ -51,6 +54,9 @@ import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@f
 import { faCircleQuestion } from "@fortawesome/free-regular-svg-icons";
 import { UserRow } from "../../components/userAvatar";
 import useUser from "../../hooks/useUser";
+import MigrateMergeChoice from "./migrateMergeChoice";
+import LegacyThreadChoice, { POST_FRESH } from "./legacyThreadChoice";
+import MigrationBanner from "./migrationBanner";
 
 const RAIL_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -63,6 +69,7 @@ const EMPTY_REWARD_PUNISHMENT_TYPES: IRewardPunishmentOption[] = [];
 
 // Same "shared reference, not a fresh `?? {}` every render" reasoning as EMPTY_STRINGS above.
 const EMPTY_JUSTIFICATIONS: DeepPartial<ChecklistJustifications> = {};
+const EMPTY_SUGGESTIONS: ICardSuggestion[] = [];
 
 /** Marks a section title whose answer the submit-time schema actually requires */
 function RequiredMark() {
@@ -280,10 +287,21 @@ function SaveDraftButton({
     );
 }
 
+function editorTitle(isSavedDraft: boolean, isMigrating: boolean, isLegacy: boolean) {
+    if (isSavedDraft) {
+        return "Draft Suggestion Editor";
+    }
+    if (isMigrating) {
+        return "Migrate Suggestion";
+    }
+    return isLegacy ? "Complete Legacy Suggestion" : "Suggestion Editor";
+}
+
 // Saving an already-submitted suggestion clears reactions/approval unconditionally - purely
 // informational (no confirmation modal). Ignore doesn't count as "reactions" here - not feedback.
 function hasEngagementToClear(suggestion: DeepPartial<ICardSuggestion>): boolean {
-    if (suggestion.draft !== false) {
+    // Completing a legacy suggestion keeps its reactions - see prepareLiveSaveBody on the server
+    if (suggestion.draft !== false || suggestion.legacy) {
         return false;
     }
     const engagement = suggestion._metadata?.engagement;
@@ -379,6 +397,7 @@ function StandardActions({
     hasCardBasics,
     isLoading,
     engagementIcon,
+    isSubmitBlocked = false,
     onSaved,
     onSaveClose,
     onCancel
@@ -387,10 +406,13 @@ function StandardActions({
     hasCardBasics: boolean;
     isLoading: boolean;
     engagementIcon: ReactNode;
+    /** Holds Submit back on the last page while it still has a question of its own unanswered */
+    isSubmitBlocked?: boolean;
     onSaved: (suggestion: ICardSuggestion) => void;
     onSaveClose: () => void;
     onCancel: () => void;
 }) {
+    const { isLastPage } = useWizard();
     return (
         <>
             {engagementIcon}
@@ -404,7 +426,11 @@ function StandardActions({
                     onClose={onSaveClose}
                 />
             )}
-            <WizardNext isLoading={isLoading} isDisabled={!hasCardBasics} color="primary" />
+            <WizardNext
+                isLoading={isLoading}
+                isDisabled={!hasCardBasics || (isLastPage && isSubmitBlocked)}
+                color="primary"
+            />
         </>
     );
 }
@@ -414,11 +440,23 @@ const EditSuggestionModal = ({
     suggestion: initial,
     onClose: onModalClose = () => true,
     onSave = () => true,
-    onReturnToDrafts = () => true
+    onReturnToDrafts = () => true,
+    migration
 }: EditSuggestionModalProps) => {
     const { user } = useAuth();
     const [createSuggestion, { isLoading: isCreating }] = useCreateSuggestionMutation();
-    const [updateSuggestion, { isLoading: isSubmitting }] = useUpdateSuggestionMutation();
+    const [updateSuggestion, { isLoading: isUpdating }] = useUpdateSuggestionMutation();
+    const [migrateSuggestion, { isLoading: isMigrating }] = useMigrateSuggestionMutation();
+    const [
+        findThreadMatches,
+        { currentData: threadMatches, isFetching: isFindingThreads, isError: isThreadSearchError }
+    ] = useLazyGetSuggestionThreadMatchesQuery();
+    const isSubmitting = isUpdating || isMigrating;
+    // The legacy suggestion a migration will absorb, picked on the migrate wizard's first page
+    const [mergeId, setMergeId] = useState<string>();
+    // Which of the designer's old forum threads completing a legacy suggestion carries over - a thread id, or
+    // POST_FRESH for none - answered on the legacy editor's last page
+    const [legacyThread, setLegacyThread] = useState<string>();
     const [deleteSuggestion, { isLoading: isDeletingDraft }] = useDeleteSuggestionMutation();
     const [suggestion, setSuggestion] = useState<DeepPartial<ICardSuggestion>>({});
     // Closes the editor's own Modal without telling the parent, so cancelling the confirmation
@@ -449,10 +487,57 @@ const EditSuggestionModal = ({
 
     useEffect(() => {
         setSuggestion({ ...initial });
+        setMergeId(undefined);
+        setLegacyThread(undefined);
         if (!initial?.id) {
             setWizardPage(1);
         }
     }, [initial]);
+
+    // Completing a legacy suggestion ends on a page offering the designer's old forum threads for the card,
+    // searched afresh on leaving the first page and again whenever the forum announces a change
+    const isCompletingLegacy = !migration && !!suggestion.legacy && !!suggestion.id;
+    const searchThreads = useCallback(() => {
+        if (suggestion.id) {
+            findThreadMatches({
+                id: suggestion.id,
+                name: suggestion.card?.name,
+                faction: suggestion.card?.faction,
+                type: suggestion.card?.type
+            });
+        }
+    }, [findThreadMatches, suggestion.id, suggestion.card?.name, suggestion.card?.faction, suggestion.card?.type]);
+    const previousPage = useRef(wizardPage);
+    const onPageChange = (page: number) => {
+        if (isCompletingLegacy && previousPage.current === 1 && page > 1) {
+            searchThreads();
+        }
+        previousPage.current = page;
+        setWizardPage(page);
+    };
+    // A choice outlives the search it answered only while that search still offers it - and with nothing
+    // found, posting fresh is the only answer, so it is given
+    useEffect(() => {
+        if (!threadMatches) {
+            return;
+        }
+        setLegacyThread((current) =>
+            threadMatches.length === 0
+                ? POST_FRESH
+                : current === POST_FRESH || threadMatches.some((thread) => thread.id === current)
+                  ? current
+                  : undefined
+        );
+    }, [threadMatches]);
+
+    const mergeCandidates = migration?.candidates ?? EMPTY_SUGGESTIONS;
+    const hasMergePage = mergeCandidates.length > 0;
+    // Merging starts the editor from the legacy suggestion's card; not merging goes back to what the thread gave
+    const onMergeChange = (id?: string) => {
+        setMergeId(id);
+        const merging = mergeCandidates.find((candidate) => candidate.id === id);
+        setSuggestion((prev) => ({ ...prev, card: merging?.card ?? initial?.card }));
+    };
 
     // `derived` is kept live client-side too, mirroring the server's own recompute on save - lets
     // the checklist/validation work without waiting on a round trip.
@@ -539,6 +624,11 @@ const EditSuggestionModal = ({
     // Nothing worth saving or moving on from until the design has at least these two basics -
     // Save Draft/Next stay disabled rather than letting either commit an unusably bare suggestion.
     const hasCardBasics = !!suggestion.card?.faction && !!suggestion.card?.type;
+    // The merge page asks nothing about the card, so it never holds anyone back
+    const canMoveOn = hasCardBasics || (hasMergePage && wizardPage === 1);
+    // Only the first search of a card shows as loading - a refresh keeps what it already found on screen
+    const isFirstThreadSearch = isFindingThreads && !threadMatches;
+    const isLegacySubmitBlocked = isCompletingLegacy && (!legacyThread || isFirstThreadSearch);
 
     // Only a saved draft gets the Delete Draft button and its 2x2 footer layout - a new,
     // never-saved suggestion has nothing to delete (Cancel already covers that).
@@ -617,18 +707,37 @@ const EditSuggestionModal = ({
         [suggestion.combosWith]
     );
 
+    const finishSubmit = (submitted: ICardSuggestion) => {
+        setSuggestion(submitted);
+        onSave(submitted);
+        // Submitting turns the draft into a real suggestion, so this never reopens "My Drafts".
+        onModalClose();
+    };
+
     const onSubmit = async (validSuggestion: ICardSuggestion, isValidationError: (err: unknown) => boolean) => {
         try {
+            if (migration) {
+                finishSubmit(
+                    await migrateSuggestion({
+                        threadId: migration.threadId,
+                        mergeId,
+                        suggestion: validSuggestion
+                    }).unwrap()
+                );
+                return;
+            }
             let id = suggestion.id;
             if (!id) {
                 const created = await createSuggestion({ ...validSuggestion, draft: true }).unwrap();
                 id = created.id;
             }
-            const submitted = await updateSuggestion({ ...validSuggestion, id }).unwrap();
-            setSuggestion(submitted);
-            onSave(submitted);
-            // Submitting turns the draft into a real suggestion, so this never reopens "My Drafts".
-            onModalClose();
+            finishSubmit(
+                await updateSuggestion({
+                    ...validSuggestion,
+                    id,
+                    legacyThread: isCompletingLegacy && legacyThread !== POST_FRESH ? legacyThread : undefined
+                }).unwrap()
+            );
         } catch (err) {
             if (!isValidationError(err)) {
                 showApiErrorToast(err);
@@ -688,11 +797,11 @@ const EditSuggestionModal = ({
                             onSubmit={onSubmit}
                             data={suggestion}
                             page={wizardPage}
-                            onPageChange={setWizardPage}
+                            onPageChange={onPageChange}
                         >
                             <ModalHeader className="flex items-center gap-2">
                                 <span className="flex-1 min-w-0">
-                                    {isSavedDraft ? "Draft Suggestion Editor" : "Suggestion Editor"}
+                                    {editorTitle(isSavedDraft, !!migration, !!suggestion.legacy)}
                                     <button
                                         type="button"
                                         aria-label="Show the suggestion editor guide"
@@ -710,6 +819,7 @@ const EditSuggestionModal = ({
                                 <ModalBody className="flex-1 min-h-0 overflow-hidden px-0">
                                     <div className="px-6">
                                         <ValidationSummary />
+                                        {migration && <MigrationBanner thread={migration.thread} className="mb-3" />}
                                         {isEditingOthersSuggestion && (
                                             <StatusNotice
                                                 icon={faUserPen}
@@ -734,6 +844,15 @@ const EditSuggestionModal = ({
                                     <div className="flex flex-1 min-h-0 flex-col md:flex-row gap-2">
                                         <div className="flex-1 min-w-0 min-h-0 overflow-y-auto px-6 md:pr-2">
                                             <WizardPages>
+                                                {hasMergePage && (
+                                                    <WizardPage controlledData={{}}>
+                                                        <MigrateMergeChoice
+                                                            candidates={mergeCandidates}
+                                                            value={mergeId}
+                                                            onChange={onMergeChange}
+                                                        />
+                                                    </WizardPage>
+                                                )}
                                                 <WizardPage
                                                     controlledData={{
                                                         card: getBaseCardValues(suggestion.card ?? {})
@@ -992,6 +1111,18 @@ const EditSuggestionModal = ({
                                                         </div>
                                                     </div>
                                                 </WizardPage>
+                                                {isCompletingLegacy && (
+                                                    <WizardPage controlledData={{}}>
+                                                        <LegacyThreadChoice
+                                                            threads={threadMatches}
+                                                            isLoading={isFirstThreadSearch}
+                                                            isError={isThreadSearchError}
+                                                            value={legacyThread}
+                                                            onChange={setLegacyThread}
+                                                            onSearch={searchThreads}
+                                                        />
+                                                    </WizardPage>
+                                                )}
                                             </WizardPages>
                                         </div>
                                         <div
@@ -1021,7 +1152,7 @@ const EditSuggestionModal = ({
                                                 <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-content3 pt-3">
                                                     <SavedDraftActions
                                                         suggestion={suggestion}
-                                                        hasCardBasics={hasCardBasics}
+                                                        hasCardBasics={canMoveOn}
                                                         isLoading={isCreating || isSubmitting}
                                                         onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
                                                         onSaved={setSuggestion}
@@ -1033,11 +1164,12 @@ const EditSuggestionModal = ({
                                                 <div className="shrink-0 flex items-center justify-end gap-2 border-t border-content3 pt-3">
                                                     <StandardActions
                                                         suggestion={suggestion}
-                                                        hasCardBasics={hasCardBasics}
+                                                        hasCardBasics={canMoveOn}
                                                         isLoading={isCreating || isSubmitting}
                                                         engagementIcon={
                                                             <DesktopEngagementClearIcon suggestion={suggestion} />
                                                         }
+                                                        isSubmitBlocked={isLegacySubmitBlocked}
                                                         onSaved={setSuggestion}
                                                         onSaveClose={closeEditor}
                                                         onCancel={onClose}
@@ -1090,7 +1222,7 @@ const EditSuggestionModal = ({
                                 <ModalFooter className="md:hidden grid grid-cols-2 gap-2">
                                     <SavedDraftActions
                                         suggestion={suggestion}
-                                        hasCardBasics={hasCardBasics}
+                                        hasCardBasics={canMoveOn}
                                         isLoading={isCreating || isSubmitting}
                                         onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
                                         onSaved={setSuggestion}
@@ -1102,9 +1234,10 @@ const EditSuggestionModal = ({
                                 <ModalFooter className="md:hidden">
                                     <StandardActions
                                         suggestion={suggestion}
-                                        hasCardBasics={hasCardBasics}
+                                        hasCardBasics={canMoveOn}
                                         isLoading={isCreating || isSubmitting}
                                         engagementIcon={<EngagementClearIcon suggestion={suggestion} />}
+                                        isSubmitBlocked={isLegacySubmitBlocked}
                                         onSaved={setSuggestion}
                                         onSaveClose={closeEditor}
                                         onCancel={onClose}
@@ -1146,6 +1279,9 @@ type EditSuggestionModalProps = Omit<BaseElementProps, "children"> & {
     onSave?: (suggestion: ICardSuggestion) => void;
     /** Fires when a saved draft's editor closes without submitting, so the caller can reopen "My Drafts". */
     onReturnToDrafts?: () => void;
+    /** Set when the editor is migrating an old suggestion-forum thread (from Discord's /migrate) - submitting
+     *  then goes through the migration route, with no draft stage, merging any legacy suggestion picked. */
+    migration?: SuggestionMigration & { threadId: string };
 };
 
 export default EditSuggestionModal;

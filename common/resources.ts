@@ -1,4 +1,4 @@
-import { ICardSuggestion, IPlaytestCard } from "./models/cards";
+import { ICardSuggestion, IPlaytestCard, ISuggestionForumThread } from "./models/cards";
 import { IPlaytestingUpdate, IProject } from "./models/projects";
 import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
@@ -21,7 +21,8 @@ export type ResourceType =
     | "artist"
     | "log"
     | "deck"
-    | "setting";
+    | "setting"
+    | "suggestionThread";
 
 export interface ResourceDataMap {
     user: User;
@@ -37,6 +38,7 @@ export interface ResourceDataMap {
     log: ILogEntry;
     deck: IDeck;
     setting: ISettingsDocument;
+    suggestionThread: ISuggestionForumThread;
 }
 
 type ResourceIdKeys = {
@@ -53,6 +55,7 @@ type ResourceIdKeys = {
     log: "id";
     deck: "identifier";
     setting: "id";
+    suggestionThread: "id";
 };
 
 export const resourceIdFuncs: {
@@ -72,5 +75,6 @@ export const resourceIdFuncs: {
     artist: (a) => a.id,
     log: (l) => l.id,
     deck: (d) => String(d.identifier),
-    setting: (s) => s.id
+    setting: (s) => s.id,
+    suggestionThread: (t) => t.id
 };

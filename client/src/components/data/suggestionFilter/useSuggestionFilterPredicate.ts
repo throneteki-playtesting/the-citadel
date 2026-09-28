@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { omit } from "lodash-es";
 import { ICard, ICardSuggestion, ReactionType } from "common/models/cards";
 import { Explodable, Filter, matchesFilter } from "common/types";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
@@ -28,8 +29,13 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         tags,
         iconic,
-        ...explodable
+        legacy,
+        archived,
+        segments,
+        ...rest
     } = value;
+    // `developed` needs the cards collection, so only the server can apply it - see suggestionListQueryExtras
+    const explodable = omit(rest, ["developed"]);
 
     const filters = useFilter<ICard>(explodable as Explodable<ICard>);
 
@@ -37,6 +43,15 @@ export default function useSuggestionFilterPredicate(
         return (suggestion: ICardSuggestion) => {
             const card = suggestion.card;
             if (filters && !filters.some((filter: Filter<ICard>) => matchesFilter(card, filter))) {
+                return false;
+            }
+            if (
+                segments &&
+                segments.length > 0 &&
+                !segments.some(
+                    (segment) => segment.faction === card.faction && (!segment.type || segment.type === card.type)
+                )
+            ) {
                 return false;
             }
             if (traits && traits.length > 0 && !traits.some((trait) => card.traits.includes(trait))) {
@@ -68,6 +83,7 @@ export default function useSuggestionFilterPredicate(
             if (
                 approvedFilter === "awaiting" &&
                 (suggestion.draft ||
+                    suggestion.legacy ||
                     !!suggestion._metadata?.engagement?.approvedBy ||
                     countLikes(suggestion._metadata?.engagement?.reactions) < SUGGESTION_APPROVAL_VOTE_THRESHOLD)
             ) {
@@ -91,6 +107,12 @@ export default function useSuggestionFilterPredicate(
             if (iconic !== undefined && !!suggestion.questions?.iconic !== iconic) {
                 return false;
             }
+            if (legacy !== undefined && !!suggestion.legacy !== legacy) {
+                return false;
+            }
+            if (!!suggestion.archived !== !!archived) {
+                return false;
+            }
             return true;
         };
     }, [
@@ -103,6 +125,9 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         tags,
         iconic,
+        legacy,
+        archived,
+        segments,
         context
     ]);
 }

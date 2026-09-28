@@ -1,5 +1,9 @@
-import { challengeIcons, ICard, ReactionType } from "common/models/cards";
+import { challengeIcons, Faction, ICard, ReactionType, Type } from "common/models/cards";
 import { Explodable } from "common/types";
+
+// One faction, optionally narrowed to one of its card types - a Suggestion Spread selection, which `faction`
+// and `type` can't express (eg. "all of Stark plus Tyrell's events")
+export type SuggestionSegment = { faction: Faction; type?: Type };
 
 // Mirrors CardFilterValue - every ICard field it exposes carries over unchanged, minus `releases`
 // (no release concept for a suggestion), plus suggestion-specific fields layered on top.
@@ -20,6 +24,17 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     // exactly like `traits`, rather than needing reward/punishment ids resolved client-side.
     tags?: string[];
     iconic?: boolean;
+    // true narrows to legacy suggestions (imported, awaiting completion), false hides them
+    legacy?: boolean;
+    // Archived suggestions only when true - otherwise never, so unset is the same as false. Only a
+    // MANAGE_SUGGESTIONS_ARCHIVE holder is offered it, since nobody else can see an archived suggestion.
+    archived?: boolean;
+    // Legacy suggestions a project card may already have been developed from - worked out server-side against the
+    // cards, so like unseen it travels as its own query param. MANAGE_SUGGESTIONS_ARCHIVE only.
+    developed?: boolean;
+    // Matches a suggestion in ANY of these pairs. Exclusive of `faction`/`type` (enforced by the drawer, not
+    // by this type) - editing either drops these, since the two ways of narrowing can't be shown together.
+    segments?: SuggestionSegment[];
 };
 
 export const EMPTY_SUGGESTION_FILTER: SuggestionFilterValue = {};
@@ -53,5 +68,10 @@ export function countActiveSuggestionFilters(value: SuggestionFilterValue): numb
     if (value.myReactions && value.myReactions.length > 0) count++;
     if (value.tags && value.tags.length > 0) count++;
     if (value.iconic !== undefined) count++;
+    if (value.legacy !== undefined) count++;
+    if (value.archived) count++;
+    if (value.developed) count++;
+    // Each pair picked on Suggestion Statistics is a filter of its own
+    count += value.segments?.length ?? 0;
     return count;
 }

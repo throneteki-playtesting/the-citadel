@@ -27,6 +27,7 @@ import {
     faTableList
 } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
+import CardCornerBadges from "../../components/cardCornerBadges";
 import Watermark from "../../components/watermark";
 import ProgressRing from "../../components/progressRing";
 import CardProgressBreakdown from "../../components/cardProgressBreakdown";
@@ -745,69 +746,36 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     </div>
                 )}
             </div>
-            <div className="absolute top-0 right-0 m-2 z-10 flex items-center gap-1 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100">
-                {card.draft && isReleaseBound && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faFlagCheckered} /> Marked For Release
-                                </div>
-                                <div className="text-xs">
-                                    This pack is out of planning, so this draft is refinement in progress — it won't
-                                    trigger a playtesting update.
-                                </div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
-                            <FontAwesomeIcon icon={faFlagCheckered} className="text-lg text-primary" />
-                        </div>
-                    </TouchTooltip>
-                )}
-                {card.draft && !isReleaseBound && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faFeather} /> New Version Being Drafted
-                                </div>
-                                <div className="text-xs">
-                                    The maesters are penning a revised version of this card — not yet in playtesting,
-                                    it will not enter the field until published with the next Playtesting Update.
-                                </div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 animate-pulse">
-                            <FontAwesomeIcon icon={faFeather} className="text-lg text-primary" />
-                        </div>
-                    </TouchTooltip>
-                )}
-                {isNextRelease && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faCrosshairs} /> High Priority
-                                </div>
-                                <div className="text-xs">This card is slotted for the next release & needs focus.</div>
-                            </div>
-                        }
-                    >
-                        <div
-                            onClick={goToRelease}
-                            onAuxClick={openReleaseInNewTab}
-                            className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 cursor-pointer"
-                        >
-                            <FontAwesomeIcon
-                                icon={faCrosshairs}
-                                className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
-                            />
-                        </div>
-                    </TouchTooltip>
-                )}
-            </div>
+            <CardCornerBadges
+                badges={[
+                    card.draft &&
+                        isReleaseBound && {
+                            key: "release-bound",
+                            icon: faFlagCheckered,
+                            title: "Marked For Release",
+                            description:
+                                "This pack is out of planning, so this draft is refinement in progress — it won't trigger a playtesting update."
+                        },
+                    card.draft &&
+                        !isReleaseBound && {
+                            key: "drafting",
+                            icon: faFeather,
+                            pulse: true,
+                            title: "New Version Being Drafted",
+                            description:
+                                "The maesters are penning a revised version of this card — not yet in playtesting, it will not enter the field until published with the next Playtesting Update."
+                        },
+                    isNextRelease && {
+                        key: "next-release",
+                        icon: faCrosshairs,
+                        iconClassName: "text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]",
+                        title: "High Priority",
+                        description: "This card is slotted for the next release & needs focus.",
+                        onClick: goToRelease,
+                        onAuxClick: openReleaseInNewTab
+                    }
+                ]}
+            />
             {showProgressBadge && progress && (
                 <div className={CORNER_BADGE_CLASS}>
                     <TouchTooltip content={<CardProgressBreakdown progress={progress} />}>

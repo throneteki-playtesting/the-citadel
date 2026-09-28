@@ -5,7 +5,7 @@ import { getContext } from "@/middleware/context";
 import { hasPermission } from "common/utils";
 import Permission from "common/models/permissions";
 import { suggestionReactionBlockReason } from "common/models/cards";
-import { buildContainer, suggestionImageFilename } from "../forums/suggestionForum";
+import { buildComponents, suggestionImageFilename } from "../forums/suggestionForum";
 
 /** The ephemeral "are you sure" row shown before a reaction is actually removed - carries the
  *  suggestion id, since this click lands on the ephemeral reply, not the suggestion's own message. */
@@ -68,8 +68,7 @@ const suggestionReaction: ButtonHandler = {
                 return;
             }
 
-            const container = await buildContainer(updated, suggestionImageFilename(updated));
-            await interaction.update({ components: [container] });
+            await interaction.update({ components: await buildComponents(updated, suggestionImageFilename(updated)) });
         } catch (err) {
             await replyFallbackError(interaction, "[Discord] Failed to handle suggestion reaction button", err);
         }

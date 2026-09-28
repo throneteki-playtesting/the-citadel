@@ -3,6 +3,7 @@ import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "co
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCheck,
+    faClockRotateLeft,
     faEye,
     faEyeSlash,
     faThumbsDown,
@@ -13,12 +14,14 @@ import { Spinner } from "@heroui/react";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
+import CardCornerBadges from "../../components/cardCornerBadges";
 import ReactionCount from "../../components/reactionCount";
 import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { useAuth } from "../../hooks/useAuth";
 import { useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../../api";
 import useUser from "../../hooks/useUser";
 import { showApiErrorToast } from "../../api/errors";
+import { cornerBadgeFadeClasses, LEGACY_SUGGESTION_DESCRIPTION } from "../../constants";
 
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
 // link target, so a badge row needs both stopPropagation AND preventDefault to stop its own clicks.
@@ -153,30 +156,79 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
 
     return (
         <div className="relative">
-            <div
-                className="absolute top-0 right-0 m-2 z-10 flex items-center gap-1.5 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-            >
-                {approvedBy && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faCheck} /> Approved
+            <CardCornerBadges
+                isolateClicks
+                leading={
+                    <AnimatePresence initial={false}>
+                        {reactionMode === "row" && (
+                            <motion.div
+                                key="quick-react-row"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={BADGE_FADE}
+                            >
+                                <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-70">
+                                    {QUICK_REACT_OPTIONS.map(({ type, label, hint, icon }) => {
+                                        const isThisPending = pending?.type === type && pending.mode === "react";
+                                        const isOtherPending = !!pending && !isThisPending;
+                                        return (
+                                            <TouchTooltip
+                                                key={type}
+                                                content={
+                                                    <div className="max-w-64 px-1 py-0.5">
+                                                        <div className="text-sm font-cinzel">
+                                                            <FontAwesomeIcon icon={icon} /> {label}
+                                                        </div>
+                                                        <div className="text-xs">{hint}</div>
+                                                    </div>
+                                                }
+                                            >
+                                                <button
+                                                    type="button"
+                                                    disabled={isOtherPending}
+                                                    onClick={() => onQuickReact(type)}
+                                                    className={classNames(
+                                                        "flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 transition-opacity duration-200 cursor-pointer disabled:cursor-default",
+                                                        isOtherPending ? "opacity-30" : "opacity-70 hover:!opacity-100"
+                                                    )}
+                                                >
+                                                    <ReactionGlyph
+                                                        icon={icon}
+                                                        isPending={isThisPending}
+                                                        className="text-lg text-primary"
+                                                    />
+                                                </button>
+                                            </TouchTooltip>
+                                        );
+                                    })}
                                 </div>
-                                <div className="text-xs">by {approver?.displayname ?? "…"}</div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
-                            <FontAwesomeIcon icon={faCheck} className="text-lg text-success" />
-                        </div>
-                    </TouchTooltip>
-                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                }
+                badges={[
+                    suggestion.legacy && {
+                        key: "legacy",
+                        icon: faClockRotateLeft,
+                        title: "Legacy",
+                        description: LEGACY_SUGGESTION_DESCRIPTION
+                    },
+                    !!approvedBy && {
+                        key: "approved",
+                        icon: faCheck,
+                        iconClassName: "text-success",
+                        title: "Approved",
+                        description: `by ${approver?.displayname ?? "…"}`
+                    },
+                    showLikesBadge && {
+                        key: "likes",
+                        icon: faThumbsUp,
+                        title: `${likeCount} like${likeCount !== 1 ? "s" : ""}`,
+                        count: <ReactionCount count={likeCount} />
+                    }
+                ]}
+            >
                 <AnimatePresence initial={false}>
                     {reactionMode === "badge" && badgeReactionType && (
                         <motion.div
@@ -185,6 +237,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={BADGE_FADE}
+                            className={cornerBadgeFadeClasses}
                         >
                             <TouchTooltip
                                 content={
@@ -219,82 +272,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                         </motion.div>
                     )}
                 </AnimatePresence>
-                {showLikesBadge && (
-                    <TouchTooltip
-                        content={
-                            <div className="px-1 py-0.5 text-sm font-cinzel">
-                                {likeCount} like{likeCount !== 1 ? "s" : ""}
-                            </div>
-                        }
-                    >
-                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
-                            <FontAwesomeIcon icon={faThumbsUp} className="text-lg text-primary" />
-                            <div className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-primary-foreground text-[0.65rem] leading-4 text-center font-bold">
-                                <ReactionCount count={likeCount} />
-                            </div>
-                        </div>
-                    </TouchTooltip>
-                )}
-            </div>
-            {/* Quick-react - only offered while unreacted (an existing reaction has its own badge
-                above). Hidden at rest, faded in on hover - the opposite of the always-visible badges. */}
-            <AnimatePresence initial={false}>
-                {reactionMode === "row" && (
-                    // Two nested layers, not one - the outer motion.div's inline `animate` opacity
-                    // would otherwise fight the inner Tailwind hover classes on the same element.
-                    <motion.div
-                        key="quick-react-row"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={BADGE_FADE}
-                        className="absolute top-0 right-0 z-10"
-                    >
-                        <div
-                            className="m-2 flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-70"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                            }}
-                            onPointerDown={(e) => e.stopPropagation()}
-                        >
-                            {QUICK_REACT_OPTIONS.map(({ type, label, hint, icon }) => {
-                                const isThisPending = pending?.type === type && pending.mode === "react";
-                                const isOtherPending = !!pending && !isThisPending;
-                                return (
-                                    <TouchTooltip
-                                        key={type}
-                                        content={
-                                            <div className="max-w-64 px-1 py-0.5">
-                                                <div className="text-sm font-cinzel">
-                                                    <FontAwesomeIcon icon={icon} /> {label}
-                                                </div>
-                                                <div className="text-xs">{hint}</div>
-                                            </div>
-                                        }
-                                    >
-                                        <button
-                                            type="button"
-                                            disabled={isOtherPending}
-                                            onClick={() => onQuickReact(type)}
-                                            className={classNames(
-                                                "flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 transition-opacity duration-200 cursor-pointer disabled:cursor-default",
-                                                isOtherPending ? "opacity-30" : "opacity-70 hover:!opacity-100"
-                                            )}
-                                        >
-                                            <ReactionGlyph
-                                                icon={icon}
-                                                isPending={isThisPending}
-                                                className="text-lg text-primary"
-                                            />
-                                        </button>
-                                    </TouchTooltip>
-                                );
-                            })}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+            </CardCornerBadges>
             <SuggestionCardPreview
                 suggestion={suggestion}
                 orientation={isPlot ? "horizontal" : "vertical"}

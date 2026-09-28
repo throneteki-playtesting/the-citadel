@@ -215,6 +215,12 @@ export const reactionTypes = ["like", "dislike", "ignore"] as const;
 export type ReactionType = (typeof reactionTypes)[number];
 
 export const archiveReasons = ["usedInProject", "duplicate", "rejected", "other"] as const;
+export const archiveReasonLabels: Record<(typeof archiveReasons)[number], string> = {
+    usedInProject: "Used in a Project",
+    duplicate: "Duplicate",
+    rejected: "Rejected",
+    other: "Other"
+};
 
 /** Justification text per checklist rule, keyed by rule id - holds no pass/fail flag of its own,
  *  since that's always `checklistRules()`'s call, recomputed server-side at submit time. */
@@ -242,6 +248,8 @@ export interface ICardSuggestion extends IAuditable {
             lastSynced?: Date;
             /** shallow snapshot of watched fields as of the last sync, for the "what changed" edit message */
             lastSyncedSnapshot?: Record<string, unknown>;
+            /** the forum thread this suggestion was migrated from, before the Citadel managed its thread */
+            legacyUrl?: string;
         };
         /** Never client-writable - lives under `_metadata` so reacting/approving never bumps `updated`.
          *  `Date | string` since it's a plain ISO string once it crosses the wire as JSON. */
@@ -257,6 +265,9 @@ export interface ICardSuggestion extends IAuditable {
     card: ICard;
     /** true until formally Submitted; only `card` needs to be valid while true */
     draft: boolean;
+    /** Imported from the design team's spreadsheet with only its card - submitted, so visible to everyone,
+     *  but without `questions` until its designer completes it. Server-owned; completing it clears this. */
+    legacy?: boolean;
     questions: ISuggestionQuestions;
     /** always server-computed from card.text, never client-supplied */
     derived: IDerivedFields;
@@ -284,6 +295,8 @@ export type ISuggestionsListQuery = {
     unseen?: boolean;
     /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */
     myReactions?: string;
+    /** Only legacy suggestions a project card may already have been developed from - MANAGE_SUGGESTIONS_ARCHIVE only */
+    developed?: boolean;
 };
 
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who
@@ -301,6 +314,46 @@ export function suggestionReactionBlockReason(
     return !reactorDiscordId || suggestion.createdBy === reactorDiscordId
         ? "You cannot react to your own suggestion"
         : undefined;
+}
+
+/** A project card a legacy suggestion may already have been developed as - see GET /suggestions/:id/card-matches */
+export interface ISuggestionCardMatch {
+    project: { number: number; code: string; isDraft: boolean };
+    number: number;
+    /** Set for a draft project, whose slot holds each version as a separate candidate card - the one matched */
+    version?: SemanticVersion;
+    /** The card as it first entered the project - the version most likely to read like the suggestion. For a draft
+     *  project, the matched version itself. */
+    firstVersion: IPlaytestCard;
+    /** Other unarchived legacy suggestions this same card could equally have come from */
+    others: number;
+}
+
+export type ProjectCardRef = { project: { number: number; code: string }; number: number; version?: SemanticVersion };
+
+export function cardMatchLabel(match: ProjectCardRef) {
+    return `${match.project.code} #${match.number}`;
+}
+
+export function cardMatchKey(match: ProjectCardRef) {
+    return `${match.project.number}|${match.number}|${match.version ?? ""}`;
+}
+
+export interface ISuggestionCardMatches {
+    matches: ISuggestionCardMatch[];
+    /** Set once linked to a draft project's card instead, which archives the suggestion when that project begins */
+    linkedTo?: { project: { number: number; code: string }; number: number };
+}
+
+/** A thread of the suggestion forum, as broadcast whenever one is started, changed or removed - never stored,
+ *  only announced, so an open search of the forum's threads (a legacy suggestion being completed) refreshes */
+export interface ISuggestionForumThread {
+    id: string;
+}
+
+/** Shared by the approve route (the actual gate) and the approval panel (to explain the disabled button) */
+export function suggestionApprovalBlockReason(suggestion: Pick<ICardSuggestion, "legacy">): string | undefined {
+    return suggestion.legacy ? "Legacy suggestions must be completed before they can be approved" : undefined;
 }
 
 type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];

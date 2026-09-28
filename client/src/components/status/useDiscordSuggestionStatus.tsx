@@ -35,6 +35,14 @@ export function useDiscordSuggestionStatus(id: string) {
                 color: "default"
             };
         }
+        if (suggestion.legacy) {
+            return {
+                title,
+                icon: <FontAwesomeIcon icon={faDiscord} />,
+                description: "Legacy suggestions cannot be synced with Discord - complete it to post it",
+                color: "default"
+            };
+        }
         if (status === "start" || status === "progress" || isSyncing) {
             return {
                 title,

@@ -10,6 +10,7 @@ import PermissionEnum from "./permissions";
 import { logCategories, logSeverities } from "./logs";
 import { sanitiseHtml } from "../richText/sanitise";
 import { PIVOT_POINT_MAX_LENGTH } from "../designGuidelines/pivotPoints";
+import { DEFAULT_NEUTRAL_WEIGHT, DEFAULT_TREND_RANGE, trendRanges } from "./settings";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
@@ -252,7 +253,8 @@ export const RenderedCard = {
 
 // Snapshot of watched fields at last Discord sync, for the suggestion forum's "what changed" edit message
 const DiscordMetadataWithSnapshot = DiscordMetadata.keys({
-    lastSyncedSnapshot: Joi.object().unknown(true)
+    lastSyncedSnapshot: Joi.object().unknown(true),
+    legacyUrl: Joi.string().uri()
 });
 
 const ArchivedInfo = Joi.object({
@@ -355,6 +357,8 @@ const suggestionSharedFields = {
     updated: Joi.date(),
     updatedBy: Joi.string(),
     archived: ArchivedInfo,
+    // Server-owned, like engagement - every route carries the stored value over whatever a body claims
+    legacy: Joi.boolean(),
     _metadata: Joi.object({
         discord: DiscordMetadataWithSnapshot,
         engagement: SuggestionEngagement
@@ -574,7 +578,11 @@ export const Settings = {
             minimumLikesThreshold: Joi.number().integer().min(1).default(3),
             rewardTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
             punishmentTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
-            loyaltyTags: Joi.array().items(Joi.string().trim()).default([])
+            loyaltyTags: Joi.array().items(Joi.string().trim()).default([]),
+            neutralWeight: Joi.number().min(1).max(10).precision(1).default(DEFAULT_NEUTRAL_WEIGHT),
+            defaultTrendRange: Joi.string()
+                .valid(...trendRanges)
+                .default(DEFAULT_TREND_RANGE)
         })
     }
 };

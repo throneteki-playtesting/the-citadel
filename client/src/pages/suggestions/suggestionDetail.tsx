@@ -9,8 +9,7 @@ import {
     useGetSuggestionQuery,
     useReactToSuggestionMutation,
     useRenderImageMutation,
-    useUnapproveSuggestionMutation,
-    useUnarchiveSuggestionMutation
+    useUnapproveSuggestionMutation
 } from "../../api";
 import Permission from "common/models/permissions";
 import { hasPermission, renderCardSuggestion } from "common/utils";
@@ -31,6 +30,7 @@ import {
     faAngleLeft,
     faCheckCircle,
     faCircleQuestion,
+    faClockRotateLeft,
     faClone,
     faEyeSlash,
     faFileImage,
@@ -39,7 +39,6 @@ import {
     faThumbsDown,
     faThumbsUp,
     faTrash,
-    faTriangleExclamation,
     faXmarkCircle,
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
@@ -52,11 +51,18 @@ import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../hooks/useAuth";
 import { User } from "common/models/auth";
 import { showApiErrorToast } from "../../api/errors";
-import { downloadBlob } from "../../utils";
+import { cardThumbnailWidthRem, downloadBlob } from "../../utils";
 import usePageTitle from "../../hooks/usePageTitle";
 import EditSuggestionModal from "./editSuggestionModal";
 import ConfirmModal from "../../components/confirmModal";
-import { Code, ICardSuggestion, ILabeledCard, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
+import {
+    Code,
+    ICardSuggestion,
+    ILabeledCard,
+    ReactionType,
+    suggestionApprovalBlockReason,
+    suggestionReactionBlockReason
+} from "common/models/cards";
 import { DeepPartial } from "common/types";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { SlimChecklistNotice } from "../../components/designGuidelines/suggestionChecklist";
@@ -74,10 +80,13 @@ import Timestamp from "../../components/timestamp";
 import ReactionCount from "../../components/reactionCount";
 import { TouchTooltip } from "../../components/touchTooltip";
 import StatusNotice from "../../components/statusNotice";
-import { EASE_STANDARD } from "../../constants";
+import { EASE_STANDARD, inertButtonClasses, LEGACY_SUGGESTION_DESCRIPTION } from "../../constants";
 import { useSearchTDBCardsQuery } from "../../api/thronesdb";
-import ArtworkFocus from "../../components/artwork/artworkFocus";
+import CardFocusThumbnail from "../../components/cardFocusThumbnail";
 import { IRewardPunishmentOption } from "common/models/settings";
+import LegacySuggestionPanel from "./legacySuggestionPanel";
+import ArchivedSuggestionNotice from "./archivedSuggestionNotice";
+import LegacyCardMatches from "./legacyCardMatches";
 
 // Shared reference rather than a fresh `?? []` every render, matching editSuggestionModal.tsx's own use
 const EMPTY_STRINGS: string[] = [];
@@ -202,62 +211,6 @@ function answerTileForBoolean(question: SuggestionQuestionMeta, value: boolean |
     return option ? <AnswerTile label={option.label} description={option.description} /> : null;
 }
 
-// A vertical card's box is w-28 (7rem) at aspect-[240/333]. A plot is the same footprint transposed -
-// as wide as a vertical card is tall, rather than reading squeezed/landscape-cramped.
-const VERTICAL_CARD_WIDTH_REM = 7;
-const PLOT_CARD_WIDTH_REM = (VERTICAL_CARD_WIDTH_REM * 333) / 240;
-
-/** One printed ThronesDB card, at (roughly) its real shape - a plot stays landscape, transposed
- *  from the vertical card's own footprint. Hover/tap zoom + click-to-focus mirrors ArtworkFocus. */
-function CardThumbnail({ card }: { card: ILabeledCard }) {
-    const [origin, setOrigin] = useState<DOMRect>();
-    const imgRef = useRef<HTMLImageElement | null>(null);
-    const isPlot = card.type === "plot";
-    const url = `https://thronesdb.com/card/${card.code}`;
-    const focus = () => setOrigin(imgRef.current?.getBoundingClientRect());
-
-    return (
-        <>
-            <motion.div
-                className="relative shrink-0 cursor-zoom-in overflow-hidden rounded-md"
-                style={{
-                    width: `${isPlot ? PLOT_CARD_WIDTH_REM : VERTICAL_CARD_WIDTH_REM}rem`,
-                    aspectRatio: isPlot ? "333/240" : "240/333"
-                }}
-                whileHover={{ scale: 0.97 }}
-                whileTap={{ scale: 0.94 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                role="button"
-                tabIndex={0}
-                aria-label={`View ${card.label} up close`}
-                onClick={focus}
-                onKeyDown={(event: React.KeyboardEvent) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        focus();
-                    }
-                }}
-            >
-                <img
-                    ref={imgRef}
-                    src={card.imageUrl}
-                    alt={card.label}
-                    className="absolute inset-0 size-full object-contain"
-                />
-            </motion.div>
-            <ArtworkFocus
-                origin={origin}
-                src={card.imageUrl}
-                url={url}
-                alt={card.label}
-                linkLabel="View on ThronesDB"
-                showSkeleton={false}
-                onClose={() => setOrigin(undefined)}
-            />
-        </>
-    );
-}
-
 /** A titled group of printed ThronesDB cards, resolved by code - shared by Comparable Cards and
  *  Combos With. Resolved by the parent (ComparableCombosSection), not fetched here - see that component. */
 function CardCodesGroup({
@@ -295,7 +248,13 @@ function CardCodesGroup({
                                 transition={{ duration: 0.2, delay: index * 0.03 }}
                             >
                                 {card ? (
-                                    <CardThumbnail card={card} />
+                                    <CardFocusThumbnail
+                                        imageUrl={card.imageUrl}
+                                        alt={card.label}
+                                        isPlot={card.type === "plot"}
+                                        url={`https://thronesdb.com/card/${card.code}`}
+                                        linkLabel="View on ThronesDB"
+                                    />
                                 ) : (
                                     <Chip size="sm" variant="flat">
                                         {code}
@@ -310,7 +269,7 @@ function CardCodesGroup({
     );
 }
 
-// Mirrors CardThumbnail's own fixed pixel widths so a group's one-row width can be computed directly
+// Mirrors CardFocusThumbnail's own fixed pixel widths so a group's one-row width can be computed directly
 // from its cards' types, without measuring rendered cards - see ComparableCombosSection for why.
 const CARD_GAP_PX = 0.5 * 16; // gap-2 between cards within a group
 const GROUP_GAP_PX = 1 * 16; // gap-4 between the two groups when side by side
@@ -321,7 +280,7 @@ function groupRowWidthPx(codes: string[], cardsByCode: Map<string, ILabeledCard>
     }
     const total = codes.reduce((sum, code) => {
         const isPlot = cardsByCode.get(code)?.type === "plot";
-        return sum + (isPlot ? PLOT_CARD_WIDTH_REM : VERTICAL_CARD_WIDTH_REM) * 16;
+        return sum + cardThumbnailWidthRem(isPlot) * 16;
     }, 0);
     return total + (codes.length - 1) * CARD_GAP_PX;
 }
@@ -406,7 +365,6 @@ const SuggestionDetail = () => {
     const { data: suggestion, isLoading } = useGetSuggestionQuery(id ?? "", { skip: !id });
     const [deleteSuggestion, { isLoading: isDeleting }] = useDeleteSuggestionMutation();
     const [renderImage, { isLoading: isRenderingImage }] = useRenderImageMutation();
-    const [unarchiveSuggestion, { isLoading: isUnarchiving }] = useUnarchiveSuggestionMutation();
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
     const [approveSuggestion, { isLoading: isApproving }] = useApproveSuggestionMutation();
@@ -432,8 +390,8 @@ const SuggestionDetail = () => {
     );
     const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
     const canRenderCard = usePermission(Permission.RENDER_CARDS);
-    const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
     const canApprove = usePermission(Permission.APPROVE_SUGGESTIONS);
+    const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
 
     const approvedBy = suggestion?._metadata?.engagement?.approvedBy;
     const { user: approver } = useUser(approvedBy);
@@ -473,16 +431,19 @@ const SuggestionDetail = () => {
 
     let sectionIndex = 0;
 
-    const checklistResults = checklistRules({
-        card: suggestion.card,
-        questions: suggestion.questions,
-        derived: suggestion.derived,
-        pivotPoints: suggestion.pivotPoints,
-        plotMedian: plotPoolMedian?.median,
-        rewardTypes: rewardTypeOptions,
-        punishmentTypes: punishmentTypeOptions,
-        loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
-    });
+    // A legacy suggestion has never answered its questions, so there is nothing yet to check them against
+    const checklistResults = suggestion.legacy
+        ? []
+        : checklistRules({
+              card: suggestion.card,
+              questions: suggestion.questions,
+              derived: suggestion.derived,
+              pivotPoints: suggestion.pivotPoints,
+              plotMedian: plotPoolMedian?.median,
+              rewardTypes: rewardTypeOptions,
+              punishmentTypes: punishmentTypeOptions,
+              loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
+          });
 
     const onExportPNG = async () => {
         try {
@@ -503,14 +464,6 @@ const SuggestionDetail = () => {
             });
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Delete" });
-        }
-    };
-    const onUnarchive = async () => {
-        try {
-            await unarchiveSuggestion({ id: suggestion.id! }).unwrap();
-            addToast({ title: "Unarchived", color: "success", description: "Suggestion is no longer archived" });
-        } catch (err) {
-            showApiErrorToast(err, { title: "Failed to Unarchive" });
         }
     };
     const reactions = suggestion._metadata?.engagement?.reactions ?? {};
@@ -568,29 +521,37 @@ const SuggestionDetail = () => {
         }
     };
 
-    // Mirrors suggestionApprovalPanel.tsx's own `awaiting` filter (minus the draft check, since a
+    // Mirrors the "awaiting" approval filter in suggestionServerFilter.ts (minus the draft check, since a
     // draft never reaches this page - see the redirect above).
+    const approvalBlockReason = suggestionApprovalBlockReason(suggestion);
+    // An archived suggestion is a record - it can still be deleted, but no longer edited (the server refuses too)
+    const isArchived = !!suggestion.archived;
     const isPendingDecision =
-        canApprove && !approvedBy && likedBy.length >= SUGGESTION_APPROVAL_VOTE_THRESHOLD && myReaction !== "ignore";
+        canApprove &&
+        !approvedBy &&
+        !approvalBlockReason &&
+        likedBy.length >= SUGGESTION_APPROVAL_VOTE_THRESHOLD &&
+        myReaction !== "ignore";
     // Ignore is a reaction, and a user can't react to their own suggestion (see
     // suggestionReactionBlockReason) - an approver reviewing their own suggestion only gets Approve.
     const canIgnore = !reactionBlockReason;
 
-    const rewardTiles = suggestion.questions.rewardTypes.map((id) => {
+    // Optional-chained throughout - a legacy suggestion has no `questions` at all
+    const rewardTiles = (suggestion.questions?.rewardTypes ?? EMPTY_STRINGS).map((id) => {
         const reward = rewardTypeOptions.find((r) => r.id === id);
         return <AnswerTile key={id} label={reward?.label ?? id} description={reward?.description ?? ""} />;
     });
-    const punishmentTiles = suggestion.questions.punishment.map((id) => {
+    const punishmentTiles = (suggestion.questions?.punishment ?? EMPTY_STRINGS).map((id) => {
         const punishment = punishmentTypeOptions.find((p) => p.id === id);
         return <AnswerTile key={id} label={punishment?.label ?? id} description={punishment?.description ?? ""} />;
     });
     const naturalTriggerTile = answerTileForBoolean(
         SUGGESTION_QUESTIONS.naturalTrigger,
-        suggestion.questions.naturalTrigger
+        suggestion.questions?.naturalTrigger
     );
     const repeatabilityTile = answerTileForBoolean(
         SUGGESTION_QUESTIONS.repeatabilityRestricted,
-        suggestion.questions.repeatabilityRestricted
+        suggestion.questions?.repeatabilityRestricted
     );
 
     // Bundled into HeaderActions' items - isDropdownOnly keeps it out of the desktop row entirely,
@@ -602,6 +563,8 @@ const SuggestionDetail = () => {
         color: approvedBy ? ("danger" as const) : undefined,
         onPress: approvedBy ? onUnapprove : onApprove,
         isLoading: approvedBy ? isUnapproving : isApproving,
+        isDisabled: !approvedBy && !!approvalBlockReason,
+        description: approvedBy ? undefined : approvalBlockReason,
         isStatus: true,
         isDropdownOnly: true
     };
@@ -617,28 +580,56 @@ const SuggestionDetail = () => {
                     >
                         <FontAwesomeIcon icon={faAngleLeft} /> All Suggestions
                     </PermissionedLink>
-                    <div className="order-2 sm:basis-full flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <div className="text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
-                            {suggestion.card.name}
-                        </div>
-                        {approvedBy && (
-                            <TouchTooltip
-                                content={
-                                    <div className="px-1 py-0.5 text-sm font-cinzel">
-                                        Approved by {approver?.displayname ?? "…"}
-                                    </div>
-                                }
-                            >
-                                <Chip
-                                    size="sm"
-                                    color="success"
-                                    variant="flat"
-                                    className="shrink-0 cursor-help"
-                                    startContent={<FontAwesomeIcon icon={faCheckCircle} className="text-xs" />}
-                                >
-                                    Approved
-                                </Chip>
-                            </TouchTooltip>
+                    <div className="order-2 sm:basis-full text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
+                        {suggestion.card.name}
+                        {(approvedBy || suggestion.legacy) && (
+                            <>
+                                {" "}
+                                <span className="inline-flex flex-wrap items-center gap-2 align-middle font-sans font-normal tracking-normal">
+                                    {approvedBy && (
+                                        <TouchTooltip
+                                            content={
+                                                <div className="px-1 py-0.5 text-sm font-cinzel">
+                                                    Approved by {approver?.displayname ?? "…"}
+                                                </div>
+                                            }
+                                        >
+                                            <Chip
+                                                size="sm"
+                                                color="success"
+                                                variant="flat"
+                                                className="shrink-0 cursor-help"
+                                                startContent={
+                                                    <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                                                }
+                                            >
+                                                Approved
+                                            </Chip>
+                                        </TouchTooltip>
+                                    )}
+                                    {suggestion.legacy && (
+                                        <TouchTooltip
+                                            content={
+                                                <div className="px-1 py-0.5 text-sm max-w-64">
+                                                    {LEGACY_SUGGESTION_DESCRIPTION}
+                                                </div>
+                                            }
+                                        >
+                                            <Chip
+                                                size="sm"
+                                                color="primary"
+                                                variant="flat"
+                                                className="shrink-0 cursor-help"
+                                                startContent={
+                                                    <FontAwesomeIcon icon={faClockRotateLeft} className="text-xs" />
+                                                }
+                                            >
+                                                Legacy
+                                            </Chip>
+                                        </TouchTooltip>
+                                    )}
+                                </span>
+                            </>
                         )}
                     </div>
                     <div className="order-3 basis-full flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
@@ -657,17 +648,30 @@ const SuggestionDetail = () => {
 
                 <div className="flex flex-col items-end gap-2 self-end sm:self-start">
                     <div className="flex items-center gap-2">
-                        {canApprove && (
-                            <Button
-                                className="hidden sm:inline-flex"
-                                color={approvedBy ? "danger" : "default"}
-                                variant="flat"
-                                isLoading={approvedBy ? isUnapproving : isApproving}
-                                onPress={approvedBy ? onUnapprove : onApprove}
-                            >
-                                <ApproveButtonContent approved={!!approvedBy} />
-                            </Button>
-                        )}
+                        {canApprove &&
+                            (!approvedBy && approvalBlockReason ? (
+                                <TouchTooltip
+                                    content={<div className="px-1 py-0.5 text-sm max-w-64">{approvalBlockReason}</div>}
+                                >
+                                    <Button
+                                        className={classNames("hidden sm:inline-flex", inertButtonClasses)}
+                                        variant="flat"
+                                        disableRipple
+                                    >
+                                        <ApproveButtonContent approved={false} />
+                                    </Button>
+                                </TouchTooltip>
+                            ) : (
+                                <Button
+                                    className="hidden sm:inline-flex"
+                                    color={approvedBy ? "danger" : "default"}
+                                    variant="flat"
+                                    isLoading={approvedBy ? isUnapproving : isApproving}
+                                    onPress={approvedBy ? onUnapprove : onApprove}
+                                >
+                                    <ApproveButtonContent approved={!!approvedBy} />
+                                </Button>
+                            ))}
                         <div className="hidden sm:flex items-center gap-1.5">
                             <DiscordSuggestionStatus id={suggestion.id!} isIconOnly />
                         </div>
@@ -688,19 +692,12 @@ const SuggestionDetail = () => {
                                     icon: <FontAwesomeIcon icon={faClone} />,
                                     onPress: () => setEditing({ card: suggestion.card })
                                 },
-                                canEdit && {
-                                    key: "edit",
-                                    title: "Edit",
-                                    icon: <FontAwesomeIcon icon={faPencil} />,
-                                    onPress: () => setEditing(suggestion)
-                                },
-                                suggestion.archived &&
-                                    canManageArchive && {
-                                        key: "unarchive",
-                                        title: "Unarchive",
-                                        icon: <FontAwesomeIcon icon={faTriangleExclamation} />,
-                                        onPress: onUnarchive,
-                                        isLoading: isUnarchiving
+                                canEdit &&
+                                    !isArchived && {
+                                        key: "edit",
+                                        title: "Edit",
+                                        icon: <FontAwesomeIcon icon={faPencil} />,
+                                        onPress: () => setEditing(suggestion)
                                     },
                                 canDelete && {
                                     key: "delete",
@@ -923,11 +920,13 @@ const SuggestionDetail = () => {
                             </motion.div>
                         )}
                     </AnimatePresence>
-                    <SlimChecklistNotice
-                        results={checklistResults}
-                        justifications={suggestion.checklistJustifications}
-                        className="mt-3"
-                    />
+                    {checklistResults.length > 0 && (
+                        <SlimChecklistNotice
+                            results={checklistResults}
+                            justifications={suggestion.checklistJustifications}
+                            className="mt-3"
+                        />
+                    )}
                 </Reveal>
 
                 <Reveal index={sectionIndex++} className="flex-1 min-w-0 flex flex-col gap-6">
@@ -940,25 +939,21 @@ const SuggestionDetail = () => {
                         </div>
                     )}
 
-                    {suggestion.archived && (
-                        <div className="border border-warning/40 bg-warning/10 p-3 text-sm">
-                            <div className="font-semibold">Archived - {suggestion.archived.reason}</div>
-                            {suggestion.archived.details && (
-                                <div className="text-xs mt-1">{suggestion.archived.details}</div>
-                            )}
-                            {suggestion.archived.project && (
-                                <div className="text-xs mt-1">
-                                    Used for {suggestion.archived.project.code} card #
-                                    {suggestion.archived.project.number}
-                                </div>
-                            )}
-                            <div className="text-xs mt-1 text-foreground/50">
-                                Archived {new Date(suggestion.archived.archivedAt).toLocaleDateString()}
-                                {suggestion.archived.archivedBy
-                                    ? ` by ${suggestion.archived.archivedBy}`
-                                    : " automatically"}
-                            </div>
-                        </div>
+                    {suggestion.archived && <ArchivedSuggestionNotice archived={suggestion.archived} />}
+
+                    {canManageArchive && suggestion.legacy && !isArchived && (
+                        <LegacyCardMatches suggestion={suggestion} />
+                    )}
+
+                    {suggestion.legacy && (
+                        <LegacySuggestionPanel
+                            suggestion={suggestion}
+                            canComplete={canEdit && !isArchived}
+                            onComplete={() => setEditing(suggestion)}
+                            canDelete={canDelete}
+                            onDelete={() => setIsConfirmingDelete(true)}
+                            canLink={canManageArchive && !isArchived}
+                        />
                     )}
 
                     {rewardTiles.length > 0 && (
@@ -996,7 +991,7 @@ const SuggestionDetail = () => {
                         </div>
                     )}
 
-                    {suggestion.pivotPoints.length > 0 && (
+                    {(suggestion.pivotPoints?.length ?? 0) > 0 && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Pivot Points</SectionTitle>
                             <SectionBlurb>{SUGGESTION_QUESTIONS.pivotPoints.blurb}</SectionBlurb>
@@ -1048,7 +1043,11 @@ const SuggestionDetail = () => {
                 isOpen={isConfirmingDelete}
                 isLoading={isDeleting}
                 title="Delete this suggestion?"
-                content="This is permanent and cannot be undone."
+                content={
+                    isArchived
+                        ? "This suggestion is archived - it's kept as a record, so it doesn't need deleting. If you still want it gone, this is permanent and cannot be undone."
+                        : "This is permanent and cannot be undone."
+                }
                 confirmContent="Delete"
                 onConfirm={doDelete}
                 onClose={() => setIsConfirmingDelete(false)}

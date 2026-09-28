@@ -85,11 +85,12 @@ enum Permission {
     DELETE_SUGGESTIONS = "DELETE_SUGGESTIONS",
     /** Can approve (or unapprove) a submitted suggestion */
     APPROVE_SUGGESTIONS = "APPROVE_SUGGESTIONS",
-    /** Can see archived suggestions, filter by archive reason, and unarchive one */
+    /** Can see archived suggestions, and filter by archive reason */
     MANAGE_SUGGESTIONS_ARCHIVE = "MANAGE_SUGGESTIONS_ARCHIVE",
     /** Can sync suggestion discord forum threads */
     SYNC_SUGGESTIONS_DISCORD = "SYNC_SUGGESTIONS_DISCORD",
-    /** Can view and edit suggestion settings (minimum likes threshold, reward/punishment types, loyalty tags) */
+    /** Can open and edit suggestion settings (minimum likes threshold, reward/punishment types, loyalty tags and
+     *  the rest) - reading them needs only READ_SUGGESTIONS, since the suggestions pages draw with them */
     EDIT_SETTINGS_SUGGESTIONS = "EDIT_SETTINGS_SUGGESTIONS",
     /** Can view a single user by ID */
     READ_USER = "READ_USER",

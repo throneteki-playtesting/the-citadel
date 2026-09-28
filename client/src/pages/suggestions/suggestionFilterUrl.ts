@@ -1,6 +1,15 @@
-import { ChallengeIcon, challengeIcons, Faction, Icons, ReactionType, Type } from "common/models/cards";
+import {
+    ChallengeIcon,
+    challengeIcons,
+    Faction,
+    factions,
+    Icons,
+    ReactionType,
+    Type,
+    types
+} from "common/models/cards";
 import { escapeRegExp } from "common/utils";
-import { SuggestionFilterValue } from "../../components/data/suggestionFilter";
+import { SuggestionFilterValue, SuggestionSegment } from "../../components/data/suggestionFilter";
 import {
     NumericFilterValue,
     NumericOperator,
@@ -17,6 +26,23 @@ function encodeArray(value?: unknown[]): string | undefined {
 
 function decodeArray(raw: string | null): string[] {
     return raw ? raw.split(",").filter(Boolean) : [];
+}
+
+// `stark,tyrell:event` - a faction alone, or faction:type
+export function encodeSegments(segments?: SuggestionSegment[]): string | undefined {
+    return encodeArray(
+        segments?.map((segment) => (segment.type ? `${segment.faction}:${segment.type}` : segment.faction))
+    );
+}
+
+export function decodeSegments(raw: string | null): SuggestionSegment[] {
+    return decodeArray(raw).flatMap((entry) => {
+        const [faction, type] = entry.split(":");
+        if (!factions.includes(faction as Faction) || (type !== undefined && !types.includes(type as Type))) {
+            return [];
+        }
+        return [{ faction: faction as Faction, ...(type && { type: type as Type }) }];
+    });
 }
 
 function encodeText(value: unknown): string | undefined {
@@ -88,6 +114,10 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
     set("myReactions", encodeArray(filter.myReactions));
     set("tags", encodeArray(filter.tags));
     set("iconic", encodeBoolean(filter.iconic));
+    set("legacy", encodeBoolean(filter.legacy));
+    set("archived", filter.archived ? "true" : undefined);
+    set("developed", filter.developed ? "true" : undefined);
+    set("segments", encodeSegments(filter.segments));
     return params;
 }
 
@@ -105,6 +135,7 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     const hasPlotStats = [income, initiative, claim, reserve].some((entry) => entry !== undefined);
 
     const byUsers = decodeArray(params.get("byUsers"));
+    const segments = decodeSegments(params.get("segments"));
     const types = decodeArray(params.get("type")) as Type[];
     const factions = decodeArray(params.get("faction")) as Faction[];
     const traits = decodeArray(params.get("traits"));
@@ -141,6 +172,10 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
         approvedFilter: asApprovalFilter(approvedFilterRaw),
         myReactions: myReactions.length > 0 ? myReactions : undefined,
         tags: tags.length > 0 ? tags : undefined,
-        iconic: decodeBoolean(iconicRaw)
+        iconic: decodeBoolean(iconicRaw),
+        legacy: decodeBoolean(params.get("legacy")),
+        archived: params.get("archived") === "true" ? true : undefined,
+        developed: params.get("developed") === "true" ? true : undefined,
+        segments: segments.length > 0 ? segments : undefined
     };
 }

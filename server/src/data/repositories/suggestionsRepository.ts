@@ -37,6 +37,9 @@ const LIKES_STAGES: Document[] = [
     }
 ];
 
+// How recently a suggestion was submitted for the overview to still call it new
+const NEW_SUGGESTION_DAYS = 7;
+
 export default class SuggestionsRepository extends BasicAuditableRepository<
     "suggestion",
     ICardSuggestion,
@@ -107,13 +110,13 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
         return data;
     }
 
-    // Drafts never sync to Discord - first sync is submission (draft flips to false). internalSync
+    // Drafts and legacy suggestions never sync to Discord - first sync is submission or completion. internalSync
     // fire-and-forgets for client requests and awaits otherwise, same split cardsRepository.sync() uses.
     public async sync(syncing: ICardSuggestion): Promise<ICardSuggestion>;
     public async sync(syncing: ICardSuggestion[]): Promise<ICardSuggestion[]>;
     public async sync(syncing: SingleOrArray<ICardSuggestion>) {
         let data = asArray(syncing);
-        const syncable = data.filter((suggestion) => !suggestion.draft);
+        const syncable = data.filter((suggestion) => !suggestion.draft && !suggestion.legacy);
         if (syncable.length > 0) {
             await this.internalSync([
                 () =>
@@ -239,7 +242,10 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
         const [traits, submitters] = await Promise.all([
             this.database.collection.distinct("card.traits", { draft: false }),
             this.database.collection
-                .aggregate<{ discordId: string; displayname: string }>([
+                .aggregate<{
+                    discordId: string;
+                    displayname: string;
+                }>([
                     { $match: { draft: false } },
                     { $group: { _id: "$createdBy" } },
                     { $lookup: { from: "users", localField: "_id", foreignField: "discordId", as: "user" } },
@@ -250,6 +256,70 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
                 .toArray()
         ]);
         return { traits: (traits as string[]).sort(), submitters };
+    }
+
+    // The overview's headline numbers across every submitted, unarchived suggestion, legacy included and also counted
+    // apart - except awaiting approval, which a legacy suggestion can never be until it's completed
+    public async feedStats(discordId: string | undefined) {
+        const collection = this.database.collection;
+        const active = { draft: false, archived: { $exists: false } };
+        const recent = {
+            ...active,
+            created: { $gte: new Date(Date.now() - NEW_SUGGESTION_DAYS * 24 * 60 * 60 * 1000) }
+        };
+        const reactionOf = (id: string) => `_metadata.engagement.reactions.${id}`;
+        const count = (filter: object) => collection.countDocuments(filter as MongoFilter<ICardSuggestion>);
+
+        const [total, legacy, submitters, awaiting, unreacted, mine, myLegacy, myDrafts] = await Promise.all([
+            count(active),
+            count({ ...active, legacy: true }),
+            collection.distinct("createdBy", active as MongoFilter<ICardSuggestion>),
+            collection
+                .aggregate<{ count: number }>([
+                    {
+                        $match: {
+                            ...active,
+                            legacy: { $exists: false },
+                            "_metadata.engagement.approvedBy": { $exists: false },
+                            // An already-ignored suggestion isn't awaiting anything from this viewer
+                            ...(discordId && { [`${reactionOf(discordId)}.type`]: { $ne: "ignore" } })
+                        }
+                    },
+                    ...LIKES_STAGES,
+                    { $match: { likes: { $gte: SUGGESTION_APPROVAL_VOTE_THRESHOLD } } },
+                    { $count: "count" }
+                ])
+                .toArray()
+                .then(([result]) => result?.count ?? 0),
+            // Submitted recently and not reacted to at all - their own excluded, since "new to you" is moot there
+            discordId
+                ? count({ ...recent, createdBy: { $ne: discordId }, [reactionOf(discordId)]: { $exists: false } })
+                : count(recent),
+            discordId ? count({ ...active, createdBy: discordId }) : 0,
+            discordId ? count({ ...active, legacy: true, createdBy: discordId }) : 0,
+            discordId ? count({ draft: true, createdBy: discordId }) : 0
+        ]);
+
+        return {
+            total,
+            legacy,
+            totalSubmitters: submitters.length,
+            awaitingApproval: awaiting,
+            unreacted,
+            mine,
+            myLegacy,
+            myDrafts
+        };
+    }
+
+    // A suggestion migrated from an old forum thread keeps that thread's date - which the ordinary
+    // create/update path can never set, as it always stamps `created` itself
+    public async setCreated(id: string, created: Date): Promise<ICardSuggestion | undefined> {
+        const suggestion = await this.findAndUpdate(id, { $set: { created } } as UpdateFilter<ICardSuggestion>);
+        if (suggestion) {
+            this.broadcastUpdates([suggestion], { silent: true });
+        }
+        return suggestion;
     }
 
     public async setApproval(id: string, approvedBy: string | undefined): Promise<ICardSuggestion | undefined> {

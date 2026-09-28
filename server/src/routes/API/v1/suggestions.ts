@@ -3,16 +3,20 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
+import { isEqual } from "lodash-es";
 import {
     canViewSuggestion,
+    cardMatchLabel,
+    ICard,
     ICardSuggestion,
     ICardSuggestionFilterable,
     ISuggestionsListQuery,
     reactionTypes,
+    suggestionApprovalBlockReason,
     suggestionReactionBlockReason
 } from "common/models/cards";
 import { dataService, thronesDbCardPoolService } from "@/services";
-import { hasPermission, validate } from "common/utils";
+import { hasPermission, SemanticVersion, validate } from "common/utils";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
 import { Principal } from "common/models/auth";
@@ -27,9 +31,21 @@ import { LogCategory } from "common/models/logs";
 import { deriveFields } from "common/designGuidelines/deriveFields";
 import { computeSuggestionTags } from "common/designGuidelines/suggestionTags";
 import { checklistRules } from "common/designGuidelines/checklistRules";
-import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { ApiFieldError } from "@/types";
 import { syncSuggestionForum } from "@/discord/forums/suggestionForum";
+import {
+    getPossiblyDevelopedSuggestionIds,
+    getSuggestionCardMatches,
+    invalidateSuggestionCardMatches
+} from "@/services/suggestionCardMatches";
+import {
+    describeLegacyThread,
+    fetchSuggestionForumThread,
+    fetchThreadLikes,
+    fetchThreadsStartedBy,
+    isThreadMigrated,
+    threadMatchesCard
+} from "@/discord/forums/legacySuggestionThreads";
 
 const router = express.Router();
 
@@ -50,15 +66,16 @@ async function getSuggestions(
 const SuggestionFilterExtensions = { likes: Joi.number() };
 
 const getQuerySchema = (
-    getRequestSchema<ICardSuggestionFilterable>(
-        Schemas.CardSuggestion.Full.keys(SuggestionFilterExtensions),
-        { created: "desc" }
-    ) as Joi.ObjectSchema<IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery>
+    getRequestSchema<ICardSuggestionFilterable>(Schemas.CardSuggestion.Full.keys(SuggestionFilterExtensions), {
+        created: "desc"
+    }) as Joi.ObjectSchema<IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery>
 ).keys({
     // Handled by applyReactionVisibilityFilter below, not the generic `filter` param - see
     // ISuggestionsListQuery's comment for why these two can't go through the generic filter schema
     unseen: Joi.boolean(),
-    myReactions: Joi.string()
+    myReactions: Joi.string(),
+    // Handled by applyPossiblyDevelopedFilter below - it depends on the cards collection, not the suggestion itself
+    developed: Joi.boolean()
 });
 
 // Resolves unseen/myReactions against the principal's discordId, merged into `req.query.filter` - NOT
@@ -109,8 +126,10 @@ const restrictArchivedVisibility = asyncHandler<unknown, unknown, unknown, IGetR
             return next();
         }
 
+        // Asking for unarchived suggestions only is what everyone gets anyway - the client's filter always sends
+        // it - so only a filter reaching for archived ones is refused
         const filters = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter];
-        if (filters.some((f) => f?.archived !== undefined)) {
+        if (filters.some((f) => f?.archived !== undefined && !isEqual(f.archived, { $exists: false }))) {
             throw new PermissionErrorResponse();
         }
 
@@ -159,10 +178,6 @@ const restrictListDraftVisibility = asyncHandler<unknown, unknown, unknown, IGet
 type SuggestionEngagement = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>;
 const EMPTY_ENGAGEMENT: SuggestionEngagement = { reactions: {} };
 
-function countLikes(reactions?: SuggestionEngagement["reactions"]) {
-    return Object.values(reactions ?? {}).filter((entry) => entry.type === "like").length;
-}
-
 // Always server-computed from `card.text` - never trusted from the client regardless of what a
 // request body claims it to be.
 function forceDerived(req: Request, _res: Response, next: NextFunction) {
@@ -182,10 +197,24 @@ const forceTags = asyncHandler(async (req: Request, _res: Response, next: NextFu
     next();
 });
 
+// `legacy` and `_metadata.discord.legacyUrl` are only ever set server-side (the spreadsheet import, and
+// a migration from an old forum thread), so every save carries the stored values over whatever the body says
+function applyServerOwnedFields(body: ICardSuggestion, existing?: ICardSuggestion) {
+    delete body.legacy;
+    if (existing?.legacy) {
+        body.legacy = true;
+    }
+    const legacyUrl = existing?._metadata?.discord?.legacyUrl;
+    const discord = { ...body._metadata?.discord };
+    delete discord.legacyUrl;
+    body._metadata = { ...body._metadata, discord: legacyUrl ? { ...discord, legacyUrl } : discord };
+}
+
 // Create (POST /) always starts a fresh draft with no engagement yet - there's nothing to preserve
 // or clear, since nothing has been submitted for anyone to react to or approve.
 function prepareCreateBody(req: Request, _res: Response, next: NextFunction) {
     req.body.draft = true;
+    applyServerOwnedFields(req.body);
     req.body._metadata = { ...req.body._metadata, engagement: EMPTY_ENGAGEMENT };
     next();
 }
@@ -195,21 +224,77 @@ function prepareCreateBody(req: Request, _res: Response, next: NextFunction) {
 function prepareDraftSaveBody(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = true;
+    applyServerOwnedFields(req.body, existing);
     req.body._metadata = { ...req.body._metadata, engagement: existing._metadata?.engagement ?? EMPTY_ENGAGEMENT };
     next();
 }
 
-// Always clears reactions/approval unconditionally - an edit invalidates them rather than letting
-// them carry over.
-function prepareLiveSaveBody(req: Request, _res: Response, next: NextFunction) {
+// Clears reactions/approval, as an edit invalidates them - except when completing a legacy suggestion, whose
+// reactions were given to the card as it already stood. Completing is also what clears `legacy`.
+function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
+    const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = false;
+    applyServerOwnedFields(req.body, existing);
+    delete req.body.legacy;
+    const reactions = existing.legacy ? (existing._metadata?.engagement?.reactions ?? {}) : {};
+    req.body._metadata = { ...req.body._metadata, engagement: { reactions } };
+    next();
+}
+
+// A migration (POST /migrate/:threadId) is submitted straight away, never left as a draft - its old thread
+// already had people reacting to it, so it gets a thread of its own to carry on in
+function prepareMigrateBody(req: Request, _res: Response, next: NextFunction) {
+    req.body.draft = false;
+    applyServerOwnedFields(req.body);
     req.body._metadata = { ...req.body._metadata, engagement: EMPTY_ENGAGEMENT };
     next();
 }
 
+// Reactions given in the Citadel stand - an old thread's 👍s only fill in for people who haven't reacted here
+// yet. Nobody's own suggestion counts.
+function mergeReactions(
+    designerId: string,
+    reactions: SuggestionEngagement["reactions"] | undefined,
+    threadLikes: string[]
+): SuggestionEngagement["reactions"] {
+    const merged: SuggestionEngagement["reactions"] = { ...reactions };
+    delete merged[designerId];
+    const now = new Date();
+    for (const discordId of threadLikes) {
+        if (discordId !== designerId && !merged[discordId]) {
+            merged[discordId] = { type: "like", reactedAt: now };
+        }
+    }
+    return merged;
+}
+
+// Only its own starter can migrate a thread, and only once - the same checks whichever route is asking
+async function loadLegacyThread(threadId: string, designerId: string) {
+    const thread = await fetchSuggestionForumThread(threadId);
+    if (!thread) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", "That is not a thread of the suggestion forum");
+    }
+    const legacy = describeLegacyThread(thread);
+    if (legacy.ownerId !== designerId) {
+        throw new ApiErrorResponse(
+            StatusCodes.FORBIDDEN,
+            "Validation Error",
+            "Only the person who started a thread can migrate it"
+        );
+    }
+    if (await isThreadMigrated(legacy.url)) {
+        throw new ApiErrorResponse(
+            StatusCodes.BAD_REQUEST,
+            "Validation Error",
+            "This thread has already been migrated to the Citadel"
+        );
+    }
+    return { thread, legacy };
+}
+
 // Recomputes checklistRules() server-side and requires justification for every rule failing - not
 // declared in the Joi schema, since that depends on card/questions/derived/pivotPoints together.
-async function checklistJustificationErrors(suggestion: ICardSuggestion): Promise<ApiFieldError[]> {
+async function assertChecklistJustified(suggestion: ICardSuggestion) {
     const [plotMedian, settings] = await Promise.all([
         thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type),
         dataService.settings.getByType("suggestions")
@@ -225,12 +310,21 @@ async function checklistJustificationErrors(suggestion: ICardSuggestion): Promis
         loyaltyTags: settings?.loyaltyTags ?? []
     });
 
-    return results
+    const fields: ApiFieldError[] = results
         .filter((result) => result.status === "warn" && !suggestion.checklistJustifications?.[result.rule]?.trim())
         .map((result) => ({
             path: `checklistJustifications.${result.rule}`,
             message: "Is required"
         }));
+    if (fields.length > 0) {
+        throw new ApiErrorResponse(
+            StatusCodes.BAD_REQUEST,
+            "Validation Error",
+            `checklistJustifications: ${fields.map((f) => f.message).join(", ")}`,
+            undefined,
+            fields
+        );
+    }
 }
 
 function notFoundSuggestion(id: string): never {
@@ -244,6 +338,15 @@ function requireDiscordId(principal: Principal): string {
         throw new PermissionErrorResponse();
     }
     return principal.discordId;
+}
+
+// An archived suggestion is a record of a design that went somewhere, or was set aside - editing it would
+// rewrite that record. It can still be deleted.
+function rejectArchived(_req: Request, res: Response, next: NextFunction) {
+    if ((res.locals.suggestion as ICardSuggestion).archived) {
+        throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Validation Error", "Archived suggestions can't be edited");
+    }
+    next();
 }
 
 // asyncHandler-wrapped, not a plain async function - Express v4 never awaits/catches a bare async
@@ -270,6 +373,26 @@ function requiresEditOrOwnership(principal: Principal, req: Request, res: Respon
     );
 }
 
+// Narrows to legacy suggestions a project card may already have been developed from - worked out against every
+// card, so the suggestions' ids are what reaches the filter. Only for those who can archive them as that card.
+const applyPossiblyDevelopedFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, _res, next) => {
+    if (!req.query.developed) {
+        next();
+        return;
+    }
+    if (!hasPermission(getContext().principal, Permission.MANAGE_SUGGESTIONS_ARCHIVE)) {
+        throw new PermissionErrorResponse();
+    }
+    const ids = await getPossiblyDevelopedSuggestionIds();
+    req.query.filter = applyToFilter(req.query.filter, { id: { $in: ids } });
+    next();
+});
+
 // Read suggestions
 router.get(
     "/",
@@ -280,6 +403,7 @@ router.get(
     restrictArchivedVisibility,
     restrictListDraftVisibility,
     applyReactionVisibilityFilter,
+    applyPossiblyDevelopedFilter,
     asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
@@ -291,7 +415,7 @@ router.get(
 
 // 10 = the Recent Suggestions rail's widest breakpoint (5 columns) times its 2-row client-side cap.
 const FEED_RAIL_SIZE = 10;
-const FEED_WORKING_SET_SIZE = 200; // bounded slice of newest/most-recently-updated suggestions the stats/rail draw from
+const FEED_WORKING_SET_SIZE = 200; // newest/most-recently-updated suggestions the rail picks from, past ones ignored
 
 router.get(
     "/feed",
@@ -302,44 +426,31 @@ router.get(
         const canManageArchive = hasPermission(principal, Permission.MANAGE_SUGGESTIONS_ARCHIVE);
 
         const baseFilter = canManageArchive ? {} : { archived: { $exists: false } as const };
-        const allActive = await dataService.suggestions.read(
-            { ...baseFilter, draft: false },
-            { updated: "desc" },
-            1,
-            FEED_WORKING_SET_SIZE
-        );
-
-        const myDrafts = discordId ? await dataService.suggestions.count({ draft: true, createdBy: discordId }) : 0;
+        // Legacy suggestions sit in the rail by the date they reached the design team's spreadsheet, so they only
+        // show here when that was recent
+        const [newest, stats, possiblyDeveloped] = await Promise.all([
+            dataService.suggestions.read(
+                { ...baseFilter, draft: false },
+                { updated: "desc" },
+                1,
+                FEED_WORKING_SET_SIZE
+            ),
+            // Counted across the whole collection, not the working set above - with the legacy import, a total
+            // taken from any bounded slice would stop at the slice's size
+            dataService.suggestions.feedStats(discordId),
+            // Only worth working out for those who can act on it
+            canManageArchive ? getPossiblyDevelopedSuggestionIds().then((ids) => ids.length) : 0
+        ]);
 
         // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail.
-        // Stats below are unaffected: they're aggregate counts, not a personalised "look at this" list.
+        // Stats are unaffected: they're aggregate counts, not a personalised "look at this" list.
         const recentCandidates = discordId
-            ? allActive.filter((s) => s._metadata?.engagement?.reactions?.[discordId]?.type !== "ignore")
-            : allActive;
+            ? newest.filter((s) => s._metadata?.engagement?.reactions?.[discordId]?.type !== "ignore")
+            : newest;
 
         res.status(StatusCodes.OK).json({
-            recent: recentCandidates.slice(0, FEED_RAIL_SIZE), // allActive is already sorted `updated: desc`
-            stats: {
-                total: allActive.length,
-                totalSubmitters: new Set(allActive.map((s) => s.createdBy)).size,
-                // Mirrors suggestionApprovalPanel.tsx's own `awaiting` filter exactly - an already-ignored
-                // suggestion is excluded here too, or this stat and that panel's own list would disagree.
-                awaitingApproval: allActive.filter(
-                    (s) =>
-                        !s._metadata?.engagement?.approvedBy &&
-                        countLikes(s._metadata?.engagement?.reactions) >= SUGGESTION_APPROVAL_VOTE_THRESHOLD &&
-                        s._metadata?.engagement?.reactions?.[discordId ?? ""]?.type !== "ignore"
-                ).length,
-                // Replaces the old timestamp-based "newSinceLastVisit" - purely "has the current user
-                // reacted at all", and also excludes the viewer's own suggestions ("new to you" is moot).
-                unreacted: discordId
-                    ? allActive.filter(
-                          (s) => s.createdBy !== discordId && !s._metadata?.engagement?.reactions?.[discordId]
-                      ).length
-                    : allActive.length,
-                mine: discordId ? allActive.filter((s) => s.createdBy === discordId).length : 0,
-                myDrafts
-            }
+            recent: recentCandidates.slice(0, FEED_RAIL_SIZE), // already sorted `updated: desc`
+            stats: { ...stats, possiblyDeveloped }
         });
     })
 );
@@ -378,6 +489,87 @@ router.get(
     })
 );
 
+// What the migrate wizard needs to know about an old thread (reached from Discord's /migrate), along with
+// the caller's own legacy suggestions that look like the same card - one of which they may merge into it
+router.get(
+    "/migrate/:threadId",
+    validateRequest(Permission.MAKE_SUGGESTIONS),
+    celebrate({ [Segments.PARAMS]: { threadId: Joi.string().required() } }),
+    asyncHandler<{ threadId: string }, unknown, unknown, unknown>(async (req, res) => {
+        const discordId = requireDiscordId(getContext().principal);
+        const { thread, legacy } = await loadLegacyThread(req.params.threadId, discordId);
+        const [likes, legacySuggestions] = await Promise.all([
+            fetchThreadLikes(thread),
+            dataService.suggestions.read({
+                createdBy: discordId,
+                draft: false,
+                legacy: true,
+                archived: { $exists: false }
+            })
+        ]);
+
+        res.status(StatusCodes.OK).json({
+            thread: { ...legacy, likes: likes.length },
+            candidates: legacySuggestions.filter((suggestion) => threadMatchesCard(legacy, suggestion.card))
+        });
+    })
+);
+
+// Submits a suggestion for an old thread - carrying over its date and 👍s, and the reactions of a merged
+// legacy suggestion, which is deleted - then posts it a new thread and closes the old one (see sync)
+router.post(
+    "/migrate/:threadId",
+    validateRequest(Permission.MAKE_SUGGESTIONS),
+    celebrate({
+        [Segments.PARAMS]: { threadId: Joi.string().required() },
+        [Segments.QUERY]: { mergeId: Joi.string() }
+    }),
+    forceDerived,
+    forceTags,
+    prepareMigrateBody,
+    celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
+    asyncHandler<{ threadId: string }, unknown, ICardSuggestion, { mergeId?: string }>(async (req, res) => {
+        const discordId = requireDiscordId(getContext().principal);
+        const { thread, legacy } = await loadLegacyThread(req.params.threadId, discordId);
+
+        const { mergeId } = req.query;
+        const [merging] = mergeId ? await dataService.suggestions.read({ id: mergeId }) : [];
+        if (mergeId && (!merging || merging.createdBy !== discordId || !merging.legacy || merging.archived)) {
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Validation Error",
+                "Only one of your own unarchived legacy suggestions can be merged"
+            );
+        }
+
+        await assertChecklistJustified(req.body);
+
+        const likes = await fetchThreadLikes(thread);
+        const body = req.body;
+        body._metadata = {
+            ...body._metadata,
+            discord: { legacyUrl: legacy.url },
+            engagement: { reactions: mergeReactions(discordId, merging?._metadata?.engagement?.reactions, likes) }
+        };
+
+        let suggestion = await dataService.suggestions.create(body, false);
+        suggestion = (await dataService.suggestions.setCreated(suggestion.id!, legacy.createdAt)) ?? suggestion;
+        if (merging) {
+            await dataService.suggestions.destroy({ id: merging.id }, false);
+        }
+        suggestion = await dataService.suggestions.sync(suggestion);
+
+        await logActivity(
+            LogCategory.SUGGESTION,
+            "suggestion.migrated",
+            "<principal> migrated suggestion <suggestion> from a forum thread",
+            { context: { suggestion: cardSnapshot(suggestion.id, suggestion.card) } }
+        );
+
+        res.status(StatusCodes.OK).json(suggestion);
+    })
+);
+
 router.get(
     "/:id",
     validateRequest(Permission.READ_SUGGESTIONS),
@@ -393,6 +585,45 @@ router.get(
         const [suggestion] = response.items;
         res.status(StatusCodes.OK).json(suggestion);
     })
+);
+
+// The designer's old forum threads matching this legacy suggestion's card, for PUT /:id?legacyThread= to carry
+// over. The card is passed in, as completing it may have renamed or retyped it.
+router.get(
+    "/:id/thread-matches",
+    validateRequest(
+        (principal) =>
+            hasPermission(principal, Permission.EDIT_SUGGESTIONS) ||
+            hasPermission(principal, Permission.MAKE_SUGGESTIONS)
+    ),
+    celebrate({
+        [Segments.PARAMS]: { id: Joi.string().required() },
+        [Segments.QUERY]: { name: Joi.string(), faction: Joi.string(), type: Joi.string() }
+    }),
+    loadSuggestionForOwnershipCheck,
+    validateRequest(requiresEditOrOwnership),
+    asyncHandler<{ id: string }, unknown, unknown, Partial<Pick<ICard, "name" | "faction" | "type">>>(
+        async (req, res) => {
+            const suggestion = res.locals.suggestion as ICardSuggestion;
+            if (!suggestion.legacy) {
+                res.status(StatusCodes.OK).json([]);
+                return;
+            }
+
+            const card = { ...suggestion.card, ...req.query };
+            const matching = (await fetchThreadsStartedBy(suggestion.createdBy))
+                .map((thread) => ({ thread, legacy: describeLegacyThread(thread) }))
+                .filter(({ legacy }) => threadMatchesCard(legacy, card));
+
+            const matches = [];
+            for (const { thread, legacy } of matching) {
+                if (!(await isThreadMigrated(legacy.url))) {
+                    matches.push({ ...legacy, likes: (await fetchThreadLikes(thread)).length });
+                }
+            }
+            res.status(StatusCodes.OK).json(matches);
+        }
+    )
 );
 
 // Create suggestion (always a draft)
@@ -426,6 +657,7 @@ router.put(
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     loadSuggestionForOwnershipCheck,
     validateRequest(requiresEditOrOwnership),
+    rejectArchived,
     (_req: Request, res: Response, next: NextFunction) => {
         const existing = res.locals.suggestion as ICardSuggestion;
         if (!existing.draft) {
@@ -464,31 +696,57 @@ router.put(
             hasPermission(principal, Permission.EDIT_SUGGESTIONS) ||
             hasPermission(principal, Permission.MAKE_SUGGESTIONS)
     ),
-    celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
+    celebrate({
+        [Segments.PARAMS]: { id: Joi.string().required() },
+        // Completing a legacy suggestion may carry over one of its designer's old forum threads - see thread-matches
+        [Segments.QUERY]: { legacyThread: Joi.string() }
+    }),
     loadSuggestionForOwnershipCheck,
     validateRequest(requiresEditOrOwnership),
+    rejectArchived,
     forceDerived,
     forceTags,
     prepareLiveSaveBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
-    asyncHandler<{ id: string }, unknown, ICardSuggestion, unknown>(async (req, res) => {
+    asyncHandler<{ id: string }, unknown, ICardSuggestion, { legacyThread?: string }>(async (req, res) => {
         const { id } = req.params;
-        const wasDraft = (res.locals.suggestion as ICardSuggestion).draft;
+        const existing = res.locals.suggestion as ICardSuggestion;
+        // Completing a legacy suggestion is its real submission, just as a draft's is
+        const wasDraft = existing.draft || !!existing.legacy;
         let suggestion = req.body;
         suggestion.id = id;
 
-        const fields = await checklistJustificationErrors(suggestion);
-        if (fields.length > 0) {
-            throw new ApiErrorResponse(
-                StatusCodes.BAD_REQUEST,
-                "Validation Error",
-                `checklistJustifications: ${fields.map((f) => f.message).join(", ")}`,
-                undefined,
-                fields
-            );
+        await assertChecklistJustified(suggestion);
+
+        const { legacyThread } = req.query;
+        let threadCreated: Date | undefined;
+        if (legacyThread) {
+            if (!existing.legacy) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Validation Error",
+                    "Only a legacy suggestion can take over an old forum thread"
+                );
+            }
+            // The thread must be its designer's, whoever is completing it on their behalf
+            const { thread, legacy } = await loadLegacyThread(legacyThread, existing.createdBy);
+            const likes = await fetchThreadLikes(thread);
+            suggestion._metadata = {
+                ...suggestion._metadata,
+                discord: { ...suggestion._metadata?.discord, legacyUrl: legacy.url },
+                engagement: {
+                    reactions: mergeReactions(existing.createdBy, suggestion._metadata?.engagement?.reactions, likes)
+                }
+            };
+            threadCreated = legacy.createdAt;
         }
 
-        suggestion = await dataService.suggestions.update(suggestion);
+        // Synced only once the thread's date is in place, so nothing is posted under the wrong one
+        suggestion = await dataService.suggestions.update(suggestion, true, !threadCreated);
+        if (threadCreated) {
+            suggestion = (await dataService.suggestions.setCreated(id, threadCreated)) ?? suggestion;
+            suggestion = await dataService.suggestions.sync(suggestion);
+        }
 
         await logActivity(
             LogCategory.SUGGESTION,
@@ -574,6 +832,14 @@ router.post(
         const { principal } = getContext();
         const discordId = requireDiscordId(principal);
         const { id } = req.params;
+        const [existing] = await dataService.suggestions.read({ id });
+        if (!existing) {
+            notFoundSuggestion(id);
+        }
+        const blockReason = suggestionApprovalBlockReason(existing);
+        if (blockReason) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Validation Error", blockReason);
+        }
         const suggestion = await dataService.suggestions.setApproval(id, discordId);
         if (!suggestion) {
             notFoundSuggestion(id);
@@ -637,6 +903,13 @@ router.post(
                 "This suggestion is still a draft and has nothing to sync"
             );
         }
+        if (suggestion.legacy) {
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Validation Error",
+                "Legacy suggestions cannot be synced with Discord until they are completed"
+            );
+        }
 
         [suggestion] = await syncSuggestionForum([suggestion], forced);
 
@@ -644,9 +917,10 @@ router.post(
     })
 );
 
-// Unarchive - clears `archived` entirely, eg. when a suggestion was archived by mistake or is worth revisiting
-router.post(
-    "/:id/unarchive",
+// The project cards a legacy suggestion may already have been developed as - or, once linked to a draft project's
+// card, that card, which archives it when the project begins
+router.get(
+    "/:id/card-matches",
     validateRequest(Permission.MANAGE_SUGGESTIONS_ARCHIVE),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
@@ -655,20 +929,80 @@ router.post(
         if (!suggestion) {
             notFoundSuggestion(id);
         }
-        delete suggestion.archived;
-        const updated = await dataService.suggestions.update(suggestion);
-
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.unarchived",
-            "<principal> unarchived suggestion <suggestion>",
-            {
-                context: { suggestion: cardSnapshot(id, updated.card) }
-            }
-        );
-
-        res.status(StatusCodes.OK).json(updated);
+        if (!suggestion.legacy || suggestion.archived) {
+            res.status(StatusCodes.OK).json({ matches: [] });
+            return;
+        }
+        const [linkedCard] = await dataService.cards.read({ suggestionId: id });
+        const linkedProject = linkedCard && (await dataService.projects.read({ number: linkedCard.project }))[0];
+        res.status(StatusCodes.OK).json({
+            matches: linkedCard ? [] : await getSuggestionCardMatches(suggestion),
+            linkedTo:
+                linkedCard && linkedProject
+                    ? { project: { number: linkedProject.number, code: linkedProject.code }, number: linkedCard.number }
+                    : undefined
+        });
     })
+);
+
+// Settles a legacy suggestion as having become a project card: archived as used in it, or - while the project is
+// still in draft - named by the card, so initialising the project archives it the same way any suggestion used is
+router.post(
+    "/:id/developed-as",
+    validateRequest(Permission.MANAGE_SUGGESTIONS_ARCHIVE),
+    celebrate({
+        [Segments.PARAMS]: { id: Joi.string().required() },
+        [Segments.BODY]: { project: Joi.number().required(), number: Joi.number().required(), version: Joi.string() }
+    }),
+    asyncHandler<{ id: string }, unknown, { project: number; number: number; version?: SemanticVersion }, unknown>(
+        async (req, res) => {
+            const { id } = req.params;
+            const [suggestion] = await dataService.suggestions.read({ id });
+            if (!suggestion) {
+                notFoundSuggestion(id);
+            }
+            // Only a card still on offer - a card comes from one suggestion at most, and this re-checks that at the
+            // moment it is claimed rather than trusting what the page was shown
+            const matches = suggestion.legacy && !suggestion.archived ? await getSuggestionCardMatches(suggestion) : [];
+            const match = matches.find(
+                (entry) =>
+                    entry.project.number === req.body.project &&
+                    entry.number === req.body.number &&
+                    entry.version === req.body.version
+            );
+            if (!match) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Validation Error",
+                    "That card isn't one this suggestion can be archived as - it may have been claimed already"
+                );
+            }
+
+            let updated = suggestion;
+            if (match.project.isDraft) {
+                await dataService.cards.setSuggestionId(match.project.number, match.number, id, match.version);
+            } else {
+                const { principal } = getContext();
+                suggestion.archived = {
+                    reason: "usedInProject",
+                    project: { code: match.project.code, number: match.number },
+                    archivedAt: new Date(),
+                    archivedBy: principal.id
+                };
+                updated = await dataService.suggestions.update(suggestion);
+            }
+            invalidateSuggestionCardMatches();
+
+            await logActivity(
+                LogCategory.SUGGESTION,
+                "suggestion.developedAs",
+                `<principal> marked suggestion <suggestion> as developed into ${cardMatchLabel(match)}`,
+                { context: { suggestion: cardSnapshot(id, updated.card) } }
+            );
+
+            res.status(StatusCodes.OK).json(updated);
+        }
+    )
 );
 
 // Delete suggestion
