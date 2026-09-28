@@ -72,12 +72,7 @@ export const navItems: NavItem[] = [
     {
         path: "/suggestions",
         label: "Suggestions",
-        permission: [
-            Permission.READ_SUGGESTIONS,
-            Permission.MAKE_SUGGESTIONS,
-            Permission.EDIT_SUGGESTIONS,
-            Permission.DELETE_SUGGESTIONS
-        ],
+        permission: Permission.READ_SUGGESTIONS,
         element: <Suggestions />
     },
     {
