@@ -27,6 +27,7 @@ import {
 import api from "../../../api";
 import { useDispatch } from "react-redux";
 import type { AppDispatch } from "../../../api/store";
+import { cacheNow } from "../../../api/cacheHelpers";
 import classNames from "classnames";
 import ThronesIcon from "../../../components/thronesIcon";
 import CardStack from "../../../components/cardStack";
@@ -164,7 +165,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                     patchTarget.number = target.number;
                     patchTarget.faction = target.faction;
                     // Newest-updated sorts to the top of the stack, which keeps the moved card draggable at its destination
-                    patchTarget.updated = new Date().toISOString() as unknown as Date;
+                    patchTarget.updated = cacheNow();
                 }
             })
         );

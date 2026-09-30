@@ -52,7 +52,7 @@ import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "comm
 import { ILogEntry } from "common/models/logs";
 import { GlobalStats, ProjectStats } from "common/models/stats";
 import { getConnectionId } from "./connectionId";
-import { patchEntityEverywhere } from "./cacheHelpers";
+import { cacheNow, patchEntityEverywhere } from "./cacheHelpers";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
 import { refreshSession } from "./refresh";
@@ -509,7 +509,10 @@ const api = createApi({
                 const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
                     suggestion._metadata ??= {};
                     suggestion._metadata.engagement ??= { reactions: {} };
-                    suggestion._metadata.engagement.reactions[discordId] = { type: reactType, reactedAt: new Date() };
+                    suggestion._metadata.engagement.reactions[discordId] = {
+                        type: reactType,
+                        reactedAt: cacheNow()
+                    };
                 });
                 try {
                     await queryFulfilled;
@@ -548,7 +551,7 @@ const api = createApi({
                     suggestion._metadata ??= {};
                     suggestion._metadata.engagement ??= { reactions: {} };
                     suggestion._metadata.engagement.approvedBy = discordId;
-                    suggestion._metadata.engagement.approvedAt = new Date();
+                    suggestion._metadata.engagement.approvedAt = cacheNow();
                 });
                 try {
                     await queryFulfilled;

@@ -32,6 +32,14 @@ export function stripUrlProtocol(url: string): string {
     return url.replace(/^(?:https?:)?\/\/+/i, "").replace(/\/+$/, "");
 }
 
+/** A short buzz confirming a long-press, where the device has one. Browsers refuse vibration until the page has
+ *  had a completed tap, which a first-ever long-press hasn't - still held down - so that one goes without. */
+export function hapticTap() {
+    if (navigator.userActivation?.hasBeenActive) {
+        navigator.vibrate?.(10);
+    }
+}
+
 export function downloadBlob(blob: Blob, fallbackFilename?: string): void {
     const filename = fallbackFilename ?? crypto.randomUUID();
     const url = URL.createObjectURL(blob);

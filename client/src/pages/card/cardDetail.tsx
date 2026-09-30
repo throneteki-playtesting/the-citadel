@@ -43,7 +43,7 @@ import CardStack from "../../components/cardStack";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { noteTypeIcon, parseParamSemanticVersion } from "../../utils";
 import RichText from "../../components/richText";
-import { changeTypeClasses } from "../../constants";
+import { changeTypeClasses, cornerBadgeDiscFillClasses } from "../../constants";
 import HeaderActions from "../../components/actions/headerActions";
 import { ActionItem } from "../../components/actions/types";
 import { statusActionItem } from "../../components/actions/statusActionItem";
@@ -464,7 +464,10 @@ function ChangeBadge({ className, style, card }: ChangeBadgeProps) {
         return null;
     }
 
-    const badgeClassName = "flex items-center justify-center size-8 rounded-full bg-black/60 ring-1 ring-primary/70";
+    const badgeClassName = classNames(
+        "flex items-center justify-center size-8 rounded-full ring-1 ring-primary/70",
+        cornerBadgeDiscFillClasses
+    );
     const badgeIcon = (
         <FontAwesomeIcon
             icon={noteTypeIcon[note.type]}

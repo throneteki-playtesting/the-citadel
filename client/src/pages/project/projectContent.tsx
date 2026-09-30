@@ -16,7 +16,13 @@ import ThronesIcon from "../../components/thronesIcon";
 import SectionTitle from "../../components/sectionTitle";
 import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
+import {
+    cornerBadgeDiscFillClasses,
+    cornerBadgeFadeClasses,
+    highlightTarget,
+    reorderTransition,
+    watermarkClasses
+} from "../../constants";
 import Error from "../../components/error";
 import {
     faCrosshairs,
@@ -92,8 +98,7 @@ const sortOptions: Record<SortOption, string> = {
 const FADE_TRANSITION = { duration: 0.12 } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
-const CORNER_BADGE_CLASS =
-    "absolute bottom-0 right-0 m-2 z-10 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100";
+const CORNER_BADGE_CLASS = classNames("absolute bottom-0 right-0 m-2 z-10", cornerBadgeFadeClasses);
 
 function compareByReviews(cardStats: Map<number, CardStats>, a: IPlaytestCard, b: IPlaytestCard) {
     const statA = cardStats.get(a.number) ?? { latest: 0, total: 0 };
@@ -780,7 +785,12 @@ const ProjectContentCard = memo(function ProjectContentCard({
                 <div className={CORNER_BADGE_CLASS}>
                     <TouchTooltip content={<CardProgressBreakdown progress={progress} />}>
                         <ProgressRing value={progress.overall} className="size-9">
-                            <div className="flex items-center justify-center size-7 rounded-full bg-black/60 text-[0.6rem] font-bold text-primary">
+                            <div
+                                className={classNames(
+                                    "flex items-center justify-center size-7 rounded-full text-[0.6rem] font-bold text-primary",
+                                    cornerBadgeDiscFillClasses
+                                )}
+                            >
                                 {Math.round(progress.overall)}%
                             </div>
                         </ProgressRing>
@@ -807,7 +817,12 @@ const ProjectContentCard = memo(function ProjectContentCard({
                             </div>
                         }
                     >
-                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
+                        <div
+                            className={classNames(
+                                "relative flex items-center justify-center size-8 rounded-full ring-1 ring-primary/70",
+                                cornerBadgeDiscFillClasses
+                            )}
+                        >
                             <FontAwesomeIcon
                                 icon={faScroll}
                                 className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"

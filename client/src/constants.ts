@@ -58,7 +58,15 @@ export const avatarBubbleClasses =
     "shrink-0 size-10 rounded-full bg-content2 border border-content3 text-foreground/60 flex items-center justify-center cursor-pointer transition-all hover:scale-105";
 
 // A card-corner badge steps back while the card under it is hovered, and forward again when it is itself
-export const cornerBadgeFadeClasses = "transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100";
+export const cornerBadgeFadeClasses =
+    "transition-[opacity,background-color] duration-200 group-hover:opacity-50 hover:!opacity-100";
+
+// A badge's disc lets the art show through until the badge itself is hovered, when it goes solid for reading
+export const cornerBadgeDiscFillClasses =
+    "bg-content3/80 hover:bg-content3 transition-[opacity,background-color] duration-200";
+
+// How long a touch is held before it counts as a long-press rather than a tap
+export const LONG_PRESS_MS = 500;
 
 // Reads as disabled without isDisabled, whose pointer-events-none would stop a tooltip explaining why
 export const inertButtonClasses = "opacity-disabled cursor-default data-[hover=true]:!opacity-disabled";

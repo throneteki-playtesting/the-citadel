@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { MouseEvent, useState } from "react";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -10,18 +10,27 @@ import {
     faThumbsUp,
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
-import { Spinner } from "@heroui/react";
+import { PopoverContent } from "@heroui/react";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
-import CardCornerBadges from "../../components/cardCornerBadges";
+import { TouchPopover } from "../../components/touchPopover";
+import CardCornerBadges, { CornerBadgeTooltip } from "../../components/cardCornerBadges";
 import ReactionCount from "../../components/reactionCount";
 import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { useAuth } from "../../hooks/useAuth";
+import { useCanHover } from "../../hooks/useCanHover";
+import { useLongPress } from "../../hooks/useLongPress";
 import { useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../../api";
 import useUser from "../../hooks/useUser";
 import { showApiErrorToast } from "../../api/errors";
-import { cornerBadgeFadeClasses, LEGACY_SUGGESTION_DESCRIPTION } from "../../constants";
+import { hapticTap } from "../../utils";
+import {
+    cornerBadgeDiscFillClasses,
+    cornerBadgeFadeClasses,
+    LEGACY_SUGGESTION_DESCRIPTION,
+    LONG_PRESS_MS
+} from "../../constants";
 
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
 // link target, so a badge row needs both stopPropagation AND preventDefault to stop its own clicks.
@@ -36,11 +45,36 @@ const QUICK_REACT_OPTIONS: { type: ReactionType; label: string; hint: string; ic
 
 // One statement of what each of the viewer's own reactions looks like as a badge. Ignore's icon is
 // deliberately the OPEN eye, not the slashed one QUICK_REACT_OPTIONS uses - the opposite direction.
-const MY_REACTION_BADGES: Record<ReactionType, { icon: IconDefinition; subtext: string; colorClass: string }> = {
-    like: { icon: faThumbsUp, subtext: "Click to remove reaction", colorClass: "text-success" },
-    dislike: { icon: faThumbsDown, subtext: "Click to remove reaction", colorClass: "text-danger" },
-    ignore: { icon: faEye, subtext: "Click to un-ignore", colorClass: "text-primary" }
+const MY_REACTION_BADGES: Record<
+    ReactionType,
+    { icon: IconDefinition; subtext: string; colorClass: string; tintClass: string }
+> = {
+    like: {
+        icon: faThumbsUp,
+        subtext: "Click to remove reaction",
+        colorClass: "text-success",
+        tintClass: "bg-success/20"
+    },
+    dislike: {
+        icon: faThumbsDown,
+        subtext: "Click to remove reaction",
+        colorClass: "text-danger",
+        tintClass: "bg-danger/20"
+    },
+    ignore: { icon: faEye, subtext: "Click to un-ignore", colorClass: "text-primary", tintClass: "bg-primary/20" }
 };
+
+// A tap does nothing to a touch badge - the reaction is changed from the same bubble that set it
+const TOUCH_REACTION_SUBTEXT = "Touch & hold to change";
+
+const BADGE_FADE = { duration: 0.15 } as const;
+const REACTION_FOLD = { duration: 0.2, ease: "easeOut" } as const;
+
+// Sinks while held; the delay keeps a scroll's brief touch from flickering the press before it cancels
+const HOLD_PRESS_CLASSES =
+    "relative transition-transform duration-200 ease-out data-[holding=true]:scale-95 data-[holding=true]:delay-150 data-[holding=true]:duration-[350ms]";
+
+type PendingReaction = { type: ReactionType; mode: "react" | "clear" } | null;
 
 // "You liked this" alone once nobody else has, "You and N others liked this" once they have -
 // Ignore stays a fixed "Ignored" (see MY_REACTION_BADGES' own comment above for why).
@@ -53,45 +87,45 @@ function reactionBadgeTitle(type: ReactionType, count: number): string {
     return others > 0 ? `You and ${others} other${others === 1 ? "" : "s"} ${verb} this` : `You ${verb} this`;
 }
 
-const BADGE_FADE = { duration: 0.15 } as const;
+function isOtherPending(pending: PendingReaction, type: ReactionType) {
+    return !!pending && pending.type !== type;
+}
 
-// Crossfades between the resting icon and a spinner, rather than one replacing the other with a
-// snap - a badge showing "processing" is a state change same as any other here.
-function ReactionGlyph({
-    icon,
-    isPending,
-    className
-}: {
-    icon: IconDefinition;
-    isPending: boolean;
-    className?: string;
-}) {
+/** Touch's stand-in for the hover row - a card that can't be reacted to still answers the press, with why */
+function ReactionBubble({ blockReason, myReaction, pending, onReact, onClear }: ReactionBubbleProps) {
+    if (blockReason) {
+        return <div className="px-3 py-1.5 text-sm text-foreground/70">{blockReason}</div>;
+    }
     return (
-        <AnimatePresence mode="wait" initial={false}>
-            {isPending ? (
-                <motion.span
-                    key="spinner"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={BADGE_FADE}
-                    className="inline-flex"
-                >
-                    <Spinner size="sm" color="primary" />
-                </motion.span>
-            ) : (
-                <motion.span
-                    key="icon"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={BADGE_FADE}
-                    className="inline-flex"
-                >
-                    <FontAwesomeIcon icon={icon} className={className} />
-                </motion.span>
-            )}
-        </AnimatePresence>
+        <div className="flex gap-1">
+            {QUICK_REACT_OPTIONS.map(({ type, label, icon }) => {
+                const isSelected = myReaction === type;
+                return (
+                    <button
+                        key={type}
+                        type="button"
+                        disabled={!!pending}
+                        onClick={() => (isSelected ? onClear() : onReact(type))}
+                        className={classNames(
+                            "flex items-center gap-2 h-10 px-3 rounded-full font-cinzel text-sm transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
+                            isSelected
+                                ? classNames(MY_REACTION_BADGES[type].tintClass, MY_REACTION_BADGES[type].colorClass)
+                                : "active:bg-primary/25",
+                            { "opacity-30": isOtherPending(pending, type) }
+                        )}
+                    >
+                        <FontAwesomeIcon
+                            icon={isSelected ? MY_REACTION_BADGES[type].icon : icon}
+                            className={classNames(
+                                "text-xl",
+                                isSelected ? MY_REACTION_BADGES[type].colorClass : "text-primary"
+                            )}
+                        />
+                        {label}
+                    </button>
+                );
+            })}
+        </div>
     );
 }
 
@@ -100,8 +134,11 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
     // Tracks the reaction action in flight independently of the cache - `react`/`unreact` patch the
-    // cache optimistically, which would otherwise flip row<->badge too fast to ever show a spinner.
-    const [pending, setPending] = useState<{ type: ReactionType; mode: "react" | "clear" } | null>(null);
+    // cache optimistically, which would otherwise flip row<->badge before the request has settled.
+    const [pending, setPending] = useState<PendingReaction>(null);
+    const [isBubbleOpen, setIsBubbleOpen] = useState(false);
+    const canHover = useCanHover();
+    const badgeLongPress = useLongPress(LONG_PRESS_MS);
 
     const reactions = suggestion._metadata?.engagement?.reactions ?? {};
     const likeCount = Object.values(reactions).filter((entry) => entry.type === "like").length;
@@ -113,19 +150,8 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
     // is also sized for it, so both need to agree on the same isPlot check explicitly.
     const isPlot = suggestion.card.type === "plot";
 
-    const canQuickReact = !!user && !suggestion.draft && !suggestionReactionBlockReason(suggestion, user.discordId);
-    // Frozen for the whole pending duration rather than recomputed from `myReaction`, or the swap
-    // would happen the instant the optimistic patch lands instead of when the request finishes.
-    const reactionMode: "row" | "badge" | "none" = pending
-        ? pending.mode === "clear"
-            ? "badge"
-            : "row"
-        : myReaction
-          ? "badge"
-          : canQuickReact
-            ? "row"
-            : "none";
-    const badgeReactionType = pending?.mode === "clear" ? pending.type : myReaction;
+    const blockReason = user ? suggestionReactionBlockReason(suggestion, user.discordId) : undefined;
+    const canQuickReact = !!user && !suggestion.draft && !blockReason;
 
     const onQuickReact = async (reactType: ReactionType) => {
         if (!user) {
@@ -134,6 +160,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
         setPending({ type: reactType, mode: "react" });
         try {
             await reactToSuggestion({ id: suggestion.id!, reactType, discordId: user.discordId }).unwrap();
+            setIsBubbleOpen(false);
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to React" });
         } finally {
@@ -147,6 +174,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
         setPending({ type: myReaction, mode: "clear" });
         try {
             await clearSuggestionReaction({ id: suggestion.id!, discordId: user.discordId }).unwrap();
+            setIsBubbleOpen(false);
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to React" });
         } finally {
@@ -154,55 +182,128 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
         }
     };
 
-    return (
-        <div className="relative">
+    // Hover holds the row or badge until the request settles, so the fold plays once; touch has no row to
+    // fold from, so its badge follows the optimistic cache straight away
+    const heldBadgeType = pending ? (pending.mode === "clear" ? pending.type : undefined) : myReaction;
+    const shownBadgeType = canHover ? heldBadgeType : myReaction;
+    const isBadge = !!shownBadgeType;
+    // The row collapses into the badge - every option but the chosen one folds away
+    const shownOptions = isBadge
+        ? QUICK_REACT_OPTIONS.filter(({ type }) => type === shownBadgeType)
+        : canHover && (!!pending || canQuickReact)
+          ? QUICK_REACT_OPTIONS
+          : [];
+
+    const onOptionPress = (type: ReactionType) => {
+        if (!isBadge) {
+            onQuickReact(type);
+        } else if (canHover) {
+            onClearReaction();
+        }
+    };
+
+    // Hover leaves opacity to the classes - an inline one would override the fades they drive
+    const touchBadgeFade = !canHover && {
+        initial: { opacity: 0 },
+        animate: { opacity: 1 },
+        exit: { opacity: 0 },
+        transition: BADGE_FADE
+    };
+    // Bound above the tooltip, so this capture runs first and the click ending a hold never opens it
+    const touchBadgeHold = isBadge &&
+        !canHover && {
+            ...badgeLongPress.bind(() => {
+                hapticTap();
+                setIsBubbleOpen(true);
+            }),
+            onClickCapture: (e: MouseEvent) => {
+                if (badgeLongPress.consumeLongPress()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }
+        };
+
+    const cardContent = (
+        <>
             <CardCornerBadges
                 isolateClicks
                 leading={
                     <AnimatePresence initial={false}>
-                        {reactionMode === "row" && (
+                        {shownOptions.length > 0 && (
                             <motion.div
-                                key="quick-react-row"
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={BADGE_FADE}
+                                key="reactions"
+                                {...touchBadgeFade}
+                                className={classNames(
+                                    "flex items-center p-0.5 rounded-full ring-1 ring-primary/70",
+                                    cornerBadgeDiscFillClasses,
+                                    isBadge
+                                        ? cornerBadgeFadeClasses
+                                        : "shadow-lg opacity-0 group-hover:opacity-100 group-has-[:focus-visible]:opacity-100"
+                                )}
                             >
-                                <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover:opacity-70">
-                                    {QUICK_REACT_OPTIONS.map(({ type, label, hint, icon }) => {
-                                        const isThisPending = pending?.type === type && pending.mode === "react";
-                                        const isOtherPending = !!pending && !isThisPending;
-                                        return (
+                                <AnimatePresence initial={false}>
+                                    {shownOptions.map(({ type, label, hint, icon }) => (
+                                        <motion.div
+                                            key={type}
+                                            initial={{ width: 0, opacity: 0 }}
+                                            animate={{ width: "auto", opacity: 1 }}
+                                            exit={{ width: 0, opacity: 0 }}
+                                            transition={REACTION_FOLD}
+                                            className="overflow-hidden"
+                                            {...touchBadgeHold}
+                                        >
                                             <TouchTooltip
-                                                key={type}
                                                 content={
-                                                    <div className="max-w-64 px-1 py-0.5">
-                                                        <div className="text-sm font-cinzel">
-                                                            <FontAwesomeIcon icon={icon} /> {label}
-                                                        </div>
-                                                        <div className="text-xs">{hint}</div>
-                                                    </div>
+                                                    isBadge ? (
+                                                        <CornerBadgeTooltip
+                                                            icon={MY_REACTION_BADGES[type].icon}
+                                                            title={reactionBadgeTitle(
+                                                                type,
+                                                                type === "like" ? likeCount : dislikeCount
+                                                            )}
+                                                            description={
+                                                                canHover
+                                                                    ? MY_REACTION_BADGES[type].subtext
+                                                                    : TOUCH_REACTION_SUBTEXT
+                                                            }
+                                                        />
+                                                    ) : (
+                                                        <CornerBadgeTooltip
+                                                            icon={icon}
+                                                            title={label}
+                                                            description={hint}
+                                                        />
+                                                    )
                                                 }
                                             >
                                                 <button
                                                     type="button"
-                                                    disabled={isOtherPending}
-                                                    onClick={() => onQuickReact(type)}
+                                                    disabled={!!pending}
+                                                    onClick={() => onOptionPress(type)}
                                                     className={classNames(
-                                                        "flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 transition-opacity duration-200 cursor-pointer disabled:cursor-default",
-                                                        isOtherPending ? "opacity-30" : "opacity-70 hover:!opacity-100"
+                                                        "flex items-center justify-center size-7 rounded-full transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
+                                                        {
+                                                            "opacity-30": isOtherPending(pending, type),
+                                                            "hover:bg-primary/25 disabled:hover:bg-transparent":
+                                                                !isBadge
+                                                        }
                                                     )}
                                                 >
-                                                    <ReactionGlyph
-                                                        icon={icon}
-                                                        isPending={isThisPending}
-                                                        className="text-lg text-primary"
+                                                    <FontAwesomeIcon
+                                                        icon={isBadge ? MY_REACTION_BADGES[type].icon : icon}
+                                                        className={classNames(
+                                                            "text-lg transition-colors duration-200",
+                                                            isBadge
+                                                                ? MY_REACTION_BADGES[type].colorClass
+                                                                : "text-primary"
+                                                        )}
                                                     />
                                                 </button>
                                             </TouchTooltip>
-                                        );
-                                    })}
-                                </div>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -228,61 +329,45 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                         count: <ReactionCount count={likeCount} />
                     }
                 ]}
-            >
-                <AnimatePresence initial={false}>
-                    {reactionMode === "badge" && badgeReactionType && (
-                        <motion.div
-                            key="reaction-badge"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={BADGE_FADE}
-                            className={cornerBadgeFadeClasses}
-                        >
-                            <TouchTooltip
-                                content={
-                                    <div className="max-w-64 px-1 py-0.5">
-                                        <div className="text-sm font-cinzel">
-                                            <FontAwesomeIcon icon={MY_REACTION_BADGES[badgeReactionType].icon} />{" "}
-                                            {reactionBadgeTitle(
-                                                badgeReactionType,
-                                                badgeReactionType === "like" ? likeCount : dislikeCount
-                                            )}
-                                        </div>
-                                        <div className="text-xs">{MY_REACTION_BADGES[badgeReactionType].subtext}</div>
-                                    </div>
-                                }
-                            >
-                                <button
-                                    type="button"
-                                    disabled={!!pending}
-                                    onClick={onClearReaction}
-                                    className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 cursor-pointer disabled:cursor-default"
-                                >
-                                    <ReactionGlyph
-                                        icon={MY_REACTION_BADGES[badgeReactionType].icon}
-                                        isPending={pending?.mode === "clear"}
-                                        className={classNames(
-                                            "text-lg",
-                                            MY_REACTION_BADGES[badgeReactionType].colorClass
-                                        )}
-                                    />
-                                </button>
-                            </TouchTooltip>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </CardCornerBadges>
+            />
             <SuggestionCardPreview
                 suggestion={suggestion}
                 orientation={isPlot ? "horizontal" : "vertical"}
                 rounded={true}
             />
-        </div>
+        </>
+    );
+
+    return (
+        <TouchPopover
+            isDisabled={!user || !!suggestion.draft}
+            isOpen={isBubbleOpen}
+            onOpenChange={setIsBubbleOpen}
+            placement="top"
+            trigger={<div className={HOLD_PRESS_CLASSES}>{cardContent}</div>}
+        >
+            <PopoverContent className="p-1 rounded-full ring-1 ring-primary/70 shadow-lg bg-content3">
+                <ReactionBubble
+                    blockReason={blockReason}
+                    myReaction={myReaction}
+                    pending={pending}
+                    onReact={onQuickReact}
+                    onClear={onClearReaction}
+                />
+            </PopoverContent>
+        </TouchPopover>
     );
 }
 
 type SuggestionCardProps = {
     suggestion: ICardSuggestion;
     showLikesBadge?: boolean;
+};
+
+type ReactionBubbleProps = {
+    blockReason?: string;
+    myReaction?: ReactionType;
+    pending: PendingReaction;
+    onReact: (type: ReactionType) => void;
+    onClear: () => void;
 };

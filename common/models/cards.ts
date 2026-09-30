@@ -252,12 +252,11 @@ export interface ICardSuggestion extends IAuditable {
             /** the forum thread this suggestion was migrated from, before the Citadel managed its thread */
             legacyUrl?: string;
         };
-        /** Never client-writable - lives under `_metadata` so reacting/approving never bumps `updated`.
-         *  `Date | string` since it's a plain ISO string once it crosses the wire as JSON. */
+        /** Never client-writable - lives under `_metadata` so reacting/approving never bumps `updated` */
         engagement?: {
-            reactions: Record<string, { type: ReactionType; reactedAt: Date | string }>;
+            reactions: Record<string, { type: ReactionType; reactedAt: Date }>;
             approvedBy?: string;
-            approvedAt?: Date | string;
+            approvedAt?: Date;
         };
     };
     /** Present only once archived - see IArchivedInfo */

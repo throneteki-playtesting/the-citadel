@@ -10,7 +10,7 @@ export type SuggestionFilterContext = {
     currentUserId?: string;
 };
 
-function countLikes(reactions?: Record<string, { type: ReactionType; reactedAt: Date | string }>) {
+function countLikes(reactions?: Record<string, { type: ReactionType; reactedAt: Date }>) {
     return Object.values(reactions ?? {}).filter((entry) => entry.type === "like").length;
 }
 

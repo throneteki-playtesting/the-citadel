@@ -150,7 +150,7 @@ function ReactionTooltipContent({
     type: "like" | "dislike";
     isActive: boolean;
     showHint: boolean;
-    entries: { discordId: string; reactedAt: string | Date }[];
+    entries: { discordId: string; reactedAt: Date }[];
 }) {
     const newestFirst = [...entries].sort((a, b) => new Date(b.reactedAt).getTime() - new Date(a.reactedAt).getTime());
     const hint = isActive ? "Tap again to remove reaction" : `Tap again to ${type}`;

@@ -3,7 +3,7 @@ import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { TouchTooltip } from "./touchTooltip";
-import { cornerBadgeFadeClasses } from "../constants";
+import { cornerBadgeDiscFillClasses, cornerBadgeFadeClasses } from "../constants";
 
 const RING_CLASSES = {
     primary: "ring-primary/70",
@@ -31,6 +31,22 @@ export type CornerBadgeProps = {
     onAuxClick?: MouseEventHandler<HTMLDivElement>;
 };
 
+/** The tooltip a corner badge explains itself with - its icon and title, over an optional line of detail */
+export function CornerBadgeTooltip({
+    icon,
+    title,
+    description
+}: Pick<CornerBadgeProps, "icon" | "title" | "description">) {
+    return (
+        <div className="max-w-64 px-1 py-0.5">
+            <div className="text-sm font-cinzel">
+                <FontAwesomeIcon icon={icon} /> {title}
+            </div>
+            {description && <div className="text-xs">{description}</div>}
+        </div>
+    );
+}
+
 /** One round badge over a card's corner - the icon on a dark disc, explained by its tooltip */
 export function CornerBadge({
     icon,
@@ -44,21 +60,13 @@ export function CornerBadge({
     onAuxClick
 }: CornerBadgeProps) {
     return (
-        <TouchTooltip
-            content={
-                <div className="max-w-64 px-1 py-0.5">
-                    <div className="text-sm font-cinzel">
-                        <FontAwesomeIcon icon={icon} /> {title}
-                    </div>
-                    {description && <div className="text-xs">{description}</div>}
-                </div>
-            }
-        >
+        <TouchTooltip content={<CornerBadgeTooltip icon={icon} title={title} description={description} />}>
             <div
                 onClick={onClick}
                 onAuxClick={onAuxClick}
                 className={classNames(
-                    "relative flex items-center justify-center size-8 rounded-full bg-black/60 ring-1",
+                    "relative flex items-center justify-center size-8 rounded-full ring-1",
+                    cornerBadgeDiscFillClasses,
                     cornerBadgeFadeClasses,
                     RING_CLASSES[color],
                     { "animate-pulse": pulse, "cursor-pointer": !!onClick }
@@ -77,17 +85,10 @@ export function CornerBadge({
 
 export type CardCornerBadge = CornerBadgeProps & { key: string };
 
-/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no
- *  room. `children` follow them, for a badge with behaviour of its own the plain spec can't express. */
-export default function CardCornerBadges({
-    badges,
-    isolateClicks = false,
-    className,
-    leading,
-    children
-}: CardCornerBadgesProps) {
+/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room */
+export default function CardCornerBadges({ badges, isolateClicks = false, className, leading }: CardCornerBadgesProps) {
     const shown = badges.filter((badge): badge is CardCornerBadge => !!badge);
-    if (shown.length === 0 && !children && !leading) {
+    if (shown.length === 0 && !leading) {
         return null;
     }
     return (
@@ -107,7 +108,6 @@ export default function CardCornerBadges({
             {shown.map(({ key, ...badge }) => (
                 <CornerBadge key={key} {...badge} />
             ))}
-            {children}
         </div>
     );
 }
@@ -119,5 +119,4 @@ type CardCornerBadgesProps = {
     className?: string;
     /** Before the badges - eg. controls which only appear on hover, and so shouldn't move the badges about */
     leading?: ReactNode;
-    children?: ReactNode;
 };

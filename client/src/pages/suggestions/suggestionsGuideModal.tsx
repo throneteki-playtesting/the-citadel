@@ -14,7 +14,8 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     {
         icon: faComments,
         title: "React & Discuss",
-        description: "Like or dislike card suggestions, and discuss them in Discord."
+        description:
+            "Like or dislike card suggestions, and discuss them in Discord. On a phone, press and hold a card to react."
     },
     {
         icon: faPenToSquare,

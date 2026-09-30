@@ -31,6 +31,12 @@ export function mergeCachedEntity<T extends object>(entity: T, data: DeepPartial
     });
 }
 
+/** "Now" for an optimistic patch - an ISO string, the shape every date the server sends arrives in, since the
+ *  cache must stay serializable. Typed as the models' `Date` so it can be written into their fields. */
+export function cacheNow(): Date {
+    return new Date().toISOString() as unknown as Date;
+}
+
 /** Patches every currently-cached query holding this entity, across every endpoint providing its
  *  tag. `mutate` gets the live Immer draft directly, so it can do anything a plain merge can't. */
 export function patchEntityEverywhere<K extends ResourceType>(
