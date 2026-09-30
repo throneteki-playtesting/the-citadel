@@ -3,8 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import Permission from "common/models/permissions";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCheckCircle, faCircleQuestion, faImage, faThumbsDown, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
-import { Chip } from "@heroui/react";
+import { faImage, faThumbsDown, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { useClearSuggestionReactionMutation, useReactToSuggestionMutation } from "../api";
 import { showApiErrorToast } from "../api/errors";
@@ -17,16 +16,17 @@ import ReactionCount from "./reactionCount";
 import { TouchTooltip } from "./touchTooltip";
 import SuggestionCardPreview from "./suggestionCardPreview";
 import useUser from "../hooks/useUser";
-import { watermarkClasses } from "../constants";
+import UserAvatar from "./userAvatar";
+import { suggestionIcons, watermarkClasses } from "../constants";
 
-// A row's own link is the whole row, so a reaction toggle/Approve/Ignore has to actively cancel that
-// navigation - capture-phase `preventDefault` alone does it, since Link checks `defaultPrevented`.
+// The whole row is a link, so its actions cancel navigation - Link checks `defaultPrevented`.
+// Read-only content is left alone so a click on it still opens the suggestion.
 function preventRowNavigation(e: { preventDefault: () => void }) {
     e.preventDefault();
 }
 
-// Styled to actually read as a button - a filled pill with its own border, rather than the plain
-// coloured text it used to be, which looked LESS interactive than the read-only Chip beside it.
+// Styled to actually read as a button - a filled pill with its own border, so it can't be mistaken
+// for the read-only ReactionStat.
 function ReactionToggle({
     icon,
     count,
@@ -54,6 +54,7 @@ function ReactionToggle({
                 onPress();
             }}
         >
+            <ReactionCount count={count} />
             <AnimatePresence mode="popLayout" initial={false}>
                 <motion.span
                     key={isActive ? "active" : "inactive"}
@@ -65,7 +66,6 @@ function ReactionToggle({
                     <FontAwesomeIcon icon={icon} />
                 </motion.span>
             </AnimatePresence>
-            <ReactionCount count={count} />
         </button>
     );
 }
@@ -75,27 +75,22 @@ function ReactionToggle({
 function ReactionStat({ icon, count, className }: { icon: typeof faThumbsUp; count: number; className?: string }) {
     return (
         <span className={classNames("flex items-center gap-1 text-xs text-foreground/40", className)}>
-            <FontAwesomeIcon icon={icon} />
             <ReactionCount count={count} />
+            <FontAwesomeIcon icon={icon} />
         </span>
     );
 }
 
-// Shared between the home page's Recent Submissions rail and the suggestions dashboard's own rails -
-// one row component, not one per caller. `className` lets a caller stretch rows to fill a taller list.
+// A suggestion's summary row, as listed in the home page's Recent Submissions.
 export default function SuggestionRow({
     suggestion,
     className,
-    showInlineStatus,
-    showWatermarkStatusIcon = true,
-    showDislikes,
     interactiveReactions,
     showPreview,
     actions
 }: SuggestionRowProps) {
     const { user } = useAuth();
-    const approvedBy = suggestion._metadata?.engagement?.approvedBy;
-    const isApproved = !!approvedBy;
+    const isApproved = !!suggestion._metadata?.engagement?.approvedBy;
     const reactions = suggestion._metadata?.engagement?.reactions ?? {};
     const likeCount = Object.values(reactions).filter((entry) => entry.type === "like").length;
     const dislikeCount = Object.values(reactions).filter((entry) => entry.type === "dislike").length;
@@ -103,16 +98,14 @@ export default function SuggestionRow({
     // Interactive Like/Dislike is only offered on someone else's suggestion (see
     // suggestionReactionBlockReason) - own suggestions fall back to the same read-only counts.
     const canReact = !!user && !suggestionReactionBlockReason(suggestion, user.discordId);
-    // Only fetched where the caller wants the approver's name (Recently Approved) - every other list
-    // shows the plain "Approved" chip instead, no lookup needed.
-    const skipApproverLookup = !showInlineStatus || !approvedBy;
-    const { user: approver } = useUser(skipApproverLookup ? undefined : approvedBy);
     const submitterName = useUser(suggestion.createdBy).user?.displayname;
 
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
     const onSetReaction = async (reactType: ReactionType) => {
-        if (!user) return;
+        if (!user) {
+            return;
+        }
         try {
             if (myReaction === reactType) {
                 await clearSuggestionReaction({ id: suggestion.id!, discordId: user.discordId }).unwrap();
@@ -128,18 +121,10 @@ export default function SuggestionRow({
         <Watermark
             position="center"
             icon={
-                <div className="relative ml-32">
-                    <ThronesIcon
-                        name={suggestion.card.faction}
-                        className={classNames("text-7xl", watermarkClasses[suggestion.card.faction])}
-                    />
-                    {showWatermarkStatusIcon && (
-                        <FontAwesomeIcon
-                            icon={isApproved ? faCheckCircle : faCircleQuestion}
-                            className="absolute right-0 bottom-0 text-2xl opacity-20"
-                        />
-                    )}
-                </div>
+                <FontAwesomeIcon
+                    icon={isApproved ? suggestionIcons.approved : suggestionIcons.awaiting}
+                    className={classNames("ml-32 text-6xl", watermarkClasses[suggestion.card.faction])}
+                />
             }
             containerClassName={classNames("relative bg-content1 hover:bg-content3", className)}
         >
@@ -148,105 +133,68 @@ export default function SuggestionRow({
                 requires={Permission.READ_SUGGESTIONS}
                 className="h-full block"
             >
-                <div className="relative z-10 h-full flex flex-col px-4 py-3">
-                    <div className="grid grid-cols-[1fr_auto] gap-2 flex-1">
-                        {/* Name and "Suggestion by" sit tight together at the top - the right column
-                            below still spreads with `justify-between`, just not this one. */}
-                        <div className="min-w-0 flex flex-col gap-0.5">
-                            <div className="flex gap-2 flex-wrap items-center">
-                                <div className="text-sm font-cinzel text-foreground truncate">
-                                    <ThronesIcon name={suggestion.card.type} /> {suggestion.card.name}
-                                </div>
-                                {showPreview && (
-                                    <TouchTooltip
-                                        content={
-                                            <div className="w-56">
-                                                <SuggestionCardPreview suggestion={suggestion} rounded />
-                                            </div>
-                                        }
-                                    >
-                                        <FontAwesomeIcon
-                                            icon={faImage}
-                                            className="text-foreground/40 hover:text-foreground/70 cursor-pointer shrink-0"
-                                        />
-                                    </TouchTooltip>
-                                )}
-                                {/* A Recently Approved/Awaiting Approval list already knows which it is,
-                                    so a small tooltipped icon replaces the chip; a draft still gets one. */}
-                                {showInlineStatus && !suggestion.draft ? (
-                                    <TouchTooltip
-                                        content={
-                                            <div className="px-1 py-0.5 text-sm font-cinzel">
-                                                {isApproved
-                                                    ? `Approved by ${approver?.displayname ?? "…"}`
-                                                    : "Awaiting Approval"}
-                                            </div>
-                                        }
-                                    >
-                                        <FontAwesomeIcon
-                                            icon={isApproved ? faCheckCircle : faCircleQuestion}
-                                            className={classNames(
-                                                "cursor-help shrink-0",
-                                                isApproved ? "text-success" : "text-warning"
-                                            )}
-                                        />
-                                    </TouchTooltip>
-                                ) : suggestion.draft ? (
-                                    <Chip size="sm" color="default" variant="flat" className="shrink-0">
-                                        Draft
-                                    </Chip>
-                                ) : isApproved ? (
-                                    <Chip size="sm" color="success" variant="flat" className="shrink-0">
-                                        Approved
-                                    </Chip>
-                                ) : (
-                                    <Chip size="sm" color="default" variant="flat" className="shrink-0">
-                                        Awaiting Approval
-                                    </Chip>
-                                )}
+                <div className="relative z-10 h-full flex gap-2 px-4 py-3">
+                    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                        <div className="flex gap-2 flex-wrap items-center">
+                            <div className="text-base font-cinzel text-foreground truncate">
+                                <ThronesIcon name={suggestion.card.type} /> {suggestion.card.name}
                             </div>
-                            <div className="text-xs font-crimson italic text-foreground/40">
-                                Suggestion by {submitterName ?? "…"}
-                            </div>
+                            {showPreview && (
+                                <TouchTooltip
+                                    content={
+                                        <div className="w-56">
+                                            <SuggestionCardPreview suggestion={suggestion} rounded />
+                                        </div>
+                                    }
+                                >
+                                    <FontAwesomeIcon
+                                        icon={faImage}
+                                        className="text-foreground/40 hover:text-foreground/70 cursor-pointer shrink-0"
+                                    />
+                                </TouchTooltip>
+                            )}
                         </div>
-                        <div
-                            className="ml-auto flex flex-col items-end justify-between gap-1 shrink-0"
-                            onClickCapture={preventRowNavigation}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Timestamp
-                                    date={suggestion.updated}
-                                    className="text-xs font-sans italic text-foreground/40"
-                                />
-                                {actions && <div className="flex items-center gap-1">{actions}</div>}
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {interactiveReactions && canReact ? (
-                                    <>
-                                        <ReactionToggle
-                                            icon={faThumbsUp}
-                                            count={likeCount}
-                                            isActive={myReaction === "like"}
-                                            activeClassName="bg-primary/20 text-primary"
-                                            onPress={() => onSetReaction("like")}
-                                        />
-                                        {showDislikes && (
-                                            <ReactionToggle
-                                                icon={faThumbsDown}
-                                                count={dislikeCount}
-                                                isActive={myReaction === "dislike"}
-                                                activeClassName="bg-danger/20 text-danger"
-                                                onPress={() => onSetReaction("dislike")}
-                                            />
-                                        )}
-                                    </>
-                                ) : (
-                                    <>
-                                        <ReactionStat icon={faThumbsUp} count={likeCount} />
-                                        {showDislikes && <ReactionStat icon={faThumbsDown} count={dislikeCount} />}
-                                    </>
-                                )}
-                            </div>
+                        <div className="flex items-center gap-1.5 min-w-0 text-xs font-crimson italic text-foreground/40">
+                            <UserAvatar discordId={suggestion.createdBy} title={false} className="!size-4" />
+                            <span className="truncate">Suggestion by {submitterName ?? "…"}</span>
+                        </div>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end justify-between gap-1">
+                        <div className="flex items-center gap-2">
+                            <Timestamp
+                                date={suggestion.updated}
+                                className="text-xs font-sans italic text-foreground/40"
+                            />
+                            {actions && (
+                                <div className="flex items-center gap-1" onClickCapture={preventRowNavigation}>
+                                    {actions}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                            {interactiveReactions && canReact ? (
+                                <>
+                                    <ReactionToggle
+                                        icon={faThumbsUp}
+                                        count={likeCount}
+                                        isActive={myReaction === "like"}
+                                        activeClassName="bg-primary/20 text-primary"
+                                        onPress={() => onSetReaction("like")}
+                                    />
+                                    <ReactionToggle
+                                        icon={faThumbsDown}
+                                        count={dislikeCount}
+                                        isActive={myReaction === "dislike"}
+                                        activeClassName="bg-danger/20 text-danger"
+                                        onPress={() => onSetReaction("dislike")}
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <ReactionStat icon={faThumbsUp} count={likeCount} />
+                                    <ReactionStat icon={faThumbsDown} count={dislikeCount} />
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -257,15 +205,6 @@ export default function SuggestionRow({
 type SuggestionRowProps = {
     suggestion: ICardSuggestion;
     className?: string;
-    /** Replaces the top Approved/Awaiting Approval chip with a small status icon - use only where
-     * every row is already known to be one or the other. A draft still falls back to its own chip. */
-    showInlineStatus?: boolean;
-    /** The small check/question-mark glyph worked into the faction watermark - on by default, turned
-     * off on the suggestions page's own rails where it reads as redundant clutter. */
-    showWatermarkStatusIcon?: boolean;
-    /** Adds a dislike count alongside the existing like count - opt-in since most lists (eg. Recent
-     * Submissions) only ever cared about likes. */
-    showDislikes?: boolean;
     /** Turns the like/dislike counts into the current user's own pressable reaction toggles (same
      * react/clear mutations the suggestion detail page uses), instead of a read-only count. */
     interactiveReactions?: boolean;

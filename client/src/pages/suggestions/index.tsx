@@ -32,7 +32,7 @@ import {
     faCircleQuestion,
     faFileLines,
     faGear,
-    faLightbulb
+    faPlus
 } from "@fortawesome/free-solid-svg-icons";
 import SuggestionsGuideModal from "./suggestionsGuideModal";
 import SuggestionSettingsModal from "./suggestionSettingsModal";
@@ -270,7 +270,7 @@ function SuggestionsContent() {
                                 className="hidden sm:inline-flex"
                                 size="sm"
                                 color="primary"
-                                startContent={<FontAwesomeIcon icon={faLightbulb} />}
+                                startContent={<FontAwesomeIcon icon={faPlus} />}
                                 onPress={() => setEditing({})}
                             >
                                 Create Suggestion
@@ -543,7 +543,7 @@ function SuggestionsContent() {
                         aria-label="Create Suggestion"
                         onPress={() => setEditing({})}
                     >
-                        <FontAwesomeIcon icon={faLightbulb} />
+                        <FontAwesomeIcon icon={faPlus} />
                     </Button>
                 </div>
             )}

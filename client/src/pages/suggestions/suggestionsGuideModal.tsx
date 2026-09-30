@@ -1,13 +1,14 @@
-import { faArrowRight, faCheckCircle, faComments, faLightbulb, faPenToSquare } from "@fortawesome/free-solid-svg-icons";
+import { faArrowRight, faComments, faPenToSquare, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { BaseElementProps } from "../../types";
+import { suggestionIcons } from "../../constants";
 
 const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     {
-        icon: faLightbulb,
+        icon: suggestionIcons.awaiting,
         title: "Make a Suggestion",
         description: "Design a card and submit it for the community to see."
     },
@@ -70,7 +71,7 @@ export default function SuggestionsGuideModal({
                             </div>
                             <div className="flex items-center gap-3 border border-content3 bg-content1 rounded-lg p-3 sm:p-4">
                                 <FontAwesomeIcon
-                                    icon={faCheckCircle}
+                                    icon={suggestionIcons.approved}
                                     className="text-primary text-3xl sm:text-4xl shrink-0"
                                 />
                                 <div className="text-sm text-foreground/70">
@@ -95,7 +96,7 @@ export default function SuggestionsGuideModal({
                                 <Button
                                     color="primary"
                                     className="font-cinzel font-semibold w-full sm:w-auto"
-                                    startContent={<FontAwesomeIcon icon={faLightbulb} />}
+                                    startContent={<FontAwesomeIcon icon={faPlus} />}
                                     onPress={() => {
                                         close();
                                         onCreateSuggestion();

@@ -2,7 +2,6 @@ import { MouseEvent, useState } from "react";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-    faCheck,
     faClockRotateLeft,
     faEye,
     faEyeSlash,
@@ -29,7 +28,8 @@ import {
     cornerBadgeDiscFillClasses,
     cornerBadgeFadeClasses,
     LEGACY_SUGGESTION_DESCRIPTION,
-    LONG_PRESS_MS
+    LONG_PRESS_MS,
+    suggestionIcons
 } from "../../constants";
 
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
@@ -317,7 +317,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                     },
                     !!approvedBy && {
                         key: "approved",
-                        icon: faCheck,
+                        icon: suggestionIcons.approved,
                         iconClassName: "text-success",
                         title: "Approved",
                         description: `by ${approver?.displayname ?? "…"}`

@@ -21,6 +21,8 @@ import {
     faCheck,
     faCircleDot,
     faCircleExclamation,
+    faEnvelopeCircleCheck,
+    faEnvelopeOpenText,
     faEye,
     faFeather,
     faHammer,
@@ -73,6 +75,9 @@ export const inertButtonClasses = "opacity-disabled cursor-default data-[hover=t
 
 export const LEGACY_SUGGESTION_DESCRIPTION =
     "Imported from the old suggestion spreadsheet, still waiting to be completed";
+
+// A suggestion is a letter to the Citadel - open while it awaits a decision, checked once approved
+export const suggestionIcons = { awaiting: faEnvelopeOpenText, approved: faEnvelopeCircleCheck };
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
