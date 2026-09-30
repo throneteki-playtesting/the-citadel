@@ -45,7 +45,6 @@ import { TouchTooltip } from "../../components/touchTooltip";
 import { EASE_STANDARD } from "../../constants";
 import { scrollableTabs } from "../../hooks/useSelectedTabInView";
 import useDebounce from "../../hooks/useDebounce";
-import SlidingPages from "../../components/slidingPages";
 
 // The row's own presence in the list (insertion/removal) - separate from, and deliberately not as fast
 // as, the edit/view crossfade below.
@@ -319,35 +318,34 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
 
                             <div className="flex flex-col gap-3">
                                 <Tabs
-                                    classNames={scrollableTabs}
+                                    classNames={{ ...scrollableTabs, panel: "p-0" }}
                                     selectedKey={tab}
                                     onSelectionChange={(key) => setTab(key as Kind)}
                                     aria-label="Reward and punishment types"
                                     variant="underlined"
                                     color="primary"
                                     size="lg"
+                                    destroyInactiveTabPanel={false}
                                 >
                                     <Tab
                                         key="rewardTypes"
                                         title={<TabTitle label="Rewards" isDirty={rewardTypesDirty} />}
-                                    />
+                                    >
+                                        <RewardPunishmentList
+                                            kindLabel="Reward Type"
+                                            options={draft.rewardTypes}
+                                            originalOptions={originalRef.current?.rewardTypes ?? []}
+                                            isOpen={isOpen}
+                                            isActivePage={tab === "rewardTypes"}
+                                            onUpsertOption={(option) => onUpsertOption("rewardTypes", option)}
+                                            onToggleEnabled={(id) => onToggleEnabled("rewardTypes", id)}
+                                            onDelete={(id) => onDeleteOption("rewardTypes", id)}
+                                        />
+                                    </Tab>
                                     <Tab
                                         key="punishmentTypes"
                                         title={<TabTitle label="Punishments" isDirty={punishmentTypesDirty} />}
-                                    />
-                                </Tabs>
-                                <SlidingPages currentPage={tab === "rewardTypes" ? 1 : 2}>
-                                    <RewardPunishmentList
-                                        kindLabel="Reward Type"
-                                        options={draft.rewardTypes}
-                                        originalOptions={originalRef.current?.rewardTypes ?? []}
-                                        isOpen={isOpen}
-                                        isActivePage={tab === "rewardTypes"}
-                                        onUpsertOption={(option) => onUpsertOption("rewardTypes", option)}
-                                        onToggleEnabled={(id) => onToggleEnabled("rewardTypes", id)}
-                                        onDelete={(id) => onDeleteOption("rewardTypes", id)}
-                                    />
-                                    <div>
+                                    >
                                         {hasViewedPunishments && (
                                             <RewardPunishmentList
                                                 kindLabel="Punishment Type"
@@ -360,8 +358,8 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                                 onDelete={(id) => onDeleteOption("punishmentTypes", id)}
                                             />
                                         )}
-                                    </div>
-                                </SlidingPages>
+                                    </Tab>
+                                </Tabs>
                             </div>
                         </>
                     )}

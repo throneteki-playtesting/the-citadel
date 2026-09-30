@@ -35,6 +35,7 @@ import ArtworkTab from "../../card/artwork/artworkTab";
 import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
 import { ChecklistDots } from "../../../components/checklist";
 import SlidingPages from "../../../components/slidingPages";
+import { useEditingCard } from "../useEditingCard";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
 import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
 import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
@@ -92,13 +93,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
     const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
-    // Kept apart from whether the editor is on show, so leaving doesn't empty the page mid-slide.
-    // Shareable via the url, so a link with ?editing=<number> opens straight to that card.
-    const [editingNumber, setEditingNumber] = useState<number | undefined>(() => {
-        const raw = Number(searchParams.get("editing"));
-        return Number.isInteger(raw) && raw > 0 ? raw : undefined;
-    });
-    const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
+    const { editingNumber, setEditingNumber, isEditing, setIsEditing, onPageChange } = useEditingCard(searchParams);
     const guide = useTabGuideModal(ARTWORKS_GUIDE_SEEN_KEY, isActive);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -290,7 +285,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
                 <ArtworksSkeleton project={project} onOpenGuide={guide.open} />
             ) : (
                 <div ref={containerRef} className="scroll-mt-20">
-                    <SlidingPages currentPage={isEditing ? 2 : 1}>
+                    <SlidingPages currentPage={isEditing ? 2 : 1} history="artworks" onPageChange={onPageChange}>
                         {renderList()}
                         <div>
                             {editingNumber !== undefined && (

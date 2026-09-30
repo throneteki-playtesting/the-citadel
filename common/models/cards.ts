@@ -20,6 +20,7 @@ export const challengeIcons = ["military", "intrigue", "power"] as const;
 export const plotStats = ["income", "initiative", "claim", "reserve"] as const;
 export type Faction = (typeof factions)[number];
 export type Type = (typeof types)[number];
+export const uniqueTypes: readonly Type[] = ["character", "attachment", "location"];
 export type NoteType = (typeof noteTypes)[number];
 export type ChallengeIcon = (typeof challengeIcons)[number];
 export type PlotStat = (typeof plotStats)[number];

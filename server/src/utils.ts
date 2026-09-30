@@ -1,4 +1,4 @@
-import { ILabeledCard, NoteType, factions } from "common/models/cards";
+import { ILabeledCard, NoteType, factions, uniqueTypes } from "common/models/cards";
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { getReleaseCapacity, THRONESDB_URL } from "common/utils";
@@ -130,7 +130,7 @@ export function convertTDBCard(obj: any): ILabeledCard {
             .filter((trait: string) => !!trait),
         text: obj.text,
         type: obj.type_code,
-        ...(["character", "attachment", "location"].includes(obj.type_code) && { unique: obj.is_unique }),
+        ...(uniqueTypes.includes(obj.type_code) && { unique: obj.is_unique }),
         quantity: obj.quantity,
         imageUrl: obj.image_url,
         workInProgress: obj.work_in_progress,

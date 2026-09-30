@@ -350,7 +350,7 @@ function ContributorRow({
         <button
             type="button"
             onClick={() => onOpen(contributor.discordId)}
-            className="w-full grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-left cursor-pointer transition-colors hover:bg-content2"
+            className="w-full grid grid-cols-[minmax(0,1fr)_7rem_auto] sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2 text-left cursor-pointer transition-colors hover:bg-content2"
         >
             <UserRow discordId={contributor.discordId} />
             <div className="flex h-1.5 overflow-hidden rounded-full bg-content2">
@@ -365,7 +365,8 @@ function ContributorRow({
             </div>
             <span className="text-xs text-foreground/50 whitespace-nowrap tabular-nums">
                 <AnimatedNumber value={contributor.submitted} className="font-semibold text-foreground" /> ·{" "}
-                <AnimatedNumber value={contributor.approved} /> approved
+                <AnimatedNumber value={contributor.approved} />
+                <span className="hidden sm:inline"> approved</span>
             </span>
         </button>
     );

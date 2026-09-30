@@ -1,4 +1,4 @@
-import { Faction, factions, Type, types } from "common/models/cards";
+import { Faction, factions, Type, types, uniqueTypes } from "common/models/cards";
 
 export type CountGrid = Record<Faction, Record<Type, number>>;
 
@@ -27,4 +27,30 @@ export function averageByType(grid: CountGrid) {
 export function expectedCount(averages: Map<Type, number>, faction: Faction, type: Type, neutralWeight: number) {
     const average = averages.get(type) ?? 0;
     return Math.round(faction === "neutral" ? average * neutralWeight : average);
+}
+
+export type SpreadCounts = { total: CountGrid; unique: CountGrid; nonUnique: CountGrid };
+
+export const emptyCounts = (): SpreadCounts => ({ total: emptyGrid(), unique: emptyGrid(), nonUnique: emptyGrid() });
+
+type Bucket = keyof SpreadCounts;
+
+type Expectation = { count: number; expected: number; isBelow: boolean };
+
+export type Expectations = Partial<Record<Bucket, Expectation>>;
+
+// Unique and non-unique are held to their own baselines, since a pile of one can hide a shortage of the other
+export function expectations(counts: SpreadCounts, faction: Faction, type: Type, neutralWeight: number): Expectations {
+    if (type === "agenda") {
+        return {};
+    }
+    const buckets: Bucket[] = uniqueTypes.includes(type) ? ["total", "unique", "nonUnique"] : ["total"];
+    const hasSegment = counts.total[faction][type] > 0;
+    return Object.fromEntries(
+        buckets.map((bucket) => {
+            const count = counts[bucket][faction][type];
+            const expected = expectedCount(averageByType(counts[bucket]), faction, type, neutralWeight);
+            return [bucket, { count, expected, isBelow: hasSegment && expected > 0 && count < expected }];
+        })
+    );
 }

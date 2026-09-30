@@ -233,9 +233,9 @@ function CardCodesGroup({
     fullWidth: boolean;
 }) {
     return (
-        <div className={classNames("flex flex-col gap-2", fullWidth ? "w-full" : "flex-1 min-w-0")}>
+        <div className={classNames("flex flex-col gap-2 w-full", { "sm:w-auto sm:flex-1 min-w-0": !fullWidth })}>
             <SectionTitle size="sm">{title}</SectionTitle>
-            <SectionBlurb className={fullWidth ? undefined : "max-w-80"}>{description}</SectionBlurb>
+            <SectionBlurb className={fullWidth ? undefined : "sm:max-w-80"}>{description}</SectionBlurb>
             {!isLoading && (
                 <div className="flex flex-wrap gap-2">
                     {codes.map((code, index) => {
@@ -333,7 +333,7 @@ function ComparableCombosSection({ comparableCards, combosWith }: { comparableCa
 
     return (
         <div ref={containerRef} className="border border-content3 bg-content1 p-3">
-            <div className={classNames("flex gap-4", sideBySide ? "flex-row" : "flex-col")}>
+            <div className={classNames("flex flex-col gap-4", { "sm:flex-row": sideBySide })}>
                 {comparableCards.length > 0 && (
                     <CardCodesGroup
                         title="Comparable Cards"

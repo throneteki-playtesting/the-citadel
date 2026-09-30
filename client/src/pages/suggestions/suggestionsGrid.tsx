@@ -82,33 +82,34 @@ const SuggestionsGrid = ({
 
     return (
         <div className="w-full flex flex-col gap-2">
-            <div className="pt-3 flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2">
+            <div className="pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
                 <button
                     type="button"
                     onClick={onBack}
-                    className="self-start text-sm sm:text-base tracking-widest text-secondary font-cinzel shrink-0 whitespace-nowrap cursor-pointer hover:brightness-150"
+                    className="self-start sm:self-auto sm:flex-1 text-left text-sm sm:text-base tracking-widest text-secondary font-cinzel shrink-0 whitespace-nowrap cursor-pointer hover:brightness-150"
                 >
                     <FontAwesomeIcon icon={faAngleLeft} /> Overview
                 </button>
-                <div className="hidden sm:block flex-1" />
-                <SuggestionFilterSearchBar
-                    search={rawSearch}
-                    onSearchChange={setRawSearch}
-                    filter={filter}
-                    onFilterChange={onFilterChange}
-                    traits={filterOptions?.traits ?? []}
-                    users={filterOptions?.submitters ?? []}
-                    isDisabled={isBusy}
-                    isSearching={isSearching}
-                    className="w-full sm:w-auto sm:min-w-40"
-                />
-                <SortSelect
-                    options={sortOptions}
-                    value={sortBy}
-                    isDisabled={isBusy}
-                    onChange={onSortChange}
-                    className="w-full sm:w-44"
-                />
+                <div className="flex flex-wrap justify-end items-center gap-2">
+                    <SuggestionFilterSearchBar
+                        search={rawSearch}
+                        onSearchChange={setRawSearch}
+                        filter={filter}
+                        onFilterChange={onFilterChange}
+                        traits={filterOptions?.traits ?? []}
+                        users={filterOptions?.submitters ?? []}
+                        isDisabled={isBusy}
+                        isSearching={isSearching}
+                        className="min-w-40"
+                    />
+                    <SortSelect
+                        options={sortOptions}
+                        value={sortBy}
+                        isDisabled={isBusy}
+                        onChange={onSortChange}
+                        className="w-44 shrink-0"
+                    />
+                </div>
             </div>
             <CardGrid<ICardSuggestionFilterable>
                 key={animationKey}

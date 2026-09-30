@@ -134,6 +134,12 @@ const OPTION_TONES = {
         icon: "text-primary bg-primary/15",
         accent: "text-primary"
     },
+    success: {
+        tile: "border-success/40 hover:border-success focus-visible:ring-success",
+        tint: "bg-success/5 group-hover:bg-success/10",
+        icon: "text-success bg-success/15",
+        accent: "text-success"
+    },
     danger: {
         tile: "border-danger/40 hover:border-danger focus-visible:ring-danger",
         tint: "bg-danger/5 group-hover:bg-danger/10",
@@ -232,6 +238,7 @@ export default function LegacySuggestionPanel({
                 icon={faLink}
                 title={`Link to ${cardMatchLabel(match)}`}
                 detail={linkDetail(match)}
+                tone="success"
                 onPress={() => setConfirmingLink(match)}
             />
         )),
@@ -315,7 +322,7 @@ export default function LegacySuggestionPanel({
                 </div>
             ) : (
                 <div className="flex flex-col gap-3 border-t border-dashed border-primary/30 pt-4">
-                    <SectionTitle size="sm">Your options</SectionTitle>
+                    <SectionTitle size="sm">What's next?</SectionTitle>
                     {!canComplete && (
                         <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-foreground/60">
                             Waiting on

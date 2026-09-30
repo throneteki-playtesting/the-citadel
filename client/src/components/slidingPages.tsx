@@ -1,11 +1,21 @@
 import React, { Children, HTMLAttributes, ReactNode, Ref, useEffect, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { PageActiveContext, useIsPageActive } from "../hooks/useIsPageActive";
+import useSlidingPagesHistory from "../hooks/useSlidingPagesHistory";
 import { BaseElementProps } from "../types";
 
 /** Lays its children out side by side and slides between them, keeping only the active one's height
  *  so the surrounding page doesn't jump. The Wizard's pages are built on this, without its form handling. */
-export default function SlidingPages({ className, style, currentPage, pageProps, children, ref }: SlidingPagesProps) {
+export default function SlidingPages({
+    className,
+    style,
+    currentPage,
+    pageProps,
+    history,
+    onPageChange,
+    children,
+    ref
+}: SlidingPagesProps) {
     // A page which is the one on show inside something hidden is still not on screen
     const isParentActive = useIsPageActive();
     const activeWrapperRef = useRef<HTMLDivElement>(null);
@@ -19,6 +29,7 @@ export default function SlidingPages({ className, style, currentPage, pageProps,
     // Counted rather than compared - children are a fresh array every render, and rebuilding the observer
     // each time is the work the observer was there to avoid
     const pageCount = Children.count(children);
+    useSlidingPagesHistory(history, currentPage, onPageChange);
 
     // Watches the active page rather than measuring once - pages can grow after mount, and a stale
     // height would either clip them or leave a gap underneath
@@ -102,4 +113,11 @@ type SlidingPagesProps = Omit<BaseElementProps, "children"> & {
     pageProps?: (pageNo: number) => HTMLAttributes<HTMLDivElement>;
     children: ReactNode;
     ref?: Ref<HTMLDivElement>;
-};
+} & (
+        | {
+              /** Records each page change as a browser history entry under this key, for back/forward to travel */
+              history: string;
+              onPageChange: (page: number) => void;
+          }
+        | { history?: undefined; onPageChange?: undefined }
+    );

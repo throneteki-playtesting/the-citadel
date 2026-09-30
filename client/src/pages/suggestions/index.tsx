@@ -37,7 +37,6 @@ import {
 import SuggestionsGuideModal from "./suggestionsGuideModal";
 import SuggestionSettingsModal from "./suggestionSettingsModal";
 import LoadingCard from "../../components/loadingCard";
-import { rowCapClasses } from "../../utils";
 import PermissionGate from "../../components/permissionGate";
 
 const SUGGESTIONS_GUIDE_SEEN_KEY = "suggestions-guide-seen";
@@ -82,13 +81,10 @@ const URL_OWNED_KEYS = [
 // The phone floating column, filling leftwards from the page FAB (Create) - literal classes, so Tailwind finds them
 const FAB_SLOTS = ["right-20", "right-36", "right-52"];
 
-// Caps the Recent Suggestions rail at 2 rows per breakpoint (grid-cols-2/3/4/5) - see the grid below.
-const RECENT_RAIL_ROW_CAP_CLASSES = rowCapClasses([
-    { max: 4 },
-    { prefix: "sm", max: 6 },
-    { prefix: "md", max: 8 },
-    { prefix: "lg", max: 10 }
-]);
+const RECENT_RAIL_MAX = 10;
+// Two rows per breakpoint (grid-cols-2/3/4/5), written out whole so Tailwind can find them
+const RECENT_RAIL_ROW_CAP_CLASSES =
+    "max-sm:[&>*:nth-child(n+5)]:hidden sm:max-md:[&>*:nth-child(n+7)]:hidden md:max-lg:[&>*:nth-child(n+9)]:hidden";
 
 export default function Suggestions() {
     return (
@@ -330,7 +326,11 @@ function SuggestionsContent() {
                 </div>
             </div>
 
-            <SlidingPages currentPage={isBrowsingAll ? 2 : 1}>
+            <SlidingPages
+                currentPage={isBrowsingAll ? 2 : 1}
+                history="suggestions"
+                onPageChange={(page) => setIsBrowsingAll(page === 2)}
+            >
                 <div className="flex flex-col gap-5">
                     <Reveal index={sectionIndex++}>
                         <StatsGrid className="border border-content3 drop-shadow-lg">
@@ -395,7 +395,7 @@ function SuggestionsContent() {
                                             RECENT_RAIL_ROW_CAP_CLASSES
                                         )}
                                     >
-                                        {Array.from({ length: 10 }).map((_, index) => (
+                                        {Array.from({ length: RECENT_RAIL_MAX }).map((_, index) => (
                                             <LoadingCard key={index} />
                                         ))}
                                     </div>
@@ -404,6 +404,8 @@ function SuggestionsContent() {
                                         size="md"
                                         cards={feed?.recent ?? []}
                                         className={RECENT_RAIL_ROW_CAP_CLASSES}
+                                        animate
+                                        keyExtractor={(suggestion) => suggestion.id ?? ""}
                                     >
                                         {(suggestion) => (
                                             <SuggestionCardLink key={suggestion.id} suggestion={suggestion} />

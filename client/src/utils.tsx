@@ -3,7 +3,6 @@ import { faAnglesUp, faArrowRightArrowLeft, faArrowRotateLeft, faGem } from "@fo
 import { Faction, NoteType } from "common/models/cards";
 import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
-import classNames from "classnames";
 import { VERTICAL_CARD_WIDTH_REM } from "./constants";
 
 /** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce".
@@ -84,20 +83,6 @@ export function formatCurrency(amount: number, currency: string, options?: Intl.
         currencyDisplay: "narrowSymbol",
         ...options
     }).format(amount);
-}
-
-/** Caps a row of children to `max` visible per breakpoint, hiding the rest outright rather than
- *  collapsing to 0 height - `steps` in ascending breakpoint order. */
-export function rowCapClasses(steps: { prefix?: string; max: number }[]): string {
-    return classNames(
-        steps.map(({ prefix, max }, i) => {
-            const at = (className: string) => (prefix ? `${prefix}:${className}` : className);
-            return classNames(
-                i > 0 && at(`[&>*:nth-child(n+${steps[i - 1].max + 1})]:block`),
-                i < steps.length - 1 && at(`[&>*:nth-child(n+${max + 1})]:hidden`)
-            );
-        })
-    );
 }
 
 // A plot is a vertical card's footprint transposed - as wide as one is tall, rather than squeezed

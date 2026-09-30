@@ -7,8 +7,8 @@ import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import { useGetSettingsQuery, useGetSuggestionsQuery } from "../../api";
 import { SuggestionFilterValue } from "../../components/data/suggestionFilter";
 import Reveal from "../../components/reveal";
-import SpreadSunburst from "./spreadSunburst";
-import { emptyGrid } from "./spreadCounts";
+import SpreadSunburst, { SpreadMarker } from "./spreadSunburst";
+import { emptyCounts } from "./spreadCounts";
 import { EMPTY_SELECTION, SpreadSelection } from "./spreadSelection";
 import { FOCUS_AREAS } from "./focusAreas";
 
@@ -24,17 +24,18 @@ export default function SuggestionSpread({ selection, onSelectionChange, onSelec
     const neutralWeight = settings?.neutralWeight ?? DEFAULT_NEUTRAL_WEIGHT;
 
     const counts = useMemo(() => {
-        const grid = emptyGrid();
+        const tally = emptyCounts();
         for (const suggestion of suggestionsData?.items ?? []) {
             if (suggestion.draft) {
                 continue;
             }
-            const { faction, type } = suggestion.card;
-            if (faction && type && grid[faction]?.[type] !== undefined) {
-                grid[faction][type]++;
+            const { faction, type, unique } = suggestion.card;
+            if (faction && type && tally.total[faction]?.[type] !== undefined) {
+                tally.total[faction][type]++;
+                tally[unique ? "unique" : "nonUnique"][faction][type]++;
             }
         }
-        return grid;
+        return tally;
     }, [suggestionsData?.items]);
 
     return (
@@ -73,9 +74,10 @@ export default function SuggestionSpread({ selection, onSelectionChange, onSelec
                     )}
                 </AnimatePresence>
             </div>
-            <div className="px-4 md:px-0 flex items-center gap-1.5 text-xs text-foreground/40">
-                <span className="size-2 rounded-full bg-warning shrink-0" aria-hidden="true" />
-                Below the expected count for that type
+            <div className="px-4 md:px-0 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-foreground/40">
+                <LegendItem label="Too few of type" />
+                <LegendItem label="Too few unique" ringOpacity={0} />
+                <LegendItem label="Too few non-unique" dotOpacity={0} />
             </div>
 
             {FOCUS_AREAS.length > 0 && (
@@ -93,6 +95,17 @@ export default function SuggestionSpread({ selection, onSelectionChange, onSelec
                 </div>
             )}
         </div>
+    );
+}
+
+function LegendItem({ label, dotOpacity, ringOpacity }: { label: string; dotOpacity?: number; ringOpacity?: number }) {
+    return (
+        <span className="flex items-center gap-1.5">
+            <svg viewBox="-6 -6 12 12" className="size-3 shrink-0" aria-hidden="true">
+                <SpreadMarker dotOpacity={dotOpacity} ringOpacity={ringOpacity} />
+            </svg>
+            {label}
+        </span>
     );
 }
 

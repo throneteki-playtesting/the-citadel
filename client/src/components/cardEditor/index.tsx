@@ -1,4 +1,4 @@
-import { DefaultDeckLimit, ICard } from "common/models/cards";
+import { DefaultDeckLimit, ICard, uniqueTypes } from "common/models/cards";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
@@ -78,7 +78,7 @@ const CardEditor = ({
         } else {
             delete card.icons;
         }
-        if (["character", "attachment", "location"].includes(card.type ?? "")) {
+        if (card.type && uniqueTypes.includes(card.type)) {
             defaults.unique = card.unique ?? false;
         } else {
             delete card.unique;
