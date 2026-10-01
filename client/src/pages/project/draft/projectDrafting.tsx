@@ -1,5 +1,5 @@
 import { factionNames, parseCardCode, renderPlaytestingCard, thronesColors } from "common/utils";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { IProject } from "common/models/projects";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
 import { DeepPartial } from "common/types";
@@ -496,11 +496,14 @@ type DropdownItemDef = {
     style?: React.CSSProperties;
 };
 function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEdit, onDelete }: FactionSlotProps) {
-    const [selectedIndex, setSelectedIndex] = useState<number>(Math.max(0, slot.options.length - 1));
-
-    useEffect(() => {
-        setSelectedIndex(Math.max(0, slot.options.length - 1));
-    }, [slot.options.length]);
+    const topIndex = Math.max(0, slot.options.length - 1);
+    const [selectedIndex, setSelectedIndex] = useState(topIndex);
+    const [previousOptionCount, setPreviousOptionCount] = useState(slot.options.length);
+    // Reset in the same render the count changes, so the stack never sees a stale selection against the new cards
+    if (slot.options.length !== previousOptionCount) {
+        setPreviousOptionCount(slot.options.length);
+        setSelectedIndex(topIndex);
+    }
 
     const canEdit = usePermission(Permission.EDIT_CARDS);
     const canDelete = usePermission(Permission.DELETE_CARDS);
@@ -519,6 +522,7 @@ function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEdit, onDelete }: Fa
                     <CardStack
                         cards={stackedCards}
                         selectedIndex={selectedIndex}
+                        behaviour="stacked"
                         tilt={{ amount: 2, alternate: true, variance: 0.5, animateNew: false }}
                         className="h-full"
                         style={{ zIndex }}
