@@ -31,6 +31,8 @@ export interface IProject extends IAuditable {
     mandateUrl?: string;
     formUrl?: string;
     emoji?: string;
+    /** Discord ids of the people running this project - see projectOwnerPermissions */
+    owners?: string[];
     releases: IProjectRelease[];
 }
 

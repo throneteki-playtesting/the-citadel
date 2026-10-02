@@ -168,6 +168,50 @@ enum Permission {
 
 export default Permission;
 
+// What owning a project grants within it - running the project, not taking part in its sign-offs
+export const projectOwnerPermissions: Permission[] = [
+    Permission.READ_PROJECTS,
+    Permission.READ_ARCHIVED_PROJECTS,
+    Permission.EDIT_PROJECTS,
+    Permission.DELETE_PROJECTS,
+    Permission.INITIALISE_PROJECTS,
+    Permission.ARCHIVE_PROJECTS,
+    Permission.READ_SLOTS,
+    Permission.CREATE_SLOTS,
+    Permission.DELETE_SLOTS,
+    Permission.EDIT_SLOTS,
+    Permission.APPROVE_CARD_DESIGN,
+    Permission.READ_ARTWORKS,
+    Permission.EDIT_ARTWORKS,
+    Permission.READ_REFINEMENT,
+    Permission.EDIT_INQUIRIES,
+    Permission.DELETE_INQUIRIES,
+    Permission.RESOLVE_INQUIRIES,
+    Permission.READ_FAQ,
+    Permission.EDIT_FAQ,
+    Permission.READ_RELEASE_CHECKS,
+    Permission.READ_RELEASES,
+    Permission.CREATE_RELEASES,
+    Permission.EDIT_RELEASES,
+    Permission.DELETE_RELEASES,
+    Permission.READ_PLAYTESTING_UPDATES,
+    Permission.CREATE_PLAYTESTING_UPDATES,
+    Permission.READ_CARDS,
+    Permission.READ_LATEST_CARDS,
+    Permission.CREATE_CARDS,
+    Permission.EDIT_CARDS,
+    Permission.DELETE_CARDS,
+    Permission.READ_STATS_PROJECT,
+    Permission.READ_STATS_SLOT,
+    Permission.READ_STATS_RELEASE,
+    Permission.SYNC_CARD_IMAGES,
+    Permission.SYNC_CARD_DISCORD,
+    Permission.SYNC_CARD_GITHUB,
+    Permission.SYNC_PROJECT_GITHUB_DATA,
+    Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE,
+    Permission.SYNC_PLAYTESTINGUPDATE_DISCORD
+];
+
 export type PermissionMeta = {
     label: string;
     group: string;

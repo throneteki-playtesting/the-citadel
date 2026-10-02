@@ -16,6 +16,7 @@ import { BaseStatus } from "../../components/status/baseStatus";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 import { useDiscordProjectStatus } from "../../components/status/useDiscordProjectStatus";
 import { useGithubProjectStatus } from "../../components/status/useGithubProjectStatus";
+import { UserNameList } from "../../components/userAvatar";
 
 const ProjectHeader = ({
     className,
@@ -24,9 +25,10 @@ const ProjectHeader = ({
     onEdit = () => true,
     onDelete = () => true
 }: ProjectHeaderProps) => {
-    const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES);
-    const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD);
-    const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB);
+    const isSyncable = !project.draft;
+    const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES) && isSyncable;
+    const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD) && isSyncable;
+    const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB) && isSyncable;
     const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
     const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
     const canArchive = usePermission(Permission.ARCHIVE_PROJECTS) && !project.draft && project.active;
@@ -47,6 +49,14 @@ const ProjectHeader = ({
             components.push(<span key="version">In Draft</span>);
         } else {
             components.push(<span key="version">{project.version} updates</span>);
+        }
+
+        if (project.owners?.length) {
+            components.push(
+                <span key="owners">
+                    By <UserNameList discordIds={project.owners} />
+                </span>
+            );
         }
 
         if (project.mandateUrl) {
@@ -71,13 +81,13 @@ const ProjectHeader = ({
                 )}
             </>
         );
-    }, [project.draft, project.mandateUrl, project.number, project.type, project.version]);
+    }, [project.draft, project.mandateUrl, project.number, project.owners, project.type, project.version]);
 
     return (
         <div className={classNames("px-4 md:px-0 space-y-2 md:space-y-4", className)} style={style}>
             <div className="flex flex-col gap-2">
                 <div className="flex flex-row items-start justify-between gap-2">
-                    <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
+                    <div className="min-w-0 text-xs tracking-widest font-cinzel uppercase text-foreground/40">
                         {headerComponents}
                     </div>
                     <div className="flex items-center gap-1.5">

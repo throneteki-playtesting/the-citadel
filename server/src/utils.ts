@@ -1,10 +1,10 @@
-import { ILabeledCard, NoteType, factions, uniqueTypes } from "common/models/cards";
+import { ILabeledCard, IPlaytestCard, NoteType, factions, uniqueTypes } from "common/models/cards";
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
 import { ISlot } from "common/models/slots";
 import { getReleaseCapacity, THRONESDB_URL } from "common/utils";
 import { IGetResponse, OAuthTokenResponse } from "./types";
 import { IDecklist } from "common/models/decks";
-import { camelCase, startCase } from "lodash-es";
+import { camelCase, startCase, uniq } from "lodash-es";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "./errors";
 import { dataService } from "./services";
@@ -18,6 +18,28 @@ export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefin
     updated: "patch",
     refinement: "patch"
 };
+
+// Nothing in a draft project is published anywhere until it is initialised
+export async function withoutDraftProjectCards(cards: IPlaytestCard[]) {
+    if (cards.length === 0) {
+        return cards;
+    }
+    const projects = await dataService.projects.read(
+        uniq(cards.map((card) => card.project)).map((number) => ({ number }))
+    );
+    const drafts = new Set(projects.filter((project) => project.draft).map((project) => project.number));
+    return cards.filter((card) => !drafts.has(card.project));
+}
+
+export function assertSyncableProject(project: IProject) {
+    if (project.draft) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Draft Project",
+            "Cards in a draft project are not synced until the project is initialised"
+        );
+    }
+}
 
 /**
  * Recalculates and persists IProject.cardCount from the actual slots collection.
@@ -202,39 +224,19 @@ export function pascalCase(value: string) {
 
 // Shared middleware: loads a project by :number param into res.locals.project
 // Works for routes where the project param is named "number"
-export const loadProjectByNumber = asyncHandler<{ number: number }, unknown, unknown, unknown>(
-    async (req, res, next) => {
-        const { number } = req.params;
-        const [project] = await dataService.projects.read({ number });
-        if (!project) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_FOUND,
-                "Invalid Number",
-                "Project with that number does not exist"
-            );
-        }
-        res.locals.project = project;
-        next();
+// Loads the project named by the route's :project param into res.locals.project
+export const loadProject = asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res, next) => {
+    const { project: number } = req.params;
+    if ((res.locals.project as IProject | undefined)?.number === Number(number)) {
+        return next();
     }
-);
-
-// Shared middleware: loads a project by :project param into res.locals.project
-// Works for routes where the project param is named "project"
-export const loadProjectByParam = asyncHandler<{ project: number }, unknown, unknown, unknown>(
-    async (req, res, next) => {
-        const { project: number } = req.params;
-        const [project] = await dataService.projects.read({ number });
-        if (!project) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_FOUND,
-                "Invalid Number",
-                "Project with that number does not exist"
-            );
-        }
-        res.locals.project = project;
-        next();
+    const [project] = await dataService.projects.read({ number });
+    if (!project) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Number", "Project with that number does not exist");
     }
-);
+    res.locals.project = project;
+    next();
+});
 
 // Applies extra filter fields to a single filter or each filter in an array,
 // without mutating the original value

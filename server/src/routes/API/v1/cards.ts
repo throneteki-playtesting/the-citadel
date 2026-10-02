@@ -12,8 +12,8 @@ import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
-import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
-import { applyToFilter, generateGetResponse, loadProjectByParam, NoteVersion } from "@/utils";
+import { scopeToProject, validateRequest, validateProjectAccess } from "@/middleware/permissions";
+import { applyToFilter, assertSyncableProject, generateGetResponse, loadProject, NoteVersion } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
@@ -25,6 +25,8 @@ import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityL
 import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
+
+router.use("/:project", scopeToProject);
 
 // Shared param schemas
 const ProjectParams = {
@@ -108,7 +110,7 @@ router.get(
     "/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateCardQueryPermission,
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(async (req, res) => {
@@ -126,7 +128,7 @@ router.get(
     "/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateCardQueryPermission,
     asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(
@@ -145,7 +147,7 @@ router.get(
 router.get(
     "/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateRequest<{ version: SemanticVersion | "latest" | "visible" }, unknown, unknown, unknown>(
         (principal, req) => {
@@ -200,7 +202,7 @@ router.get(
 router.get(
     "/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateRequest(Permission.READ_CARDS),
     asyncHandler<{ project: number; number: number; version: SemanticVersion }, unknown, unknown, IPlaytestCard>(
@@ -452,7 +454,7 @@ router.delete(
             version: Joi.string().optional().regex(Regex.SemanticVersion)
         }
     }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number; number: number; version?: SemanticVersion }, unknown, unknown, unknown>(
         async (req, res) => {
             const { number, version } = req.params;
@@ -481,6 +483,13 @@ router.delete(
     )
 );
 
+type CardSyncParams = {
+    project: number;
+    number: number;
+    version: SemanticVersion;
+    type: "image" | "discord" | "github";
+};
+
 router.post(
     "/:project/:number/:version/sync/:type",
     celebrate({
@@ -492,7 +501,7 @@ router.post(
             forced: Joi.boolean()
         }
     }),
-    validateRequest((principal, req) => {
+    validateRequest<CardSyncParams, unknown, unknown, unknown>((principal, req) => {
         const { type } = req.params;
         switch (type) {
             case "image":
@@ -505,12 +514,9 @@ router.post(
                 return false;
         }
     }),
-    asyncHandler<
-        { project: number; number: number; version: SemanticVersion; type: "image" | "discord" | "github" },
-        unknown,
-        unknown,
-        { forced: boolean }
-    >(async (req, res) => {
+    loadProject,
+    asyncHandler<CardSyncParams, unknown, unknown, { forced: boolean }>(async (req, res) => {
+        assertSyncableProject(res.locals.project as IProject);
         const { project, number, version, type } = req.params;
         const { forced } = req.query;
         let [card] = await dataService.cards.read({ project, number, version });

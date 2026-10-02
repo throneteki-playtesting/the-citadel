@@ -21,6 +21,7 @@ import {
     faCheck,
     faCircleDot,
     faCircleExclamation,
+    faEnvelope,
     faEnvelopeCircleCheck,
     faEnvelopeOpenText,
     faEye,
@@ -44,6 +45,8 @@ export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
 
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
 export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
+// A notice or its action arriving once something becomes true - quick, so it reads as a response rather than an event
+export const NOTICE_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 
 // Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
 export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };
@@ -77,7 +80,7 @@ export const LEGACY_SUGGESTION_DESCRIPTION =
     "Imported from the old suggestion spreadsheet, still waiting to be completed";
 
 // A suggestion is a letter to the Citadel - open while it awaits a decision, checked once approved
-export const suggestionIcons = { awaiting: faEnvelopeOpenText, approved: faEnvelopeCircleCheck };
+export const suggestionIcons = { base: faEnvelope, awaiting: faEnvelopeOpenText, approved: faEnvelopeCircleCheck };
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 

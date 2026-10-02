@@ -38,7 +38,7 @@ export const navItems: NavItem[] = [
         element: <Privacy />
     },
     {
-        path: "/project/:number",
+        path: "/project/:project",
         permission: Permission.READ_PROJECTS,
         element: <Project />
     },

@@ -1,120 +1,85 @@
-import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, Skeleton } from "@heroui/react";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
 import { IProject } from "common/models/projects";
+import { initialisationRequirements } from "common/models/initialisation";
 import { BaseElementProps } from "../../../types";
-import { useCallback, useMemo, useState } from "react";
-import { useGetCardsQuery, useGetSlotsQuery, useInitialiseProjectMutation } from "../../../api";
-import { faCrow, faExclamationCircle } from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { useMemo, useState } from "react";
+import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
+import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
+import { faListCheck } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { showApiErrorToast } from "../../../api/errors";
+import StatusNotice from "../../../components/statusNotice";
+import { ChecklistItems } from "../../../components/checklist";
+import { AnimatePresence, motion } from "framer-motion";
+import { NOTICE_TRANSITION } from "../../../constants";
+import InitialiseProjectModal from "./initialiseProjectModal";
 
-export default function ProjectHeaderDraftNotice({ className, style, project }: ProjectHeaderDraftNoticeProps) {
+// One per checklist row, at varied widths so the placeholder reads as lines of text
+const SKELETON_ROW_WIDTHS = ["w-40", "w-36", "w-44", "w-56"];
+
+export default function ProjectHeaderDraftNotice({ className, project }: ProjectHeaderDraftNoticeProps) {
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, draft: true } });
     const { data: slotsData } = useGetSlotsQuery({ project: project.number });
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [initialiseProject, { isLoading: isInitialising }] = useInitialiseProjectMutation();
 
-    const errorMessage = useMemo(() => {
-        if (!project || !project.draft || !cardsData || !slotsData) {
-            return false;
-        }
+    const requirements = useMemo(
+        () => cardsData && slotsData && initialisationRequirements(project, slotsData.items, cardsData.items),
+        [cardsData, slotsData, project]
+    );
+    const isReady = !!requirements?.every((requirement) => requirement.done);
 
-        const slotCounts = slotsData.items.map(
-            (slot) => cardsData.items.filter((item) => item.number === slot.number).length
-        );
-
-        if (slotCounts.some((count) => count === 0)) {
-            return "You cannot initialise a project without filling all available card slots. Either add cards to all missing slots, or remove empty slots.";
-        }
-
-        if (slotCounts.some((count) => count > 1)) {
-            return "You cannot initialise a project with multiple card options available. Ensure each card slot has only have a single card remaining.";
-        }
-
-        return null;
-    }, [cardsData, slotsData, project]);
-
-    const onSubmit = useCallback(async () => {
-        try {
-            await initialiseProject(project).unwrap();
-            setIsModalOpen(false);
-            addToast({
-                title: "Successfully initialised",
-                color: "success",
-                description: `${project.name} has been initialised`
-            });
-        } catch (err) {
-            showApiErrorToast(err, { title: "Failed to Initialise" });
-        }
-    }, [initialiseProject, project]);
-
-    if (!cardsData) {
-        return null;
-    }
     return (
-        <div className={classNames("bg-content1 p-4 flex flex-col gap-2", className)} style={style}>
-            <div className="font-cinzel text-lg md:text-xl">
-                <FontAwesomeIcon icon={faCrow} /> The Project Awaits Its First Raven...
-            </div>
-            <div className="font-sans text-sm md:text-base text-foreground/70">
-                This project is in an experimental phase where it can be freely edited or reset as the initial concept
-                is finalised. Once moved to Active status, the card designs are locked into their first official
-                versions and any future changes will be formally tracked.
-            </div>
+        <StatusNotice
+            icon={isReady ? faCircleCheck : faListCheck}
+            color={isReady ? "success" : "neutral"}
+            label="Initialisation checklist"
+            className={className}
+            detail={
+                requirements ? (
+                    <ChecklistItems items={requirements} />
+                ) : (
+                    <div className="flex flex-col gap-1.5 pt-1">
+                        {SKELETON_ROW_WIDTHS.map((width) => (
+                            <Skeleton key={width} className={classNames("h-3.5 rounded-md", width)} />
+                        ))}
+                    </div>
+                )
+            }
+        >
             <PermissionGate requires={Permission.INITIALISE_PROJECTS}>
-                <Button
-                    variant="flat"
-                    className="mt-2 w-full md:text-lg font-cinzel"
-                    onPress={() => setIsModalOpen(true)}
-                >
-                    Initialise Project
-                </Button>
-                <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} size="lg" placement="center">
-                    <ModalContent>
-                        {(onClose) => (
-                            <>
-                                <ModalHeader className="font-cinzel text-medium lg:text-large">
-                                    Send the Raven?
-                                </ModalHeader>
-                                <ModalBody className="font-sans">
-                                    <span className="text-small lg:text-medium">
-                                        The project will become Active — card counts will be sealed and all chosen cards
-                                        locked into their first official versions.
-                                    </span>
-                                    <span className="text-small lg:text-medium">
-                                        This marks the official start of playtesting, and is generally a good time to
-                                        announce it to the community.
-                                    </span>
-                                    {!errorMessage ? (
-                                        <span>Do you wish to proceed?</span>
-                                    ) : (
-                                        <div className="text-danger animate-pulse text-small lg:text-medium">
-                                            <FontAwesomeIcon icon={faExclamationCircle} /> {errorMessage}
-                                        </div>
-                                    )}
-                                </ModalBody>
-                                <ModalFooter>
-                                    <Button onPress={onClose}>Turn Back</Button>
-                                    <Button
-                                        color="primary"
-                                        isDisabled={!!errorMessage}
-                                        onPress={onSubmit}
-                                        isLoading={isInitialising}
-                                    >
-                                        Proceed
-                                    </Button>
-                                </ModalFooter>
-                            </>
-                        )}
-                    </ModalContent>
-                </Modal>
+                <AnimatePresence initial={false}>
+                    {isReady && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={NOTICE_TRANSITION}
+                            className="shrink-0"
+                        >
+                            <Button
+                                size="sm"
+                                color="success"
+                                className="w-full sm:w-auto font-cinzel font-semibold sm:h-12 sm:px-6 sm:text-base"
+                                onPress={() => setIsModalOpen(true)}
+                            >
+                                Initialise Project…
+                            </Button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+                <InitialiseProjectModal
+                    isOpen={isModalOpen}
+                    project={project}
+                    cards={cardsData?.items ?? []}
+                    isReady={isReady}
+                    onClose={() => setIsModalOpen(false)}
+                />
             </PermissionGate>
-        </div>
+        </StatusNotice>
     );
 }
 
-type ProjectHeaderDraftNoticeProps = Omit<BaseElementProps, "children"> & {
+type ProjectHeaderDraftNoticeProps = Omit<BaseElementProps, "children" | "style"> & {
     project: IProject;
 };

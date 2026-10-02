@@ -24,6 +24,11 @@ import {
 } from "../../api";
 import { EmojiSelect } from "../../components/emojiSelect";
 import { useWizard } from "../../components/wizard/context";
+import UserSelect from "../../components/data/userSelect";
+import { useAuth } from "../../hooks/useAuth";
+import { hasPermission } from "common/utils";
+import { compact } from "lodash-es";
+import Permission from "common/models/permissions";
 
 const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
@@ -41,14 +46,20 @@ export default function EditProjectModal({
     const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
     const [project, setProject] = useState<DeepPartial<IProject>>(DefaultProjectValues);
 
+    // Reset while closed, so the next opening starts from the saved project rather than an abandoned edit
     useEffect(() => {
-        setProject(initial ?? DefaultProjectValues);
-    }, [initial]);
+        if (!isOpen) {
+            setProject(initial ?? DefaultProjectValues);
+        }
+    }, [initial, isOpen]);
 
     const isNew = useMemo(() => !initial?.number, [initial?.number]);
+    const owners = useMemo(() => compact(project.owners), [project.owners]);
 
     const onSubmit = useCallback(
-        async (validProject: IProject) => {
+        async (submitted: IProject) => {
+            // Owners aren't a form field, so the wizard only holds the list it opened with
+            const validProject = { ...submitted, owners };
             setProject(validProject);
             const newProject = isNew
                 ? await createProject(validProject).unwrap()
@@ -56,11 +67,17 @@ export default function EditProjectModal({
             onSave?.(newProject);
             onModalClose?.(true);
         },
-        [createProject, isNew, onModalClose, onSave, updateProject]
+        [createProject, isNew, onModalClose, onSave, owners, updateProject]
     );
 
     return (
-        <Modal isOpen={isOpen} placement="center" onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}>
+        <Modal
+            isOpen={isOpen}
+            size="2xl"
+            placement="center"
+            scrollBehavior="inside"
+            onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}
+        >
             <ModalContent>
                 {(onClose) => (
                     <Wizard schema={Project.Draft} onSubmit={onSubmit} data={project}>
@@ -68,10 +85,11 @@ export default function EditProjectModal({
                         <ModalBody>
                             <ValidationSummary />
                             <WizardPages>
-                                <WizardPage>
+                                <WizardPage className="gap-3">
                                     <ProjectNameInput name={project.name} />
-                                    <div className="grid grid-cols-2 gap-2 w-full">
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
                                         <ProjectNumberInput number={project.number} isDisabled={!isNew} />
+                                        <ProjectCodeInput code={project.code} />
                                         <Select
                                             name="type"
                                             label="Type"
@@ -90,9 +108,12 @@ export default function EditProjectModal({
                                                 </SelectItem>
                                             ))}
                                         </Select>
-                                        <ProjectCodeInput code={project.code} />
                                         <EmojiSelect label="Discord Emoji" defaultValue={project.emoji} />
                                     </div>
+                                    <OwnersField
+                                        owners={owners}
+                                        onChange={(ids) => setProject((prev) => ({ ...prev, owners: ids }))}
+                                    />
                                     <RichTextArea
                                         name="description"
                                         label="Description"
@@ -102,30 +123,11 @@ export default function EditProjectModal({
                                             setProject((prev) => ({ ...prev, description }))
                                         }
                                     />
-                                </WizardPage>
-                                <WizardPage>
-                                    <span className="text-xl">Additional Details</span>
-                                    <div className="text-sm">
-                                        These details are not required, but help improve the quality and direction of a
-                                        project.
-                                    </div>
                                     <Input
                                         name="mandateUrl"
                                         label="Mandate (URL)"
                                         defaultValue={project.mandateUrl}
                                         description="Providing a mandate helps team alignment, quality & direction"
-                                    />
-                                    <Input
-                                        name="formUrl"
-                                        label="Form (URL)"
-                                        defaultValue={project.formUrl}
-                                        description="Required for legacy reasons. Will be removed in a future update"
-                                    />
-                                    <Input
-                                        name="script"
-                                        label="GAS Script"
-                                        defaultValue={project.script}
-                                        description="Required for legacy reasons. Will be removed in a future update"
                                     />
                                 </WizardPage>
                             </WizardPages>
@@ -146,6 +148,27 @@ type EditProjectModalProps = Omit<BaseElementProps, "children"> & {
     project?: DeepPartial<IProject>;
     onClose?: (isSaving: boolean) => void;
     onSave?: (project: IProject) => void;
+};
+
+function OwnersField({ owners, onChange }: OwnersFieldProps) {
+    // Deliberately not project-scoped - owning a project doesn't extend to deciding who else owns it
+    const { user } = useAuth();
+    const canChangeOwners = hasPermission(user, Permission.EDIT_PROJECTS);
+    return (
+        <div className="flex flex-col gap-1">
+            <UserSelect label="Owners" selectedIds={owners} isDisabled={!canChangeOwners} onChange={onChange} />
+            <span className="text-xs text-foreground/50">
+                {canChangeOwners
+                    ? "Owners can run this project from start to finish."
+                    : "Only those who can edit every project can change its owners."}
+            </span>
+        </div>
+    );
+}
+
+type OwnersFieldProps = {
+    owners: string[];
+    onChange: (owners: string[]) => void;
 };
 
 function ProjectNameInput({ className, style, name: initial }: ProjectNameInputProps) {

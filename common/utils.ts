@@ -1,9 +1,9 @@
 import { UUID } from "./models/shared";
 import * as Cards from "./models/cards";
-import Permission from "./models/permissions";
+import Permission, { projectOwnerPermissions } from "./models/permissions";
 import { DeckLink, DecklistLink, DeepPartial, ISO8601String, SingleOrArray } from "./types";
 import { Principal } from "./models/auth";
-import { isEqual } from "lodash-es";
+import { isEqual, union } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
@@ -328,6 +328,22 @@ export function hasPermission<T extends Principal>(principal?: T, ...permissions
     }
 
     return false;
+}
+
+export function isProjectOwner(principal: Principal | undefined, project: Pick<IProject, "owners">) {
+    return !!principal && "discordId" in principal && !!project.owners?.includes(principal.discordId);
+}
+
+// Folds an owner's project permissions into their own, so every existing check within the project honours ownership
+export function withProjectOwnership<T extends Principal>(principal: T, project: Pick<IProject, "owners">): T {
+    if (!isProjectOwner(principal, project)) {
+        return principal;
+    }
+    return { ...principal, permissions: union(principal.permissions, projectOwnerPermissions) };
+}
+
+export function pluralize(count: number, singular: string, plural: string = `${singular}s`) {
+    return count === 1 ? singular : plural;
 }
 
 export function hasRole<T extends Principal>(principal: T | undefined, roleName: string) {

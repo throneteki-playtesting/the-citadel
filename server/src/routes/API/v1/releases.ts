@@ -12,7 +12,7 @@ import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { loadProjectByNumber, clearRelease } from "@/utils";
+import { loadProject, clearRelease } from "@/utils";
 import { designPhase, ISlot, resolveFinalCard } from "common/models/slots";
 import { artworkBlocker, illustratorName } from "common/models/artwork";
 import { getContext } from "@/middleware/context";
@@ -26,7 +26,7 @@ import { syncDataPullRequests } from "@/github/pullRequests";
 const router = express.Router({ mergeParams: true });
 
 const CodeParams = {
-    number: Joi.number().required(),
+    project: Joi.number().required(),
     code: Joi.string().required()
 };
 
@@ -67,11 +67,11 @@ router.post(
     "/",
     validateRequest(Permission.CREATE_RELEASES),
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.BODY]: Schemas.Release.Draft
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, IProjectRelease, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, IProjectRelease, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.body;
 
@@ -128,11 +128,11 @@ router.patch(
     "/reorder",
     validateRequest(Permission.EDIT_RELEASES),
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.BODY]: Joi.object({ codes: Joi.array().items(Joi.string()).required() })
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, { codes: string[] }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, { codes: string[] }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { codes } = req.body;
 
@@ -178,8 +178,8 @@ router.put(
         [Segments.PARAMS]: CodeParams,
         [Segments.BODY]: Schemas.Release.Draft
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; code: string }, unknown, IProjectRelease, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; code: string }, unknown, IProjectRelease, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.params;
 
@@ -306,9 +306,9 @@ router.put(
 router.get(
     "/progress",
     validateRequest(Permission.READ_STATS_RELEASE),
-    celebrate({ [Segments.PARAMS]: { number: Joi.number().required() } }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (_req, res) => {
+    celebrate({ [Segments.PARAMS]: { project: Joi.number().required() } }),
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, unknown>(async (_req, res) => {
         const progress = await computeReleasesProgress(res.locals.project as IProject);
         res.status(StatusCodes.OK).json(progress);
     })
@@ -322,8 +322,8 @@ router.post(
         [Segments.PARAMS]: CodeParams,
         [Segments.BODY]: { releasedDate: Joi.string().regex(Regex.ReleaseDate).required() }
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; code: string }, unknown, { releasedDate: ReleaseDate }, unknown>(
+    loadProject,
+    asyncHandler<{ project: number; code: string }, unknown, { releasedDate: ReleaseDate }, unknown>(
         async (req, res) => {
             const project = res.locals.project as IProject;
             const { code } = req.params;
@@ -549,8 +549,8 @@ router.delete(
     "/:code",
     validateRequest(Permission.DELETE_RELEASES),
     celebrate({ [Segments.PARAMS]: CodeParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; code: string }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; code: string }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.params;
 

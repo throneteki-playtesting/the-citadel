@@ -62,10 +62,23 @@ router.get("/me", (_req, res) => {
     res.status(StatusCodes.OK).json(response);
 });
 
+const IdLookupClause = Joi.object({
+    discordId: Joi.alternatives(
+        Joi.string(),
+        Joi.object({ $in: Joi.array().items(Joi.string()).required() })
+    ).required()
+});
+// Naming exact people is the same as looking each one up in turn, so it needs no more than reading one user
+const IdLookup = Joi.alternatives(IdLookupClause, Joi.array().items(IdLookupClause).min(1)).required();
+
 // Read users
 router.get(
     "/",
-    validateRequest(Permission.READ_USERS),
+    validateRequest<unknown, unknown, unknown, IGetRequest<User>>(
+        (principal, req) =>
+            hasPermission(principal, Permission.READ_USERS) ||
+            (hasPermission(principal, Permission.READ_USER) && !IdLookup.validate(req.query.filter).error)
+    ),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     asyncHandler<unknown, unknown, unknown, IGetRequest<User>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;

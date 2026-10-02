@@ -536,7 +536,7 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
     const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
-    const { data: project } = useGetProjectQuery({ number: projectNumber }, { skip: !canReadFeedback });
+    const { data: project } = useGetProjectQuery({ number: projectNumber });
     // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
     const [feedbackOpen, setFeedbackOpen] = useState(entryReleaseCheck === "1");
 
@@ -555,21 +555,26 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
     const { data: discordStatus } = useDiscordCardStatus(projectNumber, number);
     const { data: githubStatus } = useGithubCardStatus(projectNumber, number);
     const { data: imageStatus } = useCardImageStatus(projectNumber, number);
-    const statusItems = [
-        canReadDiscord && statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
-        statusActionItem("github-status", githubStatus, { isDropdownOnly: true }),
-        statusActionItem("image-status", imageStatus, { isDropdownOnly: true })
-    ];
+    const isSyncable = !!project && !project.draft;
+    const statusItems = isSyncable
+        ? [
+              canReadDiscord && statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
+              statusActionItem("github-status", githubStatus, { isDropdownOnly: true }),
+              statusActionItem("image-status", imageStatus, { isDropdownOnly: true })
+          ]
+        : [];
 
     return (
         <div className={classNames("flex items-center gap-1.5", className)} style={style}>
-            <div className="hidden sm:flex items-center gap-1.5">
-                <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
-                    <DiscordCardStatus project={projectNumber} number={number} isIconOnly />
-                </PermissionGate>
-                <GithubCardStatus project={projectNumber} number={number} isIconOnly />
-                <ImageStatus project={projectNumber} number={number} isIconOnly />
-            </div>
+            {isSyncable && (
+                <div className="hidden sm:flex items-center gap-1.5">
+                    <PermissionGate requires={Permission.READ_DISCORD_CARD_FORUM}>
+                        <DiscordCardStatus project={projectNumber} number={number} isIconOnly />
+                    </PermissionGate>
+                    <GithubCardStatus project={projectNumber} number={number} isIconOnly />
+                    <ImageStatus project={projectNumber} number={number} isIconOnly />
+                </div>
+            )}
             <HeaderActions
                 items={[
                     ...statusItems,

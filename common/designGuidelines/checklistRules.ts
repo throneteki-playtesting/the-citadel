@@ -5,6 +5,7 @@ import {
     ISuggestionQuestions,
     plotStats as PLOT_STAT_KEYS
 } from "../models/cards";
+import { pluralize } from "../utils";
 import { computeStrength } from "./computeStrength";
 import { computePlotBudget } from "./computePlotBudget";
 import { computeTextBoxLines, TEXT_BOX_LINE_WEIGHTS } from "./computeTextBoxLines";
@@ -36,10 +37,6 @@ function joinWithAnd(labels: string[]) {
 
 function listLabels(options: { id: string; label: string }[], ids: string[]) {
     return joinWithAnd(ids.map((id) => labelFor(options, id)));
-}
-
-function pluralize(count: number, singular: string, plural: string = `${singular}s`) {
-    return count === 1 ? singular : plural;
 }
 
 /** Returns only the rules applicable right now - a rule with nothing to say yet is omitted entirely,

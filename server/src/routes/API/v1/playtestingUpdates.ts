@@ -4,12 +4,12 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
-import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
+import { scopeToProject, validateRequest, validateProjectAccess } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
 import { IGetRequest, IGetResponse } from "@/types";
-import { applyToFilter, generateGetResponse, loadProjectByParam } from "@/utils";
+import { applyToFilter, generateGetResponse, loadProject } from "@/utils";
 import { IPlaytestCard } from "common/models/cards";
 import { getRequestSchema } from "@/schemas";
 import { asPDF } from "@/rendering";
@@ -22,6 +22,8 @@ import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/play
 import { clearDiscordMetadata } from "@/discord/forums/cardForum";
 
 const router = express.Router();
+
+router.use("/:project", scopeToProject);
 
 async function getPlaytestingUpdates(
     filter: IGetRequest<IPlaytestingUpdate>["filter"],
@@ -60,7 +62,7 @@ router.get(
         [Segments.PARAMS]: { project: Joi.number().required(), version: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     asyncHandler<{ project: number; version: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
         const { project, version } = req.params;
@@ -84,7 +86,7 @@ router.post(
         [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.BODY]: Schemas.PlaytestingUpdate.Draft
     }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number }, unknown, IPlaytestingUpdate, unknown>(async (req, res, next) => {
         const project = res.locals.project as IProject;
 
@@ -164,7 +166,7 @@ router.get(
             version: Joi.number().required()
         }
     }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     asyncHandler<{ project: number; version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
@@ -194,7 +196,7 @@ router.get(
             version: Joi.number().required()
         }
     }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     asyncHandler<{ project: number; version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
@@ -229,7 +231,7 @@ router.get(
             version: Joi.number().required()
         }
     }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     asyncHandler<{ project: number; version: number }, unknown, unknown, unknown>(async (req, res) => {
         const { version } = req.params;
@@ -269,7 +271,7 @@ router.post(
         [Segments.PARAMS]: { project: Joi.number().required(), version: Joi.number().required() },
         [Segments.QUERY]: { forced: Joi.boolean() }
     }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number; version: number }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
         const { version } = req.params;
         const { forced } = req.query;
@@ -299,7 +301,7 @@ router.post(
     })
 );
 
-// Sync github pull requests - data sync is project-scoped now (POST /projects/:number/sync/data),
+// Sync github pull requests - data sync is project-scoped now (POST /projects/:project/sync/data),
 // since a project's pack file isn't specific to any one playtesting update
 router.post(
     "/:project/:version/sync/github/:type",
@@ -316,7 +318,7 @@ router.post(
     validateRequest<{ project: number; version: number; type: "code" }, unknown, unknown, unknown>((principal) =>
         hasPermission(principal, Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE)
     ),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number; version: number; type: "code" }, unknown, unknown, unknown>(
         async (req, res, next) => {
             const { version } = req.params;

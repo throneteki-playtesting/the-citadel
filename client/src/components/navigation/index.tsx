@@ -32,7 +32,8 @@ import classNames from "classnames";
 import { useGetProjectsQuery } from "../../api";
 import { useAuth } from "../../hooks/useAuth";
 import Permission from "common/models/permissions";
-import { hasPermission } from "common/utils";
+import { hasPermission, isProjectOwner } from "common/utils";
+import { IProject } from "common/models/projects";
 import { useLocation } from "react-router-dom";
 
 const NavigationBar = () => {
@@ -43,10 +44,12 @@ const NavigationBar = () => {
     const itemsRowRef = useRef<HTMLDivElement>(null);
     const measureRef = useRef<HTMLDivElement>(null);
     const canReadArchived = hasPermission(user, Permission.READ_ARCHIVED_PROJECTS);
+    // Without archive access this still returns the drafts the user owns
+    const canOwnProjects = !!user && user.id !== "anonymous" && impersonation?.type !== "role";
     const { data: projectData } = useGetProjectsQuery({ filter: { active: true } });
     const { data: archivedProjectData } = useGetProjectsQuery(
         { filter: { active: false } },
-        { skip: !canReadArchived }
+        { skip: !canReadArchived && !canOwnProjects }
     );
 
     useEffect(() => {
@@ -71,6 +74,9 @@ const NavigationBar = () => {
         }
 
         const draftProjects = (archivedProjectData?.items ?? []).filter((project) => project.draft);
+        // A project's owners need nothing more to see it - ownership is what lets them in
+        const requires = (project: IProject, permission: Permission) =>
+            canOwnProjects && isProjectOwner(user, project) ? undefined : permission;
 
         const mainProjectItems = projectData.items
             .concat(draftProjects)
@@ -78,7 +84,10 @@ const NavigationBar = () => {
             .map((project) => ({
                 path: `/project/${project.number}`,
                 label: `${project.number}. ${project.name}`,
-                permission: project.draft ? Permission.READ_ARCHIVED_PROJECTS : Permission.READ_PROJECTS,
+                permission: requires(
+                    project,
+                    project.draft ? Permission.READ_ARCHIVED_PROJECTS : Permission.READ_PROJECTS
+                ),
                 endContent: project.draft ? (
                     <FontAwesomeIcon className="animate-pulse" size="sm" icon={faFeather} />
                 ) : undefined
@@ -90,13 +99,11 @@ const NavigationBar = () => {
             .map((project) => ({
                 path: `/project/${project.number}`,
                 label: `${project.number}. ${project.name}`,
-                permission: Permission.READ_ARCHIVED_PROJECTS
+                permission: requires(project, Permission.READ_ARCHIVED_PROJECTS)
             }));
 
         const archivedMenuItem: MenuItemType | undefined =
-            archivedProjectItems.length > 0
-                ? { label: "Archived", permission: Permission.READ_ARCHIVED_PROJECTS, subPages: archivedProjectItems }
-                : undefined;
+            archivedProjectItems.length > 0 ? { label: "Archived", subPages: archivedProjectItems } : undefined;
 
         return {
             label: projectsNavItem.label,
@@ -107,7 +114,7 @@ const NavigationBar = () => {
                 ...(archivedMenuItem ? [archivedMenuItem] : [])
             ]
         } as MenuItemType;
-    }, [projectData, archivedProjectData]);
+    }, [projectData, archivedProjectData, canOwnProjects, user]);
 
     const visibleItems = useMemo(() => {
         const newNavItems = navItems.map((item) => {

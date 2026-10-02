@@ -28,7 +28,9 @@ type ComparableOperators<T> = [NonNullable<T>] extends [string]
               $nin?: (string | Date)[];
               $exists?: boolean;
           }
-        : { $exists?: boolean };
+        : NonNullable<T> extends (infer U)[]
+          ? { $in?: U[]; $exists?: boolean }
+          : { $exists?: boolean };
 
 export type Filter<T> = [NonNullable<T>] extends [Date]
     ? T | ComparableOperators<T>

@@ -39,7 +39,7 @@ import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
+import { loadProject, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
 import { ISlotFilterable } from "@/data/repositories/slotsRepository";
@@ -58,7 +58,7 @@ import {
 const router = express.Router({ mergeParams: true });
 
 const SlotParams = {
-    number: Joi.number().required(),
+    project: Joi.number().required(),
     slot: Joi.number().required()
 };
 
@@ -227,13 +227,13 @@ const getQuerySchema = getRequestSchema<ISlotFilterable>(Schemas.Slot.Full.keys(
 router.get(
     "/",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_SLOTS),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
-        const { number: project } = req.params;
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
+        const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
@@ -246,13 +246,13 @@ router.get(
 router.get(
     "/artworks",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_ARTWORKS),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
-        const { number: project } = req.params;
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
+        const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
@@ -264,12 +264,12 @@ router.get(
 router.get(
     "/refinements",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_REFINEMENT),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project: project.number });
@@ -304,8 +304,8 @@ router.get(
     "/:slot",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_SLOTS),
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot } = req.params;
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot } = req.params;
         const result = await requireSlot(project, slot);
         res.status(StatusCodes.OK).json(result);
     })
@@ -316,8 +316,8 @@ router.get(
     "/:slot/artwork",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_ARTWORKS),
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot } = req.params;
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot } = req.params;
         const result = await requireSlot(project, slot);
         res.status(StatusCodes.OK).json(toArtworkDetail(result));
     })
@@ -328,8 +328,8 @@ router.get(
     "/:slot/refinement",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_REFINEMENT),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const slot = await requireSlot(project.number, req.params.slot);
         const version = await readFinalVersion(project, slot);
@@ -342,15 +342,15 @@ router.post(
     "/",
     validateRequest(Permission.CREATE_SLOTS),
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.BODY]: {
             faction: Joi.string()
                 .required()
                 .valid(...factions)
         }
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, { faction: (typeof factions)[number] }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, { faction: (typeof factions)[number] }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { faction } = req.body;
 
@@ -387,8 +387,8 @@ router.delete(
     "/:slot",
     validateRequest(Permission.DELETE_SLOTS),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -442,8 +442,8 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.Partial
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
         const { type, notes, faq, statuses } = req.body;
@@ -575,8 +575,8 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.ArtworkProgress
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, Partial<IArtworkProgress>, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, Partial<IArtworkProgress>, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
         const artworkUpdate = req.body;
@@ -632,8 +632,8 @@ router.patch(
                 .valid(...designStatuses)
         }
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { status: DesignStatus }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { status: DesignStatus }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
         const { status } = req.body;
@@ -707,9 +707,9 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.ReleaseCheck
     }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number },
+        { project: number; slot: number },
         unknown,
         { ready: boolean; categories?: ReleaseCheckCategory[]; note?: string },
         unknown
@@ -828,9 +828,9 @@ router.get(
     "/:slot/design/checks/summary",
     validateRequest(Permission.READ_RELEASE_CHECKS),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot: slotNumber } = req.params;
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot: slotNumber } = req.params;
 
         const slot = await requireSlot(project, slotNumber);
 
@@ -876,9 +876,9 @@ router.post(
     "/:slot/inquiries",
     validateRequest(Permission.RAISE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: SlotParams, [Segments.BODY]: Schemas.Slot.Inquiry }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number },
+        { project: number; slot: number },
         unknown,
         { severity: InquirySeverity; summary: string; detail?: string },
         unknown
@@ -949,9 +949,9 @@ router.put(
             hasPermission(principal, Permission.EDIT_INQUIRIES) || hasPermission(principal, Permission.RAISE_INQUIRIES)
     ),
     celebrate({ [Segments.PARAMS]: InquiryParams, [Segments.BODY]: Schemas.Slot.Inquiry }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number; inquiry: number },
+        { project: number; slot: number; inquiry: number },
         unknown,
         { severity: InquirySeverity; summary: string; detail?: string },
         unknown
@@ -1015,8 +1015,8 @@ router.delete(
             hasPermission(principal, Permission.RAISE_INQUIRIES)
     ),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1068,9 +1068,9 @@ router.patch(
     // The body is validated in the handler rather than by celebrate: whether the note is required depends
     // on the stored inquiry, which is not loaded until the handler runs
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number; inquiry: number },
+        { project: number; slot: number; inquiry: number },
         unknown,
         { status: "resolved"; note?: string },
         unknown
@@ -1124,8 +1124,8 @@ router.delete(
     "/:slot/inquiries/:inquiry/resolution",
     validateRequest(Permission.RESOLVE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1169,8 +1169,8 @@ router.post(
     "/:slot/inquiries/:inquiry/discussion",
     validateRequest(Permission.RAISE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1227,8 +1227,8 @@ router.patch(
     "/:slot/refinement/check",
     validateRequest(Permission.SUBMIT_REFINEMENT_CHECK),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1267,8 +1267,8 @@ router.delete(
     "/:slot/refinement/check",
     validateRequest(Permission.SUBMIT_REFINEMENT_CHECK),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1300,8 +1300,8 @@ router.patch(
     "/:slot/faq",
     validateRequest(Permission.EDIT_FAQ),
     celebrate({ [Segments.PARAMS]: SlotParams, [Segments.BODY]: Schemas.Slot.Faq }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { faq: string }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { faq: string }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1324,9 +1324,9 @@ router.get(
     "/:slot/progress",
     validateRequest(Permission.READ_STATS_SLOT),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot: slotNumber } = req.params;
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot: slotNumber } = req.params;
         const progress = await computeCardProgress(project, slotNumber);
         res.status(StatusCodes.OK).json(progress);
     })
@@ -1347,8 +1347,8 @@ router.patch(
             })
         })
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { code: string | null; position?: number }, unknown>(
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { code: string | null; position?: number }, unknown>(
         async (req, res) => {
             const project = res.locals.project as IProject;
             const { slot: slotNumber } = req.params;

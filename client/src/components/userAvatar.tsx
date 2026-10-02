@@ -1,8 +1,9 @@
-import { ReactNode, Ref } from "react";
+import { Fragment, ReactNode, Ref } from "react";
 import { Avatar, AvatarProps } from "@heroui/react";
 import classNames from "classnames";
 import { useGetUserQuery } from "../api";
 import { BaseElementProps } from "../types";
+import { formatListParts } from "../utils";
 
 export default function UserAvatar({ className, style, discordId, title, size = "sm", ref, ...rest }: UserAvatarProps) {
     const { data: user, isLoading } = useGetUserQuery({ discordId });
@@ -44,6 +45,31 @@ export function UserRow({
     );
 }
 
+// People as a running sentence - "A, B and C" - wrapping between people rather than through them
+export function UserNameList({ className, style, discordIds }: UserNameListProps) {
+    return (
+        <span className={className} style={style}>
+            {formatListParts(discordIds).map((part, index) =>
+                part.type === "element" ? (
+                    <UserName key={part.value} discordId={part.value} />
+                ) : (
+                    <Fragment key={index}>{part.value}</Fragment>
+                )
+            )}
+        </span>
+    );
+}
+
+function UserName({ discordId }: { discordId: string }) {
+    const { data: user } = useGetUserQuery({ discordId });
+    return (
+        <span className="inline-flex items-center gap-1 align-middle whitespace-nowrap font-semibold">
+            <UserAvatar discordId={discordId} title={false} className="!size-5 text-[0.55rem]" />
+            {user?.displayname ?? "…"}
+        </span>
+    );
+}
+
 type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children" | "title"> &
     Omit<BaseElementProps, "children"> & {
         ref?: Ref<HTMLSpanElement>;
@@ -62,4 +88,8 @@ type UserRowProps = Omit<BaseElementProps, "children"> & {
     avatarClassName?: string;
     /** Overrides the name's text size - defaults to text-sm. */
     textClassName?: string;
+};
+
+type UserNameListProps = Omit<BaseElementProps, "children"> & {
+    discordIds: string[];
 };

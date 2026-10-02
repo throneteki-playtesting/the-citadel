@@ -38,6 +38,22 @@ export function ChecklistRow({ done, children }: { done: boolean; children: Reac
     );
 }
 
+/** Rows drawn from plain data - a label, with a dimmed note on what is left beside it */
+export function ChecklistItems({ items }: { items: ChecklistItem[] }) {
+    return (
+        <Checklist>
+            {items.map(({ label, detail, done }) => (
+                <ChecklistRow key={label} done={done}>
+                    {label}
+                    {detail && <span className="text-foreground/40"> - {detail}</span>}
+                </ChecklistRow>
+            ))}
+        </Checklist>
+    );
+}
+
+type ChecklistItem = { label: string; detail?: string; done: boolean };
+
 /** The same tick a row carries, on its own - a filled circle for done, an empty one for not */
 export function ChecklistMark({ done, className }: { done: boolean; className?: string }) {
     return (

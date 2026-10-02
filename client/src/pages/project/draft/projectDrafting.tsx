@@ -33,7 +33,6 @@ import ThronesIcon from "../../../components/thronesIcon";
 import CardStack from "../../../components/cardStack";
 import { CardBlank, CardPreview } from "@agot/card-preview";
 import {
-    faAddressCard,
     faEllipsis,
     faPencil,
     faPlus,
@@ -47,7 +46,7 @@ import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
 import { groupBy } from "lodash-es";
 import RadialMenu from "../../../components/radialMenu";
-import { watermarkClasses } from "../../../constants";
+import { suggestionIcons, watermarkClasses } from "../../../constants";
 import { BaseElementProps } from "../../../types";
 import { usePermission } from "../../../hooks/usePermission";
 import {
@@ -541,7 +540,7 @@ function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEdit, onDelete }: Fa
                                     key: "suggestion",
                                     label: "Add Suggestion",
                                     group: "Slot Actions",
-                                    icon: faAddressCard,
+                                    icon: suggestionIcons.base,
                                     onPress: () => onSuggestion(slot)
                                 },
                                 canEdit && {
@@ -698,7 +697,7 @@ function EmptyCardSlot({ className, style, slot, onNew = () => true, onSuggestio
                                 className="shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12"
                                 onPress={onSuggestion}
                             >
-                                <FontAwesomeIcon icon={faAddressCard} />
+                                <FontAwesomeIcon icon={suggestionIcons.base} />
                             </Button>
                         </Tooltip>
                     </PermissionGate>

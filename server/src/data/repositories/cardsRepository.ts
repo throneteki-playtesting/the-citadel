@@ -11,6 +11,8 @@ import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
 import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
+import { withoutDraftProjectCards } from "@/utils";
+import { resourceIdFuncs } from "common/resources";
 
 // Filter/sort-only fields, computed by the virtualFields stages below - never part of the stored document
 export type IPlaytestCardFilterable = IPlaytestCard & {
@@ -138,7 +140,11 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
     public async sync(syncing: IPlaytestCard): Promise<IPlaytestCard>;
     public async sync(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
-        let data = asArray(syncing);
+        const all = asArray(syncing);
+        let data = await withoutDraftProjectCards(all);
+        if (data.length === 0) {
+            return syncing;
+        }
         const syncs = [
             {
                 priority: 0,
@@ -167,7 +173,10 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
 
         await this.internalSync(syncs);
 
-        return Array.isArray(syncing) ? data : data[0];
+        const synced = all.map(
+            (card) => data.find((item) => resourceIdFuncs.card(item) === resourceIdFuncs.card(card)) ?? card
+        );
+        return Array.isArray(syncing) ? synced : synced[0];
     }
 
     public async desync(desyncing: IPlaytestCard): Promise<IPlaytestCard>;
