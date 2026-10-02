@@ -16,10 +16,12 @@ import {
     ISlot,
     ISlotArtwork,
     ISlotArtworkDetail,
+    ISlotOptions,
     ISlotRefinement,
     ISlotRefinementDetail,
     ReleaseCheckCategory,
     resolveFinalCard,
+    slotOptionKeys,
     SlotStatuses
 } from "common/models/slots";
 import { artworkBlocker, IArtworkProgress } from "common/models/artwork";
@@ -43,7 +45,8 @@ import { loadProject, generateGetResponse, applyToFilter, syncProjectCardCount, 
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
 import { ISlotFilterable } from "@/data/repositories/slotsRepository";
-import { isEqual } from "lodash-es";
+import { isEqual, omit } from "lodash-es";
+import { conditionsBlocker } from "common/models/slotConditions";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { getContext } from "@/middleware/context";
@@ -446,7 +449,7 @@ router.patch(
     asyncHandler<{ project: number; slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
-        const { type, notes, faq, statuses } = req.body;
+        const { faq, statuses } = req.body;
 
         const slot = await requireSlot(project.number, slotNumber);
 
@@ -554,14 +557,44 @@ router.patch(
 
         const updated = await dataService.slots.update({
             ...slot,
-            ...(type !== undefined && { type }),
-            ...(notes !== undefined && { notes }),
             ...(mergedStatuses && { statuses: mergedStatuses })
         });
 
         await logActivity(LogCategory.SLOT, "slot.updated", `<principal> updated slot ${slotNumber} in <project>`, {
             context: { project: projectSnapshot(project) }
         });
+
+        res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Replace a slot's options outright - one left out is cleared, which a PATCH merge can't express
+router.put(
+    "/:slot/options",
+    validateRequest(Permission.EDIT_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.Options
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, ISlotOptions, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const slot = await requireSlot(project.number, req.params.slot);
+
+        // The schema can't see the slot's faction, so the one rule that depends on it is checked here
+        const blocker = conditionsBlocker(req.body.conditions ?? [], slot.faction);
+        if (blocker) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", blocker);
+        }
+
+        const updated = await dataService.slots.update({ ...omit(slot, slotOptionKeys), ...req.body });
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.options_updated",
+            `<principal> updated the options of slot #${slot.number} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
 
         res.status(StatusCodes.OK).json(updated);
     })

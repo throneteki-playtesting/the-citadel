@@ -35,6 +35,7 @@ import {
     ISlot,
     ISlotArtwork,
     ISlotArtworkDetail,
+    ISlotOptions,
     ISlotRef,
     ISlotRefinement,
     ISlotRefinementDetail,
@@ -788,15 +789,17 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
-        updateSlot: builder.mutation<
-            ISlot,
-            { project: number; number: number; statuses?: DeepPartial<SlotStatuses> } & Partial<
-                Pick<ISlot, "type" | "notes">
-            >
-        >({
+        updateSlot: builder.mutation<ISlot, { project: number; number: number; statuses?: DeepPartial<SlotStatuses> }>({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "PATCH", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        updateSlotOptions: builder.mutation<ISlot, ISlotRef & ISlotOptions>({
+            query: ({ project, number, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/options`);
+                return { url, method: "PUT", body: options };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
@@ -1367,6 +1370,7 @@ export const {
     useCreateSlotMutation,
     useDeleteSlotMutation,
     useUpdateSlotMutation,
+    useUpdateSlotOptionsMutation,
     useGetSlotArtworkQuery,
     useGetSlotArtworksQuery,
     useUpdateSlotArtworkMutation,

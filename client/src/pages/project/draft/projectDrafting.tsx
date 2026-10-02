@@ -2,17 +2,21 @@ import { factionNames, parseCardCode, renderPlaytestingCard, thronesColors } fro
 import { useMemo, useState } from "react";
 import { IProject } from "common/models/projects";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
+import { ISlot } from "common/models/slots";
+import { slotConditionIssues } from "common/models/slotConditions";
 import { DeepPartial } from "common/types";
 import EditCardModal from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
+import SlotFrame, { SlotAction } from "./slotFrame";
+import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
+import CardCornerBadges, { CornerBadge } from "../../../components/cardCornerBadges";
 import {
     addToast,
     Button,
     Dropdown,
     DropdownItem,
     DropdownMenu,
-    DropdownSection,
     DropdownTrigger,
     Skeleton,
     Tooltip
@@ -37,14 +41,14 @@ import {
     faPencil,
     faPlus,
     faMinus,
+    faSliders,
     faStarOfLife,
     faTrash,
-    IconDefinition
+    faTriangleExclamation
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
-import { groupBy } from "lodash-es";
 import RadialMenu from "../../../components/radialMenu";
 import { suggestionIcons, watermarkClasses } from "../../../constants";
 import { BaseElementProps } from "../../../types";
@@ -65,21 +69,26 @@ import { rotatingDropAnimation } from "../../../animations";
 import { resourceIdFuncs } from "common/resources";
 import Watermark from "../../../components/watermark";
 
-const CARD_ROW_HEIGHT_CLASS = "h-64 sm:h-72 md:h-80";
+const CARD_ROW_HEIGHT_CLASS = "h-72 sm:h-80 md:h-[22rem]";
 const PLOT_ONLY_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
 
 const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
 const LANDSCAPE_ASPECT_CLASS = "aspect-[333/240]";
 
+// The frame holds the row's height, and its header strip (h-6 + gap-1) comes out of the card's share of it
+function frameShapeClass(isPlotOnly: boolean) {
+    return isPlotOnly ? classNames(PLOT_ONLY_WIDTH_CLASS, "self-start") : "h-full";
+}
 function slotShapeClass(isPlotOnly: boolean) {
     return isPlotOnly
-        ? classNames(PLOT_ONLY_WIDTH_CLASS, LANDSCAPE_ASPECT_CLASS, "self-start")
-        : classNames("h-full", PORTRAIT_ASPECT_CLASS);
+        ? classNames("w-full", LANDSCAPE_ASPECT_CLASS)
+        : classNames("h-[calc(100%-1.75rem)]", PORTRAIT_ASPECT_CLASS);
 }
 
 type DraftSlot = {
     faction: Faction;
     number: number;
+    slot: ISlot;
     options: IPlaytestCard[];
 };
 
@@ -111,6 +120,8 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
     const [suggesting, setSuggesting] = useState<{ faction: Faction; number: number }>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
+    const [optionsSlot, setOptionsSlot] = useState<ISlot>();
+    const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [activeDrag, setActiveDrag] = useState<DragData>();
 
     const [moveCard] = useMoveCardMutation();
@@ -130,6 +141,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                 .map((slot) => ({
                     faction,
                     number: slot.number,
+                    slot,
                     options: (cardsData?.items ?? [])
                         .filter((c) => c.number === slot.number)
                         .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime())
@@ -222,6 +234,10 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                             })
                         }
                         onSuggestion={(slot) => setSuggesting({ faction: slot.faction, number: slot.number })}
+                        onEditOptions={(slot) => {
+                            setOptionsSlot(slot.slot);
+                            setIsOptionsOpen(true);
+                        }}
                         onEdit={(card) => setEditing(card)}
                         onDelete={(card) => setDeleting(card)}
                     />
@@ -277,6 +293,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                     })
                 }
             />
+            <SlotOptionsModal isOpen={isOptionsOpen} slot={optionsSlot} onClose={() => setIsOptionsOpen(false)} />
             <DeleteCardModal
                 isOpen={!!deleting}
                 card={deleting}
@@ -305,6 +322,7 @@ function FactionCarousel({
     isSlotsFetching,
     onNew,
     onSuggestion,
+    onEditOptions,
     onEdit,
     onDelete
 }: FactionCarouselProps) {
@@ -411,6 +429,7 @@ function FactionCarousel({
                             zIndex={slots.length - index}
                             onNew={onNew}
                             onSuggestion={onSuggestion}
+                            onEditOptions={onEditOptions}
                             onEdit={onEdit}
                             onDelete={onDelete}
                         />
@@ -428,16 +447,16 @@ type FactionCarouselProps = Omit<BaseElementProps, "children"> & {
     isSlotsFetching: boolean;
     onNew: (slot: DraftSlot) => void;
     onSuggestion: (slot: DraftSlot) => void;
+    onEditOptions: (slot: DraftSlot) => void;
     onEdit: (card: IPlaytestCard) => void;
     onDelete: (card: IPlaytestCard) => void;
 };
 
-function DroppableSlot({ className, style, slot, children }: DroppableSlotProps) {
+function DroppableSlot({ className, style, slot, isOnlyPlots, children }: DroppableSlotProps) {
     const { setNodeRef, isOver } = useDroppable({
         id: `slot-${slot.number}`,
         data: { faction: slot.faction, number: slot.number }
     });
-    const isOnlyPlots = slot.options.length > 0 && slot.options.every((card) => card.type === "plot");
     return (
         <div
             ref={setNodeRef}
@@ -456,6 +475,7 @@ function DroppableSlot({ className, style, slot, children }: DroppableSlotProps)
 
 type DroppableSlotProps = BaseElementProps & {
     slot: DraftSlot;
+    isOnlyPlots: boolean;
 };
 
 function DraggableTopCard({
@@ -485,16 +505,7 @@ function DraggableTopCard({
     );
 }
 
-type DropdownItemDef = {
-    key: string;
-    label: string;
-    group: string;
-    icon: IconDefinition;
-    onPress: () => void;
-    className?: string;
-    style?: React.CSSProperties;
-};
-function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEdit, onDelete }: FactionSlotProps) {
+function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEditOptions, onEdit, onDelete }: FactionSlotProps) {
     const topIndex = Math.max(0, slot.options.length - 1);
     const [selectedIndex, setSelectedIndex] = useState(topIndex);
     const [previousOptionCount, setPreviousOptionCount] = useState(slot.options.length);
@@ -506,120 +517,99 @@ function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEdit, onDelete }: Fa
 
     const canEdit = usePermission(Permission.EDIT_CARDS);
     const canDelete = usePermission(Permission.DELETE_CARDS);
+    const canCreate = usePermission(Permission.CREATE_CARDS);
+    const canReadSuggestions = usePermission(Permission.READ_SUGGESTIONS);
+    const canEditSlot = usePermission(Permission.EDIT_SLOTS);
+    const slotActions: SlotAction[] = [
+        canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
+        canReadSuggestions && {
+            key: "suggestion",
+            label: "Add suggestion",
+            icon: suggestionIcons.base,
+            onPress: () => onSuggestion(slot)
+        },
+        canEditSlot && {
+            key: "options",
+            label: "Edit options",
+            icon: faSliders,
+            onPress: () => onEditOptions(slot)
+        }
+    ].flatMap((action) => (action ? [action] : []));
     // CardStack renders oldest-first, so selectedIndex maps into the reversed order
     const stackedCards = [...slot.options].reverse();
     const topCard = stackedCards[Math.min(selectedIndex, stackedCards.length - 1)];
     // Alongside non-plot options, a plot card is rotated to fit the standard portrait box instead of its natural landscape shape
     const hasNonPlot = slot.options.some((card) => card.type !== "plot");
+    const isOnlyPlots = slot.options.length > 0 && !hasNonPlot;
     return (
-        <DroppableSlot slot={slot} className="relative">
-            <div className="absolute inset-0">
-                <EmptyCardSlot slot={slot} onNew={() => onNew(slot)} onSuggestion={() => onSuggestion(slot)} />
-            </div>
-            {stackedCards && topCard && (
+        <SlotFrame slot={slot.slot} actions={slotActions} className={frameShapeClass(isOnlyPlots)}>
+            <DroppableSlot slot={slot} isOnlyPlots={isOnlyPlots} className="relative">
                 <div className="absolute inset-0">
-                    <CardStack
-                        cards={stackedCards}
-                        selectedIndex={selectedIndex}
-                        behaviour="stacked"
-                        tilt={{ amount: 2, alternate: true, variance: 0.5, animateNew: false }}
-                        className="h-full"
-                        style={{ zIndex }}
-                        onClick={() => setSelectedIndex((prev) => (prev === 0 ? slot.options.length - 1 : --prev))}
-                    >
-                        {(card) => {
-                            const dropdownItems: DropdownItemDef[] = [
-                                {
-                                    key: "new",
-                                    label: "Add New",
-                                    group: "Slot Actions",
-                                    icon: faStarOfLife,
-                                    onPress: () => onNew(slot)
-                                },
-                                {
-                                    key: "suggestion",
-                                    label: "Add Suggestion",
-                                    group: "Slot Actions",
-                                    icon: suggestionIcons.base,
-                                    onPress: () => onSuggestion(slot)
-                                },
-                                canEdit && {
-                                    key: "edit",
-                                    label: "Edit",
-                                    group: "Card Actions",
-                                    icon: faPencil,
-                                    onPress: () => onEdit(card)
-                                },
-                                canDelete && {
-                                    key: "delete",
-                                    label: "Delete",
-                                    group: "Card Actions",
-                                    icon: faTrash,
-                                    className: "text-danger",
-                                    onPress: () => onDelete(card)
-                                }
-                            ].flatMap((item) => (item ? [item] : []));
+                    <EmptyCardSlot slot={slot} onNew={() => onNew(slot)} onSuggestion={() => onSuggestion(slot)} />
+                </div>
+                {stackedCards && topCard && (
+                    <div className="absolute inset-0">
+                        <CardStack
+                            cards={stackedCards}
+                            selectedIndex={selectedIndex}
+                            behaviour="stacked"
+                            tilt={{ amount: 2, alternate: true, variance: 0.5, animateNew: false }}
+                            className="h-full"
+                            style={{ zIndex }}
+                            onClick={() => setSelectedIndex((prev) => (prev === 0 ? slot.options.length - 1 : --prev))}
+                        >
+                            {(card) => {
+                                const cardActions: CardAction[] = [
+                                    canEdit && {
+                                        key: "edit",
+                                        label: "Edit",
+                                        icon: faPencil,
+                                        onPress: () => onEdit(card)
+                                    },
+                                    canDelete && {
+                                        key: "delete",
+                                        label: "Delete",
+                                        icon: faTrash,
+                                        className: "text-danger",
+                                        onPress: () => onDelete(card)
+                                    }
+                                ].flatMap((action) => (action ? [action] : []));
+                                const issues = slotConditionIssues(slot.slot.conditions, card);
 
-                            const groupedItems = groupBy(dropdownItems, (item) => item.group);
-
-                            const content = (
-                                <div className="size-full relative">
-                                    <div className="absolute top-0 right-0 z-1 opacity-25 p-1 hover:opacity-90 transition-opacity">
-                                        <Dropdown>
-                                            <DropdownTrigger>
-                                                <Button isIconOnly radius="full" size="sm" variant="faded">
-                                                    <FontAwesomeIcon icon={faEllipsis} />
-                                                </Button>
-                                            </DropdownTrigger>
-                                            <DropdownMenu emptyContent="No actions">
-                                                {Object.entries(groupedItems).map(([group, items]) => (
-                                                    <DropdownSection key={group} title={group}>
-                                                        {items.map((item) => (
-                                                            <DropdownItem
-                                                                key={item.key}
-                                                                className={item.className}
-                                                                style={item.style}
-                                                                startContent={<FontAwesomeIcon icon={item.icon} />}
-                                                                onPress={item.onPress}
-                                                            >
-                                                                {item.label}
-                                                            </DropdownItem>
-                                                        ))}
-                                                    </DropdownSection>
-                                                ))}
-                                            </DropdownMenu>
-                                        </Dropdown>
-                                    </div>
-                                    <div className="relative h-full flex justify-center items-center">
-                                        <div className="relative w-full">
-                                            <CardPreview
-                                                className="select-none"
-                                                orientation={
-                                                    card.type === "plot" && hasNonPlot ? "vertical" : undefined
-                                                }
-                                                card={renderPlaytestingCard(card, {
-                                                    top: "Draft Option",
-                                                    middle: `Card #${slot.number}`,
-                                                    bottom: card.suggestionId ? "From Suggestion" : "New Design"
-                                                })}
-                                            />
+                                const content = (
+                                    <div className="size-full relative">
+                                        <DraftCardBadges issues={issues} actions={cardActions} />
+                                        <div className="relative h-full flex justify-center items-center">
+                                            <div className="relative w-full">
+                                                <CardPreview
+                                                    className="select-none"
+                                                    orientation={
+                                                        card.type === "plot" && hasNonPlot ? "vertical" : undefined
+                                                    }
+                                                    card={renderPlaytestingCard(card, {
+                                                        top: "Draft Option",
+                                                        middle: `Card #${slot.number}`,
+                                                        bottom: card.suggestionId ? "From Suggestion" : "New Design"
+                                                    })}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            );
+                                );
 
-                            return card === topCard ? (
-                                <DraggableTopCard card={card} slotNumber={slot.number}>
-                                    {content}
-                                </DraggableTopCard>
-                            ) : (
-                                content
-                            );
-                        }}
-                    </CardStack>
-                </div>
-            )}
-        </DroppableSlot>
+                                return card === topCard ? (
+                                    <DraggableTopCard card={card} slotNumber={slot.number}>
+                                        {content}
+                                    </DraggableTopCard>
+                                ) : (
+                                    content
+                                );
+                            }}
+                        </CardStack>
+                    </div>
+                )}
+            </DroppableSlot>
+        </SlotFrame>
     );
 }
 
@@ -628,9 +618,72 @@ type FactionSlotProps = {
     zIndex: number;
     onNew: (slot: DraftSlot) => void;
     onSuggestion: (slot: DraftSlot) => void;
+    onEditOptions: (slot: DraftSlot) => void;
     onEdit: (card: IPlaytestCard) => void;
     onDelete: (card: IPlaytestCard) => void;
 };
+
+// The alert first, then the card's menu - the menu faint until hovered, so the alert is what catches the eye
+function DraftCardBadges({ issues, actions }: { issues: string[]; actions: CardAction[] }) {
+    if (issues.length === 0 && actions.length === 0) {
+        return null;
+    }
+    return (
+        <CardCornerBadges
+            isolateClicks
+            badges={[]}
+            leading={
+                <>
+                    {issues.length > 0 && (
+                        <CornerBadge
+                            icon={faTriangleExclamation}
+                            color="warning"
+                            pulse
+                            title="Doesn't Fit Its Slot"
+                            description={
+                                <div className="flex flex-col gap-1 pt-0.5">
+                                    <span className="text-foreground/70">
+                                        The maesters advise heeding this slot's conditions:
+                                    </span>
+                                    <ul className="list-disc pl-4">
+                                        {issues.map((issue) => (
+                                            <li key={issue}>{issue}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            }
+                        />
+                    )}
+                    {actions.length > 0 && (
+                        <div className="opacity-25 hover:opacity-90 transition-opacity">
+                            <Dropdown>
+                                <DropdownTrigger>
+                                    <Button isIconOnly radius="full" size="sm" variant="faded">
+                                        <FontAwesomeIcon icon={faEllipsis} />
+                                    </Button>
+                                </DropdownTrigger>
+                                <DropdownMenu aria-label="Card actions" items={actions}>
+                                    {(action) => (
+                                        <DropdownItem
+                                            key={action.key}
+                                            className={action.className}
+                                            startContent={<FontAwesomeIcon icon={action.icon} />}
+                                            onPress={action.onPress}
+                                        >
+                                            {action.label}
+                                        </DropdownItem>
+                                    )}
+                                </DropdownMenu>
+                            </Dropdown>
+                        </div>
+                    )}
+                </>
+            }
+        />
+    );
+}
+
+type CardAction = SlotAction & { className?: string };
 
 function EmptyCardSlot({ className, style, slot, onNew = () => true, onSuggestion = () => true }: EmptyCardSlotProps) {
     const [isActive, setIsActive] = useState(false);

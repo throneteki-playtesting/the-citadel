@@ -1,4 +1,5 @@
-import { Faction, Type } from "./cards";
+import { Faction } from "./cards";
+import type { SlotCondition } from "./slotConditions";
 import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
 import { IAuditable } from "./shared";
@@ -201,14 +202,21 @@ export interface ISlot extends IAuditable {
     number: number;
     /** Fixed at creation - determines which faction carousel this slot belongs to */
     faction: Faction;
-    /** Recommended card type for this slot; advisory only, never enforced */
-    type?: Type;
+    /** What the slot asks of its card - see slotConditions */
+    conditions?: SlotCondition[];
+    /** Something the project must deliver - its name and references hold through development, barring approval */
+    important?: boolean;
+    /** Rich text */
     notes?: string;
     /** Rich text. The refinement team's own record of decisions on this card - never exported anywhere */
     faq?: string;
     statuses: SlotStatuses;
     release?: SlotRelease;
 }
+
+// A slot's own settings - its conditions, plus the options every slot always has
+export const slotOptionKeys = ["conditions", "important", "notes"] as const;
+export type ISlotOptions = Pick<ISlot, (typeof slotOptionKeys)[number]>;
 
 export const DefaultSlotStatuses: SlotStatuses = {
     design: { status: "preview", checks: { release: [], refinement: [] }, inquiries: [] },

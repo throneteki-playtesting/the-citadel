@@ -39,6 +39,8 @@ const KEYWORD_PATTERNS: KeywordPattern[] = [
     { keyword: "Terminal", regex: /\bTerminal\b/i }
 ];
 
+export const keywordNames = KEYWORD_PATTERNS.map(({ keyword }) => keyword);
+
 /** Derives read-only fields from a card's ability text - called server-side on every suggestion
  *  save; `derived` is never accepted from a client payload. */
 export function deriveFields(cardTextHtml: string): IDerivedFields {
