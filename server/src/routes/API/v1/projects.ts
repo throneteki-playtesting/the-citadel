@@ -5,7 +5,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { FactionCardCount, IProject } from "common/models/projects";
-import { initialisationRequirements } from "common/models/initialisation";
+import { initialisationRequirements, unmetRequirement } from "common/models/initialisation";
 import {
     canChangeProjectOwners,
     scopeToProject,
@@ -215,7 +215,7 @@ router.post(
             dataService.cards.read({ project: project.number }),
             dataService.slots.read({ project: project.number })
         ]);
-        const unmet = initialisationRequirements(project, slots, cards).find((requirement) => !requirement.done);
+        const unmet = unmetRequirement(initialisationRequirements(project, slots, cards));
         if (unmet) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,

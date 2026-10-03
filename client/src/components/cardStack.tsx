@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Key, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, TargetAndTransition, Transition } from "framer-motion";
+import { AnimatePresence, motion, TargetAndTransition, Transition, useIsPresent } from "framer-motion";
 import classNames from "classnames";
 import { EASE_STANDARD } from "../constants";
 import { useReducedMotion } from "../hooks/useReducedMotion";
@@ -8,6 +8,26 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 const STACK_TRANSITION: Transition = { duration: 0.4, ease: EASE_STANDARD };
 const SHUFFLE_TRANSITION: Transition = { duration: 0.25, ease: EASE_STANDARD };
 const INSTANT: Transition = { duration: 0 };
+const TOSS_TRANSITION: Transition = { duration: 0.35, ease: EASE_STANDARD };
+
+// Held a little above the pile and unseen, so arriving reads as being set down onto it
+function placingPose(settled: TargetAndTransition): TargetAndTransition {
+    return { ...settled, opacity: 0, scale: 1.08, y: -12 };
+}
+
+// Apart from the shared pose the shuffle flies from, where these values throw off its travel
+function landedPose(settled: TargetAndTransition): TargetAndTransition {
+    return { ...settled, scale: 1, y: 0 };
+}
+
+const TOSSED_POSE: TargetAndTransition = {
+    x: "120%",
+    rotate: 12,
+    opacity: 0,
+    filter: "brightness(1)",
+    transition: TOSS_TRANSITION
+};
+const GONE_POSE: TargetAndTransition = { opacity: 0, transition: INSTANT };
 
 // Just clear of the pile, so the crop switching at the turn never cuts through the card
 function shuffledPose(direction: ShuffleDirection): TargetAndTransition {
@@ -66,6 +86,9 @@ export default function CardStack<T>({
     children: renderCard,
     selectedIndex = cards.length - 1,
     behaviour = "throw",
+    isInstant = false,
+    cardKey,
+    isCarried,
     tilt,
     shadow,
     className,
@@ -73,19 +96,26 @@ export default function CardStack<T>({
 }: CardStackProps<T>) {
     return (
         <div className={classNames("relative", className)} {...props}>
-            {cards.map((card, index) =>
-                behaviour === "stacked" ? (
-                    <ShuffledCard
-                        key={index}
-                        card={card}
-                        renderCard={renderCard}
-                        selectedIndex={selectedIndex}
-                        index={index}
-                        count={cards.length}
-                        tilt={tilt}
-                        shadow={shadow}
-                    />
-                ) : (
+            <AnimatePresence initial={false}>
+                {behaviour === "stacked" &&
+                    cards.map((card, index) => (
+                        <ShuffledCard
+                            key={cardKey?.(card) ?? index}
+                            card={card}
+                            renderCard={renderCard}
+                            selectedIndex={selectedIndex}
+                            index={index}
+                            count={cards.length}
+                            isInstant={isInstant}
+                            hasPresence={!!cardKey}
+                            isCarried={isCarried}
+                            tilt={tilt}
+                            shadow={shadow}
+                        />
+                    ))}
+            </AnimatePresence>
+            {behaviour === "throw" &&
+                cards.map((card, index) => (
                     <ThrownCard
                         key={index}
                         card={card}
@@ -95,8 +125,7 @@ export default function CardStack<T>({
                         tilt={tilt}
                         shadow={shadow}
                     />
-                )
-            )}
+                ))}
         </div>
     );
 }
@@ -107,21 +136,26 @@ type CardStackProps<T> = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> 
     selectedIndex?: number;
     /** "throw" dismisses cards above the selection; "stacked" shuffles the top card under the pile */
     behaviour?: "throw" | "stacked";
+    /** Moves straight to each new pose, without travelling or shuffling - for a stack rearranged out of sight */
+    isInstant?: boolean;
+    /** "stacked" only: identifies each card, so an arrival is set down on the pile and a departure tossed aside */
+    cardKey?: (card: T) => Key;
+    /** Arrives or leaves by being carried (eg. dragged), so it is neither set down nor tossed */
+    isCarried?: (card: T) => boolean;
     tilt?: TiltOptions;
     shadow?: boolean;
 };
 
 function useCardTilt(tilt: TiltOptions, index: number) {
-    return useMemo(() => {
-        if (typeof tilt === "number") {
-            return tilt;
-        }
-        const amount = tilt.amount ?? 0;
-        const variance = tilt.variance ? (Math.random() * 2 - 1) * tilt.variance : 0;
-        const alternate = !tilt.alternate || index % 2 !== 0 ? 1 : -1;
+    // Both fixed at mount, so neither a re-render nor a card leaving beneath it tips this one over
+    const [roll] = useState(() => Math.random() * 2 - 1);
+    const [side] = useState(() => (index % 2 !== 0 ? 1 : -1));
+    if (typeof tilt === "number") {
+        return tilt;
+    }
+    const { amount = 0, variance = 0, alternate = false } = tilt;
 
-        return (amount + variance) * alternate;
-    }, [index, tilt]);
+    return (amount + variance * roll) * (alternate ? side : 1);
 }
 
 /** Where a card rests at a given depth into the pile, 0 being the top */
@@ -143,15 +177,23 @@ function ShuffledCard<T>({
     selectedIndex,
     index,
     count,
+    isInstant,
+    hasPresence,
+    isCarried: isCarriedCard,
     tilt = 0,
     shadow = true
 }: ShuffledCardProps<T>) {
     const position = (((selectedIndex - index) % count) + count) % count;
-    const isBase = index === 0;
+    const isPresent = useIsPresent();
+    // Asked each render, since a leaving card keeps its old props - and once carried off, it is drawn elsewhere
+    const isCarried = isCarriedCard?.(card) ?? false;
+    // Leaving, it is lifted out of flow so the card that takes its place as the base can size the stack
+    const isBase = index === 0 && isPresent;
     const cardTilt = useCardTilt(tilt, index);
     const settled = settledPose(position, cardTilt, tilt, shadow);
 
-    const prefersReducedMotion = useReducedMotion();
+    const isStill = useReducedMotion() || isInstant;
+    const isSetDownAndTossed = hasPresence && !isStill && !isCarried;
     const nodeRef = useRef<HTMLDivElement>(null);
     const [shuffle, setShuffle] = useState<Shuffle>();
     const settledRef = useRef(settled);
@@ -166,7 +208,7 @@ function ShuffledCard<T>({
         // Only a card crossing the others travels out and back; the rest just shift a place
         const isTucking = count > 1 && from === 0 && position === count - 1;
         const isDrawing = position === 0 && from > 1;
-        if (prefersReducedMotion || !isCycle || (!isTucking && !isDrawing)) {
+        if (isStill || !isCycle || (!isTucking && !isDrawing)) {
             return;
         }
 
@@ -183,21 +225,23 @@ function ShuffledCard<T>({
                     current ?? { pile, rect, clips, direction, from: fromPose, isFromTop: from === 0, snapshot: node }
             );
         }
-    }, [position, count, prefersReducedMotion]);
+    }, [position, count, isStill]);
 
     return (
         <>
             <motion.div
                 ref={nodeRef}
-                initial={false}
-                animate={settled}
-                transition={shuffle || prefersReducedMotion ? INSTANT : STACK_TRANSITION}
+                data-stack-index={index}
+                initial={isSetDownAndTossed ? placingPose(settled) : false}
+                animate={hasPresence ? landedPose(settled) : settled}
+                exit={isSetDownAndTossed ? TOSSED_POSE : GONE_POSE}
+                transition={shuffle || isStill ? INSTANT : STACK_TRANSITION}
                 style={{ zIndex: count - position }}
                 className={classNames("size-full", isBase ? "relative" : "absolute inset-0", {
                     invisible: !!shuffle
                 })}
             >
-                {renderCard(card, index)}
+                {(isPresent || !isCarried) && renderCard(card, index)}
             </motion.div>
             {shuffle &&
                 createPortal(
@@ -315,6 +359,9 @@ type ShuffledCardProps<T> = {
     selectedIndex: number;
     index: number;
     count: number;
+    isInstant: boolean;
+    hasPresence: boolean;
+    isCarried?: (card: T) => boolean;
     tilt?: TiltOptions;
     shadow?: boolean;
 };

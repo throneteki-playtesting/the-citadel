@@ -45,6 +45,8 @@ export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
 
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
 export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
+// Undoes HeroUI's transform-gpu - a compositor layer per button, which a page of hundreds pays for on every frame
+export const FLAT_BUTTON_CLASS = "transform-none";
 // A notice or its action arriving once something becomes true - quick, so it reads as a response rather than an event
 export const NOTICE_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 
@@ -72,6 +74,25 @@ export const cornerBadgeDiscFillClasses =
 
 // How long a touch is held before it counts as a long-press rather than a tap
 export const LONG_PRESS_MS = 500;
+
+// A touch rests this long before it picks something up, so the page still scrolls under a passing finger
+export const TOUCH_DRAG_DELAY_MS = 250;
+
+// A touch pick-up let go of within this distance arranges a draft pile instead of moving its card
+export const HOLD_TOLERANCE_PX = 8;
+
+// How long a moved draft card counts as carried - long enough for both piles to see it go and arrive
+export const CARRIED_FOR_MS = 1000;
+
+export const DRAFT_STACK_TILT = { amount: 2, alternate: true, variance: 0.5, animateNew: false };
+export const DRAFT_ROW_HEIGHT_CLASS = "h-72 sm:h-80 md:h-[22rem]";
+export const DRAFT_PLOT_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
+export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12";
+
+// The card face as card-preview draws it, before scaling to fit
+export const CARD_BASE = { width: 240, height: 333, cornerRadius: 12 } as const;
+export const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
+export const LANDSCAPE_ASPECT_CLASS = "aspect-[333/240]";
 
 // Reads as disabled without isDisabled, whose pointer-events-none would stop a tooltip explaining why
 export const inertButtonClasses = "opacity-disabled cursor-default data-[hover=true]:!opacity-disabled";

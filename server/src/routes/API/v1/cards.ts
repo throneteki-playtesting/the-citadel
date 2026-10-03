@@ -6,14 +6,28 @@ import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
 import { IPlaytestCardFilterable } from "@/data/repositories/cardsRepository";
-import { isReleaseBound } from "common/models/slots";
+import {
+    isReleaseBound,
+    movedOptionVersion,
+    NEW_OPTION_VERSION,
+    nextAvailableOptionVersion
+} from "common/models/slots";
 import { isInquiryOpen } from "common/models/refinement";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
 import { scopeToProject, validateRequest, validateProjectAccess } from "@/middleware/permissions";
-import { applyToFilter, assertSyncableProject, generateGetResponse, loadProject, NoteVersion } from "@/utils";
+import {
+    applyToFilter,
+    assertSyncableProject,
+    generateGetResponse,
+    loadProject,
+    NoteVersion,
+    preferFirst,
+    updateSlotPreferences,
+    withoutPreference
+} from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
@@ -216,11 +230,6 @@ router.get(
     )
 );
 
-// The first 0.0.x version not already in use, for a slot which can hold multiple option drafts at once
-function nextAvailableOptionVersion(usedVersions: Set<SemanticVersion>): SemanticVersion | undefined {
-    return Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
-}
-
 type DraftCardBody = IPlaytestCard & { addressedInquiries?: number[] };
 
 /**
@@ -412,10 +421,11 @@ router.put(
         if (project.draft) {
             // If version is 0.0.0, then it is being added as an option for that slot/number.
             // We distinct card options by incrementing the patch to the next available number
-            if (card.version === "0.0.0") {
+            if (card.version === NEW_OPTION_VERSION) {
                 const usedVersions = new Set(drafts.map((d) => d.version));
                 card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
+                await updateSlotPreferences(project.number, number, preferFirst(card.version));
             } else {
                 await process("update");
             }
@@ -472,6 +482,9 @@ router.delete(
             }
 
             await unmarkInquiriesAddressed(project.number, number, deleted.version);
+            if (project.draft) {
+                await updateSlotPreferences(project.number, number, withoutPreference(deleted.version));
+            }
 
             await logActivity(LogCategory.CARD, "card.draft.deleted", "<principal> deleted draft <card>", {
                 context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) },
@@ -596,9 +609,10 @@ router.post(
                 );
             }
 
-            // Keep the card's version if it is free in the target slot; otherwise take the next available 0.0.x
-            const usedVersions = new Set(targetDrafts.map((draft) => draft.version));
-            const newVersion = usedVersions.has(version) ? nextAvailableOptionVersion(usedVersions) : version;
+            const newVersion = movedOptionVersion(
+                version,
+                targetDrafts.map((draft) => draft.version)
+            );
 
             const movedCard: IPlaytestCard = {
                 ...card,
@@ -611,6 +625,8 @@ router.post(
             // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
             await dataService.cards.destroy({ project: projectNumber, number, version }, false);
             const [created] = await dataService.cards.create([movedCard], false);
+            await updateSlotPreferences(projectNumber, number, withoutPreference(version));
+            await updateSlotPreferences(projectNumber, to, preferFirst(newVersion));
 
             await logActivity(
                 LogCategory.CARD,

@@ -1,7 +1,7 @@
 import { HTMLAttributes, ReactNode, Ref } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
-import { faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faListCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import { EASE_STANDARD } from "../constants";
@@ -21,7 +21,7 @@ export default function Checklist({ children }: { children: ReactNode }) {
 }
 
 /** Rows are animated to help transition checklist items being added/removed */
-export function ChecklistRow({ done, children }: { done: boolean; children: ReactNode }) {
+export function ChecklistRow({ done, warning, children }: { done: boolean; warning?: boolean; children: ReactNode }) {
     return (
         <motion.li
             className="overflow-hidden"
@@ -31,7 +31,7 @@ export function ChecklistRow({ done, children }: { done: boolean; children: Reac
             transition={ROW_TRANSITION}
         >
             <div className="flex items-start gap-1.5 pt-1">
-                <ChecklistMark done={done} className="mt-0.5" />
+                <ChecklistMark done={done} warning={warning} className="mt-0.5" />
                 <span className={classNames("min-w-0", done && "text-foreground/40")}>{children}</span>
             </div>
         </motion.li>
@@ -42,8 +42,8 @@ export function ChecklistRow({ done, children }: { done: boolean; children: Reac
 export function ChecklistItems({ items }: { items: ChecklistItem[] }) {
     return (
         <Checklist>
-            {items.map(({ label, detail, done }) => (
-                <ChecklistRow key={label} done={done}>
+            {items.map(({ label, detail, done, warning }) => (
+                <ChecklistRow key={label} done={done} warning={warning}>
                     {label}
                     {detail && <span className="text-foreground/40"> - {detail}</span>}
                 </ChecklistRow>
@@ -52,14 +52,19 @@ export function ChecklistItems({ items }: { items: ChecklistItem[] }) {
     );
 }
 
-type ChecklistItem = { label: string; detail?: string; done: boolean };
+type ChecklistItem = { label: string; detail?: string; done: boolean; warning?: boolean };
 
-/** The same tick a row carries, on its own - a filled circle for done, an empty one for not */
-export function ChecklistMark({ done, className }: { done: boolean; className?: string }) {
+/** A row's tick on its own - filled for done, empty for not, a warning for done with a caveat */
+export function ChecklistMark({ done, warning, className }: { done: boolean; warning?: boolean; className?: string }) {
+    const isWarning = done && warning;
     return (
         <FontAwesomeIcon
-            icon={done ? faCircleCheck : faCircle}
-            className={classNames("shrink-0", done ? "text-success" : "text-foreground/30", className)}
+            icon={isWarning ? faTriangleExclamation : done ? faCircleCheck : faCircle}
+            className={classNames(
+                "shrink-0",
+                isWarning ? "text-warning" : done ? "text-success" : "text-foreground/30",
+                className
+            )}
         />
     );
 }

@@ -838,6 +838,8 @@ const slotConditions = Joi.array()
         return blocker ? helpers.message({ custom: blocker }) : conditions;
     });
 
+const slotPreferences = Joi.array().items(Joi.string().regex(Regex.SemanticVersion)).unique();
+
 const slotOptionFields = {
     conditions: slotConditions,
     important: Joi.boolean(),
@@ -849,6 +851,8 @@ export const Slot = {
     ArtworkProgress,
     // Body for PUT /:slot/options - the whole set, since an option left out is one being cleared
     Options: Joi.object(slotOptionFields),
+    // Body for PUT /:slot/preferences - every option in the slot, most preferred first
+    Preferences: Joi.object({ preferences: slotPreferences.required() }),
     Full: Joi.object({
         project: Joi.number().required(),
         number: Joi.number().required(),
@@ -856,6 +860,7 @@ export const Slot = {
             .required()
             .valid(...Cards.factions),
         ...slotOptionFields,
+        preferences: slotPreferences,
         faq: RichText,
         statuses: Joi.object({
             design: Joi.object({

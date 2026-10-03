@@ -45,7 +45,7 @@ import { loadProject, generateGetResponse, applyToFilter, syncProjectCardCount, 
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
 import { ISlotFilterable } from "@/data/repositories/slotsRepository";
-import { isEqual, omit } from "lodash-es";
+import { isEqual, omit, xor } from "lodash-es";
 import { conditionsBlocker } from "common/models/slotConditions";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
@@ -598,6 +598,52 @@ router.put(
 
         res.status(StatusCodes.OK).json(updated);
     })
+);
+
+// Reorder a draft slot's options, most preferred first - the order has to name every option the slot holds
+router.put(
+    "/:slot/preferences",
+    validateRequest(Permission.EDIT_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.Preferences
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { preferences: SemanticVersion[] }, unknown>(
+        async (req, res) => {
+            const project = res.locals.project as IProject;
+            if (!project.draft) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Project",
+                    "Options are only ordered while a project is in draft"
+                );
+            }
+            const slot = await requireSlot(project.number, req.params.slot);
+            const { preferences } = req.body;
+
+            const options = await dataService.cards.read({ project: project.number, number: slot.number, draft: true });
+            const versions = options.map((option) => option.version);
+            if (xor(versions, preferences).length > 0) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    "The order has to name every option in the slot, and nothing else"
+                );
+            }
+
+            const updated = await dataService.slots.update({ ...slot, preferences });
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.preferences_updated",
+                `<principal> rearranged the options of slot #${slot.number} in <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
+
+            res.status(StatusCodes.OK).json(updated);
+        }
+    )
 );
 
 // Edit a slot's artwork lane alone, gated by EDIT_ARTWORKS rather than EDIT_SLOTS - see PATCH /:slot

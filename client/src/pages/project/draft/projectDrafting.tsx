@@ -1,111 +1,49 @@
-import { factionNames, parseCardCode, renderPlaytestingCard, thronesColors } from "common/utils";
-import { useMemo, useState } from "react";
-import { IProject } from "common/models/projects";
+import { useCallback, useRef, useState } from "react";
+import { useDispatch } from "react-redux";
+import { addToast, Skeleton } from "@heroui/react";
+import { DndContext, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
+import classNames from "classnames";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
-import { ISlot } from "common/models/slots";
-import { slotConditionIssues } from "common/models/slotConditions";
+import { IProject } from "common/models/projects";
+import { ISlot, movedOptionVersion, NEW_OPTION_VERSION } from "common/models/slots";
+import Permission from "common/models/permissions";
+import { parseCardCode } from "common/utils";
 import { DeepPartial } from "common/types";
+import api, { useGetCardsQuery, useGetSlotsQuery, useMoveCardMutation } from "../../../api";
+import type { AppDispatch } from "../../../api/store";
+import { cacheNow } from "../../../api/cacheHelpers";
+import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
+import { usePermission } from "../../../hooks/usePermission";
+import { useDragSensors } from "../../../hooks/useDragSensors";
+import { DRAFT_ROW_HEIGHT_CLASS, HOLD_TOLERANCE_PX } from "../../../constants";
 import EditCardModal from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
-import SlotFrame, { SlotAction } from "./slotFrame";
-import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
-import CardCornerBadges, { CornerBadge } from "../../../components/cardCornerBadges";
-import {
-    addToast,
-    Button,
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownTrigger,
-    Skeleton,
-    Tooltip
-} from "@heroui/react";
-import {
-    useCreateSlotMutation,
-    useDeleteSlotMutation,
-    useGetCardsQuery,
-    useGetSlotsQuery,
-    useMoveCardMutation
-} from "../../../api";
-import api from "../../../api";
-import { useDispatch } from "react-redux";
-import type { AppDispatch } from "../../../api/store";
-import { cacheNow } from "../../../api/cacheHelpers";
-import classNames from "classnames";
-import ThronesIcon from "../../../components/thronesIcon";
-import CardStack from "../../../components/cardStack";
-import { CardBlank, CardPreview } from "@agot/card-preview";
-import {
-    faEllipsis,
-    faPencil,
-    faPlus,
-    faMinus,
-    faSliders,
-    faStarOfLife,
-    faTrash,
-    faTriangleExclamation
-} from "@fortawesome/free-solid-svg-icons";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import Permission from "common/models/permissions";
-import PermissionGate from "../../../components/permissionGate";
-import RadialMenu from "../../../components/radialMenu";
-import { suggestionIcons, watermarkClasses } from "../../../constants";
-import { BaseElementProps } from "../../../types";
-import { usePermission } from "../../../hooks/usePermission";
-import {
-    DndContext,
-    DragEndEvent,
-    DragOverlay,
-    DragStartEvent,
-    MouseSensor,
-    TouchSensor,
-    useDraggable,
-    useDroppable,
-    useSensor,
-    useSensors
-} from "@dnd-kit/core";
-import { rotatingDropAnimation } from "../../../animations";
-import { resourceIdFuncs } from "common/resources";
-import Watermark from "../../../components/watermark";
+import ArrangeModal from "./arrangeModal";
+import FactionCarousel from "./factionCarousel";
+import DraftDragOverlay from "./draggedCard";
+import { createDragStore, DragData, DragStoreContext } from "./draftDragStore";
+import { buildFactionSlots, carryCard, DraftSlot, FactionSlots, findDraftSlot, reuseUnchanged } from "./draftSlots";
 
-const CARD_ROW_HEIGHT_CLASS = "h-72 sm:h-80 md:h-[22rem]";
-const PLOT_ONLY_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
+const NO_RESULT = () => ({});
 
-const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
-const LANDSCAPE_ASPECT_CLASS = "aspect-[333/240]";
-
-// The frame holds the row's height, and its header strip (h-6 + gap-1) comes out of the card's share of it
-function frameShapeClass(isPlotOnly: boolean) {
-    return isPlotOnly ? classNames(PLOT_ONLY_WIDTH_CLASS, "self-start") : "h-full";
-}
-function slotShapeClass(isPlotOnly: boolean) {
-    return isPlotOnly
-        ? classNames("w-full", LANDSCAPE_ASPECT_CLASS)
-        : classNames("h-[calc(100%-1.75rem)]", PORTRAIT_ASPECT_CLASS);
-}
-
-type DraftSlot = {
-    faction: Faction;
-    number: number;
-    slot: ISlot;
-    options: IPlaytestCard[];
+const cardToasts = {
+    added: (card: IPlaytestCard) => ({
+        title: "Successfully added",
+        description: `'${card.name}' was added to slot #${card.number}`
+    }),
+    saved: (card: IPlaytestCard) => ({
+        title: "Successfully saved",
+        description: `'${card.name}' in slot #${card.number} was saved`
+    }),
+    deleted: (card: IPlaytestCard) => ({
+        title: "Successfully deleted",
+        description: `'${card.name}' was removed from slot #${card.number}`
+    })
 };
 
-type DragData = { card: IPlaytestCard; slotNumber: number };
-
-// Maps a card's domain key to a generated drag id; entries are transferred on move (see handleDragEnd)
-// so the id survives the optimistic patch and the drop animation can find the card at its destination
-const dragUids = new Map<string, string>();
-const getDragUid = (card: IPlaytestCard) => {
-    const key = resourceIdFuncs.card(card);
-    let uid = dragUids.get(key);
-    if (!uid) {
-        uid = crypto.randomUUID();
-        dragUids.set(key, uid);
-    }
-    return uid;
-};
+const toastCard = (change: keyof typeof cardToasts, card: IPlaytestCard) =>
+    addToast({ color: "success", ...cardToasts[change](card) });
 
 export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
@@ -122,42 +60,90 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [deleting, setDeleting] = useState<IPlaytestCard>();
     const [optionsSlot, setOptionsSlot] = useState<ISlot>();
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
-    const [activeDrag, setActiveDrag] = useState<DragData>();
-
-    const [moveCard] = useMoveCardMutation();
+    const [arranging, setArranging] = useState<{ number: number; pile: HTMLElement; isLifted: boolean }>();
+    const [dragStore] = useState(createDragStore);
+    const pileElements = useRef(new Map<number, HTMLElement>());
+    const canEditSlots = usePermission(Permission.EDIT_SLOTS);
+    const sensors = useDragSensors();
+    // The trigger alone - following the request's status would redraw the page twice for every move
+    const [moveCard] = useMoveCardMutation({ selectFromResult: NO_RESULT });
     const dispatch = useDispatch<AppDispatch>();
 
-    const sensors = useSensors(
-        useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-        useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
-    );
+    const [factionSlots, setFactionSlots] = useState<FactionSlots>(new Map());
+    const [previousData, setPreviousData] = useState<[typeof cardsData, typeof slotsData]>();
+    if (previousData?.[0] !== cardsData || previousData?.[1] !== slotsData) {
+        setPreviousData([cardsData, slotsData]);
+        setFactionSlots(reuseUnchanged(factionSlots, buildFactionSlots(cardsData?.items, slotsData?.items)));
+    }
+    const arrangingSlot = arranging && findDraftSlot(factionSlots, arranging.number);
 
-    const factionSlots = useMemo(() => {
-        const map = new Map<Faction, DraftSlot[]>();
-        for (const faction of factions) {
-            const slots = (slotsData?.items ?? [])
-                .filter((slot) => slot.faction === faction)
-                .sort((a, b) => a.number - b.number)
-                .map((slot) => ({
-                    faction,
-                    number: slot.number,
-                    slot,
-                    options: (cardsData?.items ?? [])
-                        .filter((c) => c.number === slot.number)
-                        .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime())
-                }));
-            map.set(faction, slots);
+    // Stable, so the memoised slots only redraw when their own data changes
+    const registerPile = useCallback((number: number, element: HTMLElement | null) => {
+        if (element) {
+            pileElements.current.set(number, element);
+        } else {
+            pileElements.current.delete(number);
         }
-        return map;
-    }, [cardsData, slotsData]);
+    }, []);
+    const openArrange = useCallback((number: number) => {
+        const pile = pileElements.current.get(number);
+        if (pile) {
+            setArranging({ number, pile, isLifted: false });
+        }
+    }, []);
+    const onNew = useCallback(
+        (slot: DraftSlot) =>
+            setEditing({
+                project: project.number,
+                number: slot.number,
+                code: parseCardCode(false, project.number, slot.number),
+                faction: slot.faction,
+                version: NEW_OPTION_VERSION
+            }),
+        [project.number]
+    );
+    const onSuggestion = useCallback(
+        (slot: DraftSlot) => setSuggesting({ faction: slot.faction, number: slot.number }),
+        []
+    );
+    const onArrange = useCallback((slot: DraftSlot) => openArrange(slot.number), [openArrange]);
+    const onEditOptions = useCallback((slot: DraftSlot) => {
+        setOptionsSlot(slot.slot);
+        setIsOptionsOpen(true);
+    }, []);
+    const onEdit = useCallback((card: IPlaytestCard) => setEditing(card), []);
+    const onDelete = useCallback((card: IPlaytestCard) => setDeleting(card), []);
 
     const handleDragStart = (event: DragStartEvent) => {
         const data = event.active.data.current as DragData | undefined;
-        if (data) setActiveDrag(data);
+        if (!data) {
+            return;
+        }
+        // On touch, a pick-up let go of without moving arranges the pile instead of moving its card
+        const optionCount = findDraftSlot(factionSlots, data.slotNumber)?.options.length ?? 0;
+        const isHold = "touches" in event.activatorEvent && canEditSlots && optionCount > 1;
+        dragStore.set({ active: data, held: isHold ? data.slotNumber : undefined });
     };
 
+    const handleDragMove = ({ delta }: DragMoveEvent) => {
+        if (dragStore.get().held !== undefined && Math.hypot(delta.x, delta.y) > HOLD_TOLERANCE_PX) {
+            dragStore.set({ held: undefined });
+        }
+    };
+
+    const handleDragOver = ({ over }: DragOverEvent) => {
+        dragStore.set({ over: (over?.data.current as { number: number } | undefined)?.number });
+    };
+
+    const clearDrag = () => dragStore.set({ active: undefined, over: undefined, held: undefined });
+
     const handleDragEnd = async (event: DragEndEvent) => {
-        setActiveDrag(undefined);
+        const releasedHold = dragStore.get().held;
+        clearDrag();
+        if (releasedHold !== undefined) {
+            openArrange(releasedHold);
+            return;
+        }
         const data = event.active.data.current as DragData | undefined;
         const target = event.over?.data.current as { faction: Faction; number: number } | undefined;
         if (!data || !target || data.slotNumber === target.number) {
@@ -165,17 +151,27 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         }
 
         const { card } = data;
-        dragUids.set(
-            resourceIdFuncs.card({ project: card.project, number: target.number, version: card.version }),
-            getDragUid(card)
+        // The version the server will give it, so it never shares an identity with a card already in that slot
+        const version = movedOptionVersion(
+            card.version,
+            (cardsData?.items ?? []).filter((c) => c.number === target.number).map((c) => c.version)
         );
+        if (!version) {
+            addToast({
+                title: "Failed to move card",
+                color: "danger",
+                description: `Slot #${target.number} has no room left`
+            });
+            return;
+        }
+        carryCard(card, { number: target.number, version });
         const patchResult = dispatch(
             api.util.updateQueryData("getCards", { filter: { project: project.number, draft: true } }, (draft) => {
                 const patchTarget = draft.items.find((c) => c.number === card.number && c.version === card.version);
                 if (patchTarget) {
                     patchTarget.number = target.number;
+                    patchTarget.version = version;
                     patchTarget.faction = target.faction;
-                    // Newest-updated sorts to the top of the stack, which keeps the moved card draggable at its destination
                     patchTarget.updated = cacheNow();
                 }
             })
@@ -193,7 +189,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             addToast({
                 title: "Failed to move card",
                 color: "danger",
-                description: `'${card.name}' could not be moved to that slot`
+                description: `'${card.name}' could not be moved to slot #${target.number}`
             });
         }
     };
@@ -202,566 +198,80 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         return (
             <div className="space-y-2">
                 {factions.map((faction) => (
-                    <Skeleton key={faction} className={classNames("w-full rounded-md", CARD_ROW_HEIGHT_CLASS)} />
+                    <Skeleton key={faction} className={classNames("w-full rounded-md", DRAFT_ROW_HEIGHT_CLASS)} />
                 ))}
             </div>
         );
     }
 
     return (
-        <DndContext
-            sensors={sensors}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={() => setActiveDrag(undefined)}
-        >
-            <div className="flex flex-col gap-2">
-                {[...factionSlots.entries()].map(([faction, slots]) => (
-                    <FactionCarousel
-                        key={faction}
-                        project={project.number}
-                        faction={faction}
-                        slots={slots}
-                        totalSlots={slotsData?.items.length ?? 0}
-                        isSlotsFetching={isFetchingSlots}
-                        onNew={(slot) =>
-                            setEditing({
-                                project: project.number,
-                                number: slot.number,
-                                code: parseCardCode(false, project.number, slot.number),
-                                faction: slot.faction,
-                                version: "0.0.0"
-                            })
-                        }
-                        onSuggestion={(slot) => setSuggesting({ faction: slot.faction, number: slot.number })}
-                        onEditOptions={(slot) => {
-                            setOptionsSlot(slot.slot);
-                            setIsOptionsOpen(true);
-                        }}
-                        onEdit={(card) => setEditing(card)}
-                        onDelete={(card) => setDeleting(card)}
-                    />
-                ))}
-            </div>
-            <DragOverlay dropAnimation={rotatingDropAnimation}>
-                {activeDrag && (
-                    <div
-                        className={classNames(
-                            "cursor-grabbing",
-                            activeDrag.card.type === "plot"
-                                ? classNames(PLOT_ONLY_WIDTH_CLASS, LANDSCAPE_ASPECT_CLASS)
-                                : "size-full"
-                        )}
-                    >
-                        <CardPreview
-                            orientation={activeDrag.card.type === "plot" ? "horizontal" : undefined}
-                            card={renderPlaytestingCard(activeDrag.card, {
-                                top: "Moving",
-                                middle: `Card #${activeDrag.slotNumber}`,
-                                bottom: activeDrag.card.suggestionId ? "From Suggestion" : "New Design"
-                            })}
-                        />
-                    </div>
-                )}
-            </DragOverlay>
-            <EditCardModal
-                isOpen={!!editing}
-                card={editing}
-                onClose={() => setEditing(undefined)}
-                onSave={(card) =>
-                    addToast({
-                        title: "Successfully saved",
-                        color: "success",
-                        description: `Slot #${card.number} has been saved`
-                    })
-                }
-            />
-            <SelectSuggestionModal
-                isOpen={!!suggesting}
-                project={project.number}
-                number={suggesting?.number ?? 0}
-                faction={suggesting?.faction}
-                unselectable={cardsData?.items
-                    .filter((card) => card.faction === suggesting?.faction && card.suggestionId)
-                    .map((card) => card.suggestionId!)}
-                onClose={() => setSuggesting(undefined)}
-                onSave={(card) =>
-                    addToast({
-                        title: "Successfully saved",
-                        color: "success",
-                        description: `Slot #${card.number} has been saved`
-                    })
-                }
-            />
-            <SlotOptionsModal isOpen={isOptionsOpen} slot={optionsSlot} onClose={() => setIsOptionsOpen(false)} />
-            <DeleteCardModal
-                isOpen={!!deleting}
-                card={deleting}
-                onClose={() => setDeleting(undefined)}
-                onDelete={(card) =>
-                    addToast({
-                        title: "Successfully deleted",
-                        color: "success",
-                        description: `Slot #${card.number} has been deleted`
-                    })
-                }
-            />
-        </DndContext>
-    );
-}
-
-type ProjectDraftingProps = { project: IProject };
-
-function FactionCarousel({
-    className,
-    style,
-    project,
-    faction,
-    slots,
-    totalSlots,
-    isSlotsFetching,
-    onNew,
-    onSuggestion,
-    onEditOptions,
-    onEdit,
-    onDelete
-}: FactionCarouselProps) {
-    const canCreateSlots = usePermission(Permission.CREATE_SLOTS);
-    const canDeleteSlots = usePermission(Permission.DELETE_SLOTS);
-
-    const [createSlot, { isLoading: isCreatingSlot }] = useCreateSlotMutation();
-    const [deleteSlot, { isLoading: isDeletingSlot }] = useDeleteSlotMutation();
-
-    const lastSlot = slots.at(-1);
-    const lastSlotIsEmpty = !lastSlot || lastSlot.options.length === 0;
-
-    const onAddSlot = async () => {
-        try {
-            await createSlot({ project, faction }).unwrap();
-        } catch {
-            addToast({
-                title: "Failed to add slot",
-                color: "danger",
-                description: `Could not add a new ${factionNames[faction]} slot`
-            });
-        }
-    };
-
-    const onRemoveSlot = async () => {
-        if (!lastSlot) return;
-        try {
-            await deleteSlot({ project, number: lastSlot.number }).unwrap();
-        } catch {
-            addToast({
-                title: "Failed to remove slot",
-                color: "danger",
-                description: `Could not remove ${factionNames[faction]} slot #${lastSlot.number}`
-            });
-        }
-    };
-
-    return (
-        <div className="relative border border-content3 overflow-hidden">
-            <Watermark
-                position="top-right"
-                icon={
-                    <ThronesIcon
-                        name={faction}
-                        className={classNames("-mt-8 mr-48 text-[8rem] sm:text-[10rem]", watermarkClasses[faction])}
-                    />
-                }
-            />
-            <div className="relative flex h-20 items-center">
-                <div
-                    className={classNames(
-                        "text-2xl sm:text-3xl font-cinzel tracking-widest p-4 flex items-center gap-2 grow",
-                        className
-                    )}
-                    style={style}
-                >
-                    {factionNames[faction]}
-                </div>
-                <div className="flex items-center gap-1 pr-4">
-                    <span className="text-small text-default-500 whitespace-nowrap pr-1">
-                        {slots.length}/{totalSlots} {totalSlots === 1 ? "slot" : "slots"}
-                    </span>
-                    {canDeleteSlots && (
-                        <Tooltip
-                            content={
-                                lastSlotIsEmpty
-                                    ? `Remove last ${factionNames[faction]} slot`
-                                    : "Cannot remove a slot with cards on it"
-                            }
-                        >
-                            <span tabIndex={0} className="inline-block">
-                                <Button
-                                    isIconOnly
-                                    size="sm"
-                                    variant="flat"
-                                    isDisabled={!lastSlotIsEmpty || isDeletingSlot || isSlotsFetching}
-                                    onPress={onRemoveSlot}
-                                >
-                                    <FontAwesomeIcon icon={faMinus} />
-                                </Button>
-                            </span>
-                        </Tooltip>
-                    )}
-                    {canCreateSlots && (
-                        <Tooltip content={`Add a ${factionNames[faction]} slot`}>
-                            <Button isIconOnly size="sm" variant="flat" isLoading={isCreatingSlot} onPress={onAddSlot}>
-                                <FontAwesomeIcon icon={faPlus} />
-                            </Button>
-                        </Tooltip>
-                    )}
-                </div>
-            </div>
-            <div className="relative">
-                <div
-                    className={classNames(
-                        "w-full flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-2 p-2",
-                        CARD_ROW_HEIGHT_CLASS
-                    )}
-                >
-                    {slots.map((slot, index) => (
-                        <FactionSlot
-                            key={slot.number}
-                            slot={slot}
-                            zIndex={slots.length - index}
+        <DragStoreContext.Provider value={dragStore}>
+            <DndContext
+                sensors={sensors}
+                onDragStart={handleDragStart}
+                onDragMove={handleDragMove}
+                onDragOver={handleDragOver}
+                onDragEnd={handleDragEnd}
+                onDragCancel={clearDrag}
+            >
+                <div className="flex flex-col gap-2">
+                    {[...factionSlots.entries()].map(([faction, slots]) => (
+                        <FactionCarousel
+                            key={faction}
+                            project={project.number}
+                            faction={faction}
+                            slots={slots}
+                            totalSlots={slotsData?.items.length ?? 0}
+                            isSlotsFetching={isFetchingSlots}
+                            arrangingNumber={arranging?.number}
+                            isLifted={!!arranging?.isLifted}
                             onNew={onNew}
                             onSuggestion={onSuggestion}
+                            onArrange={onArrange}
                             onEditOptions={onEditOptions}
+                            registerPile={registerPile}
                             onEdit={onEdit}
                             onDelete={onDelete}
                         />
                     ))}
                 </div>
-            </div>
-        </div>
-    );
-}
-type FactionCarouselProps = Omit<BaseElementProps, "children"> & {
-    project: number;
-    faction: Faction;
-    slots: DraftSlot[];
-    totalSlots: number;
-    isSlotsFetching: boolean;
-    onNew: (slot: DraftSlot) => void;
-    onSuggestion: (slot: DraftSlot) => void;
-    onEditOptions: (slot: DraftSlot) => void;
-    onEdit: (card: IPlaytestCard) => void;
-    onDelete: (card: IPlaytestCard) => void;
-};
-
-function DroppableSlot({ className, style, slot, isOnlyPlots, children }: DroppableSlotProps) {
-    const { setNodeRef, isOver } = useDroppable({
-        id: `slot-${slot.number}`,
-        data: { faction: slot.faction, number: slot.number }
-    });
-    return (
-        <div
-            ref={setNodeRef}
-            className={classNames(
-                slotShapeClass(isOnlyPlots),
-                "shrink-0 outline-primary rounded-lg",
-                { "outline-2 outline-dashed outline-offset-2 ": isOver },
-                className
-            )}
-            style={style}
-        >
-            {children}
-        </div>
-    );
-}
-
-type DroppableSlotProps = BaseElementProps & {
-    slot: DraftSlot;
-    isOnlyPlots: boolean;
-};
-
-function DraggableTopCard({
-    card,
-    slotNumber,
-    children
-}: {
-    card: IPlaytestCard;
-    slotNumber: number;
-    children: React.ReactNode;
-}) {
-    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-        id: `card-${getDragUid(card)}`,
-        data: { card, slotNumber } satisfies DragData
-    });
-    return (
-        <div
-            ref={setNodeRef}
-            {...listeners}
-            {...attributes}
-            className={classNames("size-full touch-manipulation cursor-grab active:cursor-grabbing", {
-                "opacity-0": isDragging
-            })}
-        >
-            <div className="size-full">{children}</div>
-        </div>
-    );
-}
-
-function FactionSlot({ slot, zIndex, onNew, onSuggestion, onEditOptions, onEdit, onDelete }: FactionSlotProps) {
-    const topIndex = Math.max(0, slot.options.length - 1);
-    const [selectedIndex, setSelectedIndex] = useState(topIndex);
-    const [previousOptionCount, setPreviousOptionCount] = useState(slot.options.length);
-    // Reset in the same render the count changes, so the stack never sees a stale selection against the new cards
-    if (slot.options.length !== previousOptionCount) {
-        setPreviousOptionCount(slot.options.length);
-        setSelectedIndex(topIndex);
-    }
-
-    const canEdit = usePermission(Permission.EDIT_CARDS);
-    const canDelete = usePermission(Permission.DELETE_CARDS);
-    const canCreate = usePermission(Permission.CREATE_CARDS);
-    const canReadSuggestions = usePermission(Permission.READ_SUGGESTIONS);
-    const canEditSlot = usePermission(Permission.EDIT_SLOTS);
-    const slotActions: SlotAction[] = [
-        canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
-        canReadSuggestions && {
-            key: "suggestion",
-            label: "Add suggestion",
-            icon: suggestionIcons.base,
-            onPress: () => onSuggestion(slot)
-        },
-        canEditSlot && {
-            key: "options",
-            label: "Edit options",
-            icon: faSliders,
-            onPress: () => onEditOptions(slot)
-        }
-    ].flatMap((action) => (action ? [action] : []));
-    // CardStack renders oldest-first, so selectedIndex maps into the reversed order
-    const stackedCards = [...slot.options].reverse();
-    const topCard = stackedCards[Math.min(selectedIndex, stackedCards.length - 1)];
-    // Alongside non-plot options, a plot card is rotated to fit the standard portrait box instead of its natural landscape shape
-    const hasNonPlot = slot.options.some((card) => card.type !== "plot");
-    const isOnlyPlots = slot.options.length > 0 && !hasNonPlot;
-    return (
-        <SlotFrame slot={slot.slot} actions={slotActions} className={frameShapeClass(isOnlyPlots)}>
-            <DroppableSlot slot={slot} isOnlyPlots={isOnlyPlots} className="relative">
-                <div className="absolute inset-0">
-                    <EmptyCardSlot slot={slot} onNew={() => onNew(slot)} onSuggestion={() => onSuggestion(slot)} />
-                </div>
-                {stackedCards && topCard && (
-                    <div className="absolute inset-0">
-                        <CardStack
-                            cards={stackedCards}
-                            selectedIndex={selectedIndex}
-                            behaviour="stacked"
-                            tilt={{ amount: 2, alternate: true, variance: 0.5, animateNew: false }}
-                            className="h-full"
-                            style={{ zIndex }}
-                            onClick={() => setSelectedIndex((prev) => (prev === 0 ? slot.options.length - 1 : --prev))}
-                        >
-                            {(card) => {
-                                const cardActions: CardAction[] = [
-                                    canEdit && {
-                                        key: "edit",
-                                        label: "Edit",
-                                        icon: faPencil,
-                                        onPress: () => onEdit(card)
-                                    },
-                                    canDelete && {
-                                        key: "delete",
-                                        label: "Delete",
-                                        icon: faTrash,
-                                        className: "text-danger",
-                                        onPress: () => onDelete(card)
-                                    }
-                                ].flatMap((action) => (action ? [action] : []));
-                                const issues = slotConditionIssues(slot.slot.conditions, card);
-
-                                const content = (
-                                    <div className="size-full relative">
-                                        <DraftCardBadges issues={issues} actions={cardActions} />
-                                        <div className="relative h-full flex justify-center items-center">
-                                            <div className="relative w-full">
-                                                <CardPreview
-                                                    className="select-none"
-                                                    orientation={
-                                                        card.type === "plot" && hasNonPlot ? "vertical" : undefined
-                                                    }
-                                                    card={renderPlaytestingCard(card, {
-                                                        top: "Draft Option",
-                                                        middle: `Card #${slot.number}`,
-                                                        bottom: card.suggestionId ? "From Suggestion" : "New Design"
-                                                    })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-
-                                return card === topCard ? (
-                                    <DraggableTopCard card={card} slotNumber={slot.number}>
-                                        {content}
-                                    </DraggableTopCard>
-                                ) : (
-                                    content
-                                );
-                            }}
-                        </CardStack>
-                    </div>
-                )}
-            </DroppableSlot>
-        </SlotFrame>
-    );
-}
-
-type FactionSlotProps = {
-    slot: DraftSlot;
-    zIndex: number;
-    onNew: (slot: DraftSlot) => void;
-    onSuggestion: (slot: DraftSlot) => void;
-    onEditOptions: (slot: DraftSlot) => void;
-    onEdit: (card: IPlaytestCard) => void;
-    onDelete: (card: IPlaytestCard) => void;
-};
-
-// The alert first, then the card's menu - the menu faint until hovered, so the alert is what catches the eye
-function DraftCardBadges({ issues, actions }: { issues: string[]; actions: CardAction[] }) {
-    if (issues.length === 0 && actions.length === 0) {
-        return null;
-    }
-    return (
-        <CardCornerBadges
-            isolateClicks
-            badges={[]}
-            leading={
-                <>
-                    {issues.length > 0 && (
-                        <CornerBadge
-                            icon={faTriangleExclamation}
-                            color="warning"
-                            pulse
-                            title="Doesn't Fit Its Slot"
-                            description={
-                                <div className="flex flex-col gap-1 pt-0.5">
-                                    <span className="text-foreground/70">
-                                        The maesters advise heeding this slot's conditions:
-                                    </span>
-                                    <ul className="list-disc pl-4">
-                                        {issues.map((issue) => (
-                                            <li key={issue}>{issue}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            }
-                        />
-                    )}
-                    {actions.length > 0 && (
-                        <div className="opacity-25 hover:opacity-90 transition-opacity">
-                            <Dropdown>
-                                <DropdownTrigger>
-                                    <Button isIconOnly radius="full" size="sm" variant="faded">
-                                        <FontAwesomeIcon icon={faEllipsis} />
-                                    </Button>
-                                </DropdownTrigger>
-                                <DropdownMenu aria-label="Card actions" items={actions}>
-                                    {(action) => (
-                                        <DropdownItem
-                                            key={action.key}
-                                            className={action.className}
-                                            startContent={<FontAwesomeIcon icon={action.icon} />}
-                                            onPress={action.onPress}
-                                        >
-                                            {action.label}
-                                        </DropdownItem>
-                                    )}
-                                </DropdownMenu>
-                            </Dropdown>
-                        </div>
-                    )}
-                </>
-            }
-        />
-    );
-}
-
-type CardAction = SlotAction & { className?: string };
-
-function EmptyCardSlot({ className, style, slot, onNew = () => true, onSuggestion = () => true }: EmptyCardSlotProps) {
-    const [isActive, setIsActive] = useState(false);
-    const isOnlyPlots = slot.options.length > 0 && slot.options.every((card) => card.type === "plot");
-
-    return (
-        <div className={classNames("relative h-full flex justify-center items-center", className)} style={style}>
-            <div className="relative w-full">
-                <CardBlank
-                    className={classNames({
-                        "transition-all duration-200 ease-in-out not-hover:brightness-75 hover:brightness-100":
-                            !isActive,
-                        "brightness-100": isActive
-                    })}
-                    rounded
-                    classNames={{
-                        inner: "flex flex-col justify-center items-center border-12 bg-default-100 brightness-50"
-                    }}
-                    styles={{
-                        inner: {
-                            borderColor: thronesColors[slot.faction],
-                            ...(isOnlyPlots && { width: "333px", height: "240px" })
-                        }
-                    }}
-                    onClick={() => !isActive && setIsActive(true)}
-                    orientation={isOnlyPlots ? "horizontal" : undefined}
+                <DraftDragOverlay factionSlots={factionSlots} onEdit={onEdit} onDelete={onDelete} />
+                <EditCardModal
+                    isOpen={!!editing}
+                    card={editing}
+                    onClose={() => setEditing(undefined)}
+                    onSave={(card) => toastCard(editing?.version === NEW_OPTION_VERSION ? "added" : "saved", card)}
                 />
-            </div>
-            <div
-                className={classNames(
-                    "z-0 absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500",
-                    slot.options.length === 0 ? "opacity-100" : "opacity-0"
+                <SelectSuggestionModal
+                    isOpen={!!suggesting}
+                    project={project.number}
+                    number={suggesting?.number ?? 0}
+                    faction={suggesting?.faction}
+                    unselectable={cardsData?.items
+                        .filter((card) => card.faction === suggesting?.faction && card.suggestionId)
+                        .map((card) => card.suggestionId!)}
+                    onClose={() => setSuggesting(undefined)}
+                    onSave={(card) => toastCard("added", card)}
+                />
+                <SlotOptionsModal isOpen={isOptionsOpen} slot={optionsSlot} onClose={() => setIsOptionsOpen(false)} />
+                {arranging && arrangingSlot && (
+                    <ArrangeModal
+                        project={project.number}
+                        slot={arrangingSlot}
+                        pile={arranging.pile}
+                        onLifted={() => setArranging((current) => current && { ...current, isLifted: true })}
+                        onClosed={() => setArranging(undefined)}
+                    />
                 )}
-            >
-                <RadialMenu
-                    className="size-16 sm:size-20 md:size-28 lg:size-32"
-                    isOpen={isActive}
-                    onOpenChange={setIsActive}
-                    classNames={{ button: "h-10 w-10" }}
-                >
-                    <PermissionGate requires={Permission.CREATE_CARDS}>
-                        <Tooltip content="Create new card">
-                            <Button
-                                isIconOnly
-                                radius="full"
-                                variant="flat"
-                                color="primary"
-                                size="sm"
-                                className="shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12"
-                                onPress={onNew}
-                            >
-                                <FontAwesomeIcon icon={faStarOfLife} />
-                            </Button>
-                        </Tooltip>
-                    </PermissionGate>
-                    <PermissionGate requires={Permission.READ_SUGGESTIONS}>
-                        <Tooltip content="Choose suggestion">
-                            <Button
-                                isIconOnly
-                                radius="full"
-                                variant="flat"
-                                color="primary"
-                                size="sm"
-                                className="shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12"
-                                onPress={onSuggestion}
-                            >
-                                <FontAwesomeIcon icon={suggestionIcons.base} />
-                            </Button>
-                        </Tooltip>
-                    </PermissionGate>
-                </RadialMenu>
-            </div>
-        </div>
+                <DeleteCardModal
+                    isOpen={!!deleting}
+                    card={deleting}
+                    onClose={() => setDeleting(undefined)}
+                    onDelete={(card) => toastCard("deleted", card)}
+                />
+            </DndContext>
+        </DragStoreContext.Provider>
     );
 }
 
-type EmptyCardSlotProps = Omit<BaseElementProps, "children"> & {
-    slot: DraftSlot;
-    onNew?: () => void;
-    onSuggestion?: () => void;
-};
+type ProjectDraftingProps = { project: IProject };

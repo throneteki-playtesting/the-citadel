@@ -2,7 +2,7 @@ import { Button, Skeleton } from "@heroui/react";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
 import { IProject } from "common/models/projects";
-import { initialisationRequirements } from "common/models/initialisation";
+import { initialisationRequirements, unmetRequirement } from "common/models/initialisation";
 import { BaseElementProps } from "../../../types";
 import { useMemo, useState } from "react";
 import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
@@ -27,7 +27,7 @@ export default function ProjectHeaderDraftNotice({ className, project }: Project
         () => cardsData && slotsData && initialisationRequirements(project, slotsData.items, cardsData.items),
         [cardsData, slotsData, project]
     );
-    const isReady = !!requirements?.every((requirement) => requirement.done);
+    const isReady = !!requirements && !unmetRequirement(requirements);
 
     return (
         <StatusNotice

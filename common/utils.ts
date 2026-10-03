@@ -7,7 +7,7 @@ import { isEqual, union } from "lodash-es";
 import { major, minor, patch, rcompare, valid } from "semver";
 import type { IPlaytestingUpdate, IProject, PlaytestingUpdateState, ReleaseSlotAllocation } from "./models/projects";
 import type { ISlot } from "./models/slots";
-import { isReleaseBound, resolveFinalCard } from "./models/slots";
+import { isReleaseBound, NEW_OPTION_VERSION, resolveFinalCard } from "./models/slots";
 import { onboardingPriority, onboardingRoleConfig, OnboardingType } from "./models/onboarding";
 import { toThronetekiText } from "./richText/toThroneteki";
 
@@ -630,7 +630,7 @@ export function suggestionToPlaytestCard(
     suggestion: Cards.ICardSuggestion,
     project: number,
     number: number,
-    version: SemanticVersion = "0.0.0"
+    version: SemanticVersion = NEW_OPTION_VERSION
 ) {
     return {
         project,

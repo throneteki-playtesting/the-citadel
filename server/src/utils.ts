@@ -1,7 +1,7 @@
 import { ILabeledCard, IPlaytestCard, NoteType, factions, uniqueTypes } from "common/models/cards";
 import { FactionCardCount, IProject, IProjectRelease } from "common/models/projects";
-import { ISlot } from "common/models/slots";
-import { getReleaseCapacity, THRONESDB_URL } from "common/utils";
+import { ISlot, orderByPreference } from "common/models/slots";
+import { getReleaseCapacity, SemanticVersion, THRONESDB_URL } from "common/utils";
 import { IGetResponse, OAuthTokenResponse } from "./types";
 import { IDecklist } from "common/models/decks";
 import { camelCase, startCase, uniq } from "lodash-es";
@@ -18,6 +18,30 @@ export const NoteVersion: Record<NoteType, "major" | "minor" | "patch" | undefin
     updated: "patch",
     refinement: "patch"
 };
+
+// Keeps a draft slot's order of preference in step as its options come and go
+export async function updateSlotPreferences(
+    project: number,
+    number: number,
+    update: (preferences: SemanticVersion[]) => SemanticVersion[]
+) {
+    const [slot] = await dataService.slots.read({ project, number });
+    if (slot) {
+        // Ranked from every option the slot holds, so a stored list missing some cannot strand them above the rest
+        const options = await dataService.cards.read({ project, number, draft: true });
+        const current = orderByPreference(options, slot.preferences).map((card) => card.version);
+        await dataService.slots.update({ ...slot, preferences: update(current) });
+    }
+}
+
+// A newcomer to a slot goes straight to the front - the card just added is the one being put forward
+export const preferFirst = (version: SemanticVersion) => (preferences: SemanticVersion[]) => [
+    version,
+    ...preferences.filter((preferred) => preferred !== version)
+];
+
+export const withoutPreference = (version: SemanticVersion) => (preferences: SemanticVersion[]) =>
+    preferences.filter((preferred) => preferred !== version);
 
 // Nothing in a draft project is published anywhere until it is initialised
 export async function withoutDraftProjectCards(cards: IPlaytestCard[]) {

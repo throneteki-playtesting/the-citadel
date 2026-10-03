@@ -202,6 +202,8 @@ export interface ISlot extends IAuditable {
     number: number;
     /** Fixed at creation - determines which faction carousel this slot belongs to */
     faction: Faction;
+    /** A draft project's options, by card version, in order of preference - the first is the slot's Favoured */
+    preferences?: SemanticVersion[];
     /** What the slot asks of its card - see slotConditions */
     conditions?: SlotCondition[];
     /** Something the project must deliver - its name and references hold through development, barring approval */
@@ -215,6 +217,49 @@ export interface ISlot extends IAuditable {
 }
 
 // A slot's own settings - its conditions, plus the options every slot always has
+const ordinal = new Intl.PluralRules("en-GB", { type: "ordinal" });
+const ordinalSuffixes: Record<Intl.LDMLPluralRule, string> = {
+    zero: "th",
+    one: "st",
+    two: "nd",
+    few: "rd",
+    many: "th",
+    other: "th"
+};
+
+// How a draft option's place reads on the card - "Favoured" for the first, "2nd Preference" onwards
+export function preferenceLabel(rank: number) {
+    const place = rank + 1;
+    return rank === 0 ? "Favoured" : `${place}${ordinalSuffixes[ordinal.select(place)]} Preference`;
+}
+
+// The version a draft option is sent with to be created, which the server swaps for the next free 0.0.x
+export const NEW_OPTION_VERSION: SemanticVersion = "0.0.0";
+
+// The first 0.0.x version not already in use, for a slot which can hold multiple option drafts at once
+export function nextAvailableOptionVersion(usedVersions: Set<SemanticVersion>): SemanticVersion | undefined {
+    return Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
+}
+
+// A moved card keeps its version if it is free in the target slot; otherwise it takes the next available 0.0.x
+export function movedOptionVersion(version: SemanticVersion, targetVersions: SemanticVersion[]) {
+    const used = new Set(targetVersions);
+    return used.has(version) ? nextAvailableOptionVersion(used) : version;
+}
+
+// A slot's options in order of preference - anything the order hasn't caught up with yet comes first, newest first
+export function orderByPreference<C extends { version: SemanticVersion; updated: Date | string }>(
+    cards: C[],
+    preferences: SemanticVersion[] = []
+) {
+    const rankOf = (card: C) => preferences.indexOf(card.version);
+    const unranked = cards
+        .filter((card) => rankOf(card) === -1)
+        .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
+    const ranked = cards.filter((card) => rankOf(card) !== -1).sort((a, b) => rankOf(a) - rankOf(b));
+    return [...unranked, ...ranked];
+}
+
 export const slotOptionKeys = ["conditions", "important", "notes"] as const;
 export type ISlotOptions = Pick<ISlot, (typeof slotOptionKeys)[number]>;
 

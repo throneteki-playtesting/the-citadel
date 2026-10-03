@@ -796,6 +796,24 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
+        // Drawn in its new order straight away - a drag shouldn't wait on the round trip to settle
+        updateSlotPreferences: builder.mutation<ISlot, ISlotRef & { preferences: SemanticVersion[] }>({
+            query: ({ project, number, preferences }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/preferences`);
+                return { url, method: "PUT", body: { preferences } };
+            },
+            async onQueryStarted({ project, number, preferences }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("slot", `${project}|${number}`, (slot) => {
+                    slot.preferences = preferences;
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
         updateSlotOptions: builder.mutation<ISlot, ISlotRef & ISlotOptions>({
             query: ({ project, number, ...options }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}/options`);
@@ -1371,6 +1389,7 @@ export const {
     useDeleteSlotMutation,
     useUpdateSlotMutation,
     useUpdateSlotOptionsMutation,
+    useUpdateSlotPreferencesMutation,
     useGetSlotArtworkQuery,
     useGetSlotArtworksQuery,
     useUpdateSlotArtworkMutation,
