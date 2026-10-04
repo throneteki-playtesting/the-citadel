@@ -860,6 +860,7 @@ export const Slot = {
             .required()
             .valid(...Cards.factions),
         ...slotOptionFields,
+        closed: Joi.boolean(),
         preferences: slotPreferences,
         faq: RichText,
         statuses: Joi.object({
@@ -999,6 +1000,8 @@ export const Slot = {
     Faq: Joi.object({ faq: RichText.required() })
 };
 
+const slotCount = Joi.number().integer().min(0);
+
 export const Project = {
     Full: Joi.object({
         number: Joi.number().integer().max(99).required(),
@@ -1028,6 +1031,7 @@ export const Project = {
         formUrl: Joi.string(),
         emoji: Joi.string(),
         owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Full).required(),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -1060,6 +1064,7 @@ export const Project = {
         formUrl: Joi.string(),
         emoji: Joi.string(),
         owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Partial),
         created: Joi.date(),
         createdBy: Joi.string(),
@@ -1095,6 +1100,9 @@ export const Project = {
         formUrl: Joi.string(),
         emoji: Joi.string(),
         owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
+        // Not stored - how many slots each faction should have, which the server opens, creates or closes slots to meet
+        slotCounts: Joi.object(Object.fromEntries(Cards.factions.map((faction) => [faction, slotCount]))),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

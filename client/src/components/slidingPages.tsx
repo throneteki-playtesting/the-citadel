@@ -1,4 +1,13 @@
-import React, { Children, HTMLAttributes, ReactNode, Ref, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+    Children,
+    HTMLAttributes,
+    ReactNode,
+    Ref,
+    TransitionEvent,
+    useLayoutEffect,
+    useRef,
+    useState
+} from "react";
 import classNames from "classnames";
 import { PageActiveContext, useIsPageActive } from "../hooks/useIsPageActive";
 import useSlidingPagesHistory from "../hooks/useSlidingPagesHistory";
@@ -20,12 +29,14 @@ export default function SlidingPages({
     const isParentActive = useIsPageActive();
     const activeWrapperRef = useRef<HTMLDivElement>(null);
     const [measuredHeight, setMeasuredHeight] = useState<number>();
-    // Before the first measurement, the container can't be trusted to have a correct height from JS
-    // alone - so until then the active page is left in normal flow (not absolute) instead, which sizes
-    // the container by pure CSS on whatever the first painted frame turns out to be, and the container
-    // itself isn't clipped, so even a wrong guess here leaves content visible rather than hidden. Both
-    // relax back to the measured/absolute/clipped steady state together once a real measurement lands.
-    const [hasMeasuredOnce, setHasMeasuredOnce] = useState(false);
+    // The height only eases while travelling between pages - on mount, and whenever the page on show
+    // resizes by itself, the container is simply the right height
+    const [shownPage, setShownPage] = useState(currentPage);
+    const [isTravelling, setIsTravelling] = useState(false);
+    if (shownPage !== currentPage) {
+        setShownPage(currentPage);
+        setIsTravelling(true);
+    }
     // Counted rather than compared - children are a fresh array every render, and rebuilding the observer
     // each time is the work the observer was there to avoid
     const pageCount = Children.count(children);
@@ -50,27 +61,29 @@ export default function SlidingPages({
         return () => observer.disconnect();
     }, [currentPage, pageCount]);
 
-    // Deliberately a render behind measuredHeight, via a plain (not layout) effect - flipping this in
-    // the same commit as the first real height would add "transition-height" at the same moment the
-    // container's height first goes from unmeasured to real, and the browser then animates that jump
-    // from its actual previous (collapsed) state, regardless of the class only just having arrived.
-    // Waiting one extra paint means the frame this lands on already shows the correct height (put there
-    // by the active page's own normal-flow layout, not by this state), so there's nothing left to ease.
-    useEffect(() => {
-        if (measuredHeight !== undefined) {
-            setHasMeasuredOnce(true);
+    // Until the first measurement lands the active page is left in normal flow and the container
+    // unclipped, so the container is sized by CSS rather than collapsing around absolute children
+    const isMeasured = measuredHeight !== undefined;
+
+    // The pages' own slide finishing is what ends the journey - the height may not change at all
+    // between two pages of the same size, so it has no transition of its own to wait on
+    const onTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
+        const isPageSlide = e.propertyName === "transform" && (e.target as HTMLElement).parentElement === e.currentTarget;
+        if (isPageSlide) {
+            setIsTravelling(false);
         }
-    }, [measuredHeight]);
+    };
 
     return (
         <div
             ref={ref}
             className={classNames(
                 "relative size-full",
-                { "overflow-clip transition-height": hasMeasuredOnce },
+                { "overflow-clip": isMeasured, "transition-height": isTravelling },
                 className
             )}
-            style={{ ...style, height: measuredHeight !== undefined ? `${measuredHeight}px` : undefined }}
+            style={{ ...style, height: isMeasured ? `${measuredHeight}px` : undefined }}
+            onTransitionEnd={onTransitionEnd}
         >
             {Children.map(children, (page, index) => {
                 if (!React.isValidElement(page)) {
@@ -87,10 +100,10 @@ export default function SlidingPages({
                         // Absolutely positioned, not a flex sibling - a flex row flashed the tallest
                         // page's height before snapping down once the active page's was measured. The
                         // active page is the one exception, and only until that first measurement lands
-                        // (see hasMeasuredOnce) - left in normal flow, it sizes the container itself.
+                        // (see isMeasured) - left in normal flow, it sizes the container itself.
                         className={classNames(
                             "inset-x-0 top-0 w-full transition-transform duration-500 ease-in-out",
-                            isActive && !hasMeasuredOnce ? "relative" : "absolute",
+                            isActive && !isMeasured ? "relative" : "absolute",
                             { "overflow-clip": !isActive }
                         )}
                         style={{ transform: `translateX(${(pageNo - currentPage) * 100}%)` }}

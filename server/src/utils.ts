@@ -65,12 +65,27 @@ export function assertSyncableProject(project: IProject) {
     }
 }
 
+// A draft project's closed slots are out of it until reopened, so nothing counting or listing slots should see them
+export async function readOpenSlots(project: number) {
+    return (await dataService.slots.read({ project })).filter((slot) => !slot.closed);
+}
+
+export function assertSlotOpen(slot: ISlot | undefined) {
+    if (slot?.closed) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Slot",
+            `Slot #${slot.number} is closed, and takes no cards until it is reopened`
+        );
+    }
+}
+
 /**
  * Recalculates and persists IProject.cardCount from the actual slots collection.
  * cardCount is a read cache only - slots are the source of truth for per-faction counts.
  */
 export async function syncProjectCardCount(projectNumber: number) {
-    const slots = await dataService.slots.read({ project: projectNumber });
+    const slots = await readOpenSlots(projectNumber);
     const cardCount = factions.reduce((acc, faction) => {
         acc[faction] = slots.filter((slot) => slot.faction === faction).length;
         return acc;

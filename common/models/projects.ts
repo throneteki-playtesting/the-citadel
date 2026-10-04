@@ -1,5 +1,6 @@
 import { SemanticVersion } from "common/utils";
 import type { Faction } from "./cards";
+import type { ISlotOptions } from "./slots";
 import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
@@ -33,6 +34,8 @@ export interface IProject extends IAuditable {
     emoji?: string;
     /** Discord ids of the people running this project - see projectOwnerPermissions */
     owners?: string[];
+    /** Key into projectTemplates for this project's type - absent means custom, its slots set by hand */
+    template?: string;
     releases: IProjectRelease[];
 }
 
@@ -100,6 +103,43 @@ export type FactionCardCount = {
     tyrell: number;
     neutral: number;
 };
+
+export type SlotCounts = Partial<FactionCardCount>;
+
+// A project as it is saved - the counts are not stored, but opened, created or closed towards by the server
+export type IProjectSave = IProject & { slotCounts?: SlotCounts };
+
+export const CUSTOM_TEMPLATE = "custom";
+
+/** Each faction's slots in order, one entry per slot - what it asks for, or {} where it asks nothing */
+export type TemplateSlots = Record<Faction, ISlotOptions[]>;
+
+export type ProjectTemplate = {
+    name: string;
+    description: string;
+    /** The slots a project starts with - absent for custom, where they are set by hand */
+    slots?: TemplateSlots;
+};
+
+const customTemplate: ProjectTemplate = { name: "Custom", description: "Set each faction's slots yourself" };
+
+// Per project type, as a cycle and an expansion are shaped differently - custom alone until the real ones are defined
+export const projectTemplates: Record<Type, Record<string, ProjectTemplate>> = {
+    cycle: { [CUSTOM_TEMPLATE]: customTemplate },
+    expansion: { [CUSTOM_TEMPLATE]: customTemplate }
+};
+
+export function templateCounts(template: ProjectTemplate): FactionCardCount | undefined {
+    const { slots } = template;
+    return (
+        slots &&
+        (Object.fromEntries(Object.keys(slots).map((key) => [key, slots[key as Faction].length])) as FactionCardCount)
+    );
+}
+
+export function projectTemplateOf(project: Pick<IProject, "type" | "template">): ProjectTemplate | undefined {
+    return projectTemplates[project.type]?.[project.template ?? CUSTOM_TEMPLATE];
+}
 
 export interface GithubPRMeta {
     status?: (typeof githubStatuses)[number];

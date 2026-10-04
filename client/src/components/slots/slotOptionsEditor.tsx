@@ -48,7 +48,7 @@ const iconStates = [
 const iconStateOf = (setting?: boolean) => iconStates.find((state) => state.setting === setting) ?? iconStates[0];
 
 // A slot's conditions and the options every slot has - shared by the slot's shortcut and the project editor
-export default function SlotOptionsEditor({ value, faction, onChange }: SlotOptionsEditorProps) {
+export default function SlotOptionsEditor({ value, faction, isShared, onChange }: SlotOptionsEditorProps) {
     const conditions = value.conditions ?? [];
     const usedStats = new Set(conditions.map((condition) => condition.stat));
 
@@ -72,22 +72,24 @@ export default function SlotOptionsEditor({ value, faction, onChange }: SlotOpti
     return (
         <div className="flex flex-col gap-3">
             <div className="flex flex-col">
-                <ConditionRow
-                    label="Faction"
-                    isInline
-                    action={
-                        <TouchTooltip content="Set by the slot">
-                            <span className="grid size-8 place-items-center text-foreground/40 cursor-help">
-                                <FontAwesomeIcon icon={faLock} />
-                            </span>
-                        </TouchTooltip>
-                    }
-                >
-                    <span className="flex items-center gap-2 text-small">
-                        <ThronesIcon name={faction} />
-                        {factionNames[faction]}
-                    </span>
-                </ConditionRow>
+                {!isShared && (
+                    <ConditionRow
+                        label="Faction"
+                        isInline
+                        action={
+                            <TouchTooltip content="Set by the slot">
+                                <span className="grid size-8 place-items-center text-foreground/40 cursor-help">
+                                    <FontAwesomeIcon icon={faLock} />
+                                </span>
+                            </TouchTooltip>
+                        }
+                    >
+                        <span className="flex items-center gap-2 text-small">
+                            <ThronesIcon name={faction} />
+                            {factionNames[faction]}
+                        </span>
+                    </ConditionRow>
+                )}
                 <AnimatePresence initial={false}>
                     {conditions.map((condition, index) => (
                         <motion.div
@@ -372,6 +374,8 @@ type SlotOptionsEditorProps = {
     value: ISlotOptions;
     /** Neutral slots can't ask for loyalty */
     faction: Faction;
+    /** Set for slots across several factions at once, so no single faction is named as the slot's own */
+    isShared?: boolean;
     onChange: (value: ISlotOptions) => void;
 };
 

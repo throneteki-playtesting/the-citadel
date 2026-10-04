@@ -17,10 +17,6 @@ enum Permission {
     ARCHIVE_PROJECTS = "ARCHIVE_PROJECTS",
     /** Can view slots for a project */
     READ_SLOTS = "READ_SLOTS",
-    /** Can create new slots (draft projects only) */
-    CREATE_SLOTS = "CREATE_SLOTS",
-    /** Can delete empty slots (draft projects only) */
-    DELETE_SLOTS = "DELETE_SLOTS",
     /** Can edit slot statuses, type & notes */
     EDIT_SLOTS = "EDIT_SLOTS",
     /** Can move (or emergency-reverse) a card's design into the finalising phase */
@@ -177,8 +173,6 @@ export const projectOwnerPermissions: Permission[] = [
     Permission.INITIALISE_PROJECTS,
     Permission.ARCHIVE_PROJECTS,
     Permission.READ_SLOTS,
-    Permission.CREATE_SLOTS,
-    Permission.DELETE_SLOTS,
     Permission.EDIT_SLOTS,
     Permission.APPROVE_CARD_DESIGN,
     Permission.READ_ARTWORKS,
@@ -231,8 +225,6 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         dependencies: Permission.READ_PROJECTS
     },
     [Permission.READ_SLOTS]: { label: "Read Slots", group: "Projects", dependencies: Permission.READ_PROJECTS },
-    [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
-    [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.APPROVE_CARD_DESIGN]: {
         label: "Approve Card Design",

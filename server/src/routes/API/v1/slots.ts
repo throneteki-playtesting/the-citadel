@@ -6,7 +6,6 @@ import * as Schemas from "common/models/schemas";
 import { SchemaType } from "common/models/schemas";
 import {
     checksClosedBy,
-    DefaultSlotStatuses,
     DesignStatus,
     designPhase,
     designStatuses,
@@ -33,7 +32,7 @@ import {
     isInquiryOpen,
     refinementBlocker
 } from "common/models/refinement";
-import { factions, IPlaytestCard } from "common/models/cards";
+import { IPlaytestCard } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { areReleaseChecksClosed, IProject } from "common/models/projects";
@@ -41,7 +40,7 @@ import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { loadProject, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
+import { loadProject, generateGetResponse, applyToFilter, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
 import { ISlotFilterable } from "@/data/repositories/slotsRepository";
@@ -221,6 +220,8 @@ const SlotFilterExtensions = {
     refinementMeta: Joi.object({ openInquiries: Joi.number() })
 };
 
+const OPEN_SLOTS = { closed: { $ne: true } };
+
 const getQuerySchema = getRequestSchema<ISlotFilterable>(Schemas.Slot.Full.keys(SlotFilterExtensions), {
     project: "asc",
     number: "asc"
@@ -238,7 +239,9 @@ router.get(
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
-        const normalizedFilter = applyToFilter(filter, { project });
+        // Closed slots are out of the project unless they are asked for by name
+        const asksForClosed = [filter ?? []].flat().some((entry) => "closed" in entry);
+        const normalizedFilter = applyToFilter(filter, asksForClosed ? { project } : { project, ...OPEN_SLOTS });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
     })
@@ -337,103 +340,6 @@ router.get(
         const slot = await requireSlot(project.number, req.params.slot);
         const version = await readFinalVersion(project, slot);
         res.status(StatusCodes.OK).json(toRefinementDetail(slot, version, canReadFaq()));
-    })
-);
-
-// Create a new slot for a faction (draft projects only) - always appended after the current highest slot number
-router.post(
-    "/",
-    validateRequest(Permission.CREATE_SLOTS),
-    celebrate({
-        [Segments.PARAMS]: { project: Joi.number().required() },
-        [Segments.BODY]: {
-            faction: Joi.string()
-                .required()
-                .valid(...factions)
-        }
-    }),
-    loadProject,
-    asyncHandler<{ project: number }, unknown, { faction: (typeof factions)[number] }, unknown>(async (req, res) => {
-        const project = res.locals.project as IProject;
-        const { faction } = req.body;
-
-        if (!project.draft) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Project",
-                "Slots can only be added while a project is in draft"
-            );
-        }
-
-        const existingSlots = await dataService.slots.read({ project: project.number });
-        const nextNumber = existingSlots.reduce((max, slot) => Math.max(max, slot.number), 0) + 1;
-
-        const slot = await dataService.slots.create({
-            project: project.number,
-            number: nextNumber,
-            faction,
-            statuses: DefaultSlotStatuses
-        } as ISlot);
-
-        await syncProjectCardCount(project.number);
-
-        await logActivity(LogCategory.SLOT, "slot.created", `<principal> created a ${faction} slot in <project>`, {
-            context: { project: projectSnapshot(project) }
-        });
-
-        res.status(StatusCodes.OK).json(slot);
-    })
-);
-
-// Delete an empty slot (draft projects only) - must be the highest-numbered slot within its own faction
-router.delete(
-    "/:slot",
-    validateRequest(Permission.DELETE_SLOTS),
-    celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProject,
-    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const project = res.locals.project as IProject;
-        const { slot: slotNumber } = req.params;
-
-        if (!project.draft) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Project",
-                "Slots can only be removed while a project is in draft"
-            );
-        }
-
-        const slot = await requireSlot(project.number, slotNumber);
-
-        const factionSlots = await dataService.slots.read({ project: project.number, faction: slot.faction });
-        const highestForFaction = Math.max(...factionSlots.map((s) => s.number));
-        if (slotNumber !== highestForFaction) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Slot",
-                "Only the last slot in a faction can be removed"
-            );
-        }
-
-        const cardCount = await dataService.cards.count({ project: project.number, number: slotNumber });
-        if (cardCount > 0) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Slot",
-                "Cannot remove a slot which has cards assigned to it"
-            );
-        }
-
-        const [deleted] = await dataService.slots.destroy({ project: project.number, number: slotNumber });
-
-        await syncProjectCardCount(project.number);
-
-        await logActivity(LogCategory.SLOT, "slot.deleted", `<principal> deleted slot ${slotNumber} from <project>`, {
-            context: { project: projectSnapshot(project) },
-            severity: "warn"
-        });
-
-        res.status(StatusCodes.OK).json(deleted);
     })
 );
 

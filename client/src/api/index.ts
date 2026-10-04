@@ -10,6 +10,7 @@ import {
 import {
     IPlaytestingUpdate,
     IProject,
+    IProjectSave,
     IProjectProgress,
     IProjectRelease,
     IReleaseProgress
@@ -20,7 +21,6 @@ import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import {
-    Faction,
     ICardSuggestion,
     ICardSuggestionFilterable,
     IPlaytestCard,
@@ -147,6 +147,12 @@ const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof ba
         // Identity unchanged, so the cache is still valid
     }
 };
+
+// A save which opens or closes slots changes every slot list as well as the project itself
+const projectSaveTags = (result: IProject | undefined, project: Pick<IProjectSave, "slotCounts">) => [
+    ...generateFor(result, "project"),
+    ...(project.slotCounts ? [{ type: "slot" as const, id: undefined }] : [])
+];
 
 const api = createApi({
     reducerPath: "api",
@@ -660,13 +666,13 @@ const api = createApi({
             },
             providesTags: (result, _error, args) => generateFor(result, "project", { includeList: false, args })
         }),
-        createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
+        createProject: builder.mutation<IProject, Omit<IProjectSave, "created" | "updated">>({
             query: (project) => {
                 const url = buildUrl("projects");
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
         }),
         initialiseProject: builder.mutation<{ project: IProject; cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
@@ -679,13 +685,13 @@ const api = createApi({
                 ...generateFor(undefined, "slot", { includeList: true })
             ]
         }),
-        updateProject: builder.mutation<IProject, IProject>({
+        updateProject: builder.mutation<IProject, IProjectSave>({
             query: (project) => {
                 const url = buildUrl(`projects/${project.number}`);
                 const body = project;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
         }),
         deleteProject: builder.mutation<IProject, { number: number }>({
             query: (options) => {
@@ -774,20 +780,6 @@ const api = createApi({
                 return { url, method: "GET" };
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
-        }),
-        createSlot: builder.mutation<ISlot, { project: number; faction: Faction }>({
-            query: ({ project, faction }) => {
-                const url = buildUrl(`projects/${project}/slots`);
-                return { url, method: "POST", body: { faction } };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
-        }),
-        deleteSlot: builder.mutation<ISlot, { project: number; number: number }>({
-            query: ({ project, number }) => {
-                const url = buildUrl(`projects/${project}/slots/${number}`);
-                return { url, method: "DELETE" };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
         }),
         updateSlot: builder.mutation<ISlot, { project: number; number: number; statuses?: DeepPartial<SlotStatuses> }>({
             query: ({ project, number, ...body }) => {
@@ -1385,8 +1377,6 @@ export const {
     useGetSlotQuery,
     useGetSlotsQuery,
     useLazyGetSlotsQuery,
-    useCreateSlotMutation,
-    useDeleteSlotMutation,
     useUpdateSlotMutation,
     useUpdateSlotOptionsMutation,
     useUpdateSlotPreferencesMutation,

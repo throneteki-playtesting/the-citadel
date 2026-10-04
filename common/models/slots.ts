@@ -202,6 +202,8 @@ export interface ISlot extends IAuditable {
     number: number;
     /** Fixed at creation - determines which faction carousel this slot belongs to */
     faction: Faction;
+    /** Taken out of a draft project without losing its number or options - hidden until its faction reopens it */
+    closed?: boolean;
     /** A draft project's options, by card version, in order of preference - the first is the slot's Favoured */
     preferences?: SemanticVersion[];
     /** What the slot asks of its card - see slotConditions */

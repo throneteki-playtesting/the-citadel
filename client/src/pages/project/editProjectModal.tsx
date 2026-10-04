@@ -1,5 +1,6 @@
-import { IProject, types } from "common/models/projects";
+import { CUSTOM_TEMPLATE, IProject, projectTemplateOf, projectTemplates, Type, types } from "common/models/projects";
 import {
+    addToast,
     Input,
     Modal,
     ModalBody,
@@ -20,15 +21,25 @@ import {
     useCreateProjectMutation,
     useLazyGetProjectQuery,
     useLazyGetProjectsQuery,
-    useUpdateProjectMutation
+    useLazyGetSlotsQuery,
+    useUpdateProjectMutation,
+    useUpdateSlotOptionsMutation
 } from "../../api";
+import ProjectSlots from "./projectSlots";
+import { changedSlotOptions, groupErrors, slotCountsOf, SlotGroup, SlotOptionErrors } from "./slotGroups";
 import { EmojiSelect } from "../../components/emojiSelect";
 import { useWizard } from "../../components/wizard/context";
 import UserSelect from "../../components/data/userSelect";
 import { useAuth } from "../../hooks/useAuth";
 import { hasPermission } from "common/utils";
-import { compact } from "lodash-es";
+import { chunk, compact, isEmpty } from "lodash-es";
 import Permission from "common/models/permissions";
+
+const SLOTS_PAGE = 2;
+// The slots page has no form fields of its own - what it edits is held here and merged in on submit
+const NO_PAGE_DATA = {};
+// A group of eight factions changes eight slots at a time, so their saves go out a few together
+const SLOT_SAVES_AT_ONCE = 6;
 
 const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
@@ -44,31 +55,105 @@ export default function EditProjectModal({
 }: EditProjectModalProps) {
     const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
     const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
+    const [updateSlotOptions, { isLoading: isUpdatingSlots }] = useUpdateSlotOptionsMutation();
     const [project, setProject] = useState<DeepPartial<IProject>>(DefaultProjectValues);
+    const [type, setType] = useState<Type>();
+    const [template, setTemplate] = useState(CUSTOM_TEMPLATE);
+    const [getSlots, { isFetching: isReadingSlots }] = useLazyGetSlotsQuery();
+    const [slotGroups, setSlotGroups] = useState<SlotGroup[]>();
+    const [slotErrors, setSlotErrors] = useState<SlotOptionErrors>({});
+    const [hasSeenSlots, setHasSeenSlots] = useState(false);
 
     // Reset while closed, so the next opening starts from the saved project rather than an abandoned edit
     useEffect(() => {
         if (!isOpen) {
             setProject(initial ?? DefaultProjectValues);
+            setType(initial?.type);
+            setTemplate(initial?.template ?? CUSTOM_TEMPLATE);
+            setSlotGroups(undefined);
+            setSlotErrors({});
+            setHasSeenSlots(false);
         }
     }, [initial, isOpen]);
 
     const isNew = useMemo(() => !initial?.number, [initial?.number]);
+    const templateDefinition = type && projectTemplateOf({ type, template });
+    // A template with slots of its own leaves nothing to set for a project with none yet
+    const hasSlotsPage = !!templateDefinition && (!templateDefinition.slots || !isNew);
+
+    const onTypeChange = (next: Type) => {
+        setType(next);
+        if (!projectTemplates[next][template]) {
+            setTemplate(CUSTOM_TEMPLATE);
+        }
+    };
+    // Groups set by hand belong to the template they were set under
+    const onTemplateChange = (next: string) => {
+        setTemplate(next);
+        setSlotGroups(undefined);
+    };
     const owners = useMemo(() => compact(project.owners), [project.owners]);
 
     const onSubmit = useCallback(
         async (submitted: IProject) => {
-            // Owners aren't a form field, so the wizard only holds the list it opened with
-            const validProject = { ...submitted, owners };
+            const errors = slotGroups ? groupErrors(slotGroups) : {};
+            if (!isEmpty(errors)) {
+                setSlotErrors(errors);
+                addToast({
+                    title: "Slot options need attention",
+                    color: "danger",
+                    description: "One or more slots have conditions that can't be saved as they are"
+                });
+                return;
+            }
+
+            // Owners, template and slot counts aren't form fields, so the wizard only holds what it opened with
+            const setsCounts = slotGroups && submitted.draft && !templateDefinition?.slots;
+            const validProject = {
+                ...submitted,
+                owners,
+                template,
+                ...(setsCounts && { slotCounts: slotCountsOf(slotGroups) })
+            };
             setProject(validProject);
             const newProject = isNew
                 ? await createProject(validProject).unwrap()
                 : await updateProject(validProject).unwrap();
+
+            // Options are set per slot, so they follow once the save above has opened or created the slots
+            if (slotGroups) {
+                const { items } = await getSlots({ project: newProject.number }).unwrap();
+                const changed = changedSlotOptions(slotGroups, items);
+                for (const saves of chunk(changed, SLOT_SAVES_AT_ONCE)) {
+                    await Promise.all(
+                        saves.map(({ number, options }) =>
+                            updateSlotOptions({ project: newProject.number, number, ...options }).unwrap()
+                        )
+                    );
+                }
+            }
             onSave?.(newProject);
             onModalClose?.(true);
         },
-        [createProject, isNew, onModalClose, onSave, owners, updateProject]
+        [
+            createProject,
+            getSlots,
+            isNew,
+            onModalClose,
+            onSave,
+            owners,
+            slotGroups,
+            template,
+            templateDefinition,
+            updateProject,
+            updateSlotOptions
+        ]
     );
+
+    const onSlotGroupsChange = useCallback((groups: SlotGroup[]) => {
+        setSlotGroups(groups);
+        setSlotErrors({});
+    }, []);
 
     return (
         <Modal
@@ -80,7 +165,12 @@ export default function EditProjectModal({
         >
             <ModalContent>
                 {(onClose) => (
-                    <Wizard schema={Project.Draft} onSubmit={onSubmit} data={project}>
+                    <Wizard
+                        schema={Project.Draft}
+                        onSubmit={onSubmit}
+                        data={project}
+                        onPageChange={(page) => page === SLOTS_PAGE && setHasSeenSlots(true)}
+                    >
                         <ModalHeader>Project Editor</ModalHeader>
                         <ModalBody>
                             <ValidationSummary />
@@ -101,6 +191,7 @@ export default function EditProjectModal({
                                                 ))
                                             }
                                             defaultSelectedKeys={project.type ? [project.type] : []}
+                                            onSelectionChange={(keys) => onTypeChange([...keys][0] as Type)}
                                         >
                                             {types.map((type) => (
                                                 <SelectItem key={type} className="capitalize">
@@ -110,10 +201,36 @@ export default function EditProjectModal({
                                         </Select>
                                         <EmojiSelect label="Discord Emoji" defaultValue={project.emoji} />
                                     </div>
-                                    <OwnersField
-                                        owners={owners}
-                                        onChange={(ids) => setProject((prev) => ({ ...prev, owners: ids }))}
-                                    />
+                                    <div className="grid w-full grid-cols-1 items-start gap-2 sm:grid-cols-2">
+                                        <OwnersField
+                                            owners={owners}
+                                            onChange={(ids) => setProject((prev) => ({ ...prev, owners: ids }))}
+                                        />
+                                        <Select
+                                            label="Template"
+                                            description={
+                                                type
+                                                    ? "Determines how many slots each faction has"
+                                                    : "Choose a type to see its templates"
+                                            }
+                                            disallowEmptySelection
+                                            selectedKeys={type ? [template] : []}
+                                            isDisabled={!type || !project.draft}
+                                            onSelectionChange={(keys) => onTemplateChange([...keys][0] as string)}
+                                        >
+                                            {Object.entries(type ? projectTemplates[type] : {}).map(
+                                                ([key, { name, description }]) => (
+                                                    <SelectItem
+                                                        key={key}
+                                                        classNames={{ description: "whitespace-normal" }}
+                                                        description={description}
+                                                    >
+                                                        {name}
+                                                    </SelectItem>
+                                                )
+                                            )}
+                                        </Select>
+                                    </div>
                                     <RichTextArea
                                         name="description"
                                         label="Description"
@@ -130,11 +247,28 @@ export default function EditProjectModal({
                                         description="Providing a mandate helps team alignment, quality & direction"
                                     />
                                 </WizardPage>
+                                {hasSlotsPage && (
+                                    <WizardPage controlledData={NO_PAGE_DATA}>
+                                        <ProjectSlots
+                                            project={initial ?? DefaultProjectValues}
+                                            template={templateDefinition}
+                                            isNew={isNew}
+                                            isActive={hasSeenSlots}
+                                            groups={slotGroups}
+                                            errors={slotErrors}
+                                            onChange={onSlotGroupsChange}
+                                        />
+                                    </WizardPage>
+                                )}
                             </WizardPages>
                         </ModalBody>
                         <ModalFooter>
                             <WizardBack onCancel={onClose} />
-                            <WizardNext isLoading={isCreating || isUpdating} color={"primary"} />
+                            <WizardNext
+                                submitContent={isNew ? "Create" : "Save"}
+                                isLoading={isCreating || isUpdating || isReadingSlots || isUpdatingSlots}
+                                color={"primary"}
+                            />
                         </ModalFooter>
                     </Wizard>
                 )}

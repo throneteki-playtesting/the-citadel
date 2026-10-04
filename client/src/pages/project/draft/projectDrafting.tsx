@@ -49,11 +49,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
         filter: { project: project.number, draft: true }
     });
-    const {
-        data: slotsData,
-        isLoading: isLoadingSlots,
-        isFetching: isFetchingSlots
-    } = useGetSlotsQuery({ project: project.number });
+    const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
 
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
     const [suggesting, setSuggesting] = useState<{ faction: Faction; number: number }>();
@@ -218,11 +214,9 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                     {[...factionSlots.entries()].map(([faction, slots]) => (
                         <FactionCarousel
                             key={faction}
-                            project={project.number}
                             faction={faction}
                             slots={slots}
                             totalSlots={slotsData?.items.length ?? 0}
-                            isSlotsFetching={isFetchingSlots}
                             arrangingNumber={arranging?.number}
                             isLifted={!!arranging?.isLifted}
                             onNew={onNew}

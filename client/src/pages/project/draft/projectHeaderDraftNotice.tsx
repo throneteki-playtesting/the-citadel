@@ -1,4 +1,4 @@
-import { Button, Skeleton } from "@heroui/react";
+import { Button, Skeleton, Tooltip } from "@heroui/react";
 import Permission from "common/models/permissions";
 import PermissionGate from "../../../components/permissionGate";
 import { IProject } from "common/models/projects";
@@ -7,13 +7,19 @@ import { BaseElementProps } from "../../../types";
 import { useMemo, useState } from "react";
 import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
 import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
-import { faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faCircleQuestion, faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import StatusNotice from "../../../components/statusNotice";
 import { ChecklistItems } from "../../../components/checklist";
 import { AnimatePresence, motion } from "framer-motion";
 import { NOTICE_TRANSITION } from "../../../constants";
 import InitialiseProjectModal from "./initialiseProjectModal";
+import DraftingGuideModal from "./draftingGuideModal";
+import { usePermission } from "../../../hooks/usePermission";
+import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
+
+const DRAFTING_GUIDE_SEEN_KEY = "drafting-guide-seen";
 
 // One per checklist row, at varied widths so the placeholder reads as lines of text
 const SKELETON_ROW_WIDTHS = ["w-40", "w-36", "w-44", "w-56"];
@@ -22,6 +28,8 @@ export default function ProjectHeaderDraftNotice({ className, project }: Project
     const { data: cardsData } = useGetCardsQuery({ filter: { project: project.number, draft: true } });
     const { data: slotsData } = useGetSlotsQuery({ project: project.number });
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const canDraft = usePermission(Permission.CREATE_CARDS);
+    const guide = useTabGuideModal(DRAFTING_GUIDE_SEEN_KEY, canDraft);
 
     const requirements = useMemo(
         () => cardsData && slotsData && initialisationRequirements(project, slotsData.items, cardsData.items),
@@ -47,6 +55,24 @@ export default function ProjectHeaderDraftNotice({ className, project }: Project
                 )
             }
         >
+            {canDraft && (
+                <>
+                    <Tooltip content="Drafting Guide">
+                        <Button
+                            isIconOnly
+                            color="primary"
+                            variant="flat"
+                            size="sm"
+                            aria-label="Drafting Guide"
+                            className="shrink-0"
+                            onPress={guide.open}
+                        >
+                            <FontAwesomeIcon icon={faCircleQuestion} />
+                        </Button>
+                    </Tooltip>
+                    <DraftingGuideModal isOpen={guide.isOpen} onClose={guide.close} />
+                </>
+            )}
             <PermissionGate requires={Permission.INITIALISE_PROJECTS}>
                 <AnimatePresence initial={false}>
                     {isReady && (

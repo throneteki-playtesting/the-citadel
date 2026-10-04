@@ -49,6 +49,15 @@ export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const
 export const FLAT_BUTTON_CLASS = "transform-none";
 // A notice or its action arriving once something becomes true - quick, so it reads as a response rather than an event
 export const NOTICE_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
+// A block opening and closing by its height, taking the room it needs rather than appearing in it
+export const EXPAND_MOTION = {
+    initial: { height: 0, opacity: 0 },
+    animate: { height: "auto", opacity: 1 },
+    exit: { height: 0, opacity: 0 },
+    transition: NOTICE_TRANSITION
+} as const;
+// How long a dropped faction chip takes to reach its group
+export const CHIP_DROP_MS = 250;
 
 // Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
 export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };

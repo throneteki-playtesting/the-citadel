@@ -15,7 +15,7 @@ import { errorHandler } from "./errors";
 import { StatusCodes } from "http-status-codes";
 import { isCelebrateError } from "celebrate";
 import { isApiError } from "./types";
-import { checkPermissionDependencies } from "./startup/checkPermissionDependencies";
+import { checkStoredPermissions } from "./startup/checkStoredPermissions";
 
 const app = express();
 
@@ -53,8 +53,8 @@ app.use((req, res) => {
 // Data service is a requirement for server to function
 await dataService.ready;
 
-// Warns for any users or roles with missing dependencies for permissions they have (eg. if permission dependencies were updated)
-await checkPermissionDependencies();
+// Removes permissions the code no longer defines from users and roles, and warns of any missing a dependency
+await checkStoredPermissions();
 
 app.listen(process.env.SERVER_PORT, () => {
     logger.info(`Server running on port ${process.env.SERVER_PORT}: ${process.env.SERVER_HOST}`);

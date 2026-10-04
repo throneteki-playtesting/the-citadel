@@ -4,7 +4,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { FactionCardCount, IProject } from "common/models/projects";
+import { FactionCardCount, IProject, IProjectSave } from "common/models/projects";
 import { initialisationRequirements, unmetRequirement } from "common/models/initialisation";
 import {
     canChangeProjectOwners,
@@ -21,7 +21,15 @@ import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, xor } from "lodash-es";
 import { factions, IPlaytestCard, pickVisibleCards } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
-import { generateGetResponse, applyToFilter, loadProject, buildExpansionRelease, assertSyncableProject } from "@/utils";
+import {
+    generateGetResponse,
+    applyToFilter,
+    loadProject,
+    buildExpansionRelease,
+    assertSyncableProject,
+    readOpenSlots
+} from "@/utils";
+import { applySlots, requestedSlots } from "@/services/draftSlotService";
 import { ProjectStats } from "common/models/stats";
 import { computeProjectProgress } from "@/services/progressService";
 import { syncImage } from "@/rendering/hosting";
@@ -179,14 +187,18 @@ router.post(
         }
         next();
     }),
-    asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
-        const body = req.body;
+    asyncHandler<unknown, unknown, IProjectSave, unknown>(async (req, res) => {
+        const { slotCounts, ...body } = req.body;
         if (body.owners?.length && !canChangeProjectOwners(res)) {
             throw new PermissionErrorResponse();
         }
+        const slots = requestedSlots(body, slotCounts);
         body.cardCount = factions.reduce((acc, faction) => ({ ...acc, [faction]: 0 }), {} as FactionCardCount);
         body.releases = [];
-        const project = await dataService.projects.create(body);
+        let project = await dataService.projects.create(body);
+        if (slots) {
+            project = await applySlots(project, slots);
+        }
 
         await logActivity(LogCategory.PROJECT, "project.created", "<principal> created project <project>", {
             context: { project: projectSnapshot(project) }
@@ -213,7 +225,7 @@ router.post(
         }
         const [cards, slots] = await Promise.all([
             dataService.cards.read({ project: project.number }),
-            dataService.slots.read({ project: project.number })
+            readOpenSlots(project.number)
         ]);
         const unmet = unmetRequirement(initialisationRequirements(project, slots, cards));
         if (unmet) {
@@ -235,6 +247,9 @@ router.post(
 
         project.draft = false;
         project.active = true;
+
+        // Slots are fixed from here, so the closed ones have no way back and go for good
+        await dataService.slots.destroy({ project: project.number, closed: true });
 
         // Expansions ship as one release containing every card - seed it now, as slots are fixed once initialised
         if (project.type === "expansion") {
@@ -302,9 +317,10 @@ router.put(
         [Segments.PARAMS]: projectParams,
         [Segments.BODY]: Schemas.Project.Draft
     }),
-    asyncHandler<{ project: number }, unknown, IProject, unknown>(async (req, res) => {
+    asyncHandler<{ project: number }, unknown, IProjectSave, unknown>(async (req, res) => {
         const { project: number } = req.params;
-        let project = req.body;
+        const { slotCounts, ...body } = req.body;
+        let project: IProject = body;
 
         const newNumber = project.number !== number;
         project.number = number;
@@ -325,12 +341,24 @@ router.put(
         project.cardCount = previous.cardCount;
         project.releases = previous.releases;
 
+        if (slotCounts && !previous.draft) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Slots can only be opened or closed while a project is in draft"
+            );
+        }
+        const slots = previous.draft ? requestedSlots(project, slotCounts, previous) : undefined;
+
         // If the project number changes, we need to destroy + create, as its a primary key
         if (newNumber) {
             await dataService.projects.destroy({ number });
             project = await dataService.projects.create(project);
         } else {
             project = await dataService.projects.update(project);
+        }
+        if (slots) {
+            project = await applySlots(project, slots);
         }
 
         await logActivity(LogCategory.PROJECT, "project.updated", "<principal> updated project <project>", {
