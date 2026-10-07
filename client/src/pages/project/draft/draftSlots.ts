@@ -1,4 +1,5 @@
-import { Faction, factions, IPlaytestCard } from "common/models/cards";
+import { Faction, factions, IPlaytestCard, Type } from "common/models/cards";
+import { asksForPlotsOnly, SlotCondition } from "common/models/slotConditions";
 import { ISlot, orderByPreference, preferenceLabel } from "common/models/slots";
 import { renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { resourceIdFuncs } from "common/resources";
@@ -53,6 +54,13 @@ export function reuseUnchanged(previous: FactionSlots, next: FactionSlots): Fact
         result.set(faction, isSame && oldSlots ? oldSlots : reused);
     }
     return result;
+}
+
+// A slot lies on its side when everything in it is a plot - and while it is empty, when it asks for plots alone.
+// `incoming` is a card about to join it, so a slot can show what it is about to become
+export function isLandscapeSlot(conditions: SlotCondition[] | undefined, options: IPlaytestCard[], incoming?: Type) {
+    const types = [...options.map((card) => card.type), ...(incoming ? [incoming] : [])];
+    return types.length > 0 ? types.every((type) => type === "plot") : asksForPlotsOnly(conditions);
 }
 
 export function findDraftSlot(factionSlots: FactionSlots, number: number) {
@@ -115,6 +123,15 @@ export function getDragUid(card: IPlaytestCard) {
 // Cards mid-move, keyed at both ends - neither pile sets them down nor tosses them, as the drag already carries them
 const carriedCards = new Set<string>();
 export const isCarried = (card: IPlaytestCard) => carriedCards.has(resourceIdFuncs.card(card));
+
+// Cards flown in by hand are carried until they land, so the pile lets them straight in rather than setting them down
+export function carryArrivals(cards: IPlaytestCard[]) {
+    cards.forEach((card) => carriedCards.add(resourceIdFuncs.card(card)));
+}
+
+export function releaseArrivals(cards: IPlaytestCard[]) {
+    cards.forEach((card) => carriedCards.delete(resourceIdFuncs.card(card)));
+}
 
 export function carryCard(card: IPlaytestCard, to: { number: number; version: SemanticVersion }) {
     const sourceKey = resourceIdFuncs.card(card);

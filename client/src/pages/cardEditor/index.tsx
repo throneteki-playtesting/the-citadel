@@ -7,11 +7,12 @@ import { toThronetekiText } from "common/richText/toThroneteki";
 import { useRenderImageMutation } from "../../api";
 import { downloadBlob } from "../../utils";
 import CardEditor from "../../components/cardEditor";
-import { CardPreview } from "@agot/card-preview";
+import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
 import { addToast, Button } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFileImage } from "@fortawesome/free-solid-svg-icons";
 import usePageTitle from "../../hooks/usePageTitle";
+import { EDITOR_CARD_WIDTH } from "../../constants";
 
 export default function CardEditorPage() {
     usePageTitle("Card Editor");
@@ -64,7 +65,12 @@ export default function CardEditorPage() {
                 </Button>
             </div>
             <div className="flex flex-col md:flex-row gap-2">
-                <CardPreview card={renderCard} className="self-center md:self-start shrink-0 max-w-86" />
+                <EditorCardPreview
+                    card={renderCard}
+                    isPlot={card.type === "plot"}
+                    verticalWidth={EDITOR_CARD_WIDTH.page}
+                    className="self-center md:self-start"
+                />
                 <CardEditor onUpdate={setCard} inputOptions={{ flavor: "hidden", deckLimit: "hidden" }} />
             </div>
         </div>

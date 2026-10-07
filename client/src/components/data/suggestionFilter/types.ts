@@ -37,6 +37,15 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     segments?: SuggestionSegment[];
 };
 
+// Narrowed to plots alone, by type or by every segment - so the cards shown are all landscape, and can have the room for it
+export function isPlotsOnly(value: SuggestionFilterValue): boolean {
+    const types = value.type === undefined ? [] : [value.type].flat();
+    if (types.length > 0) {
+        return types.every((type) => type === "plot");
+    }
+    return !!value.segments?.length && value.segments.every((segment) => segment.type === "plot");
+}
+
 export const EMPTY_SUGGESTION_FILTER: SuggestionFilterValue = {};
 
 export function isSuggestionFilterActive(value: SuggestionFilterValue): boolean {

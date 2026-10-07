@@ -1,11 +1,12 @@
-import { Faction } from "./cards";
+import { isEqual, pick } from "lodash-es";
+import { Faction, factions } from "./cards";
 import type { SlotCondition } from "./slotConditions";
-import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
+import { areReleaseChecksClosed, ProjectTemplate, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
 import { IAuditable } from "./shared";
 import { IArtworkProgress } from "./artwork";
 import { isCheckStale, IRefinementCheck, IRefinementInquiry } from "./refinement";
-import { SemanticVersion } from "../utils";
+import { pruneEmpty, SemanticVersion } from "../utils";
 
 // The artwork lane lives in ./artwork, but is re-exported here so a slot's three lanes stay importable together
 export { artworkStatuses, artworkTypes } from "./artwork";
@@ -264,6 +265,25 @@ export function orderByPreference<C extends { version: SemanticVersion; updated:
 
 export const slotOptionKeys = ["conditions", "important", "notes"] as const;
 export type ISlotOptions = Pick<ISlot, (typeof slotOptionKeys)[number]>;
+
+// Whether a project's open slots are exactly what its template lays out: how many each faction has, and what each asks for
+export function matchesTemplate(template: ProjectTemplate, slots: ISlot[]) {
+    const laidOut = template.slots;
+    return (
+        !laidOut ||
+        factions.every((faction) => {
+            const own = slots
+                .filter((slot) => slot.faction === faction && !slot.closed)
+                .sort((a, b) => a.number - b.number);
+            return (
+                own.length === laidOut[faction].length &&
+                own.every((slot, position) =>
+                    isEqual(pruneEmpty(pick(slot, slotOptionKeys)) ?? {}, pruneEmpty(laidOut[faction][position]) ?? {})
+                )
+            );
+        })
+    );
+}
 
 export const DefaultSlotStatuses: SlotStatuses = {
     design: { status: "preview", checks: { release: [], refinement: [] }, inquiries: [] },

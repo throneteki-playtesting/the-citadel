@@ -14,6 +14,8 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     onFilterChange: (value: SuggestionFilterValue) => void;
     traits: string[];
     users: { discordId: string; displayname: string }[];
+    // Takes the faction choice out of the drawer, where whoever shows the bar has already settled it
+    isFactionFixed?: boolean;
     // Applies to the Advanced button only - disabling the search input itself would blur it mid-type.
     isDisabled?: boolean;
     // While debouncing or the resulting server search is in flight - shown in place of the clear button
@@ -31,6 +33,7 @@ const SuggestionFilterSearchBar = ({
     onFilterChange,
     traits,
     users,
+    isFactionFixed,
     isDisabled,
     isSearching
 }: SuggestionFilterSearchBarProps) => {
@@ -101,6 +104,7 @@ const SuggestionFilterSearchBar = ({
                         onChange={onFilterChange}
                         traits={traits}
                         users={users}
+                        isFactionFixed={isFactionFixed}
                         onClose={() => setIsOpen(false)}
                     />
                 </DrawerContent>

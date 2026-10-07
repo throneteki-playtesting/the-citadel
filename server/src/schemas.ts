@@ -38,6 +38,14 @@ function orderBy<T>(schema: Joi.ObjectSchema<T>, defaultValue?: Sort<T>) {
 
     return { orderBy: sortSchema };
 }
+// Every outcome a conditional field can settle on, through however many conditions are nested inside it
+function conditionalBranches(desc: Joi.Description): Joi.Description[] {
+    const whens = (desc.whens ?? []) as { then?: Joi.Description; otherwise?: Joi.Description }[];
+    return whens
+        .flatMap((when) => [when.then, when.otherwise])
+        .flatMap((branch) => (branch ? [branch, ...conditionalBranches(branch)] : []));
+}
+
 function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
     const desc = fieldSchema.describe();
 
@@ -139,36 +147,41 @@ function buildFieldFilterSchema(fieldSchema: Joi.Schema): Joi.Schema {
         }
 
         case "alternatives": {
-            // Handles JoiXDashNumber etc. - just allow the original schema or $exists
-            return Joi.alternatives()
-                .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))
-                .optional();
+            const value = fieldSchema.optional();
+            const matches = (desc.matches ?? []) as { schema?: Joi.Description }[];
+            const operators: Record<string, Joi.Schema> = { $exists: Joi.boolean() };
+            // A number that may also be "X" or "-" (eg. cost) compares as a number - Mongo never ranks a string against one
+            if (matches.some((match) => match.schema?.type === "number")) {
+                Object.assign(operators, {
+                    $gt: Joi.number(),
+                    $gte: Joi.number(),
+                    $lt: Joi.number(),
+                    $lte: Joi.number(),
+                    $ne: value,
+                    $in: Joi.array().items(value),
+                    $nin: Joi.array().items(value)
+                });
+            }
+            return Joi.alternatives().try(value, Joi.object(operators)).optional();
         }
 
         default: {
-            // A bare `Joi.when()` (eg. icons/plotStats) describes as "any" with no shape of its own -
-            // rebuild the object-shaped then/otherwise branch's fields from their Description instead.
-            const whens = desc.whens as { then?: Joi.Description; otherwise?: Joi.Description }[] | undefined;
-            if (whens) {
-                const nestedShape: Record<string, Joi.Schema> = {};
-                for (const when of whens) {
-                    for (const branch of [when.then, when.otherwise]) {
-                        if (branch?.type !== "object" || !branch.keys) {
-                            continue;
-                        }
-                        for (const [key, childDesc] of Object.entries(branch.keys)) {
-                            // First branch wins - icons/plotStats only ever have one object-shaped branch.
-                            if (!(key in nestedShape)) {
-                                nestedShape[key] = buildFieldFilterSchema(Joi.build(childDesc as Joi.Description));
-                            }
-                        }
-                    }
-                }
-                if (Object.keys(nestedShape).length > 0) {
-                    return Joi.alternatives()
-                        .try(Joi.object(nestedShape), Joi.object({ $exists: Joi.boolean() }))
-                        .optional();
-                }
+            // A bare `Joi.when()` (eg. icons, cost) describes as "any" with no shape of its own, so the filter is
+            // built from the branch which says what the field holds - the first, as none has two that differ
+            const branch = conditionalBranches(desc).find(({ type }) => type !== "any");
+            if (branch?.type === "object" && branch.keys) {
+                const nestedShape = Object.fromEntries(
+                    Object.entries(branch.keys as Record<string, Joi.Description>).map(([key, childDesc]) => [
+                        key,
+                        buildFieldFilterSchema(Joi.build(childDesc))
+                    ])
+                );
+                return Joi.alternatives()
+                    .try(Joi.object(nestedShape), Joi.object({ $exists: Joi.boolean() }))
+                    .optional();
+            }
+            if (branch) {
+                return buildFieldFilterSchema(Joi.build(branch));
             }
             return Joi.alternatives()
                 .try(fieldSchema, Joi.object({ $exists: Joi.boolean() }))

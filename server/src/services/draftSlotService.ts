@@ -1,9 +1,16 @@
 import { StatusCodes } from "http-status-codes";
 import { omit } from "lodash-es";
 import { Faction, factions } from "common/models/cards";
-import { IProject, projectTemplateOf, SlotCounts, templateCounts, TemplateSlots } from "common/models/projects";
+import {
+    CUSTOM_TEMPLATE,
+    IProject,
+    projectTemplateOf,
+    SlotCounts,
+    templateCounts,
+    TemplateSlots
+} from "common/models/projects";
 import { conditionsBlocker } from "common/models/slotConditions";
-import { DefaultSlotStatuses, ISlot, ISlotOptions, slotOptionKeys } from "common/models/slots";
+import { DefaultSlotStatuses, ISlot, ISlotOptions, matchesTemplate, slotOptionKeys } from "common/models/slots";
 import * as Schemas from "common/models/schemas";
 import { ApiErrorResponse } from "@/errors";
 import { dataService } from "@/services";
@@ -58,6 +65,26 @@ export function requestedSlots(project: IProject, slotCounts?: SlotCounts, previ
         assertTemplateSlots(template.name, template.slots);
     }
     return { counts: templateCounts(template), options: isChosen ? template.slots : undefined } as SlotRequest;
+}
+
+// A project whose slots stray from its template, however they came to, is no longer that template's
+export async function settleTemplate(project: IProject) {
+    const template = projectTemplateOf(project);
+    if (!template?.slots) {
+        return project;
+    }
+    const slots = await dataService.slots.read({ project: project.number });
+    if (matchesTemplate(template, slots)) {
+        return project;
+    }
+    const settled = await dataService.projects.update({ ...project, template: CUSTOM_TEMPLATE });
+    await logActivity(
+        LogCategory.PROJECT,
+        "project.updated",
+        `<principal> changed <project> to a custom template, as its slots no longer match ${template.name}`,
+        { context: { project: projectSnapshot(settled) } }
+    );
+    return settled;
 }
 
 // Opens, creates or closes slots to reach the counts - closing takes a faction's last slots, whatever they hold

@@ -1,5 +1,5 @@
 import { SemanticVersion } from "common/utils";
-import type { Faction } from "./cards";
+import { factions, type Faction, type Type as CardType } from "./cards";
 import type { ISlotOptions } from "./slots";
 import { IAuditable, ReleaseDate } from "./shared";
 
@@ -123,9 +123,51 @@ export type ProjectTemplate = {
 
 const customTemplate: ProjectTemplate = { name: "Custom", description: "Set each faction's slots yourself" };
 
+const character = (unique: boolean, min?: number, max?: number): ISlotOptions => ({
+    conditions: [
+        { stat: "type", types: ["character"] },
+        { stat: "unique", value: unique },
+        { stat: "cost", min, max }
+    ]
+});
+const typed = (type: CardType, stat?: "cost" | "income", min?: number, max?: number): ISlotOptions => ({
+    conditions: [{ stat: "type", types: [type] }, ...(stat ? [{ stat, min, max } as const] : [])]
+});
+const repeat = (count: number, slot: ISlotOptions) => Array.from({ length: count }, () => slot);
+
+const standardFactionSlots: ISlotOptions[] = [
+    character(true, 5),
+    character(true, 3, 5),
+    character(true, 0, 3),
+    character(false, 5),
+    character(false, 3, 5),
+    character(false, 0, 3),
+    typed("attachment", "cost", 1),
+    typed("attachment"),
+    typed("location", "cost", 1),
+    typed("location"),
+    ...repeat(2, typed("event"))
+];
+
+const standardNeutralSlots: ISlotOptions[] = [
+    ...standardFactionSlots,
+    ...repeat(2, typed("plot", "income", 5)),
+    ...repeat(4, typed("plot", "income", 3, 4)),
+    ...repeat(3, typed("plot", "income", 0, 3)),
+    ...repeat(3, typed("agenda"))
+];
+
+const standardTemplate: ProjectTemplate = {
+    name: "Standard",
+    description: "120 slots with standard options",
+    slots: Object.fromEntries(
+        factions.map((faction) => [faction, faction === "neutral" ? standardNeutralSlots : standardFactionSlots])
+    ) as TemplateSlots
+};
+
 // Per project type, as a cycle and an expansion are shaped differently - custom alone until the real ones are defined
 export const projectTemplates: Record<Type, Record<string, ProjectTemplate>> = {
-    cycle: { [CUSTOM_TEMPLATE]: customTemplate },
+    cycle: { [CUSTOM_TEMPLATE]: customTemplate, standard: standardTemplate },
     expansion: { [CUSTOM_TEMPLATE]: customTemplate }
 };
 

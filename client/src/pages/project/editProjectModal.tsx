@@ -26,7 +26,14 @@ import {
     useUpdateSlotOptionsMutation
 } from "../../api";
 import ProjectSlots from "./projectSlots";
-import { changedSlotOptions, groupErrors, slotCountsOf, SlotGroup, SlotOptionErrors } from "./slotGroups";
+import {
+    changedSlotOptions,
+    groupErrors,
+    groupsMatchTemplate,
+    slotCountsOf,
+    SlotGroup,
+    SlotOptionErrors
+} from "./slotGroups";
 import { EmojiSelect } from "../../components/emojiSelect";
 import { useWizard } from "../../components/wizard/context";
 import UserSelect from "../../components/data/userSelect";
@@ -150,10 +157,18 @@ export default function EditProjectModal({
         ]
     );
 
-    const onSlotGroupsChange = useCallback((groups: SlotGroup[]) => {
-        setSlotGroups(groups);
-        setSlotErrors({});
-    }, []);
+    // Slots which stray from the template are no longer its own
+    const templateSlots = templateDefinition?.slots;
+    const onSlotGroupsChange = useCallback(
+        (groups: SlotGroup[]) => {
+            setSlotGroups(groups);
+            setSlotErrors({});
+            if (templateSlots && !groupsMatchTemplate(groups, templateSlots)) {
+                setTemplate(CUSTOM_TEMPLATE);
+            }
+        },
+        [templateSlots]
+    );
 
     return (
         <Modal

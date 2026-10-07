@@ -304,6 +304,37 @@ async function unmarkInquiriesAddressed(project: number, number: number, version
     });
 }
 
+// A card as it is held while a draft - unpublished, and carrying nothing from wherever it was copied
+function asDraft<T extends IPlaytestCard>(card: T, code: T["code"]) {
+    card.code = code;
+    card.draft = true;
+    card.latest = false;
+    card.implemented = false;
+    if (card._metadata) {
+        delete card._metadata.github;
+        delete card._metadata.imageUrl;
+    }
+    return card;
+}
+
+// A suggestion is put forward once per project - its card is moved between slots, not added to a second
+async function assertSuggestionsUnused(project: number, cards: Pick<IPlaytestCard, "suggestionId">[]) {
+    const ids = cards.flatMap((card) => (card.suggestionId ? [card.suggestionId] : []));
+    if (ids.length === 0) {
+        return;
+    }
+    const [taken] = await dataService.cards.read({ project, suggestionId: { $in: ids } });
+    if (taken || new Set(ids).size < ids.length) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Data",
+            taken
+                ? `"${taken.name}" is already an option in slot #${taken.number} from the same suggestion`
+                : "The same suggestion cannot be added twice"
+        );
+    }
+}
+
 // Upsert draft card
 router.put(
     "/:project/:number/draft",
@@ -393,14 +424,7 @@ router.put(
                 : (inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion);
         }
 
-        card.code = code;
-        card.draft = true;
-        card.latest = false;
-        card.implemented = false;
-        if (card._metadata) {
-            delete card._metadata.github;
-            delete card._metadata.imageUrl;
-        }
+        asDraft(card, code);
 
         const process = async (action: "create" | "update") => {
             switch (action) {
@@ -424,6 +448,7 @@ router.put(
             // If version is 0.0.0, then it is being added as an option for that slot/number.
             // We distinct card options by incrementing the patch to the next available number
             if (card.version === NEW_OPTION_VERSION) {
+                await assertSuggestionsUnused(project.number, [card]);
                 const usedVersions = new Set(drafts.map((d) => d.version));
                 card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
@@ -454,6 +479,71 @@ router.put(
 
         res.status(StatusCodes.OK).json(card);
     })
+);
+
+// Add several options to a draft project's slot at once - the first given ends up on top
+router.post(
+    "/:project/:number/options",
+    validateRequest(Permission.CREATE_CARDS),
+    celebrate({
+        [Segments.PARAMS]: CardParams,
+        [Segments.BODY]: { cards: Joi.array().items(Schemas.PlaytestingCard.Draft).min(1).required() }
+    }),
+    loadProject,
+    asyncHandler<{ project: number; number: number }, IPlaytestCard[], { cards: IPlaytestCard[] }, unknown>(
+        async (req, res) => {
+            const { number } = req.params;
+            const project = res.locals.project as IProject;
+            if (!project.draft) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Project",
+                    "Options can only be added to a slot while its project is in draft"
+                );
+            }
+            const [[slot], drafts] = await Promise.all([
+                dataService.slots.read({ project: project.number, number }),
+                dataService.cards.read({ project: project.number, number, draft: true })
+            ]);
+            if (!slot) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    `Slot #${number} does not exist for project #${project.number}`
+                );
+            }
+            assertSlotOpen(slot);
+            await assertSuggestionsUnused(project.number, req.body.cards);
+
+            const code = parseCardCode(false, project.number, number);
+            const usedVersions = new Set(drafts.map((draft) => draft.version));
+            const cards = req.body.cards.map((card) => {
+                const version = nextAvailableOptionVersion(usedVersions);
+                if (!version) {
+                    throw new ApiErrorResponse(
+                        StatusCodes.NOT_ACCEPTABLE,
+                        "Invalid Slot",
+                        `Slot #${number} cannot hold any more options`
+                    );
+                }
+                usedVersions.add(version);
+                return asDraft({ ...card, project: project.number, number, version }, code);
+            });
+            await dataService.cards.create(cards, false);
+            const added = cards.map((card) => card.version);
+            await updateSlotPreferences(project.number, number, (preferences) => [
+                ...added,
+                ...preferences.filter((version) => !added.includes(version))
+            ]);
+
+            for (const card of cards) {
+                await logActivity(LogCategory.CARD, "card.draft.created", "<principal> created draft <card>", {
+                    context: { card: cardSnapshot(`${project.number}|${number}|${card.version}`, card) }
+                });
+            }
+            res.status(StatusCodes.OK).json(cards);
+        }
+    )
 );
 
 // Delete draft card

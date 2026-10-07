@@ -156,12 +156,44 @@ export function describeIcon(icon: ChallengeIcon, required: boolean) {
     return `${upperFirst(icon)} ${required ? "required" : "forbidden"}`;
 }
 
-// Where a card strays from its slot's conditions, worded for a warning beside it. X and "-" never stray
-export function slotConditionIssues(conditions: SlotCondition[] = [], card: ICard) {
+// Whether the slot asks for plots and nothing else, which is what makes it lie on its side while it is empty
+export function asksForPlotsOnly(conditions: SlotCondition[] = []) {
+    return conditions.some(
+        (condition) =>
+            condition.stat === "type" && condition.types.length > 0 && condition.types.every((type) => type === "plot")
+    );
+}
+
+// Where a card strays from its slot's conditions, worded for a warning beside it. X and "-" never stray.
+// A card still being written is `isLenient`: what hasn't been given a value yet isn't a stray, only what has
+export function slotConditionIssues(conditions: SlotCondition[] = [], card: ICard, isLenient = false) {
     return conditions.flatMap((condition) => {
-        const issue = conditionIssue(condition, card);
+        const issue = isLenient && isBlank(condition, card) ? undefined : conditionIssue(condition, card);
         return issue ? [issue] : [];
     });
+}
+
+// Whether a card could go into the slot with nothing to warn about - its faction's, and within every condition
+export function fitsSlot(slot: { faction: Faction; conditions?: SlotCondition[] }, card: ICard) {
+    return card.faction === slot.faction && slotConditionIssues(slot.conditions, card).length === 0;
+}
+
+function isBlank(condition: SlotCondition, card: ICard) {
+    switch (condition.stat) {
+        case "type":
+            return !card.type;
+        case "unique":
+        case "loyal":
+            return card[condition.stat] === undefined;
+        case "icons":
+            return !card.icons;
+        case "traits":
+            return !card.traits?.length;
+        case "keywords":
+            return !card.text;
+        default:
+            return false;
+    }
 }
 
 function conditionIssue(condition: SlotCondition, card: ICard): string | undefined {
@@ -174,7 +206,7 @@ function conditionIssue(condition: SlotCondition, card: ICard): string | undefin
         case "loyal":
             return !!card[condition.stat] === condition.value
                 ? undefined
-                : `The slot asks for ${condition.value ? "a" : "a non-"}${condition.stat} card`;
+                : `The slot asks for ${condition.value ? "a " : "a non-"}${condition.stat} card`;
         case "icons": {
             const wrong = challengeIcons.filter(
                 (icon) => condition.icons[icon] !== undefined && !!card.icons?.[icon] !== condition.icons[icon]
@@ -182,7 +214,7 @@ function conditionIssue(condition: SlotCondition, card: ICard): string | undefin
             return wrong.length === 0 ? undefined : `Challenge icons should be: ${describeCondition(condition)}`;
         }
         case "traits": {
-            const traits = card.traits.map((trait) => trait.toLowerCase());
+            const traits = (card.traits ?? []).map((trait) => trait.toLowerCase());
             return condition.traits.some((trait) => traits.includes(trait.toLowerCase()))
                 ? undefined
                 : `The slot asks for ${joinOr(condition.traits)}`;

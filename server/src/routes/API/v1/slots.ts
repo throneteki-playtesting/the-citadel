@@ -36,6 +36,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { areReleaseChecksClosed, IProject } from "common/models/projects";
+import { settleTemplate } from "@/services/draftSlotService";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
@@ -494,6 +495,7 @@ router.put(
         }
 
         const updated = await dataService.slots.update({ ...omit(slot, slotOptionKeys), ...req.body });
+        await settleTemplate(project);
 
         await logActivity(
             LogCategory.SLOT,

@@ -148,10 +148,11 @@ const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof ba
     }
 };
 
-// A save which opens or closes slots changes every slot list as well as the project itself
+// Saving a draft project may lay out its slots - choosing a template, opening or closing them - so every slot list
+// is refetched along with the project itself
 const projectSaveTags = (result: IProject | undefined, project: Pick<IProjectSave, "slotCounts">) => [
     ...generateFor(result, "project"),
-    ...(project.slotCounts ? [{ type: "slot" as const, id: undefined }] : [])
+    ...(result?.draft || project.slotCounts ? [{ type: "slot" as const, id: undefined }] : [])
 ];
 
 const api = createApi({
@@ -371,6 +372,17 @@ const api = createApi({
                 return { url, method: "PUT", body };
             },
             // The slot too, since an update can stamp the inquiries it claims to address
+            invalidatesTags: (result, _error, { project, number }) => [
+                ...generateFor(result, "card"),
+                { type: "slot" as const, id: `${project}|${number}` }
+            ]
+        }),
+        addSlotOptions: builder.mutation<IPlaytestCard[], { project: number; number: number; cards: IPlaytestCard[] }>({
+            query: ({ project, number, cards }) => {
+                const url = buildUrl(`cards/${project}/${number}/options`);
+                return { url, method: "POST", body: { cards } };
+            },
+            // The slot too, as its preference order takes the new options in
             invalidatesTags: (result, _error, { project, number }) => [
                 ...generateFor(result, "card"),
                 { type: "slot" as const, id: `${project}|${number}` }
@@ -811,7 +823,8 @@ const api = createApi({
                 const url = buildUrl(`projects/${project}/slots/${number}/options`);
                 return { url, method: "PUT", body: options };
             },
-            invalidatesTags: (result) => generateFor(result, "slot")
+            // A slot which no longer matches its project's template turns the project custom
+            invalidatesTags: (result) => [...generateFor(result, "slot"), { type: "project" as const, id: undefined }]
         }),
         // The artwork lane alone - gated by READ_ARTWORKS/EDIT_ARTWORKS rather than READ_SLOTS/EDIT_SLOTS
         getSlotArtwork: builder.query<ISlotArtworkDetail, { project: number; number: number }>({
@@ -1330,6 +1343,7 @@ export const {
     useGetPreviousCardQuery,
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
+    useAddSlotOptionsMutation,
     useDeleteDraftMutation,
     useMoveCardMutation,
 

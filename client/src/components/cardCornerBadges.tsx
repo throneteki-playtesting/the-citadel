@@ -7,12 +7,14 @@ import { cornerBadgeDiscFillClasses, cornerBadgeFadeClasses } from "../constants
 
 const RING_CLASSES = {
     primary: "ring-primary/70",
-    warning: "ring-warning/70"
+    warning: "ring-warning/70",
+    danger: "ring-danger/70"
 } as const;
 
 const ICON_CLASSES = {
     primary: "text-primary",
-    warning: "text-warning"
+    warning: "text-warning",
+    danger: "text-danger"
 } as const;
 
 export type CornerBadgeProps = {

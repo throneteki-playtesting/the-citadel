@@ -1,33 +1,11 @@
-import { useEffect, useState } from "react";
-import { useGetSuggestionFilterOptionsQuery, useGetSuggestionsQuery } from "../../api";
-import CardGrid, { CardGridQueryState } from "../../components/cardGrid";
-import SortSelect from "../../components/sortSelect";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faAngleLeft } from "@fortawesome/free-solid-svg-icons";
-import { useAuth } from "../../hooks/useAuth";
-import useDebounce from "../../hooks/useDebounce";
+import SuggestionBrowser from "./suggestionBrowser";
 import SuggestionCardLink from "./suggestionCardLink";
-import {
-    isSuggestionFilterActive,
-    SuggestionFilterSearchBar,
-    SuggestionFilterValue
-} from "../../components/data/suggestionFilter";
-import { SortOption, sortOptions } from "./suggestionSortOptions";
-import useSuggestionServerFilter, { suggestionListQueryExtras, suggestionSortOrderBy } from "./suggestionServerFilter";
-import { ICardSuggestionFilterable } from "common/models/cards";
-import type { IGetRequest } from "server/types";
+import { SuggestionFilterValue } from "../../components/data/suggestionFilter";
+import { SortOption } from "./suggestionSortOptions";
 
-const PER_PAGE = 20;
-const SEARCH_DEBOUNCE_MS = 500;
-
-const EMPTY_GRID_STATE: CardGridQueryState<ICardSuggestionFilterable> = {
-    items: [],
-    isInitialLoading: true,
-    isRefreshing: false,
-    isFetching: false
-};
-
-// A fully controlled component - filter/search/sort/unseen live in the dashboard's own state (see
+// The dashboard's "All Suggestions" view - filter/search/sort/unseen live in the dashboard's own state (see
 // index.tsx), so a stat card can jump straight into a preset view via a plain state update.
 const SuggestionsGrid = ({
     animationKey,
@@ -38,51 +16,18 @@ const SuggestionsGrid = ({
     sortBy,
     onSortChange,
     onBack
-}: SuggestionsGridProps) => {
-    const { user } = useAuth();
-    const isFilterActive = isSuggestionFilterActive(filter);
-
-    // Keystrokes live here, not in index.tsx's state, so typing doesn't re-render the whole dashboard.
-    const [rawSearch, setRawSearch] = useState(search);
-    // Re-seeds from the parent only on a fresh browse session (openAll bumps animationKey), adjusted
-    // during render per React's own reset-on-key-change pattern rather than clobbering mid-type via an effect.
-    const [prevAnimationKey, setPrevAnimationKey] = useState(animationKey);
-    if (animationKey !== prevAnimationKey) {
-        setPrevAnimationKey(animationKey);
-        setRawSearch(search);
-    }
-
-    // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
-    // search text stays visible in the (now tucked-away) search box but no longer applies
-    const { value: debouncedSearch, isPending: isSearchDebouncing } = useDebounce(rawSearch.trim(), SEARCH_DEBOUNCE_MS);
-    const effectiveSearch = isFilterActive ? "" : debouncedSearch;
-
-    // Reports the settled value up to index.tsx (for the URL) once typing pauses - onSearchChange is
-    // `setSearch` from useState, which React guarantees is referentially stable, so this can't loop.
-    useEffect(() => {
-        onSearchChange(debouncedSearch);
-    }, [debouncedSearch, onSearchChange]);
-
-    const serverFilter = useSuggestionServerFilter(filter, effectiveSearch, { currentUserId: user?.discordId });
-    const orderBy = suggestionSortOrderBy[sortBy];
-    const queryExtras = suggestionListQueryExtras(filter);
-
-    // CardGrid's `query` prop only takes IGetRequest<T> - suggestions' own unseen/myReactions extras are
-    // closed over here. Named with a `use` prefix (not useCallback) so it reads as the hook it is.
-    function useSuggestionsQuery(arg: IGetRequest<ICardSuggestionFilterable>) {
-        return useGetSuggestionsQuery({ ...arg, ...queryExtras });
-    }
-
-    // Mirrored out of CardGrid (which owns fetching/paging) - needed here for the search box's spinner.
-    // The filter dropdown's own option lists come from a separate, full-universe query below.
-    const [gridState, setGridState] = useState(EMPTY_GRID_STATE);
-    const { data: filterOptions } = useGetSuggestionFilterOptionsQuery();
-    const isBusy = gridState.isInitialLoading || gridState.isRefreshing;
-    const isSearching = isSearchDebouncing || (isBusy && gridState.isFetching && !!effectiveSearch);
-
-    return (
-        <div className="w-full flex flex-col gap-2">
-            <div className="pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+}: SuggestionsGridProps) => (
+    <div className="w-full pt-3">
+        <SuggestionBrowser
+            resetKey={animationKey}
+            filter={filter}
+            onFilterChange={onFilterChange}
+            search={search}
+            onSearchChange={onSearchChange}
+            sortBy={sortBy}
+            onSortChange={onSortChange}
+            animate
+            leading={
                 <button
                     type="button"
                     onClick={onBack}
@@ -90,51 +35,12 @@ const SuggestionsGrid = ({
                 >
                     <FontAwesomeIcon icon={faAngleLeft} /> Overview
                 </button>
-                <div className="flex flex-wrap justify-end items-center gap-2">
-                    <SuggestionFilterSearchBar
-                        search={rawSearch}
-                        onSearchChange={setRawSearch}
-                        filter={filter}
-                        onFilterChange={onFilterChange}
-                        traits={filterOptions?.traits ?? []}
-                        users={filterOptions?.submitters ?? []}
-                        isDisabled={isBusy}
-                        isSearching={isSearching}
-                        className="min-w-40"
-                    />
-                    <SortSelect
-                        options={sortOptions}
-                        value={sortBy}
-                        isDisabled={isBusy}
-                        onChange={onSortChange}
-                        className="w-44 shrink-0"
-                    />
-                </div>
-            </div>
-            <CardGrid<ICardSuggestionFilterable>
-                key={animationKey}
-                query={useSuggestionsQuery}
-                queryArgs={{ filter: serverFilter, orderBy }}
-                resetKey={queryExtras}
-                perPage={PER_PAGE}
-                animate
-                keyExtractor={(suggestion) => suggestion.id ?? ""}
-                onStateChange={setGridState}
-                emptyContent={
-                    effectiveSearch ? (
-                        <>No suggestions match &ldquo;{effectiveSearch}&rdquo;.</>
-                    ) : (
-                        "No suggestions match the current filters."
-                    )
-                }
-                errorContent="Something went wrong loading suggestions."
-                endContent={<>You&rsquo;ve seen everything that matches.</>}
-            >
-                {(suggestion) => <SuggestionCardLink suggestion={suggestion} showLikesBadge={sortBy === "likes"} />}
-            </CardGrid>
-        </div>
-    );
-};
+            }
+        >
+            {(suggestion) => <SuggestionCardLink suggestion={suggestion} showLikesBadge={sortBy === "likes"} />}
+        </SuggestionBrowser>
+    </div>
+);
 
 type SuggestionsGridProps = {
     animationKey: number;

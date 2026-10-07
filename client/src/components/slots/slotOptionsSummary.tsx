@@ -87,6 +87,7 @@ export default function SlotOptionsSummary({ className, options }: SlotOptionsSu
             <TouchTooltip
                 content={
                     <div className="flex flex-col gap-1 py-1 max-w-64 text-xs">
+                        {conditions.length > 0 && <span className="font-cinzel text-sm">Slot needs:</span>}
                         {conditions.flatMap(tooltipLines).map(({ key, token, text }) => (
                             <span key={key} className="flex items-center gap-2">
                                 <span className="inline-flex w-5 shrink-0 justify-center">{token}</span>

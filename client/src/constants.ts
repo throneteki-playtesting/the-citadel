@@ -95,11 +95,18 @@ export const CARRIED_FOR_MS = 1000;
 
 export const DRAFT_STACK_TILT = { amount: 2, alternate: true, variance: 0.5, animateNew: false };
 export const DRAFT_ROW_HEIGHT_CLASS = "h-72 sm:h-80 md:h-[22rem]";
+// The row's height and a plot slot's width at each breakpoint, as variables so a slot can be sized from either
+export const DRAFT_SLOT_VARIABLES_CLASS =
+    "[--row:18rem] sm:[--row:20rem] md:[--row:22rem] [--plot:16rem] sm:[--plot:18rem] md:[--plot:20rem]";
 export const DRAFT_PLOT_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
 export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12";
 
 // The card face as card-preview draws it, before scaling to fit
 export const CARD_BASE = { width: 240, height: 333, cornerRadius: 12 } as const;
+// The width a vertical card is drawn at beside the inputs of each card editor
+export const EDITOR_CARD_WIDTH = { modal: 256, suggestion: 288, page: 344 } as const;
+// How much wider a plot lies than a vertical card - the same card on its side
+export const PLOT_RATIO = CARD_BASE.height / CARD_BASE.width;
 export const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
 export const LANDSCAPE_ASPECT_CLASS = "aspect-[333/240]";
 

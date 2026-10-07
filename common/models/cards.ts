@@ -298,6 +298,8 @@ export type ISuggestionsListQuery = {
     myReactions?: string;
     /** Only legacy suggestions a project card may already have been developed from - MANAGE_SUGGESTIONS_ARCHIVE only */
     developed?: boolean;
+    /** Only suggestions which fit a draft project's slot, named as "{project}:{slot}" - see fitsSlot */
+    fitsSlot?: string;
 };
 
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who

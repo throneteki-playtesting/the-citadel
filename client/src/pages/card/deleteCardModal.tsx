@@ -30,8 +30,12 @@ const DeleteCardModal = ({
         <ConfirmModal
             isOpen={isOpen}
             isLoading={isDeleting}
-            title={`Delete draft version for ${card?.name}`}
-            content={"This is permanent and cannot be undone."}
+            title={`Delete "${card?.name}"?`}
+            content={
+                card?.suggestionId
+                    ? "This removes the card from this project. The original suggestion will remain."
+                    : "This card will be deleted permanently and cannot be undone."
+            }
             confirmContent="Delete"
             cancelContent="Back"
             onConfirm={onSubmit}

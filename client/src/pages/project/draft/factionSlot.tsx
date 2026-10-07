@@ -1,23 +1,24 @@
 import { memo, ReactNode, useCallback, useMemo, useState } from "react";
 import { Button, Tooltip } from "@heroui/react";
+import { motion } from "framer-motion";
 import { CardBlank } from "@agot/card-preview";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faListOl, faSliders, faStarOfLife } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
-import { IPlaytestCard } from "common/models/cards";
+import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import { thronesColors } from "common/utils";
 import CardStack from "../../../components/cardStack";
 import PermissionGate from "../../../components/permissionGate";
 import RadialMenu from "../../../components/radialMenu";
 import { usePermission } from "../../../hooks/usePermission";
+import { useReducedMotion } from "../../../hooks/useReducedMotion";
+import { useStableCallback } from "../../../hooks/useStableCallback";
 import {
-    DRAFT_PLOT_WIDTH_CLASS,
+    DRAFT_SLOT_VARIABLES_CLASS,
     DRAFT_STACK_TILT,
     FLAT_BUTTON_CLASS,
-    LANDSCAPE_ASPECT_CLASS,
-    PORTRAIT_ASPECT_CLASS,
     RADIAL_ITEM_CLASS,
     suggestionIcons
 } from "../../../constants";
@@ -26,7 +27,17 @@ import SlotFrame, { SlotAction } from "./slotFrame";
 import DraftCardContent from "./draftCardContent";
 import { CardHandlers } from "./useCardActions";
 import { DragData, useSlotDrag } from "./draftDragStore";
-import { DraftSlot, getDragUid, isCarried, isUprightPlot, nextSelection, projectedRank } from "./draftSlots";
+import { frameShape, QUARTER_TURN, SHAPE_TRANSITION, SHAPE_TRANSITION_CLASS, slotShape, blankShape } from "./slotShape";
+import { setSlotMenuOpen, useIsSlotMenuOpen } from "./slotMenuStore";
+import {
+    DraftSlot,
+    getDragUid,
+    isCarried,
+    isLandscapeSlot,
+    isUprightPlot,
+    nextSelection,
+    projectedRank
+} from "./draftSlots";
 
 export type SlotHandlers = CardHandlers & {
     onNew: (slot: DraftSlot) => void;
@@ -35,17 +46,6 @@ export type SlotHandlers = CardHandlers & {
     onEditOptions: (slot: DraftSlot) => void;
     registerPile: (number: number, element: HTMLElement | null) => void;
 };
-
-// The frame holds the row's height, and its header strip (h-6 + gap-1) comes out of the card's share of it
-function frameShapeClass(isOnlyPlots: boolean) {
-    return isOnlyPlots ? classNames(DRAFT_PLOT_WIDTH_CLASS, "self-start") : "h-full";
-}
-
-function slotShapeClass(isOnlyPlots: boolean) {
-    return isOnlyPlots
-        ? classNames("w-full", LANDSCAPE_ASPECT_CLASS)
-        : classNames("h-[calc(100%-1.75rem)]", PORTRAIT_ASPECT_CLASS);
-}
 
 const FactionSlot = memo(function FactionSlot({
     slot,
@@ -60,7 +60,7 @@ const FactionSlot = memo(function FactionSlot({
     onEdit,
     onDelete
 }: FactionSlotProps) {
-    const { isHeld, isReceiving, leavingVersion } = useSlotDrag(slot.number);
+    const { isHeld, isReceiving, leavingVersion, incomingType } = useSlotDrag(slot.number);
     const topIndex = Math.max(0, slot.options.length - 1);
     const [selectedIndex, setSelectedIndex] = useState(topIndex);
     // Bottom to top, matching the stack's own order
@@ -83,7 +83,7 @@ const FactionSlot = memo(function FactionSlot({
                 canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
                 canReadSuggestions && {
                     key: "suggestion",
-                    label: "Add suggestion",
+                    label: "Add suggestions",
                     icon: suggestionIcons.base,
                     onPress: () => onSuggestion(slot)
                 },
@@ -104,26 +104,41 @@ const FactionSlot = memo(function FactionSlot({
                 : undefined,
         [hasArrange, slot, onArrange]
     );
-    const onNewHere = useCallback(() => onNew(slot), [onNew, slot]);
-    const onSuggestionHere = useCallback(() => onSuggestion(slot), [onSuggestion, slot]);
+    const onNewHere = useStableCallback(() => onNew(slot));
+    const onSuggestionHere = useStableCallback(() => onSuggestion(slot));
+    const pileRef = useCallback(
+        (element: HTMLElement | null) => registerPile(slot.number, element),
+        [registerPile, slot.number]
+    );
 
     const stackedCards = [...slot.options].reverse();
     const topCard = stackedCards[Math.min(selectedIndex, stackedCards.length - 1)];
-    const hasNonPlot = slot.options.some((card) => card.type !== "plot");
-    const isOnlyPlots = slot.options.length > 0 && !hasNonPlot;
+    // A card held over the slot shows it as it would be with that card in it - its shape, and plots standing upright
+    // beside one which isn't a plot
+    const hasNonPlot =
+        slot.options.some((card) => card.type !== "plot") || (incomingType !== undefined && incomingType !== "plot");
+    const isLandscape = isLandscapeSlot(slot.slot.conditions, slot.options, incomingType);
     return (
         <SlotFrame
             slot={slot.slot}
             primaryAction={arrangeAction}
             actions={slotActions}
-            className={frameShapeClass(isOnlyPlots)}
+            className={classNames(DRAFT_SLOT_VARIABLES_CLASS, "self-start", SHAPE_TRANSITION_CLASS)}
+            style={frameShape(isLandscape)}
         >
-            <DroppableSlot slot={slot} isOnlyPlots={isOnlyPlots} isHeld={isHeld} className="relative">
+            <DroppableSlot slot={slot} isLandscape={isLandscape} isHeld={isHeld} className="relative">
                 <div className="absolute inset-0">
-                    <EmptyCardSlot slot={slot} onNew={onNewHere} onSuggestion={onSuggestionHere} />
+                    <EmptyCardSlot
+                        slotNumber={slot.number}
+                        faction={slot.faction}
+                        isEmpty={slot.options.length === 0}
+                        isLandscape={isLandscape}
+                        onNew={onNewHere}
+                        onSuggestion={onSuggestionHere}
+                    />
                 </div>
                 <div
-                    ref={(element) => registerPile(slot.number, element)}
+                    ref={pileRef}
                     className={classNames(
                         "absolute inset-0 transition-transform ease-out",
                         isHeld ? "scale-95 duration-[250ms]" : "duration-200",
@@ -177,7 +192,7 @@ type FactionSlotProps = SlotHandlers & {
     isLifted: boolean;
 };
 
-function DroppableSlot({ className, style, slot, isOnlyPlots, isHeld, children }: DroppableSlotProps) {
+function DroppableSlot({ className, slot, isLandscape, isHeld, children }: DroppableSlotProps) {
     const { setNodeRef, isOver } = useDroppable({
         id: `slot-${slot.number}`,
         data: { faction: slot.faction, number: slot.number }
@@ -186,12 +201,12 @@ function DroppableSlot({ className, style, slot, isOnlyPlots, isHeld, children }
         <div
             ref={setNodeRef}
             className={classNames(
-                slotShapeClass(isOnlyPlots),
-                "shrink-0 rounded-lg outline-2 outline-dashed outline-offset-2 transition-colors duration-200",
+                "shrink-0 rounded-lg outline-2 outline-dashed outline-offset-2",
+                SHAPE_TRANSITION_CLASS,
                 isOver && !isHeld ? "outline-primary" : "outline-transparent",
                 className
             )}
-            style={style}
+            style={slotShape(isLandscape)}
         >
             {children}
         </div>
@@ -200,7 +215,7 @@ function DroppableSlot({ className, style, slot, isOnlyPlots, isHeld, children }
 
 type DroppableSlotProps = BaseElementProps & {
     slot: DraftSlot;
-    isOnlyPlots: boolean;
+    isLandscape: boolean;
     /** Pressed but not yet moved - not a drag until it is, so no slot offers itself */
     isHeld: boolean;
 };
@@ -234,10 +249,17 @@ type DraggableCardProps = {
     children: ReactNode;
 };
 
-const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }: EmptyCardSlotProps) {
-    const [isActive, setIsActive] = useState(false);
-    const isEmpty = slot.options.length === 0;
-    const isOnlyPlots = !isEmpty && slot.options.every((card) => card.type === "plot");
+const EmptyCardSlot = memo(function EmptyCardSlot({
+    slotNumber,
+    faction,
+    isEmpty,
+    isLandscape,
+    onNew,
+    onSuggestion
+}: EmptyCardSlotProps) {
+    const isActive = useIsSlotMenuOpen(slotNumber);
+    const setIsActive = useCallback((isOpen: boolean) => setSlotMenuOpen(slotNumber, isOpen), [slotNumber]);
+    const prefersReducedMotion = useReducedMotion();
     // Mounted only while it can be seen, so a page of filled slots isn't a page of hidden buttons
     const [isMenuMounted, setIsMenuMounted] = useState(isEmpty);
     if (isEmpty && !isMenuMounted) {
@@ -245,11 +267,20 @@ const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }:
     }
 
     return (
-        <div className="relative h-full flex justify-center items-center">
-            <div className="relative w-full">
+        <div className="relative h-full">
+            <motion.div
+                initial={false}
+                animate={{ rotate: isLandscape ? QUARTER_TURN : 0 }}
+                transition={prefersReducedMotion ? { duration: 0 } : SHAPE_TRANSITION}
+                className={classNames(
+                    "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+                    SHAPE_TRANSITION_CLASS
+                )}
+                style={blankShape(isLandscape)}
+            >
                 <CardBlank
                     className={classNames({
-                        "transition-all duration-200 ease-in-out not-hover:brightness-75 hover:brightness-100":
+                        "transition-[filter] duration-200 ease-in-out not-hover:brightness-75 hover:brightness-100":
                             !isActive,
                         "brightness-100": isActive
                     })}
@@ -257,16 +288,10 @@ const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }:
                     classNames={{
                         inner: "flex flex-col justify-center items-center border-12 bg-default-100 brightness-50"
                     }}
-                    styles={{
-                        inner: {
-                            borderColor: thronesColors[slot.faction],
-                            ...(isOnlyPlots && { width: "333px", height: "240px" })
-                        }
-                    }}
+                    styles={{ inner: { borderColor: thronesColors[faction] } }}
                     onClick={() => !isActive && setIsActive(true)}
-                    orientation={isOnlyPlots ? "horizontal" : undefined}
                 />
-            </div>
+            </motion.div>
             <div
                 className={classNames(
                     "z-0 absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-500",
@@ -294,14 +319,17 @@ const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }:
                                     color="primary"
                                     size="sm"
                                     className={classNames(RADIAL_ITEM_CLASS, FLAT_BUTTON_CLASS)}
-                                    onPress={onNew}
+                                    onPress={() => {
+                                        setIsActive(false);
+                                        onNew();
+                                    }}
                                 >
                                     <FontAwesomeIcon icon={faStarOfLife} />
                                 </Button>
                             </Tooltip>
                         </PermissionGate>
                         <PermissionGate requires={Permission.READ_SUGGESTIONS}>
-                            <Tooltip content="Choose suggestion">
+                            <Tooltip content="Choose suggestions">
                                 <Button
                                     isIconOnly
                                     radius="full"
@@ -309,7 +337,10 @@ const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }:
                                     color="primary"
                                     size="sm"
                                     className={classNames(RADIAL_ITEM_CLASS, FLAT_BUTTON_CLASS)}
-                                    onPress={onSuggestion}
+                                    onPress={() => {
+                                        setIsActive(false);
+                                        onSuggestion();
+                                    }}
                                 >
                                     <FontAwesomeIcon icon={suggestionIcons.base} />
                                 </Button>
@@ -323,7 +354,11 @@ const EmptyCardSlot = memo(function EmptyCardSlot({ slot, onNew, onSuggestion }:
 });
 
 type EmptyCardSlotProps = {
-    slot: DraftSlot;
+    slotNumber: number;
+    faction: Faction;
+    isEmpty: boolean;
+    /** Lies on its side - the slot's plots, or the plot about to be put in it */
+    isLandscape: boolean;
     onNew: () => void;
     onSuggestion: () => void;
 };

@@ -1,5 +1,5 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
-import { IPlaytestCard } from "common/models/cards";
+import { IPlaytestCard, Type } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
 
 export type DragData = { card: IPlaytestCard; slotNumber: number };
@@ -63,5 +63,8 @@ export function useSlotDrag(number: number) {
         const move = pendingMove(state);
         return move?.from === number ? move.version : undefined;
     });
-    return { isHeld, isReceiving, leavingVersion };
+    const incomingType = useDragState((state): Type | undefined =>
+        pendingMove(state)?.to === number ? state.active?.card.type : undefined
+    );
+    return { isHeld, isReceiving, leavingVersion, incomingType };
 }

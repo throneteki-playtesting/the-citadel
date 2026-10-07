@@ -1,58 +1,26 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
-import { animate, motion } from "framer-motion";
-import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { animate } from "framer-motion";
 import classNames from "classnames";
 import { CardPreview } from "@agot/card-preview";
 import { IPlaytestCard } from "common/models/cards";
-import { preferenceLabel } from "common/models/slots";
 import { factionNames, SemanticVersion } from "common/utils";
 import { useUpdateSlotPreferencesMutation } from "../../../api";
 import { showApiErrorToast } from "../../../api/errors";
 import ThronesIcon from "../../../components/thronesIcon";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
-import { useDragSensors } from "../../../hooks/useDragSensors";
-import { CARD_BASE, EASE_STANDARD } from "../../../constants";
+import { useStableCallback } from "../../../hooks/useStableCallback";
+import { slotConditionIssues } from "common/models/slotConditions";
+import { DraftCardBadges } from "./draftCardContent";
+import { ControlMorph } from "./flyingCard";
 import { DraftSlot, isUprightPlot, renderDraftCard } from "./draftSlots";
-import { dropAnimation } from "../releases/releaseDnd";
+import { FLIGHT, LIT, pileCardPose, towardsPile } from "./pilePose";
+import SortableCardGrid, { SortableCard } from "./sortableCardGrid";
 
-const FLIGHT = { duration: 0.45, ease: EASE_STANDARD } as const;
 const STAGGER_S = 0.04;
 const FADE = { duration: 0.2 } as const;
 // The modal's own parts fade by class, in step with FADE
 const FADE_CLASS = "transition-opacity duration-200";
-const LIT = "brightness(1)";
-
-type Pose = { cx: number; cy: number; width: number; rotate: number; filter: string; zIndex: string };
-
-// Where a card rests in its pile, read off the stack itself - box, offset and tilt, shading, and what it lies under
-function pileCardPose(pile: HTMLElement, stackIndex: number): Pose {
-    const box = pile.getBoundingClientRect();
-    const card = pile.querySelector<HTMLElement>(`[data-stack-index="${stackIndex}"]`);
-    const style = card ? getComputedStyle(card) : undefined;
-    const matrix = new DOMMatrix(style?.transform ?? "none");
-    return {
-        cx: box.left + box.width / 2 + matrix.e,
-        cy: box.top + box.height / 2 + matrix.f,
-        width: box.width,
-        rotate: (Math.atan2(matrix.b, matrix.a) * 180) / Math.PI,
-        filter: style && style.filter !== "none" ? style.filter : LIT,
-        zIndex: card?.style.zIndex ?? ""
-    };
-}
-
-function towardsPile(rect: DOMRect, pose: Pose) {
-    return {
-        x: pose.cx - (rect.left + rect.width / 2),
-        y: pose.cy - (rect.top + rect.height / 2),
-        scale: pose.width / rect.width,
-        rotate: pose.rotate,
-        filter: pose.filter
-    };
-}
 
 // The pile lifted off the table to be put in order, then laid back down - drawn here while its originals hide
 export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }: ArrangeModalProps) {
@@ -167,6 +135,7 @@ export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }
                         slot={slot}
                         cardWidth={cardWidth}
                         isShown={isShown}
+                        isClosing={isClosing}
                         flightNodes={flightNodes.current}
                     />
                 </ModalBody>
@@ -180,11 +149,8 @@ export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }
     );
 }
 
-function ArrangeOptions({ project, slot, cardWidth, isShown, flightNodes }: ArrangeOptionsProps) {
+function ArrangeOptions({ project, slot, cardWidth, isShown, isClosing, flightNodes }: ArrangeOptionsProps) {
     const [updatePreferences] = useUpdateSlotPreferencesMutation();
-    const [activeVersion, setActiveVersion] = useState<SemanticVersion>();
-    const [overVersion, setOverVersion] = useState<SemanticVersion>();
-    const sensors = useDragSensors();
 
     // Held locally and moved the moment a card drops, so it lands where it was let go rather than where it was
     const saved = slot.options.map((card) => card.version);
@@ -195,26 +161,18 @@ function ArrangeOptions({ project, slot, cardWidth, isShown, flightNodes }: Arra
         setOrder(saved);
     }
 
-    // Where every card would sit if dropped now - so each rank reads as it would, while still being dragged
-    const projected =
-        activeVersion && overVersion
-            ? arrayMove(order, order.indexOf(activeVersion), order.indexOf(overVersion))
-            : order;
-    const cardOf = (version: string) => slot.options.find((card) => card.version === version);
     const hasNonPlot = slot.options.some((card) => card.type !== "plot");
-    const active = activeVersion ? cardOf(activeVersion) : undefined;
+    const cards = useMemo(
+        () =>
+            order.flatMap((version) => {
+                const card = slot.options.find((option) => option.version === version);
+                return card ? [{ id: version, card }] : [];
+            }),
+        [order, slot.options]
+    );
 
-    const endDrag = () => {
-        setActiveVersion(undefined);
-        setOverVersion(undefined);
-    };
-
-    const onDragEnd = async () => {
-        const next = projected;
-        endDrag();
-        if (next.join() === order.join()) {
-            return;
-        }
+    const onReorder = useStableCallback(async (ids: string[]) => {
+        const next = ids as SemanticVersion[];
         setOrder(next);
         try {
             await updatePreferences({ project, number: slot.number, preferences: next }).unwrap();
@@ -222,125 +180,77 @@ function ArrangeOptions({ project, slot, cardWidth, isShown, flightNodes }: Arra
             setOrder(saved);
             showApiErrorToast(err, { title: "Failed to rearrange options" });
         }
-    };
-
-    return (
-        <DndContext
-            sensors={sensors}
-            onDragStart={({ active }) => setActiveVersion(active.id as SemanticVersion)}
-            onDragOver={({ over }) => setOverVersion(over?.id as SemanticVersion | undefined)}
-            onDragEnd={onDragEnd}
-            onDragCancel={endDrag}
-        >
-            <SortableContext items={order} strategy={rectSortingStrategy}>
-                <div className="relative flex flex-wrap justify-center gap-4">
-                    {order.flatMap((version) => {
-                        const card = cardOf(version);
-                        return card
-                            ? [
-                                  <SortableOption
-                                      key={version}
-                                      card={card}
-                                      rank={projected.indexOf(version)}
-                                      hasNonPlot={hasNonPlot}
-                                      cardWidth={cardWidth}
-                                      isShown={isShown}
-                                      flightRef={(node) => {
-                                          if (node) {
-                                              flightNodes.set(version, node);
-                                          } else {
-                                              flightNodes.delete(version);
-                                          }
-                                      }}
-                                  />
-                              ]
-                            : [];
-                    })}
-                </div>
-            </SortableContext>
-            {createPortal(
-                <DragOverlay dropAnimation={dropAnimation}>
-                    {active && (
-                        <div className="flex cursor-grabbing flex-col gap-1" style={{ width: cardWidth }}>
-                            <RankLabel rank={projected.indexOf(active.version)} />
-                            <OptionCard
-                                card={active}
-                                rank={projected.indexOf(active.version)}
-                                hasNonPlot={hasNonPlot}
-                            />
-                        </div>
-                    )}
-                </DragOverlay>,
-                document.body
-            )}
-        </DndContext>
-    );
-}
-
-// The card face's corner, scaled from its base size to the width it is drawn at
-function cornerRadius(width: number, isLandscape: boolean) {
-    return (CARD_BASE.cornerRadius * width) / (isLandscape ? CARD_BASE.height : CARD_BASE.width);
-}
-
-// Its cell holds still while the card in it moves, so the outline beneath marks a place a card can go
-function SortableOption({ card, rank, hasNonPlot, cardWidth, isShown, flightRef }: SortableOptionProps) {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-        id: card.version,
-        disabled: !isShown
     });
-    return (
-        <div className="relative" style={{ width: cardWidth }}>
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isShown ? 1 : 0 }}
-                transition={FADE}
-                className="absolute inset-x-0 bottom-0 top-5 border-2 border-dashed border-foreground/20"
-                style={{ borderRadius: cornerRadius(cardWidth, card.type === "plot" && !hasNonPlot) }}
+    const renderCard = useCallback(
+        ({ card }: SortableCard, rank: number, isOverlay: boolean) => (
+            <OptionCard
+                card={card}
+                rank={rank}
+                hasNonPlot={hasNonPlot}
+                issues={slotConditionIssues(slot.slot.conditions, card)}
+                isClosing={isClosing}
+                isOverlay={isOverlay}
             />
-            <div
-                ref={setNodeRef}
-                {...attributes}
-                {...listeners}
-                style={{ transform: CSS.Transform.toString(transform), transition }}
-                className={classNames("relative flex flex-col gap-1 touch-manipulation select-none", {
-                    "cursor-grab": isShown,
-                    "opacity-0": isDragging
-                })}
-            >
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: isShown ? 1 : 0 }} transition={FADE}>
-                    <RankLabel rank={rank} />
-                </motion.div>
-                <div ref={flightRef} className="relative">
-                    <OptionCard card={card} rank={rank} hasNonPlot={hasNonPlot} />
-                </div>
-            </div>
-        </div>
+        ),
+        [hasNonPlot, slot.slot.conditions, isClosing]
     );
-}
 
-function RankLabel({ rank }: { rank: number }) {
     return (
-        <span
-            className={classNames(
-                "block font-cinzel text-xs uppercase tracking-wide",
-                rank === 0 ? "text-primary" : "text-foreground/60"
-            )}
-        >
-            {preferenceLabel(rank)}
-        </span>
-    );
-}
-
-function OptionCard({ card, rank, hasNonPlot }: { card: IPlaytestCard; rank: number; hasNonPlot: boolean }) {
-    return (
-        <CardPreview
-            orientation={isUprightPlot(card, hasNonPlot) ? "vertical" : undefined}
-            card={renderDraftCard(card, rank, card.number)}
+        <SortableCardGrid
+            cards={cards}
+            cardWidth={cardWidth}
+            hasNonPlot={hasNonPlot}
+            isShown={isShown}
+            flightNodes={flightNodes}
+            renderCard={renderCard}
+            onReorder={onReorder}
         />
     );
 }
 
-type ArrangedSlot = Pick<DraftSlot, "number" | "faction" | "options">;
+// The stack's menu is on the card as it leaves the pile, fading as the cards lift and returning as they are laid back
+function OptionCard({ card, rank, hasNonPlot, issues, isClosing, isOverlay }: OptionCardProps) {
+    return (
+        <>
+            <div className="pointer-events-none absolute inset-0 z-10">
+                <DraftCardBadges
+                    issues={issues}
+                    actions={[]}
+                    trailing={
+                        isOverlay ? undefined : (
+                            <ControlMorph
+                                from="menu"
+                                to="none"
+                                isMorphing={!isClosing}
+                                transition={
+                                    isClosing
+                                        ? { ...FLIGHT, delay: FADE.duration }
+                                        : { ...FLIGHT, delay: rank * STAGGER_S }
+                                }
+                            />
+                        )
+                    }
+                />
+            </div>
+            <CardPreview
+                orientation={isUprightPlot(card, hasNonPlot) ? "vertical" : undefined}
+                card={renderDraftCard(card, rank, card.number)}
+            />
+        </>
+    );
+}
+
+type OptionCardProps = {
+    card: IPlaytestCard;
+    rank: number;
+    hasNonPlot: boolean;
+    issues: string[];
+    isClosing: boolean;
+    /** Lifted by the cursor, by which time the menu has already gone */
+    isOverlay: boolean;
+};
+
+type ArrangedSlot = Pick<DraftSlot, "number" | "faction" | "options" | "slot">;
 
 type ArrangeModalProps = {
     project: number;
@@ -359,14 +269,7 @@ type ArrangeOptionsProps = {
     cardWidth: number;
     /** The modal around the cards is on show - not while they fly in or out, when nothing can be dragged */
     isShown: boolean;
+    /** The cards are being laid back on the pile */
+    isClosing: boolean;
     flightNodes: Map<string, HTMLElement>;
-};
-
-type SortableOptionProps = {
-    card: IPlaytestCard;
-    rank: number;
-    hasNonPlot: boolean;
-    cardWidth: number;
-    isShown: boolean;
-    flightRef: (node: HTMLDivElement | null) => void;
 };

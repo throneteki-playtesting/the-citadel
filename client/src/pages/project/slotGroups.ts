@@ -64,6 +64,14 @@ export function templateSchemes(slots: TemplateSlots) {
     ) as Record<Faction, FactionScheme>;
 }
 
+// Whether every faction's slots are exactly as a template lays them out
+export function groupsMatchTemplate(groups: SlotGroup[], slots: TemplateSlots) {
+    const schemes = templateSchemes(slots);
+    return groups.every((group) =>
+        group.factions.every((faction) => isEqual(comparable(group), comparable(schemes[faction])))
+    );
+}
+
 // A project with no slots of its own yet starts as the houses together and Neutral apart
 export function startingGroups(): SlotGroup[] {
     return [

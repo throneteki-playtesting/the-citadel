@@ -20,6 +20,7 @@ import ConfirmModal from "../../components/confirmModal";
 import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
+import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
 import { getBaseCardValues, renderCardSuggestion } from "common/utils";
 import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
@@ -47,7 +48,7 @@ import SectionTitle from "../../components/sectionTitle";
 import SectionBlurb from "../../components/sectionBlurb";
 import StatusNotice from "../../components/statusNotice";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { EASE_STANDARD } from "../../constants";
+import { EASE_STANDARD, EDITOR_CARD_WIDTH } from "../../constants";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@fortawesome/free-solid-svg-icons";
@@ -1132,20 +1133,13 @@ const EditSuggestionModal = ({
                                             )}
                                         >
                                             <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-2 pb-3">
-                                                <div
-                                                    className={classNames(
-                                                        "w-full mx-auto",
-                                                        isPlot
-                                                            ? "max-w-[calc(18rem*333/240)] aspect-[333/240]"
-                                                            : "max-w-72 aspect-[240/333]"
-                                                    )}
-                                                >
-                                                    <CardPreview
-                                                        card={renderedCard}
-                                                        orientation={isPlot ? "horizontal" : "vertical"}
-                                                        rounded
-                                                    />
-                                                </div>
+                                                <EditorCardPreview
+                                                    card={renderedCard}
+                                                    isPlot={isPlot}
+                                                    verticalWidth={EDITOR_CARD_WIDTH.suggestion}
+                                                    isClamped={false}
+                                                    className="mx-auto"
+                                                />
                                                 <ChecklistRail results={checklistResults} suggestion={suggestion} />
                                             </div>
                                             {isSavedDraft ? (

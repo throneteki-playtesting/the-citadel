@@ -6,7 +6,7 @@ import classNames from "classnames";
 import { slotConditionIssues } from "common/models/slotConditions";
 import Crossfade from "../../../components/crossfade";
 import { rotatingDropAnimation } from "../../../animations";
-import { DRAFT_PLOT_WIDTH_CLASS, LANDSCAPE_ASPECT_CLASS } from "../../../constants";
+import { DRAFT_SLOT_VARIABLES_CLASS, LANDSCAPE_ASPECT_CLASS } from "../../../constants";
 import { DraftCardBadges } from "./draftCardContent";
 import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
 import { DragData, useDragState } from "./draftDragStore";
@@ -49,8 +49,9 @@ function DraggedCard({ drag, source, over, actions }: DraggedCardProps) {
         <div
             className={classNames(
                 "relative cursor-grabbing",
-                card.type === "plot" ? classNames(DRAFT_PLOT_WIDTH_CLASS, LANDSCAPE_ASPECT_CLASS) : "size-full"
+                card.type === "plot" ? classNames(DRAFT_SLOT_VARIABLES_CLASS, LANDSCAPE_ASPECT_CLASS) : "size-full"
             )}
+            style={card.type === "plot" ? { width: "calc(var(--plot) - 0.5rem - 2px)" } : undefined}
         >
             <DraftCardBadges issues={slotConditionIssues(slot?.slot.conditions, card)} actions={actions} />
             <Crossfade contentKey={`${number}|${rank}|${card.faction}`}>

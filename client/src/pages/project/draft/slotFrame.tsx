@@ -2,7 +2,7 @@ import { Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip 
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
-import { memo } from "react";
+import { CSSProperties, memo } from "react";
 import classNames from "classnames";
 import { ISlot } from "common/models/slots";
 import { BaseElementProps } from "../../../types";
@@ -10,9 +10,10 @@ import SlotOptionsSummary from "../../../components/slots/slotOptionsSummary";
 import { FLAT_BUTTON_CLASS } from "../../../constants";
 
 // The slot beneath its cards - what it asks for and what can be done with it, apart from any one card in it
-export default function SlotFrame({ className, slot, primaryAction, actions, children }: SlotFrameProps) {
+export default function SlotFrame({ className, style, slot, primaryAction, actions, children }: SlotFrameProps) {
     return (
         <div
+            style={style}
             className={classNames(
                 "shrink-0 flex flex-col gap-1 rounded-lg border border-content3 bg-content2/40 p-1",
                 className
@@ -87,7 +88,8 @@ export type SlotAction = {
     onPress: () => void;
 };
 
-type SlotFrameProps = Omit<BaseElementProps, "style"> & {
+type SlotFrameProps = BaseElementProps & {
+    style?: CSSProperties;
     slot: ISlot;
     /** The one action worth a button of its own, beside the menu rather than inside it */
     primaryAction?: SlotAction;

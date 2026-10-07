@@ -16,7 +16,8 @@ import {
     suggestionReactionBlockReason
 } from "common/models/cards";
 import { dataService, thronesDbCardPoolService } from "@/services";
-import { hasPermission, SemanticVersion, validate } from "common/utils";
+import { hasPermission, SemanticVersion, validate, withProjectOwnership } from "common/utils";
+import { fitsSlot } from "common/models/slotConditions";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
 import { Principal } from "common/models/auth";
@@ -75,7 +76,9 @@ const getQuerySchema = (
     unseen: Joi.boolean(),
     myReactions: Joi.string(),
     // Handled by applyPossiblyDevelopedFilter below - it depends on the cards collection, not the suggestion itself
-    developed: Joi.boolean()
+    developed: Joi.boolean(),
+    // Handled by applySlotFitFilter below - the conditions are the slot's, read where they are kept
+    fitsSlot: Joi.string().regex(/^\d+:\d+$/)
 });
 
 // Resolves unseen/myReactions against the principal's discordId, merged into `req.query.filter` - NOT
@@ -393,6 +396,39 @@ const applyPossiblyDevelopedFilter = asyncHandler<
     next();
 });
 
+// Narrows to suggestions which fit a slot, by the rule that warns of a misfit once a card is in it. X and "-" pass
+// any range, which a query cannot say - so every suggestion of the slot's faction is asked, and the ids filtered on
+const applySlotFitFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, _res, next) => {
+    if (!req.query.fitsSlot) {
+        next();
+        return;
+    }
+    const [projectNumber, number] = req.query.fitsSlot.split(":").map(Number);
+    const [[project], [slot]] = await Promise.all([
+        dataService.projects.read({ number: projectNumber }),
+        dataService.slots.read({ project: projectNumber, number })
+    ]);
+    if (!project || !slot) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_FOUND,
+            "Not Found",
+            `Slot #${number} does not exist for project #${projectNumber}`
+        );
+    }
+    if (!hasPermission(withProjectOwnership(getContext().principal, project), Permission.READ_SLOTS)) {
+        throw new PermissionErrorResponse();
+    }
+    const candidates = await dataService.suggestions.read({ card: { faction: slot.faction } });
+    const ids = candidates.filter((suggestion) => fitsSlot(slot, suggestion.card)).map((suggestion) => suggestion.id);
+    req.query.filter = applyToFilter(req.query.filter, { id: { $in: ids } });
+    next();
+});
+
 // Read suggestions
 router.get(
     "/",
@@ -404,6 +440,7 @@ router.get(
     restrictListDraftVisibility,
     applyReactionVisibilityFilter,
     applyPossiblyDevelopedFilter,
+    applySlotFitFilter,
     asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
