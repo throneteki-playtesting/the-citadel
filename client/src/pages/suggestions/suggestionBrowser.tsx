@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
+import classNames from "classnames";
 import AnimatedHeight from "../../components/animatedHeight";
 import { ICardSuggestion, ICardSuggestionFilterable, ISuggestionsListQuery } from "common/models/cards";
 import type { IGetRequest } from "server/types";
@@ -43,6 +44,7 @@ export default function SuggestionBrowser({
     emptyContent,
     animate,
     scrollClassName,
+    className,
     children
 }: SuggestionBrowserProps) {
     const { user } = useAuth();
@@ -109,7 +111,7 @@ export default function SuggestionBrowser({
     );
 
     return (
-        <div className="flex w-full min-h-0 flex-col gap-2">
+        <div className={classNames("flex w-full min-h-0 flex-col gap-2", className)}>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 {leading}
                 <div className="flex flex-wrap justify-end items-center gap-2 sm:ml-auto">
@@ -162,5 +164,6 @@ type SuggestionBrowserProps = {
     animate?: boolean;
     /** Puts the grid in a region of its own which scrolls past this max-height, leaving the controls above it in view */
     scrollClassName?: string;
+    className?: string;
     children: (suggestion: ICardSuggestion) => ReactNode;
 };

@@ -11,7 +11,13 @@ const ROW_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
 /** 0-many illustrative example strings for a reward/punishment type - the same simple row-per-entry
  *  add/edit/delete shape as PivotPointsInput, rather than the free-typed chips this used to be. */
-const ExamplesInput = memo(function ExamplesInput({ className, style, value, onChange, isDisabled }: ExamplesInputProps) {
+const ExamplesInput = memo(function ExamplesInput({
+    className,
+    style,
+    value,
+    onChange,
+    isDisabled
+}: ExamplesInputProps) {
     const [draft, setDraft] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 

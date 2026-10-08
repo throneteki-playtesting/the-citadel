@@ -300,6 +300,8 @@ export type ISuggestionsListQuery = {
     developed?: boolean;
     /** Only suggestions which fit a draft project's slot, named as "{project}:{slot}" - see fitsSlot */
     fitsSlot?: string;
+    /** Only the suggestions in a draft project's pool, named by its number - for those who can draft in it */
+    pooledIn?: number;
 };
 
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who

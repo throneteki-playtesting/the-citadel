@@ -19,7 +19,7 @@ export function useCardActions({ onEdit, onDelete }: CardHandlers) {
             canEdit && { key: "edit", label: "Edit", icon: faPencil, onPress: () => onEdit(card) },
             canDelete && {
                 key: "delete",
-                label: "Delete",
+                label: card.suggestionId ? "Remove" : "Delete",
                 icon: faTrash,
                 className: "text-danger",
                 onPress: () => onDelete(card)

@@ -30,8 +30,36 @@ export type IncomingCard = {
 export default function IncomingCards({ cards, pile, isReady, onDone }: IncomingCardsProps) {
     const nodes = useRef(new Map<number, HTMLElement>());
     const hasFlown = useRef(false);
+    // Off once the cards have landed, when the pile's copies are shown again
+    const isHiding = useRef(true);
     const [isMorphing, setIsMorphing] = useState(false);
     const [stackWidth] = useState(() => Math.min(pile.clientWidth, pile.clientHeight));
+    // What the pile held before the cards came - so the copies which are theirs can be told from the rest
+    const [heldBefore] = useState(() => pile.querySelectorAll("[data-stack-index]").length);
+
+    // The pile's own copies are unseen from the moment they arrive, which may be well before the cards set off - they
+    // wait while the page scrolls to the slot - or they would show in the pile first, then vanish to be flown in
+    useLayoutEffect(() => {
+        const hide = () => {
+            if (!isHiding.current) {
+                return;
+            }
+            const count = pile.querySelectorAll("[data-stack-index]").length;
+            if (count < heldBefore + cards.length) {
+                return;
+            }
+            cards.forEach(({ rank }) => {
+                pile.querySelector<HTMLElement>(`[data-stack-index="${count - 1 - rank}"]`)?.style.setProperty(
+                    "visibility",
+                    "hidden"
+                );
+            });
+        };
+        hide();
+        const observer = new MutationObserver(hide);
+        observer.observe(pile, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    }, [pile, cards, heldBefore]);
 
     // The pile's own copies are in by now, unseen until these land on them in the pose they were dealt
     useLayoutEffect(() => {
@@ -68,6 +96,7 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
             return [travel, animate(node, { filter: [LIT, shade] }, timing)];
         });
         void Promise.all(flights).then(() => {
+            isHiding.current = false;
             resting.forEach((home) => home.style.removeProperty("visibility"));
             onDone();
         });

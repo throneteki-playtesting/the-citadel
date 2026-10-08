@@ -45,6 +45,26 @@ export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
 
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
 export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
+
+// The most a project's pool is read at once - more than it will ever hold
+export const POOL_READ_LIMIT = 1000;
+export const POOL_CARD_GRID_CLASS =
+    "grid grid-cols-2 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]";
+export const POOL_STATUS_FADE = { duration: 0.18 } as const;
+
+// How a card let go over the pool ends: how long it waits on the server, then fades away or shrinks into the pool
+export const POOL_DROP_HOLD_LIMIT_MS = 8000;
+export const POOL_DROP_FADE_MS = 150;
+export const POOL_DROP_TAKE_IN_MS = 250;
+export const POOL_DROP_START_PATIENCE_MS = 500;
+
+// A scroll to a slot is over once the slot has held still this many frames - or this long has passed
+export const SCROLL_STILL_FRAMES = 6;
+export const SCROLL_PATIENCE_MS = 2000;
+
+// How much of a slot a carousel must leave showing for it to be dropped on
+export const MIN_VISIBLE_SLOT = 0.5;
+
 // Undoes HeroUI's transform-gpu - a compositor layer per button, which a page of hundreds pays for on every frame
 export const FLAT_BUTTON_CLASS = "transform-none";
 // A notice or its action arriving once something becomes true - quick, so it reads as a response rather than an event
@@ -76,6 +96,9 @@ export const avatarBubbleClasses =
 // A card-corner badge steps back while the card under it is hovered, and forward again when it is itself
 export const cornerBadgeFadeClasses =
     "transition-[opacity,background-color] duration-200 group-hover:opacity-50 hover:!opacity-100";
+
+// Where a sort-specific badge sits over a card
+export const cornerBadgeBottomRightClasses = "absolute bottom-0 right-0 m-2 z-10";
 
 // A badge's disc lets the art show through until the badge itself is hovered, when it goes solid for reading
 export const cornerBadgeDiscFillClasses =

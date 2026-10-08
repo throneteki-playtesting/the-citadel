@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { TouchPopover } from "../../components/touchPopover";
 import CardCornerBadges, { CornerBadgeTooltip } from "../../components/cardCornerBadges";
-import ReactionCount from "../../components/reactionCount";
+import SuggestionLikesBadge from "../../components/suggestionLikesBadge";
 import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { useAuth } from "../../hooks/useAuth";
 import { useCanHover } from "../../hooks/useCanHover";
@@ -35,8 +35,8 @@ import {
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
 // link target, so a badge row needs both stopPropagation AND preventDefault to stop its own clicks.
 
-// Badges stay rare - draft/approved are infrequent states worth a corner badge; Likes only earns one
-// when the grid is actually sorted by Likes, mirroring ProjectContentCard's showReviewBadge.
+// Badges stay rare - draft/approved are infrequent states worth a corner badge; Likes only earns one, in the opposite
+// corner, when the grid is actually sorted by Likes, mirroring ProjectContentCard's showReviewBadge.
 const QUICK_REACT_OPTIONS: { type: ReactionType; label: string; hint: string; icon: IconDefinition }[] = [
     { type: "like", label: "Like", hint: "Support this suggestion", icon: faThumbsUp },
     { type: "dislike", label: "Dislike", hint: "Flag a problem with this suggestion", icon: faThumbsDown },
@@ -321,15 +321,10 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                         iconClassName: "text-success",
                         title: "Approved",
                         description: `by ${approver?.displayname ?? "…"}`
-                    },
-                    showLikesBadge && {
-                        key: "likes",
-                        icon: faThumbsUp,
-                        title: `${likeCount} like${likeCount !== 1 ? "s" : ""}`,
-                        count: <ReactionCount count={likeCount} />
                     }
                 ]}
             />
+            <SuggestionLikesBadge suggestion={suggestion} isShown={!!showLikesBadge} />
             <SuggestionCardPreview
                 suggestion={suggestion}
                 orientation={isPlot ? "horizontal" : "vertical"}

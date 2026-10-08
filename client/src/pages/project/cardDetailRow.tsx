@@ -14,7 +14,11 @@ import ThronesIcon from "../../components/thronesIcon";
 import { TouchTooltip } from "../../components/touchTooltip";
 import RichText from "../../components/richText";
 import CardImage from "../../components/cardImage";
-import { formatPlotModifier, PlotModifiers, splitPlotModifiers } from "../../components/cardEditor/components/plotModifiers";
+import {
+    formatPlotModifier,
+    PlotModifiers,
+    splitPlotModifiers
+} from "../../components/cardEditor/components/plotModifiers";
 import { DraftActions } from "../card/cardDetail";
 import ReleaseCheckButton from "./releases/releaseCheckButton";
 

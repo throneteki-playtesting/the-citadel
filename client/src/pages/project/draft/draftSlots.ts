@@ -1,9 +1,11 @@
 import { Faction, factions, IPlaytestCard, Type } from "common/models/cards";
-import { asksForPlotsOnly, SlotCondition } from "common/models/slotConditions";
+import { asksForPlotsOnly, fitsSlot, SlotCondition, slotConditionIssues } from "common/models/slotConditions";
 import { ISlot, orderByPreference, preferenceLabel } from "common/models/slots";
 import { renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { resourceIdFuncs } from "common/resources";
 import { CARRIED_FOR_MS } from "../../../constants";
+import type { CardControl } from "./flyingCard";
+import type { IncomingCard } from "./incomingCards";
 
 export type DraftSlot = {
     faction: Faction;
@@ -36,6 +38,10 @@ export function buildFactionSlots(cards: IPlaytestCard[] = [], slots: ISlot[] = 
     }
     return map;
 }
+
+// Where a card dropped on its faction goes: the first open slot it fits, other than the one it is already in
+export const firstFittingSlot = (slots: DraftSlot[] | undefined, card: IPlaytestCard, excluding?: number) =>
+    slots?.find((slot) => slot.number !== excluding && !slot.slot.closed && fitsSlot(slot.slot, card));
 
 const isSameDraftSlot = (a: DraftSlot, b: DraftSlot) =>
     a.slot === b.slot && a.options.length === b.options.length && a.options.every((card, i) => card === b.options[i]);
@@ -100,6 +106,24 @@ export function nextSelection(previous: string[], next: string[], selected: numb
 // Beside other card types a plot is turned upright, to fit the same portrait frame
 export const isUprightPlot = (card: IPlaytestCard, hasNonPlot: boolean) => card.type === "plot" && hasNonPlot;
 
+// A card just added to a slot, on its way from where it was drawn to the top of the slot's pile
+export function incomingCardFor(
+    card: IPlaytestCard,
+    slot: DraftSlot,
+    from: DOMRect,
+    fromControl: CardControl
+): IncomingCard {
+    return {
+        card,
+        rank: 0,
+        from,
+        isFromUpright: false,
+        isUpright: isUprightPlot(card, card.type !== "plot" || slot.options.some((option) => option.type !== "plot")),
+        issues: slotConditionIssues(slot.slot.conditions, card, true),
+        fromControl
+    };
+}
+
 export function renderDraftCard(card: IPlaytestCard, rank: number, slotNumber: number) {
     return renderPlaytestingCard(card, {
         top: preferenceLabel(rank),
@@ -131,6 +155,13 @@ export function carryArrivals(cards: IPlaytestCard[]) {
 
 export function releaseArrivals(cards: IPlaytestCard[]) {
     cards.forEach((card) => carriedCards.delete(resourceIdFuncs.card(card)));
+}
+
+// A card taken out of its pile by hand, which the pile has nothing to do with - the hand has it
+export function carryAway(card: IPlaytestCard) {
+    const key = resourceIdFuncs.card(card);
+    carriedCards.add(key);
+    setTimeout(() => carriedCards.delete(key), CARRIED_FOR_MS);
 }
 
 export function carryCard(card: IPlaytestCard, to: { number: number; version: SemanticVersion }) {

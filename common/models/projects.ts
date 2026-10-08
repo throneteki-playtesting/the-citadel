@@ -109,6 +109,15 @@ export type SlotCounts = Partial<FactionCardCount>;
 // A project as it is saved - the counts are not stored, but opened, created or closed towards by the server
 export type IProjectSave = IProject & { slotCounts?: SlotCounts };
 
+/** A suggestion set aside in a draft project, to be drawn on for its slots - it stays pooled once placed */
+export interface IPoolEntry {
+    project: number;
+    suggestion: string;
+    /** Discord id of whoever pooled it */
+    addedBy: string;
+    added: Date;
+}
+
 export const CUSTOM_TEMPLATE = "custom";
 
 /** Each faction's slots in order, one entry per slot - what it asks for, or {} where it asks nothing */

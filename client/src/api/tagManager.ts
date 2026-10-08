@@ -28,7 +28,8 @@ export type PendingTag = { type: ApiTag; id: string | number | undefined };
 // Resource types whose id encodes a hierarchy can have their "list" queries scoped to it; field order must match the id's prefix order.
 const listScopeFields: Partial<Record<ApiTag, string[]>> = {
     card: ["project", "number"],
-    slot: ["project"]
+    slot: ["project"],
+    pool: ["project"]
 };
 
 // Stops at the first non-exact field (eg. a { $ne: ... } operator), since only exact equality folds into a scope key.

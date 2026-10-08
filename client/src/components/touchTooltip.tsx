@@ -11,12 +11,23 @@ import {
     type MouseEvent as ReactMouseEvent
 } from "react";
 import { Tooltip, type TooltipProps } from "@heroui/react";
+import classNames from "classnames";
 
 type TouchTooltipProps = TooltipProps & {
     keepOpen?: boolean;
+    // Whether hovering the tooltip itself holds it open. Touch is unaffected, as there is no hover.
+    isInteractive?: boolean;
 };
 
-export function TouchTooltip({ onOpenChange, children, content, keepOpen = false, ...props }: TouchTooltipProps) {
+export function TouchTooltip({
+    onOpenChange,
+    children,
+    content,
+    keepOpen = false,
+    isInteractive = false,
+    classNames: tooltipClassNames,
+    ...props
+}: TouchTooltipProps) {
     const [isOpen, setIsOpenState] = useState(false);
     const isOpenRef = useRef(false);
     const isTouchRef = useRef(false);
@@ -105,7 +116,16 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
     );
 
     return (
-        <Tooltip {...props} content={tooltipContent} isOpen={keepOpen || isOpen} onOpenChange={handleTooltipOpenChange}>
+        <Tooltip
+            {...props}
+            classNames={{
+                ...tooltipClassNames,
+                base: classNames(tooltipClassNames?.base, !isInteractive && "[@media(hover:hover)]:pointer-events-none")
+            }}
+            content={tooltipContent}
+            isOpen={keepOpen || isOpen}
+            onOpenChange={handleTooltipOpenChange}
+        >
             {child}
         </Tooltip>
     );

@@ -9,6 +9,7 @@ import { usePermission } from "../../hooks/usePermission";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectProgressMeter from "../../components/projectProgressMeter";
+import DraftingGuideButton from "./draft/draftingGuideButton";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
@@ -150,9 +151,15 @@ const ProjectHeader = ({
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
                         {project.name}
                     </div>
-                    <div className="hidden md:block w-64 shrink-0 pb-1">
-                        <ProjectProgressMeter project={project.number} />
-                    </div>
+                    {project.draft ? (
+                        <div className="flex shrink-0 items-center pb-1">
+                            <DraftingGuideButton />
+                        </div>
+                    ) : (
+                        <div className="hidden md:block w-64 shrink-0 pb-1">
+                            <ProjectProgressMeter project={project.number} />
+                        </div>
+                    )}
                 </div>
             </div>
             {project.description && (
@@ -160,9 +167,11 @@ const ProjectHeader = ({
                     <RichText html={project.description} />
                 </div>
             )}
-            <div className="md:hidden">
-                <ProjectProgressMeter project={project.number} />
-            </div>
+            {!project.draft && (
+                <div className="md:hidden">
+                    <ProjectProgressMeter project={project.number} />
+                </div>
+            )}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
         </div>
     );

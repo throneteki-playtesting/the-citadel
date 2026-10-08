@@ -75,13 +75,14 @@ export default function SuggestionsGuideModal({
                                     className="text-primary text-3xl sm:text-4xl shrink-0"
                                 />
                                 <div className="text-sm text-foreground/70">
-                                    <span className="font-cinzel font-semibold text-foreground">Approval. </span>
-                                    From there, managers may approve suggestions, which highlights them for
-                                    consideration in future projects - those with{" "}
-                                    <span className="font-semibold text-foreground">
-                                        {SUGGESTION_APPROVAL_VOTE_THRESHOLD} or more likes
-                                    </span>{" "}
-                                    get priority approval attention.
+                                    <span>
+                                        Managers may approve suggestions, which highlights them for consideration in
+                                        future projects - those with{" "}
+                                        <span className="font-semibold text-foreground">
+                                            {SUGGESTION_APPROVAL_VOTE_THRESHOLD} or more likes
+                                        </span>{" "}
+                                        get priority approval attention.
+                                    </span>
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 border border-content3 bg-content2 rounded-lg p-3">

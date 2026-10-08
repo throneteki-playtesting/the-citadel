@@ -19,7 +19,7 @@ import { slotConditionIssues } from "common/models/slotConditions";
 import { ISlot } from "common/models/slots";
 import { DeepPartial } from "common/types";
 import { pluralize, suggestionToPlaytestCard } from "common/utils";
-import { useAddSlotOptionsMutation, useGetSuggestionsQuery } from "../../../api";
+import { useAddSlotOptionsMutation, useGetPoolQuery, useGetSuggestionsQuery } from "../../../api";
 import { showApiErrorToast } from "../../../api/errors";
 import AnimatedHeight from "../../../components/animatedHeight";
 import CardEditor from "../../../components/cardEditor";
@@ -28,7 +28,7 @@ import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../../compone
 import SlidingPages from "../../../components/slidingPages";
 import SlotOptionsSummary from "../../../components/slots/slotOptionsSummary";
 import ThronesIcon from "../../../components/thronesIcon";
-import { EDITOR_CARD_WIDTH, PLOT_RATIO } from "../../../constants";
+import { EDITOR_CARD_WIDTH, PLOT_RATIO, POOL_READ_LIMIT } from "../../../constants";
 import { schemaErrors } from "../../../hooks/useFormValidation";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
@@ -48,9 +48,9 @@ const REVIEW_PAGE = 2;
 const NO_ERRORS = {};
 const SLIDING_PAGE_PROPS = () => ({ [SLIDING_PAGE_ATTRIBUTE]: "" }) as HTMLAttributes<HTMLDivElement>;
 // What the modal's own header, controls and footer leave of the screen, so a region of cards scrolls rather than the modal
-const BROWSE_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-25rem)] px-2";
+const BROWSE_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-25rem)] px-2 py-0.5";
 const REVIEW_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-28rem)] px-2 py-1";
-const EDIT_SCROLL_CLASS = "max-h-[calc(100vh-22rem)] overflow-y-auto";
+const EDIT_SCROLL_CLASS = "max-h-[calc(100vh-22rem)] overflow-y-auto pt-2";
 
 type Source = "pooled" | "approved" | "all";
 /** A suggestion chosen for the slot, and the card it will go in as - which may be edited before it does */
@@ -81,7 +81,7 @@ function SuggestionPicker({
     const flightNodes = useRef(new Map<string, HTMLElement>());
     const previewRef = useRef<HTMLDivElement>(null);
     const [page, setPage] = useState(BROWSE_PAGE);
-    const [source, setSource] = useState<Source>("approved");
+    const [chosenSource, setChosenSource] = useState<Source>();
     const [fitsOnly, setFitsOnly] = useState(true);
     const [filter, setFilter] = useState<SuggestionFilterValue>(EMPTY_SUGGESTION_FILTER);
     const [search, setSearch] = useState("");
@@ -97,7 +97,7 @@ function SuggestionPicker({
     useEffect(() => {
         if (isOpen) {
             setPage(BROWSE_PAGE);
-            setSource("approved");
+            setChosenSource(undefined);
             setFitsOnly(true);
             setFilter(EMPTY_SUGGESTION_FILTER);
             setSearch("");
@@ -122,8 +122,26 @@ function SuggestionPicker({
         },
         { skip: !isOpen }
     );
+    // The same for the pool - what is left in it that this slot could take, as the switch below has it set
+    const { data: pool } = useGetPoolQuery({ project }, { skip: !isOpen });
+    const poolFilter = useSuggestionServerFilter({ ...EMPTY_SUGGESTION_FILTER, faction: slot.faction }, "", {});
+    const { data: pooledFit } = useGetSuggestionsQuery(
+        {
+            filter: poolFilter,
+            pooledIn: project,
+            perPage: POOL_READ_LIMIT,
+            ...(fitsOnly && { fitsSlot: `${project}:${slot.number}` })
+        },
+        { skip: !isOpen || !pool?.length }
+    );
     const hasApproved = !approvedFit || approvedFit.total > 0;
-    const shownSource = source === "approved" && !hasApproved ? "all" : source;
+    const hasPooled = pooledFit
+        ? pooledFit.items.some((suggestion) => !suggestion.id || !used.has(suggestion.id))
+        : !!pool?.length;
+    // The pool first once it holds anything, then the approved - each only while it has something to choose from
+    const defaultSource: Source = hasPooled ? "pooled" : hasApproved ? "approved" : "all";
+    const isChosenOpen = chosenSource === "pooled" ? hasPooled : chosenSource === "approved" ? hasApproved : true;
+    const shownSource = chosenSource && isChosenOpen ? chosenSource : defaultSource;
 
     const hasConditions = !!slot.conditions?.length;
     const editing = picks.find((pick) => idOf(pick) === editingId);
@@ -261,11 +279,24 @@ function SuggestionPicker({
         }
     };
 
+    const disabledSources = useMemo(
+        () => [...(hasPooled ? [] : ["pooled"]), ...(hasApproved ? [] : ["approved"])],
+        [hasPooled, hasApproved]
+    );
+    const queryExtras = useMemo(
+        () => ({
+            ...(fitsOnly && { fitsSlot: `${project}:${slot.number}` }),
+            ...(shownSource === "pooled" && { pooledIn: project })
+        }),
+        [fitsOnly, project, slot.number, shownSource]
+    );
+
     // Only as the picks, the filters or the slot change, so the pages beside the one on show stand still
     const browsePage = useMemo(
         () => (
             <SuggestionBrowser
                 key="browse"
+                className="pt-2"
                 resetKey={slot.number}
                 filter={filter}
                 onFilterChange={setFilter}
@@ -277,7 +308,7 @@ function SuggestionPicker({
                     faction: slot.faction,
                     ...(shownSource === "approved" && { approvedFilter: "only" })
                 }}
-                queryExtras={fitsOnly ? { fitsSlot: `${project}:${slot.number}` } : undefined}
+                queryExtras={queryExtras}
                 isFactionFixed
                 scrollClassName={BROWSE_SCROLL_CLASS}
                 emptyContent="No suggestions match this slot."
@@ -287,8 +318,8 @@ function SuggestionPicker({
                             size="sm"
                             aria-label="Which suggestions to choose from"
                             selectedKey={shownSource}
-                            disabledKeys={hasApproved ? ["pooled"] : ["pooled", "approved"]}
-                            onSelectionChange={(key) => setSource(key as Source)}
+                            disabledKeys={disabledSources}
+                            onSelectionChange={(key) => setChosenSource(key as Source)}
                         >
                             <Tab key="pooled" title="Pooled" />
                             <Tab key="approved" title="Approved" />
@@ -308,6 +339,7 @@ function SuggestionPicker({
                         suggestion={suggestion}
                         isPicked={pickedIds.has(suggestion.id ?? "")}
                         isDimmed={pickedIds.size > 0}
+                        showLikes={sortBy === "likes"}
                         usedIn={suggestion.id ? used.get(suggestion.id) : undefined}
                         onToggle={toggle}
                     />
@@ -316,13 +348,13 @@ function SuggestionPicker({
         ),
         [
             slot,
-            project,
             filter,
             search,
             sortBy,
             shownSource,
             fitsOnly,
-            hasApproved,
+            queryExtras,
+            disabledSources,
             hasConditions,
             pickedIds,
             used,
@@ -330,7 +362,7 @@ function SuggestionPicker({
         ]
     );
     const reviewPage = (
-        <div key="review" className="flex flex-col gap-2">
+        <div key="review" className="flex flex-col gap-2 pt-2">
             <p className="text-sm text-foreground/60">
                 Drag to set the order of preference - you can rearrange it later. Edit any card here; the original
                 suggestion stays unchanged.
@@ -403,7 +435,7 @@ function SuggestionPicker({
                         )}
                     </ModalHeader>
                     <ModalBody>
-                        <SlidingPages currentPage={page} pageProps={SLIDING_PAGE_PROPS}>
+                        <SlidingPages currentPage={page} pageProps={SLIDING_PAGE_PROPS} className="-mt-2">
                             {[browsePage, ...(hasReview ? [reviewPage] : []), editPage]}
                         </SlidingPages>
                     </ModalBody>

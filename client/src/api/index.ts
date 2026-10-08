@@ -9,6 +9,7 @@ import {
 } from "@reduxjs/toolkit/query/react";
 import {
     IPlaytestingUpdate,
+    IPoolEntry,
     IProject,
     IProjectSave,
     IProjectProgress,
@@ -419,7 +420,10 @@ const api = createApi({
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => generateFor(response?.items, "suggestion")
+            providesTags: (response, _error, options) => [
+                ...generateFor(response?.items, "suggestion"),
+                ...(options?.pooledIn === undefined ? [] : [{ type: "pool" as const, id: `LIST|${options.pooledIn}` }])
+            ]
         }),
         getSuggestion: builder.query<ICardSuggestion, string>({
             query: (id) => {
@@ -704,6 +708,37 @@ const api = createApi({
                 return { url, method: "PUT", body };
             },
             invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
+        }),
+        getPool: builder.query<IPoolEntry[], { project: number }>({
+            query: ({ project }) => ({ url: buildUrl(`projects/${project}/pool`), method: "GET" }),
+            providesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        addToPool: builder.mutation<
+            IPoolEntry,
+            { project: number; suggestion: string; isUnapprovedConfirmed?: boolean }
+        >({
+            query: ({ project, suggestion, ...body }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "PUT",
+                body
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        removeFromPool: builder.mutation<IPoolEntry, { project: number; suggestion: string }>({
+            query: ({ project, suggestion }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
         }),
         deleteProject: builder.mutation<IProject, { number: number }>({
             query: (options) => {
@@ -1344,6 +1379,9 @@ export const {
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
     useAddSlotOptionsMutation,
+    useGetPoolQuery,
+    useAddToPoolMutation,
+    useRemoveFromPoolMutation,
     useDeleteDraftMutation,
     useMoveCardMutation,
 

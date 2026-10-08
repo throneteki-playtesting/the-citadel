@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
 import { addToast, Skeleton } from "@heroui/react";
-import { DndContext, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
+import { DndContext, getClientRect, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
 import classNames from "classnames";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
@@ -10,7 +10,16 @@ import { ISlot, movedOptionVersion, NEW_OPTION_VERSION } from "common/models/slo
 import Permission from "common/models/permissions";
 import { parseCardCode } from "common/utils";
 import { DeepPartial } from "common/types";
-import api, { useGetCardsQuery, useGetSlotsQuery, useMoveCardMutation } from "../../../api";
+import api, {
+    useAddSlotOptionsMutation,
+    useAddToPoolMutation,
+    useDeleteDraftMutation,
+    useGetCardsQuery,
+    useGetPoolQuery,
+    useGetSlotsQuery,
+    useMoveCardMutation
+} from "../../../api";
+import { showApiErrorToast, toNormalizedError } from "../../../api/errors";
 import type { AppDispatch } from "../../../api/store";
 import { cacheNow } from "../../../api/cacheHelpers";
 import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
@@ -18,23 +27,31 @@ import { usePermission } from "../../../hooks/usePermission";
 import { useDragSensors } from "../../../hooks/useDragSensors";
 import { useHasOpened } from "../../../hooks/useHasOpened";
 import { useStableCallback } from "../../../hooks/useStableCallback";
-import { CARD_BASE, DRAFT_ROW_HEIGHT_CLASS, HOLD_TOLERANCE_PX } from "../../../constants";
+import { useTagManagerOverrides } from "../../../hooks/useTagManagerOverrides";
+import { CARD_BASE, DRAFT_ROW_HEIGHT_CLASS, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
 import EditCardModal, { EditOrigin } from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
 import ArrangeModal from "./arrangeModal";
 import IncomingCards, { IncomingCard } from "./incomingCards";
 import FactionCarousel from "./factionCarousel";
+import DraftPool from "./draftPool";
+import { useDraftPoolHost } from "./useDraftPoolHost";
 import { closeSlotMenus } from "./slotMenuStore";
 import DraftDragOverlay from "./draggedCard";
+import { collisions } from "./draftCollisions";
+import { scrollToSlot } from "./scrollToSlot";
 import { createDragStore, DragData, DragStoreContext } from "./draftDragStore";
 import {
     buildFactionSlots,
     carryArrivals,
+    carryAway,
     carryCard,
     DraftSlot,
     FactionSlots,
     findDraftSlot,
+    firstFittingSlot,
+    incomingCardFor,
     isUprightPlot,
     releaseArrivals,
     reuseUnchanged
@@ -55,8 +72,10 @@ const cardToasts = {
         description: `'${card.name}' in slot #${card.number} was saved`
     }),
     deleted: (card: IPlaytestCard) => ({
-        title: "Successfully deleted",
-        description: `'${card.name}' was removed from slot #${card.number}`
+        title: card.suggestionId ? "Successfully removed" : "Successfully deleted",
+        description: card.suggestionId
+            ? `'${card.name}' was removed from slot #${card.number}`
+            : `'${card.name}' in slot #${card.number} was deleted`
     })
 };
 
@@ -64,6 +83,9 @@ const toastCard = (change: keyof typeof cardToasts, card: IPlaytestCard) =>
     addToast({ color: "success", ...cardToasts[change](card) });
 
 export default function ProjectDrafting({ project }: ProjectDraftingProps) {
+    // A board others are working on at the same time - what they change applies as it arrives, rather than waiting on the
+    // "new data" toast
+    useTagManagerOverrides({ autoRefresh: true });
     const { data: cardsData, isLoading: isLoadingCards } = useGetCardsQuery({
         filter: { project: project.number, draft: true }
     });
@@ -80,18 +102,37 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         isOpen: boolean;
     }>();
     // Suggestions just added fly in from the modal to the pile, which holds them unseen until they land
-    const [flight, setFlight] = useState<{ slotNumber: number; cards: IncomingCard[] }>();
+    const [flight, setFlight] = useState<{ slotNumber: number; cards: IncomingCard[]; isWaiting?: boolean }>();
     const [deleting, setDeleting] = useState<IPlaytestCard>();
     const [optionsSlot, setOptionsSlot] = useState<ISlot>();
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const [arranging, setArranging] = useState<{ number: number; pile: HTMLElement; isLifted: boolean }>();
     const [dragStore] = useState(createDragStore);
+    // dnd-kit scrolls the page back to the card's place before a drop animation, so it can fly home - which a card on
+    // its way to the pool is not doing. It is told that card is in view, and so left where the page is
+    const measuring = useMemo(
+        () => ({
+            draggable: {
+                measure: (element: HTMLElement) =>
+                    dragStore.isReturning()
+                        ? { top: 0, left: 0, right: 1, bottom: 1, width: 1, height: 1 }
+                        : getClientRect(element, { ignoreTransform: true })
+            }
+        }),
+        [dragStore]
+    );
     useEffect(() => closeSlotMenus, []);
     const pileElements = useRef(new Map<number, HTMLElement>());
     const canEditSlots = usePermission(Permission.EDIT_SLOTS);
     const sensors = useDragSensors();
     // The trigger alone - following the request's status would redraw the page twice for every move
     const [moveCard] = useMoveCardMutation({ selectFromResult: NO_RESULT });
+    const [addOptions] = useAddSlotOptionsMutation({ selectFromResult: NO_RESULT });
+    const [addToPool] = useAddToPoolMutation({ selectFromResult: NO_RESULT });
+    const [deleteDraft] = useDeleteDraftMutation({ selectFromResult: NO_RESULT });
+    const poolHost = useDraftPoolHost();
+    const canDraft = usePermission(Permission.CREATE_CARDS);
+    const { data: pool } = useGetPoolQuery({ project: project.number }, { skip: !canDraft });
     const dispatch = useDispatch<AppDispatch>();
 
     const [factionSlots, setFactionSlots] = useState<FactionSlots>(new Map());
@@ -102,7 +143,9 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     }
     const incomingOptions = flight && findDraftSlot(factionSlots, flight.slotNumber)?.options;
     const isFlightReady =
-        !!flight && flight.cards.every(({ card }, rank) => incomingOptions?.[rank]?.version === card.version);
+        !!flight &&
+        !flight.isWaiting &&
+        flight.cards.every(({ card }, rank) => incomingOptions?.[rank]?.version === card.version);
     const slotsRef = useRef(factionSlots);
     slotsRef.current = factionSlots;
     const arrangingSlot = arranging && findDraftSlot(factionSlots, arranging.number);
@@ -145,6 +188,13 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             }),
         []
     );
+    // Cards sent to a slot wait over where they left from while it is scrolled into view, so they never fly off-screen
+    const beginFlight = useStableCallback((slotNumber: number, cards: IncomingCard[], hold?: Promise<void>) => {
+        setFlight({ slotNumber, cards, isWaiting: true });
+        return Promise.all([scrollToSlot(pileElements.current.get(slotNumber)), hold]).then(() =>
+            setFlight((current) => (current?.slotNumber === slotNumber ? { ...current, isWaiting: false } : current))
+        );
+    });
     const onSuggestionsAdded = useStableCallback((cards: IPlaytestCard[], incoming?: IncomingCard[]) => {
         if (cards.length === 1) {
             toastCard("added", cards[0]);
@@ -157,7 +207,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         }
         if (incoming && pileElements.current.has(cards[0].number)) {
             carryArrivals(cards);
-            setFlight({ slotNumber: cards[0].number, cards: incoming });
+            void beginFlight(cards[0].number, incoming);
         }
     });
     const onCardSaved = useStableCallback((card: IPlaytestCard, from?: DOMRect) => {
@@ -166,23 +216,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         const slot = findDraftSlot(slotsRef.current, card.number);
         if (isNew && from && slot && pileElements.current.has(card.number)) {
             carryArrivals([card]);
-            setFlight({
-                slotNumber: card.number,
-                cards: [
-                    {
-                        card,
-                        rank: 0,
-                        from,
-                        isFromUpright: false,
-                        isUpright: isUprightPlot(
-                            card,
-                            card.type !== "plot" || slot.options.some((option) => option.type !== "plot")
-                        ),
-                        issues: slotConditionIssues(slot.slot.conditions, card, true),
-                        fromControl: "none"
-                    }
-                ]
-            });
+            void beginFlight(card.number, [incomingCardFor(card, slot, from, "none")]);
         }
     });
     const onFlightDone = useStableCallback(() => {
@@ -245,6 +279,10 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const onDelete = useCallback((card: IPlaytestCard) => setDeleting(card), []);
 
     const handleDragStart = (event: DragStartEvent) => {
+        dragStore.clearDrop();
+        // Pressing a card focuses it, and anything which then makes the page redraw puts the focus back on it - scrolling
+        // the page to where it was picked up, however far it has been carried since
+        (document.activeElement as HTMLElement | null)?.blur();
         const data = event.active.data.current as DragData | undefined;
         if (!data) {
             return;
@@ -253,6 +291,26 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         const optionCount = findDraftSlot(factionSlots, data.slotNumber)?.options.length ?? 0;
         const isHold = "touches" in event.activatorEvent && canEditSlots && optionCount > 1;
         dragStore.set({ active: data, held: isHold ? data.slotNumber : undefined });
+        // A card made from a suggestion which has since been deleted can't go back in the pool - so the pool says so
+        // while it is held, rather than accepting a drop which can't happen
+        if (data.card.suggestionId && !data.suggestion) {
+            const request = dispatch(api.endpoints.getSuggestion.initiate(data.card.suggestionId));
+            void request.then((result) => {
+                request.unsubscribe();
+                // A suggestion which is gone comes back as nothing at all, or as not found
+                const isGone = result.isError ? toNormalizedError(result.error).kind === "notFound" : !result.data;
+                if (dragStore.get().active === data && isGone) {
+                    dragStore.set({ isOrphaned: true });
+                }
+            });
+        }
+        if (data.suggestion) {
+            dragStore.beginDrop();
+            const target = factionSlotFor(data.card.faction, data);
+            if (target) {
+                void scrollToSlot(pileElements.current.get(target.number));
+            }
+        }
     };
 
     const handleDragMove = ({ delta }: DragMoveEvent) => {
@@ -261,11 +319,136 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         }
     };
 
-    const handleDragOver = ({ over }: DragOverEvent) => {
-        dragStore.set({ over: (over?.data.current as { number: number } | undefined)?.number });
+    // Where a card dropped on a faction goes - the first slot of it which the card fits
+    const factionSlotFor = (faction: Faction | undefined, data: DragData) =>
+        faction ? firstFittingSlot(slotsRef.current.get(faction), data.card, data.slotNumber) : undefined;
+
+    const handleDragOver = ({ active, over }: DragOverEvent) => {
+        const target = over?.data.current as { faction?: Faction; number?: number } | undefined;
+        const data = active.data.current as DragData | undefined;
+        if (target?.number !== undefined || !data) {
+            dragStore.set({ over: target?.number, overFaction: undefined });
+            return;
+        }
+        const slot = factionSlotFor(target?.faction, data);
+        dragStore.set({ over: slot?.number, overFaction: slot && target?.faction });
     };
 
-    const clearDrag = () => dragStore.set({ active: undefined, over: undefined, held: undefined });
+    const clearDrag = () =>
+        dragStore.set({
+            active: undefined,
+            over: undefined,
+            overFaction: undefined,
+            isOrphaned: undefined,
+            held: undefined
+        });
+
+    // A suggestion from the pool goes in as a new option on top, whether or not it suits the slot - which only warns. It
+    // flies from where it was let go of - or, tapped, from where it sat in the pool - onto the slot's pile
+    const placeFromPool = async (
+        data: DragData,
+        number: number | undefined,
+        tapped?: { from: DOMRect; arrived: Promise<void>; dismiss: () => void }
+    ) => {
+        const slot = number === undefined ? undefined : findDraftSlot(slotsRef.current, number);
+        if (!slot) {
+            dragStore.endDrop(false);
+            return;
+        }
+        try {
+            const [created] = await addOptions({
+                project: project.number,
+                number: slot.number,
+                cards: [{ ...data.card, number: slot.number, faction: slot.faction }]
+            }).unwrap();
+            toastCard("added", created);
+            const from = tapped?.from ?? dragStore.dropRect();
+            if (from && pileElements.current.has(slot.number)) {
+                carryArrivals([created]);
+                // Tapped, it waits over its place in the pool until the page has scrolled to its slot, and the pool is put away
+                void beginFlight(
+                    slot.number,
+                    [incomingCardFor(created, slot, from, tapped ? "none" : "menu")],
+                    tapped?.arrived.then(tapped.dismiss)
+                );
+                // The copy in flight is drawn over the card in hand before that is let go
+                requestAnimationFrame(() => requestAnimationFrame(() => dragStore.endDrop(true)));
+            } else {
+                tapped?.dismiss();
+                dragStore.endDrop(false);
+            }
+        } catch (error) {
+            dragStore.endDrop(false);
+            showApiErrorToast(error, { title: "Failed to add suggestion" });
+        }
+    };
+
+    // A card made from a suggestion, let go over the pool: it is put back in it - pooled first if it never was - and
+    // taken out of its slot. It is held where it was let go until that is known, and only then taken in
+    const returnToPool = async (card: IPlaytestCard) => {
+        const suggestion = card.suggestionId;
+        if (!suggestion) {
+            dragStore.endDrop(false);
+            return;
+        }
+        try {
+            if (!pool?.some((entry) => entry.suggestion === suggestion)) {
+                await addToPool({ project: project.number, suggestion, isUnapprovedConfirmed: true }).unwrap();
+            }
+        } catch (error) {
+            dragStore.endDrop(false);
+            if (toNormalizedError(error).kind === "notFound") {
+                addToast({
+                    title: "Can't add to the pool",
+                    color: "warning",
+                    description: "The suggestion this card was made from no longer exists"
+                });
+            } else {
+                showApiErrorToast(error, { title: "Failed to add to the pool" });
+            }
+            return;
+        }
+        const started = dragStore.dropStarted();
+        dragStore.endDrop("taken in");
+        // Its place in the pile has to stay until the overlay has begun, or there is nothing for it to start from
+        await Promise.race([started, new Promise((resolve) => setTimeout(resolve, POOL_DROP_START_PATIENCE_MS))]);
+        // The card was let go of - the pile has nothing to toss
+        carryAway(card);
+        const patchResult = dispatch(
+            api.util.updateQueryData("getCards", { filter: { project: project.number, draft: true } }, (draft) => {
+                draft.items = draft.items.filter((c) => !(c.number === card.number && c.version === card.version));
+            })
+        );
+        try {
+            await deleteDraft(card).unwrap();
+            addToast({
+                color: "success",
+                title: "Returned to the pool",
+                description: `'${card.name}' was taken out of slot #${card.number}`
+            });
+        } catch (error) {
+            patchResult.undo();
+            showApiErrorToast(error, { title: "Failed to take the card out of its slot" });
+        }
+    };
+
+    // Tapped in the pool: it goes where dropping it on its faction would put it
+    const onPlaceFromPool = useStableCallback((data: DragData, from: DOMRect, dismiss: () => void) => {
+        const slot = factionSlotFor(data.card.faction, data);
+        if (slot) {
+            void placeFromPool(data, slot.number, {
+                from,
+                arrived: scrollToSlot(pileElements.current.get(slot.number)),
+                dismiss
+            });
+        } else {
+            addToast({
+                title: "No slot fits",
+                color: "warning",
+                description: "None of that faction's slots can take a card like this"
+            });
+        }
+    });
 
     const handleDragEnd = async (event: DragEndEvent) => {
         const releasedHold = dragStore.get().held;
@@ -275,33 +458,46 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             return;
         }
         const data = event.active.data.current as DragData | undefined;
-        const target = event.over?.data.current as { faction: Faction; number: number } | undefined;
-        if (!data || !target || data.slotNumber === target.number) {
+        const target = event.over?.data.current as { faction: Faction; number?: number; pool?: boolean } | undefined;
+        if (target?.pool && event.over && data && !data.suggestion) {
+            dragStore.beginDrop(true);
+            await returnToPool(data.card);
+            return;
+        }
+        const toSlot = data && (target?.number ?? factionSlotFor(target?.faction, data)?.number);
+        if (data?.suggestion) {
+            await placeFromPool(data, toSlot);
+            return;
+        }
+        if (!data || !target || toSlot === undefined || data.slotNumber === toSlot) {
             return;
         }
 
+        const to = toSlot;
         const { card } = data;
+        const { faction: toFaction } = target;
         // The version the server will give it, so it never shares an identity with a card already in that slot
         const version = movedOptionVersion(
             card.version,
-            (cardsData?.items ?? []).filter((c) => c.number === target.number).map((c) => c.version)
+            (cardsData?.items ?? []).filter((c) => c.number === to).map((c) => c.version)
         );
         if (!version) {
             addToast({
                 title: "Failed to move card",
                 color: "danger",
-                description: `Slot #${target.number} has no room left`
+                description: `Slot #${to} has no room left`
             });
             return;
         }
-        carryCard(card, { number: target.number, version });
+        void scrollToSlot(pileElements.current.get(to));
+        carryCard(card, { number: to, version });
         const patchResult = dispatch(
             api.util.updateQueryData("getCards", { filter: { project: project.number, draft: true } }, (draft) => {
                 const patchTarget = draft.items.find((c) => c.number === card.number && c.version === card.version);
                 if (patchTarget) {
-                    patchTarget.number = target.number;
+                    patchTarget.number = to;
                     patchTarget.version = version;
-                    patchTarget.faction = target.faction;
+                    patchTarget.faction = toFaction;
                     patchTarget.updated = cacheNow();
                 }
             })
@@ -312,14 +508,14 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                 project: project.number,
                 number: card.number,
                 version: card.version,
-                to: target.number
+                to: to
             }).unwrap();
         } catch {
             patchResult.undo();
             addToast({
                 title: "Failed to move card",
                 color: "danger",
-                description: `'${card.name}' could not be moved to slot #${target.number}`
+                description: `'${card.name}' could not be moved to slot #${to}`
             });
         }
     };
@@ -338,11 +534,16 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         <DragStoreContext.Provider value={dragStore}>
             <DndContext
                 sensors={sensors}
+                collisionDetection={collisions}
+                measuring={measuring}
                 onDragStart={handleDragStart}
                 onDragMove={handleDragMove}
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
-                onDragCancel={clearDrag}
+                onDragCancel={() => {
+                    clearDrag();
+                    dragStore.endDrop(false);
+                }}
             >
                 <div className="flex flex-col gap-2">
                     {[...factionSlots.entries()].map(([faction, slots]) => (
@@ -363,6 +564,14 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                         />
                     ))}
                 </div>
+                {canDraft && (
+                    <DraftPool
+                        project={project.number}
+                        used={usedSuggestions}
+                        host={poolHost}
+                        onPlace={onPlaceFromPool}
+                    />
+                )}
                 <DraftDragOverlay factionSlots={factionSlots} onEdit={onEdit} onDelete={onDelete} />
                 {hasOpenedEditor && (
                     <EditCardModal

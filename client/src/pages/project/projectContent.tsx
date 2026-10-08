@@ -17,6 +17,7 @@ import SectionTitle from "../../components/sectionTitle";
 import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
 import {
+    cornerBadgeBottomRightClasses,
     cornerBadgeDiscFillClasses,
     cornerBadgeFadeClasses,
     highlightTarget,
@@ -98,7 +99,7 @@ const sortOptions: Record<SortOption, string> = {
 const FADE_TRANSITION = { duration: 0.12 } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
-const CORNER_BADGE_CLASS = classNames("absolute bottom-0 right-0 m-2 z-10", cornerBadgeFadeClasses);
+const CORNER_BADGE_CLASS = classNames(cornerBadgeBottomRightClasses, cornerBadgeFadeClasses);
 
 function compareByReviews(cardStats: Map<number, CardStats>, a: IPlaytestCard, b: IPlaytestCard) {
     const statA = cardStats.get(a.number) ?? { latest: 0, total: 0 };

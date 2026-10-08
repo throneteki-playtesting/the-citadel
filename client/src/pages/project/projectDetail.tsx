@@ -9,6 +9,7 @@ import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
+import { DraftPoolHostProvider } from "./draft/draftPoolHost";
 import ProjectReleases from "./releases/projectReleases";
 import ProjectArtworks from "./artworks/projectArtworks";
 import ProjectRefinements from "./refinements/projectRefinements";
@@ -84,20 +85,22 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                     }
                 />
             </div>
-            <div className="relative space-y-2">
-                <ProjectHeader
-                    project={project}
-                    onEdit={() => setIsEditing(true)}
-                    onDelete={() => setIsDeleting(true)}
-                />
-                {project.draft ? (
-                    <ProjectDrafting project={project} />
-                ) : (
-                    <ScopedSearchParamsProvider>
-                        <ProjectTabsSection project={project} entryRelease={entryRelease} />
-                    </ScopedSearchParamsProvider>
-                )}
-            </div>
+            <DraftPoolHostProvider>
+                <div className="relative space-y-2">
+                    <ProjectHeader
+                        project={project}
+                        onEdit={() => setIsEditing(true)}
+                        onDelete={() => setIsDeleting(true)}
+                    />
+                    {project.draft ? (
+                        <ProjectDrafting project={project} />
+                    ) : (
+                        <ScopedSearchParamsProvider>
+                            <ProjectTabsSection project={project} entryRelease={entryRelease} />
+                        </ScopedSearchParamsProvider>
+                    )}
+                </div>
+            </DraftPoolHostProvider>
             <EditProjectModal
                 isOpen={isEditing}
                 project={project}

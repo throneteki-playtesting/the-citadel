@@ -719,9 +719,9 @@ export function DraftActions({
                 onClose={() => setDeleting(undefined)}
                 onDelete={(card) =>
                     addToast({
-                        title: "Successfully deleted",
+                        title: card.suggestionId ? "Successfully removed" : "Successfully deleted",
                         color: "success",
-                        description: `'${card.name}' ver. ${card.version} has been deleted`
+                        description: `'${card.name}' ver. ${card.version} has been ${card.suggestionId ? "removed" : "deleted"}`
                     })
                 }
             />

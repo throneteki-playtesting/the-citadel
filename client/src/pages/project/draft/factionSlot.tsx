@@ -126,7 +126,13 @@ const FactionSlot = memo(function FactionSlot({
             className={classNames(DRAFT_SLOT_VARIABLES_CLASS, "self-start", SHAPE_TRANSITION_CLASS)}
             style={frameShape(isLandscape)}
         >
-            <DroppableSlot slot={slot} isLandscape={isLandscape} isHeld={isHeld} className="relative">
+            <DroppableSlot
+                slot={slot}
+                isLandscape={isLandscape}
+                isHeld={isHeld}
+                isTargeted={isReceiving}
+                className="relative"
+            >
                 <div className="absolute inset-0">
                     <EmptyCardSlot
                         slotNumber={slot.number}
@@ -192,7 +198,7 @@ type FactionSlotProps = SlotHandlers & {
     isLifted: boolean;
 };
 
-function DroppableSlot({ className, slot, isLandscape, isHeld, children }: DroppableSlotProps) {
+function DroppableSlot({ className, slot, isLandscape, isHeld, isTargeted, children }: DroppableSlotProps) {
     const { setNodeRef, isOver } = useDroppable({
         id: `slot-${slot.number}`,
         data: { faction: slot.faction, number: slot.number }
@@ -203,7 +209,7 @@ function DroppableSlot({ className, slot, isLandscape, isHeld, children }: Dropp
             className={classNames(
                 "shrink-0 rounded-lg outline-2 outline-dashed outline-offset-2",
                 SHAPE_TRANSITION_CLASS,
-                isOver && !isHeld ? "outline-primary" : "outline-transparent",
+                (isOver || isTargeted) && !isHeld ? "outline-primary" : "outline-transparent",
                 className
             )}
             style={slotShape(isLandscape)}
@@ -218,6 +224,8 @@ type DroppableSlotProps = BaseElementProps & {
     isLandscape: boolean;
     /** Pressed but not yet moved - not a drag until it is, so no slot offers itself */
     isHeld: boolean;
+    /** A card in hand is bound for it, though not over it - eg. held over its faction's header */
+    isTargeted: boolean;
 };
 
 // Worn by every card in the pile and live only on top - a wrapper added as a card surfaces would remount it mid-tilt

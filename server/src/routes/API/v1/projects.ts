@@ -34,6 +34,7 @@ import { ProjectStats } from "common/models/stats";
 import { computeProjectProgress } from "@/services/progressService";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
+import pool from "./pool";
 import slots from "./slots";
 import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
@@ -47,6 +48,7 @@ const router = express.Router();
 
 router.use("/:project", scopeToProject);
 router.use("/:project/slots", slots);
+router.use("/:project/pool", pool);
 router.use("/:project/releases", releases);
 
 const projectParams = {
@@ -394,6 +396,7 @@ router.delete(
         }
         await dataService.cards.destroy({ project: number });
         await dataService.slots.destroy({ project: number });
+        await dataService.pools.destroy({ project: number });
 
         await logActivity(LogCategory.PROJECT, "project.deleted", "<principal> deleted project <project>", {
             context: { project: projectSnapshot(deleted) },

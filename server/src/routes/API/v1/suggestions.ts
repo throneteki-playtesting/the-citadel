@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
-import { isEqual } from "lodash-es";
+import { intersection, isEqual } from "lodash-es";
 import {
     canViewSuggestion,
     cardMatchLabel,
@@ -78,7 +78,9 @@ const getQuerySchema = (
     // Handled by applyPossiblyDevelopedFilter below - it depends on the cards collection, not the suggestion itself
     developed: Joi.boolean(),
     // Handled by applySlotFitFilter below - the conditions are the slot's, read where they are kept
-    fitsSlot: Joi.string().regex(/^\d+:\d+$/)
+    fitsSlot: Joi.string().regex(/^\d+:\d+$/),
+    // Handled by applyPooledFilter below - the pool is a project's own, read where it is kept
+    pooledIn: Joi.number().integer()
 });
 
 // Resolves unseen/myReactions against the principal's discordId, merged into `req.query.filter` - NOT
@@ -403,7 +405,7 @@ const applySlotFitFilter = asyncHandler<
     unknown,
     unknown,
     IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
->(async (req, _res, next) => {
+>(async (req, res, next) => {
     if (!req.query.fitsSlot) {
         next();
         return;
@@ -425,7 +427,44 @@ const applySlotFitFilter = asyncHandler<
     }
     const candidates = await dataService.suggestions.read({ card: { faction: slot.faction } });
     const ids = candidates.filter((suggestion) => fitsSlot(slot, suggestion.card)).map((suggestion) => suggestion.id);
-    req.query.filter = applyToFilter(req.query.filter, { id: { $in: ids } });
+    res.locals.idSets = [...(res.locals.idSets ?? []), ids];
+    next();
+});
+
+// Narrows to a draft project's pool, which only those who can draft in the project may see
+const applyPooledFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, res, next) => {
+    if (req.query.pooledIn === undefined) {
+        next();
+        return;
+    }
+    const [project] = await dataService.projects.read({ number: req.query.pooledIn });
+    if (!project) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Project #${req.query.pooledIn} does not exist`);
+    }
+    if (!hasPermission(withProjectOwnership(getContext().principal, project), Permission.CREATE_CARDS)) {
+        throw new PermissionErrorResponse();
+    }
+    const pooled = await dataService.pools.read({ project: project.number });
+    res.locals.idSets = [...(res.locals.idSets ?? []), pooled.map((entry) => entry.suggestion)];
+    next();
+});
+
+// What the filters above each allow, applied together as the suggestions which every one of them allows
+const applyIdSets = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, res, next) => {
+    const sets = (res.locals.idSets ?? []) as string[][];
+    if (sets.length > 0) {
+        req.query.filter = applyToFilter(req.query.filter, { id: { $in: intersection(...sets) } });
+    }
     next();
 });
 
@@ -441,6 +480,8 @@ router.get(
     applyReactionVisibilityFilter,
     applyPossiblyDevelopedFilter,
     applySlotFitFilter,
+    applyPooledFilter,
+    applyIdSets,
     asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
@@ -593,6 +634,7 @@ router.post(
         suggestion = (await dataService.suggestions.setCreated(suggestion.id!, legacy.createdAt)) ?? suggestion;
         if (merging) {
             await dataService.suggestions.destroy({ id: merging.id }, false);
+            await dataService.pools.destroy({ suggestion: merging.id });
         }
         suggestion = await dataService.suggestions.sync(suggestion);
 
@@ -1066,6 +1108,8 @@ router.delete(
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
         const [deleted] = await dataService.suggestions.destroy({ id });
+        // Whatever pool had set it aside has nothing left to hold
+        await dataService.pools.destroy({ suggestion: id });
 
         await logActivity(LogCategory.SUGGESTION, "suggestion.deleted", "<principal> deleted suggestion <suggestion>", {
             context: { suggestion: cardSnapshot(id, deleted.card) },

@@ -1,4 +1,4 @@
-import { DropAnimation } from "@dnd-kit/core";
+import { DropAnimationFunction } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
 const SETTLE_FRAMES = 3;
@@ -22,7 +22,7 @@ async function settled(node: HTMLElement) {
 // A drop animation for a dnd-kit DragOverlay item whose displayed shape can rotate 90 degrees between its
 // drag preview and its destination (eg. a landscape card that lands rotated into a portrait slot). Whether
 // to rotate is inferred purely from the two rects' shapes, so callers don't need to track orientation themselves.
-export const rotatingDropAnimation: DropAnimation = async ({ active, dragOverlay, transform }) => {
+export const rotatingDropAnimation: DropAnimationFunction = async ({ active, dragOverlay, transform }) => {
     // Held where it was let go until its destination has stopped moving - a slot still turning or resizing under it
     // would otherwise be flown to mid-change, and the card stretched and turned to fit a shape it is leaving
     active.node.style.setProperty("opacity", "0");
