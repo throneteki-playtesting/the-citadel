@@ -16,6 +16,7 @@ import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
+import { isPlanningForum, onPlanningForumMessageDeleted } from "./forums/planningForum";
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
 import { isSuggestionForumThread, onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
 import { broadcastResourceChange } from "@/services/sseService";
@@ -146,6 +147,10 @@ export function registerEvents(
 }
 
 async function onForumMessageDeleted(forumName: string, messageUrl: string) {
+    if (isPlanningForum(forumName)) {
+        await onPlanningForumMessageDeleted(messageUrl);
+        return;
+    }
     switch (forumName) {
         case "card-forum":
             await onCardForumMessageDeleted(messageUrl);

@@ -33,6 +33,7 @@ import { IGetRequest, IGetResponse } from "@/types";
 import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
+import { autoOpenSlotDiscussion } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
 import { IProject } from "common/models/projects";
@@ -453,6 +454,7 @@ router.put(
                 card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
                 await updateSlotPreferences(project.number, number, preferFirst(card.version));
+                void autoOpenSlotDiscussion(project.number, number);
             } else {
                 await process("update");
             }
@@ -535,6 +537,7 @@ router.post(
                 ...added,
                 ...preferences.filter((version) => !added.includes(version))
             ]);
+            void autoOpenSlotDiscussion(project.number, number);
 
             for (const card of cards) {
                 await logActivity(LogCategory.CARD, "card.draft.created", "<principal> created draft <card>", {
@@ -720,6 +723,7 @@ router.post(
             const [created] = await dataService.cards.create([movedCard], false);
             await updateSlotPreferences(projectNumber, number, withoutPreference(version));
             await updateSlotPreferences(projectNumber, to, preferFirst(newVersion));
+            void autoOpenSlotDiscussion(projectNumber, to);
 
             await logActivity(
                 LogCategory.CARD,

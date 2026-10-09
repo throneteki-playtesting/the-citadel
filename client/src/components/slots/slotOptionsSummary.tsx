@@ -1,7 +1,7 @@
 import { ReactNode, useCallback, useLayoutEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faCoins, faNoteSticky, faStar } from "@fortawesome/free-solid-svg-icons";
+import { faClipboardCheck, faCoins, faNoteSticky, faStar } from "@fortawesome/free-solid-svg-icons";
 import { ChallengeIcon, challengeIcons } from "common/models/cards";
 import { describeCondition, describeIcon, formatRange, SlotCondition } from "common/models/slotConditions";
 import { ISlotOptions } from "common/models/slots";
@@ -61,20 +61,6 @@ export default function SlotOptionsSummary({ className, options }: SlotOptionsSu
             {conditionToken(condition)}
         </span>
     ));
-    const extras = (
-        <>
-            {options.important && (
-                <span data-extra className="inline-flex shrink-0">
-                    <FontAwesomeIcon icon={faStar} className="text-warning" />
-                </span>
-            )}
-            {options.notes && (
-                <span data-extra className="inline-flex shrink-0">
-                    <FontAwesomeIcon icon={faNoteSticky} />
-                </span>
-            )}
-        </>
-    );
     const hiddenCount = conditions.length - shownCount;
 
     return (
@@ -82,40 +68,78 @@ export default function SlotOptionsSummary({ className, options }: SlotOptionsSu
             <span ref={measureRef} aria-hidden className="invisible absolute flex items-center gap-2 whitespace-nowrap">
                 {tokens}
                 <span data-more>+{conditions.length} more</span>
-                {extras}
+                {options.important && (
+                    <span data-extra className="inline-flex shrink-0">
+                        <FontAwesomeIcon icon={faStar} />
+                    </span>
+                )}
+                {options.notes && (
+                    <span data-extra className="inline-flex shrink-0">
+                        <FontAwesomeIcon icon={faNoteSticky} />
+                    </span>
+                )}
             </span>
-            <TouchTooltip
-                content={
-                    <div className="flex flex-col gap-1 py-1 max-w-64 text-xs">
-                        {conditions.length > 0 && <span className="font-cinzel text-sm">Slot needs:</span>}
-                        {conditions.flatMap(tooltipLines).map(({ key, token, text }) => (
-                            <span key={key} className="flex items-center gap-2">
-                                <span className="inline-flex w-5 shrink-0 justify-center">{token}</span>
-                                {text}
-                            </span>
-                        ))}
-                        {options.important && (
-                            <span className="flex items-center gap-2">
-                                <span className="inline-flex w-5 shrink-0 justify-center">
-                                    <FontAwesomeIcon icon={faStar} className="text-warning" />
+            <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+                {conditions.length > 0 && (
+                    <TouchTooltip
+                        content={
+                            <div className="flex flex-col gap-1 py-1 max-w-64 text-xs">
+                                <span className="font-cinzel text-sm">Slot needs:</span>
+                                {conditions.flatMap(tooltipLines).map(({ key, token, text }) => (
+                                    <span key={key} className="flex items-center gap-2">
+                                        <span className="inline-flex w-5 shrink-0 justify-center">{token}</span>
+                                        {text}
+                                    </span>
+                                ))}
+                            </div>
+                        }
+                    >
+                        <span className="flex min-w-0 items-center gap-2 overflow-hidden cursor-help">
+                            {tokens.slice(0, shownCount)}
+                            {hiddenCount > 0 && (
+                                <span className="inline-flex shrink-0 items-center gap-1 text-foreground/50">
+                                    {shownCount === 0 ? (
+                                        <>
+                                            {hiddenCount}
+                                            <FontAwesomeIcon icon={faClipboardCheck} />
+                                        </>
+                                    ) : (
+                                        `+${hiddenCount} more`
+                                    )}
                                 </span>
-                                Important addition
-                            </span>
-                        )}
-                        {options.notes && (
-                            <div className="border-t border-content3 pt-1 text-foreground/70">
+                            )}
+                        </span>
+                    </TouchTooltip>
+                )}
+                {options.important && (
+                    <TouchTooltip
+                        content={
+                            <div className="max-w-64 py-1 text-xs">
+                                <span className="font-cinzel text-sm">Important addition</span>
+                                <div>The project must deliver this card.</div>
+                            </div>
+                        }
+                    >
+                        <span className="inline-flex shrink-0 cursor-help">
+                            <FontAwesomeIcon icon={faStar} />
+                        </span>
+                    </TouchTooltip>
+                )}
+                {options.notes && (
+                    <TouchTooltip
+                        content={
+                            <div className="max-w-64 py-1 text-xs">
+                                <span className="font-cinzel text-sm">Notes</span>
                                 <RichText html={options.notes} />
                             </div>
-                        )}
-                    </div>
-                }
-            >
-                <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap cursor-help">
-                    {tokens.slice(0, shownCount)}
-                    {hiddenCount > 0 && <span className="shrink-0 text-foreground/50">+{hiddenCount} more</span>}
-                    {extras}
-                </span>
-            </TouchTooltip>
+                        }
+                    >
+                        <span className="inline-flex shrink-0 cursor-help">
+                            <FontAwesomeIcon icon={faNoteSticky} />
+                        </span>
+                    </TouchTooltip>
+                )}
+            </span>
         </span>
     );
 }

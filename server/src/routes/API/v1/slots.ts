@@ -57,6 +57,7 @@ import {
     reopenInquiryDiscussion,
     startInquiryDiscussion
 } from "@/discord/forums/refinementForum";
+import { openSlotDiscussion } from "@/discord/forums/planningForum";
 
 const router = express.Router({ mergeParams: true });
 
@@ -1205,6 +1206,52 @@ router.post(
         res.status(StatusCodes.OK).json(
             toRefinementDetail(updated, await readFinalVersion(project, updated), canReadFaq())
         );
+    })
+);
+
+// Open a Discord thread in a draft project's planning forum for one slot, for a slot which has none yet - opening
+// itself as its first card arrives is the usual way, so this is for talking a slot over before it holds anything
+router.post(
+    "/:slot/discussion",
+    validateRequest(Permission.CREATE_CARDS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const slot = await requireSlot(project.number, req.params.slot);
+        if (!project.draft || slot.closed) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Slot",
+                "A discussion can only be opened for an open slot of a project in draft"
+            );
+        }
+
+        const { principal } = getContext();
+        try {
+            await openSlotDiscussion(project, slot, principal.id);
+        } catch (err) {
+            logger.warn(
+                new Error(`[Discord] Failed to open discussion for slot #${slot.number} of ${project.code}`, {
+                    cause: err
+                })
+            );
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_GATEWAY,
+                "Discord Error",
+                "A discussion could not be opened for this slot. The planning forum may be missing or out of reach.",
+                err
+            );
+        }
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.discussed",
+            `<principal> opened a discussion for slot ${slot.number} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
+        res.status(StatusCodes.OK).json(await requireSlot(project.number, slot.number));
     })
 );
 

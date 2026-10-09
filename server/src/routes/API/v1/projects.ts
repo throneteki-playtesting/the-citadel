@@ -41,6 +41,7 @@ import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
 import { closeSuggestionThreads } from "@/discord/forums/suggestionForum";
+import { deletePlanningForum } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { syncDataPullRequests } from "@/github/pullRequests";
 
@@ -397,6 +398,7 @@ router.delete(
         await dataService.cards.destroy({ project: number });
         await dataService.slots.destroy({ project: number });
         await dataService.pools.destroy({ project: number });
+        await deletePlanningForum(deleted);
 
         await logActivity(LogCategory.PROJECT, "project.deleted", "<principal> deleted project <project>", {
             context: { project: projectSnapshot(deleted) },

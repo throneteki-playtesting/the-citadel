@@ -5,6 +5,7 @@ import { BasicAuditableRepository } from "./shared";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 import { syncReleaseChecks } from "@/discord/announcements/releaseChecks";
+import { syncPlanningForum } from "@/discord/forums/planningForum";
 
 export default class ProjectsRepository extends BasicAuditableRepository<"project"> {
     constructor(mongoClient: MongoClient) {
@@ -54,6 +55,12 @@ export default class ProjectsRepository extends BasicAuditableRepository<"projec
                     syncReleaseChecks(data, forced).then((result) => {
                         data = result;
                     })
+            },
+            {
+                priority: 1,
+                func: async () => {
+                    data = await Promise.all(data.map((project) => syncPlanningForum(project, forced)));
+                }
             }
         ];
 

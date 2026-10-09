@@ -146,6 +146,8 @@ enum Permission {
     READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM",
     /** Can access & read from the review forum on discord */
     READ_DISCORD_REVIEW_FORUM = "READ_DISCORD_REVIEW_FORUM",
+    /** Can view the links to a draft project's planning forum threads, and is given access to the forum itself */
+    READ_DISCORD_PLANNING_FORUM = "READ_DISCORD_PLANNING_FORUM",
     /** Can sync card images */
     SYNC_CARD_IMAGES = "SYNC_CARD_IMAGES",
     /** Can sync card discord forum threads */
@@ -174,6 +176,7 @@ export const projectOwnerPermissions: Permission[] = [
     Permission.ARCHIVE_PROJECTS,
     Permission.READ_SLOTS,
     Permission.EDIT_SLOTS,
+    Permission.READ_DISCORD_PLANNING_FORUM,
     Permission.APPROVE_CARD_DESIGN,
     Permission.READ_ARTWORKS,
     Permission.EDIT_ARTWORKS,
@@ -396,6 +399,7 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
     [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },
     [Permission.READ_DISCORD_REVIEW_FORUM]: { label: "View Review Forum", group: "Discord" },
+    [Permission.READ_DISCORD_PLANNING_FORUM]: { label: "View Planning Forum", group: "Discord" },
     [Permission.SYNC_CARD_IMAGES]: { label: "Card Images", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_CARD_DISCORD]: { label: "Card Discord", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync", dependencies: Permission.EDIT_CARDS },

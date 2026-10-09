@@ -64,7 +64,7 @@ router.get(
     }),
     loadProject,
     validateProjectAccess,
-    asyncHandler<{ project: number; version: number }, unknown, unknown, IGetRequest<IProject>>(async (req, res) => {
+    asyncHandler<{ project: number; version: number }, unknown, unknown, IGetRequest<IPlaytestingUpdate>>(async (req, res) => {
         const { project, version } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getPlaytestingUpdates(

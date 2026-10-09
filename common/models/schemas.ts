@@ -1028,6 +1028,7 @@ export const Project = {
         version: Joi.number().required(),
         milestone: Joi.number(),
         mandateUrl: Joi.string(),
+        _metadata: Joi.object({ discord: Joi.object({ forumUrl: Joi.string().uri(), lastSynced: Joi.date() }) }),
         formUrl: Joi.string(),
         emoji: Joi.string(),
         owners: Joi.array().items(Joi.string()),

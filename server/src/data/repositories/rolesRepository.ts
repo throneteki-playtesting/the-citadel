@@ -6,6 +6,7 @@ import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 import { dataService } from "@/services";
 import { refreshReleaseChecks } from "@/discord/announcements/releaseChecks";
+import { syncPlanningForumAccess } from "@/discord/forums/planningForum";
 
 export default class RolesRepository extends BasicRepository<"role"> {
     constructor(mongoClient: MongoClient) {
@@ -31,7 +32,11 @@ export default class RolesRepository extends BasicRepository<"role"> {
     public async sync(syncing: SingleOrArray<Role>) {
         const data = asArray(syncing);
         // A role's permission list is part of who can submit a check, so editing one dates the announcement
-        const syncs = [{ priority: 0, func: () => refreshReleaseChecks() }];
+        // And who may see a draft project's planning forum, which is the roles which hold the permission for it
+        const syncs = [
+            { priority: 0, func: () => refreshReleaseChecks() },
+            { priority: 0, func: () => syncPlanningForumAccess() }
+        ];
 
         await this.internalSync(syncs);
 

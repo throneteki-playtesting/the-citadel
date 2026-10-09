@@ -46,7 +46,11 @@ const ARTWORK_META_STAGES: Document[] = [
                                         in: {
                                             $ifNull: [
                                                 "$$selected.artist",
-                                                { $first: { $ifNull: ["$statuses.artwork.sourced.options.artist", []] } }
+                                                {
+                                                    $first: {
+                                                        $ifNull: ["$statuses.artwork.sourced.options.artist", []]
+                                                    }
+                                                }
                                             ]
                                         }
                                     }
@@ -96,7 +100,10 @@ const ARTWORK_META_STAGES: Document[] = [
                                                             $first: {
                                                                 $filter: {
                                                                     input: {
-                                                                        $ifNull: ["$statuses.artwork.sourced.options", []]
+                                                                        $ifNull: [
+                                                                            "$statuses.artwork.sourced.options",
+                                                                            []
+                                                                        ]
                                                                     },
                                                                     cond: {
                                                                         $eq: [
@@ -137,7 +144,9 @@ const ARTWORK_META_STAGES: Document[] = [
                                                 $or: [
                                                     {
                                                         $eq: [
-                                                            { $ifNull: ["$statuses.artwork.commissioned.artist", null] },
+                                                            {
+                                                                $ifNull: ["$statuses.artwork.commissioned.artist", null]
+                                                            },
                                                             null
                                                         ]
                                                     },

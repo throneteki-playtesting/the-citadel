@@ -37,6 +37,13 @@ export interface IProject extends IAuditable {
     /** Key into projectTemplates for this project's type - absent means custom, its slots set by hand */
     template?: string;
     releases: IProjectRelease[];
+    _metadata?: {
+        /** A draft project's planning forum - server-maintained */
+        discord?: {
+            forumUrl?: string;
+            lastSynced?: Date;
+        };
+    };
 }
 
 export interface IProjectRelease extends IAuditable {

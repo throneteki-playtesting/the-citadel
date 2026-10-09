@@ -273,10 +273,13 @@ export class BasicAuditableRepository<
 }
 
 export class BasicRepository<
-    K extends ResourceType,
-    T extends ResourceDataMap[K] = ResourceDataMap[K],
-    TFilterable extends T = T
-> extends BroadcastDatabase<K, T> implements IRepository<T> {
+        K extends ResourceType,
+        T extends ResourceDataMap[K] = ResourceDataMap[K],
+        TFilterable extends T = T
+    >
+    extends BroadcastDatabase<K, T>
+    implements IRepository<T>
+{
     protected virtualFields: VirtualFieldMap = {};
 
     public async create(creating: T, broadcast?: boolean): Promise<T>;

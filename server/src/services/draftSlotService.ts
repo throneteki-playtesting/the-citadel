@@ -16,6 +16,7 @@ import { ApiErrorResponse } from "@/errors";
 import { dataService } from "@/services";
 import { syncProjectCardCount } from "@/utils";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
+import { closeSlotDiscussion, reopenSlotDiscussion } from "@/discord/forums/planningForum";
 import { LogCategory } from "common/models/logs";
 
 /** How many slots each faction should have, and - where a template is being laid out - what each one asks for */
@@ -94,6 +95,7 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
     const closing: ISlot[] = [];
     const creating: { faction: Faction; options: ISlotOptions }[] = [];
     let reopened = 0;
+    const reopening: ISlot[] = [];
 
     for (const faction of factions) {
         const target = counts[faction];
@@ -103,12 +105,13 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
         const open = slots.filter((slot) => slot.faction === faction && !slot.closed);
         const closed = slots.filter((slot) => slot.faction === faction && slot.closed);
         const kept = open.slice(0, target);
-        const reopening = closed.slice(0, Math.max(0, target - open.length));
+        const reopeningHere = closed.slice(0, Math.max(0, target - open.length));
         const asked = options?.[faction];
         const optionsAt = (position: number) => asked?.[position] ?? {};
 
         // Closed slots are a faction's last, so kept, reopened and created is also the order of their numbers
-        const staying = [...kept, ...reopening.map((slot) => ({ ...slot, closed: false }))];
+        const staying = [...kept, ...reopeningHere.map((slot) => ({ ...slot, closed: false }))];
+        reopening.push(...reopeningHere);
         if (asked) {
             updating.push(...staying.map((slot, at) => ({ ...omit(slot, slotOptionKeys), ...optionsAt(at) }) as ISlot));
         } else {
@@ -118,7 +121,7 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
             creating.push({ faction, options: optionsAt(position) });
         }
         closing.push(...open.slice(target));
-        reopened += reopening.length;
+        reopened += reopeningHere.length;
     }
 
     const opened = reopened + creating.length;
@@ -140,6 +143,11 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
     if (changed.length > 0) {
         await dataService.slots.update(changed);
     }
+    // A slot's thread follows it out of play, and back
+    await Promise.all([
+        ...closing.map((slot) => closeSlotDiscussion(project, slot)),
+        ...reopening.map((slot) => reopenSlotDiscussion(project, slot))
+    ]);
     if (creating.length > 0) {
         await dataService.slots.create(
             creating.map(

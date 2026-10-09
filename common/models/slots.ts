@@ -217,6 +217,15 @@ export interface ISlot extends IAuditable {
     faq?: string;
     statuses: SlotStatuses;
     release?: SlotRelease;
+    _metadata?: {
+        /** The slot's thread in its draft project's planning forum - server-maintained */
+        discord?: {
+            messageUrl?: string;
+            /** Discord id of who opened it by hand - absent when it opened itself as a card arrived */
+            startedBy?: string;
+            lastSynced?: Date;
+        };
+    };
 }
 
 // A slot's own settings - its conditions, plus the options every slot always has

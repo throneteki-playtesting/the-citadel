@@ -17,7 +17,8 @@ import api, {
     useGetCardsQuery,
     useGetPoolQuery,
     useGetSlotsQuery,
-    useMoveCardMutation
+    useMoveCardMutation,
+    useStartSlotDiscussionMutation
 } from "../../../api";
 import { showApiErrorToast, toNormalizedError } from "../../../api/errors";
 import type { AppDispatch } from "../../../api/store";
@@ -130,6 +131,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [addOptions] = useAddSlotOptionsMutation({ selectFromResult: NO_RESULT });
     const [addToPool] = useAddToPoolMutation({ selectFromResult: NO_RESULT });
     const [deleteDraft] = useDeleteDraftMutation({ selectFromResult: NO_RESULT });
+    const [startDiscussion] = useStartSlotDiscussionMutation({ selectFromResult: NO_RESULT });
     const poolHost = useDraftPoolHost();
     const canDraft = usePermission(Permission.CREATE_CARDS);
     const { data: pool } = useGetPoolQuery({ project: project.number }, { skip: !canDraft });
@@ -244,6 +246,18 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         [cardsData]
     );
     const onArrange = useCallback((slot: DraftSlot) => openArrange(slot.number), [openArrange]);
+    const onStartDiscussion = useStableCallback(async (slot: DraftSlot) => {
+        try {
+            await startDiscussion({ project: project.number, number: slot.number }).unwrap();
+            addToast({
+                color: "success",
+                title: "Discussion opened",
+                description: `Slot #${slot.number} has a thread in the planning forum`
+            });
+        } catch (error) {
+            showApiErrorToast(error, { title: "Failed to open discussion" });
+        }
+    });
     const onEditOptions = useCallback((slot: DraftSlot) => {
         setOptionsSlot(slot.slot);
         setIsOptionsOpen(true);
@@ -558,6 +572,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                             onSuggestion={onSuggestion}
                             onArrange={onArrange}
                             onEditOptions={onEditOptions}
+                            onStartDiscussion={onStartDiscussion}
                             registerPile={registerPile}
                             onEdit={onEdit}
                             onDelete={onDelete}

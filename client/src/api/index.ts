@@ -835,6 +835,13 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
+        startSlotDiscussion: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/discussion`),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
         // Drawn in its new order straight away - a drag shouldn't wait on the round trip to settle
         updateSlotPreferences: builder.mutation<ISlot, ISlotRef & { preferences: SemanticVersion[] }>({
             query: ({ project, number, preferences }) => {
@@ -1380,6 +1387,7 @@ export const {
     usePutDraftCardMutation,
     useAddSlotOptionsMutation,
     useGetPoolQuery,
+    useStartSlotDiscussionMutation,
     useAddToPoolMutation,
     useRemoveFromPoolMutation,
     useDeleteDraftMutation,

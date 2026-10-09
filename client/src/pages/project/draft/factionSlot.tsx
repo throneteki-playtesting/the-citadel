@@ -5,6 +5,7 @@ import { CardBlank } from "@agot/card-preview";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faListOl, faSliders, faStarOfLife } from "@fortawesome/free-solid-svg-icons";
+import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import classNames from "classnames";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
@@ -44,6 +45,7 @@ export type SlotHandlers = CardHandlers & {
     onSuggestion: (slot: DraftSlot) => void;
     onArrange: (slot: DraftSlot) => void;
     onEditOptions: (slot: DraftSlot) => void;
+    onStartDiscussion: (slot: DraftSlot) => void;
     registerPile: (number: number, element: HTMLElement | null) => void;
 };
 
@@ -56,6 +58,7 @@ const FactionSlot = memo(function FactionSlot({
     onSuggestion,
     onArrange,
     onEditOptions,
+    onStartDiscussion,
     registerPile,
     onEdit,
     onDelete
@@ -77,32 +80,57 @@ const FactionSlot = memo(function FactionSlot({
     const canCreate = usePermission(Permission.CREATE_CARDS);
     const canReadSuggestions = usePermission(Permission.READ_SUGGESTIONS);
     const canEditSlot = usePermission(Permission.EDIT_SLOTS);
-    const slotActions = useMemo(
-        (): SlotAction[] =>
-            [
-                canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
-                canReadSuggestions && {
-                    key: "suggestion",
-                    label: "Add suggestions",
-                    icon: suggestionIcons.base,
-                    onPress: () => onSuggestion(slot)
-                },
-                canEditSlot && {
-                    key: "options",
-                    label: "Edit options",
-                    icon: faSliders,
-                    onPress: () => onEditOptions(slot)
-                }
-            ].flatMap((action) => (action ? [action] : [])),
-        [canCreate, canReadSuggestions, canEditSlot, slot, onNew, onSuggestion, onEditOptions]
-    );
+    const discussionUrl = slot.slot._metadata?.discord?.messageUrl;
     const hasArrange = canEditSlot && slot.options.length > 1;
-    const arrangeAction = useMemo(
-        (): SlotAction | undefined =>
-            hasArrange
-                ? { key: "arrange", label: "Arrange", icon: faListOl, onPress: () => onArrange(slot) }
-                : undefined,
-        [hasArrange, slot, onArrange]
+    const slotActions = useMemo(
+        (): SlotAction[][] =>
+            [
+                [
+                    !discussionUrl &&
+                        canCreate && {
+                            key: "discussion",
+                            label: "Start discussion",
+                            icon: faDiscord,
+                            onPress: () => onStartDiscussion(slot)
+                        },
+                    hasArrange && {
+                        key: "arrange",
+                        label: "Arrange",
+                        icon: faListOl,
+                        onPress: () => onArrange(slot)
+                    }
+                ],
+                [
+                    canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
+                    canReadSuggestions && {
+                        key: "suggestion",
+                        label: "Add suggestions",
+                        icon: suggestionIcons.base,
+                        onPress: () => onSuggestion(slot)
+                    },
+                    canEditSlot && {
+                        key: "options",
+                        label: "Edit options",
+                        icon: faSliders,
+                        onPress: () => onEditOptions(slot)
+                    }
+                ]
+            ]
+                .map((group) => group.flatMap((action) => (action ? [action] : [])))
+                .filter((group) => group.length > 0),
+        [
+            canCreate,
+            canReadSuggestions,
+            canEditSlot,
+            hasArrange,
+            discussionUrl,
+            slot,
+            onNew,
+            onSuggestion,
+            onEditOptions,
+            onStartDiscussion,
+            onArrange
+        ]
     );
     const onNewHere = useStableCallback(() => onNew(slot));
     const onSuggestionHere = useStableCallback(() => onSuggestion(slot));
@@ -121,7 +149,6 @@ const FactionSlot = memo(function FactionSlot({
     return (
         <SlotFrame
             slot={slot.slot}
-            primaryAction={arrangeAction}
             actions={slotActions}
             className={classNames(DRAFT_SLOT_VARIABLES_CLASS, "self-start", SHAPE_TRANSITION_CLASS)}
             style={frameShape(isLandscape)}
