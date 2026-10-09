@@ -16,6 +16,7 @@ import { statusActionItem } from "../../components/actions/statusActionItem";
 import { BaseStatus } from "../../components/status/baseStatus";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 import { useDiscordProjectStatus } from "../../components/status/useDiscordProjectStatus";
+import { useDiscordForumStatus } from "../../components/status/useDiscordForumStatus";
 import { useGithubProjectStatus } from "../../components/status/useGithubProjectStatus";
 import { UserNameList } from "../../components/userAvatar";
 
@@ -30,6 +31,7 @@ const ProjectHeader = ({
     const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES) && isSyncable;
     const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD) && isSyncable;
     const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB) && isSyncable;
+    const canViewForum = usePermission(Permission.READ_DISCORD_PLANNING_FORUM) && project.draft;
     const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
     const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
     const canArchive = usePermission(Permission.ARCHIVE_PROJECTS) && !project.draft && project.active;
@@ -37,6 +39,7 @@ const ProjectHeader = ({
     const { data: imageStatus, isLoading: isImageStatusLoading } = useProjectImageStatus(project.number);
     const { data: discordStatus, isLoading: isDiscordStatusLoading } = useDiscordProjectStatus(project.number);
     const { data: githubStatus, isLoading: isGithubStatusLoading } = useGithubProjectStatus(project.number);
+    const forumStatus = useDiscordForumStatus(project);
 
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
@@ -93,6 +96,7 @@ const ProjectHeader = ({
                     </div>
                     <div className="flex items-center gap-1.5">
                         <div className="hidden sm:flex items-center gap-1.5">
+                            {canViewForum && <BaseStatus data={forumStatus} isIconOnly />}
                             {canSyncImages && (
                                 <BaseStatus data={imageStatus} isLoading={isImageStatusLoading} isIconOnly />
                             )}
@@ -105,6 +109,8 @@ const ProjectHeader = ({
                         </div>
                         <HeaderActions
                             items={[
+                                canViewForum &&
+                                    statusActionItem("forum-discord", forumStatus, { isDropdownOnly: true }),
                                 canSyncImages &&
                                     statusActionItem("sync-images", imageStatus, {
                                         isLoading: isImageStatusLoading,

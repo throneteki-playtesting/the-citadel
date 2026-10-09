@@ -72,7 +72,7 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
                         )}
                     </div>
                 </DropdownTrigger>
-                <DropdownMenu>
+                <DropdownMenu disabledKeys={isImpersonationActionPending ? ["stop-impersonating"] : []}>
                     {(isImpersonating && impersonation
                         ? [
                               <DropdownItem
@@ -105,7 +105,6 @@ const ProfileSection = ({ children: items = [] }: ProfileSectionProps) => {
                                       <DropdownItem
                                           key="stop-impersonating"
                                           onPress={stopImpersonating}
-                                          isDisabled={isImpersonationActionPending}
                                           color="warning"
                                       >
                                           Exit Impersonation

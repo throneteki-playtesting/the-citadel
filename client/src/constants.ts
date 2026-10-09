@@ -614,6 +614,7 @@ export const highlightTarget = {
         `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
     release: (project: number, code: string) => `release-${project}|${code}`,
+    slot: (project: number, number: number) => `slot-${project}|${number}`,
     playtestingUpdateCard: (project: number, number: number) => `update-card-${project}|${number}`,
     inquiry: (project: number, number: number, inquiry: number) => `inquiry-${project}|${number}|${inquiry}`
 } as const;

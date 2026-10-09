@@ -1,4 +1,5 @@
 import { ColorResolvable } from "discord.js";
+import * as discordEmojis from "discord-emoji";
 import { dataService } from "@/services";
 
 /** Discord's own caps on how much text a single embed part will carry */
@@ -30,6 +31,12 @@ export const labelEmojis = {
     "strongly disagree": ":thumbsdown::thumbsdown:",
     white_check_mark: "\u2705"
 } as { [emoji: string]: string };
+
+// Emoji by name, for what has no room for a shortcode - eg. a channel's name
+export const unicodeEmojis: { [name: string]: string } = Object.assign(
+    {},
+    ...Object.values(discordEmojis).filter((category) => typeof category === "object")
+);
 
 export const colors = {
     review: "#660087",

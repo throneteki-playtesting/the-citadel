@@ -4,10 +4,10 @@ import { animate } from "framer-motion";
 import classNames from "classnames";
 import { CardPreview } from "@agot/card-preview";
 import { IPlaytestCard } from "common/models/cards";
-import { factionNames, SemanticVersion } from "common/utils";
+import { SemanticVersion } from "common/utils";
 import { useUpdateSlotPreferencesMutation } from "../../../api";
+import { useSlotTitle } from "../../../components/slots/slotTitle";
 import { showApiErrorToast } from "../../../api/errors";
-import ThronesIcon from "../../../components/thronesIcon";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { slotConditionIssues } from "common/models/slotConditions";
@@ -24,6 +24,7 @@ const FADE_CLASS = "transition-opacity duration-200";
 
 // The pile lifted off the table to be put in order, then laid back down - drawn here while its originals hide
 export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }: ArrangeModalProps) {
+    const title = useSlotTitle(project, slot.number, "Arrange Preferences");
     const [isSettled, setIsSettled] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [cardWidth] = useState(() => pile.getBoundingClientRect().width);
@@ -122,10 +123,7 @@ export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }
             }}
         >
             <ModalContent>
-                <ModalHeader className={classNames("flex items-center gap-2", fadeClass)}>
-                    <ThronesIcon name={slot.faction} />
-                    Arrange #{slot.number} {factionNames[slot.faction]} slot
-                </ModalHeader>
+                <ModalHeader className={fadeClass}>{title}</ModalHeader>
                 <ModalBody className="overflow-visible">
                     <span className={classNames("text-sm text-foreground/60", fadeClass)}>
                         Drag the cards into order of preference. The first is the slot's Favoured.

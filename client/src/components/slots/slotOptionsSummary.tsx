@@ -144,6 +144,25 @@ export default function SlotOptionsSummary({ className, options }: SlotOptionsSu
     );
 }
 
+// Every condition written out in full, for where there is room to - the icon and what it asks, run together
+export function SlotNeeds({ className, conditions }: { className?: string; conditions: SlotCondition[] }) {
+    const lines = conditions.flatMap(tooltipLines);
+    return (
+        <p className={classNames("text-sm text-foreground/60", className)}>
+            <span className="font-cinzel text-foreground/80">Slot needs: </span>
+            {lines.map(({ key, token, text }, index) => (
+                <span key={key}>
+                    <span className="inline-flex items-center gap-1.5">
+                        {token}
+                        {text}
+                    </span>
+                    {index < lines.length - 1 && ", "}
+                </span>
+            ))}
+        </p>
+    );
+}
+
 // The tooltip's lines - one per condition, except icons, which take a line each
 function tooltipLines(condition: SlotCondition): TooltipLine[] {
     if (condition.stat !== "icons") {

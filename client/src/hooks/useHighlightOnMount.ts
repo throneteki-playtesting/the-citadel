@@ -43,6 +43,7 @@ export default function useHighlightOnMount<T extends HTMLElement>(targetId: str
             if (timerRef.current) {
                 clearTimeout(timerRef.current);
             }
+            hasFired.current = false;
         };
     }, []);
 

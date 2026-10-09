@@ -45,7 +45,7 @@ export type SlotHandlers = CardHandlers & {
     onSuggestion: (slot: DraftSlot) => void;
     onArrange: (slot: DraftSlot) => void;
     onEditOptions: (slot: DraftSlot) => void;
-    onStartDiscussion: (slot: DraftSlot) => void;
+    onStartDiscussion: (slot: DraftSlot) => Promise<void>;
     registerPile: (number: number, element: HTMLElement | null) => void;
 };
 
@@ -104,7 +104,7 @@ const FactionSlot = memo(function FactionSlot({
                     canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
                     canReadSuggestions && {
                         key: "suggestion",
-                        label: "Add suggestions",
+                        label: "Add Suggestions",
                         icon: suggestionIcons.base,
                         onPress: () => onSuggestion(slot)
                     },
@@ -346,7 +346,7 @@ const EmptyCardSlot = memo(function EmptyCardSlot({
                         classNames={{ button: "h-10 w-10" }}
                     >
                         <PermissionGate requires={Permission.CREATE_CARDS}>
-                            <Tooltip content="Create new card">
+                            <Tooltip content="Add new card">
                                 <Button
                                     isIconOnly
                                     radius="full"
@@ -364,7 +364,7 @@ const EmptyCardSlot = memo(function EmptyCardSlot({
                             </Tooltip>
                         </PermissionGate>
                         <PermissionGate requires={Permission.READ_SUGGESTIONS}>
-                            <Tooltip content="Choose suggestions">
+                            <Tooltip content="Add Suggestions">
                                 <Button
                                     isIconOnly
                                     radius="full"

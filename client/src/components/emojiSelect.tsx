@@ -4,7 +4,13 @@ import { Autocomplete, AutocompleteItem, AutocompleteProps } from "@heroui/react
 
 const ALL_EMOJIS = Object.entries(dismoji).map(([name, unicode]) => ({ name, unicode }));
 
-export function EmojiSelect({ defaultValue, name = "emoji", label = "Emoji", ...props }: EmojiSelectProps) {
+export function EmojiSelect({
+    defaultValue,
+    name = "emoji",
+    label = "Emoji",
+    onEmojiChange,
+    ...props
+}: EmojiSelectProps) {
     const [search, setSearch] = useState(defaultValue ? (dismoji[defaultValue] ?? defaultValue) : "");
     const [selectedKey, setSelectedKey] = useState<string | null>(defaultValue ?? null);
 
@@ -17,12 +23,14 @@ export function EmojiSelect({ defaultValue, name = "emoji", label = "Emoji", ...
     const handleInputChange = (value: string) => {
         setSearch(value);
         setSelectedKey(null);
+        onEmojiChange?.(undefined);
     };
 
     const handleSelectionChange = (key: React.Key | null) => {
         const emojiName = key as string | null;
         setSelectedKey(emojiName);
         if (emojiName) setSearch(dismoji[emojiName] ?? emojiName);
+        onEmojiChange?.(emojiName ?? undefined);
     };
 
     return (
@@ -56,4 +64,6 @@ type EmojiSelectProps = Omit<
     "children" | "items" | "inputValue" | "onInputChange" | "allowsCustomValue" | "defaultSelectedKey"
 > & {
     defaultValue?: string;
+    /** What is chosen as it changes - undefined once it is cleared, which a form's own data can't say */
+    onEmojiChange?: (emoji: string | undefined) => void;
 };

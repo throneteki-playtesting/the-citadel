@@ -33,7 +33,7 @@ import { IGetRequest, IGetResponse } from "@/types";
 import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
-import { autoOpenSlotDiscussion } from "@/discord/forums/planningForum";
+import { slotDiscussionChanged } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
 import { IProject } from "common/models/projects";
@@ -454,9 +454,10 @@ router.put(
                 card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
                 await updateSlotPreferences(project.number, number, preferFirst(card.version));
-                void autoOpenSlotDiscussion(project.number, number);
+                void slotDiscussionChanged(project.number, number, true);
             } else {
                 await process("update");
+                void slotDiscussionChanged(project.number, number, true);
             }
         } else {
             // When project is not in draft, can only be one (or none) existing drafts
@@ -537,7 +538,7 @@ router.post(
                 ...added,
                 ...preferences.filter((version) => !added.includes(version))
             ]);
-            void autoOpenSlotDiscussion(project.number, number);
+            void slotDiscussionChanged(project.number, number);
 
             for (const card of cards) {
                 await logActivity(LogCategory.CARD, "card.draft.created", "<principal> created draft <card>", {
@@ -579,6 +580,7 @@ router.delete(
             await unmarkInquiriesAddressed(project.number, number, deleted.version);
             if (project.draft) {
                 await updateSlotPreferences(project.number, number, withoutPreference(deleted.version));
+                void slotDiscussionChanged(project.number, number);
             }
 
             await logActivity(LogCategory.CARD, "card.draft.deleted", "<principal> deleted draft <card>", {
@@ -723,7 +725,8 @@ router.post(
             const [created] = await dataService.cards.create([movedCard], false);
             await updateSlotPreferences(projectNumber, number, withoutPreference(version));
             await updateSlotPreferences(projectNumber, to, preferFirst(newVersion));
-            void autoOpenSlotDiscussion(projectNumber, to);
+            void slotDiscussionChanged(projectNumber, to, true);
+            void slotDiscussionChanged(projectNumber, number);
 
             await logActivity(
                 LogCategory.CARD,

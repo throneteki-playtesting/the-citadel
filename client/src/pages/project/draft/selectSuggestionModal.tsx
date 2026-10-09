@@ -26,8 +26,8 @@ import CardEditor from "../../../components/cardEditor";
 import EditorCardPreview from "../../../components/cardEditor/editorCardPreview";
 import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../../components/data/suggestionFilter";
 import SlidingPages from "../../../components/slidingPages";
-import SlotOptionsSummary from "../../../components/slots/slotOptionsSummary";
-import ThronesIcon from "../../../components/thronesIcon";
+import { SlotNeeds } from "../../../components/slots/slotOptionsSummary";
+import { useSlotTitle } from "../../../components/slots/slotTitle";
 import { EDITOR_CARD_WIDTH, PLOT_RATIO, POOL_READ_LIMIT } from "../../../constants";
 import { schemaErrors } from "../../../hooks/useFormValidation";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
@@ -77,6 +77,7 @@ function SuggestionPicker({
     onSave
 }: SuggestionPickerProps) {
     const [addOptions, { isLoading: isAdding }] = useAddSlotOptionsMutation();
+    const title = useSlotTitle(project, slot.number, "Add Suggestions");
     const prefersReducedMotion = useReducedMotion();
     const flightNodes = useRef(new Map<string, HTMLElement>());
     const previewRef = useRef<HTMLDivElement>(null);
@@ -153,11 +154,16 @@ function SuggestionPicker({
     // Typing in a card's editor changes the picks, but not which are picked - the grid of suggestions is left alone
     const pickedKey = picks.map(idOf).join("\n");
     const pickedIds = useMemo(() => new Set(pickedKey ? pickedKey.split("\n") : []), [pickedKey]);
-    // The review lags what is typed, so a card being written doesn't redraw every other card on each keystroke
+    // What is written in a card lags what is typed, so a card being written doesn't redraw every other card on each
+    // keystroke - but their order doesn't, or a card let go in a new place would fall back before it moved
     const deferredPicks = useDeferredValue(picks);
-    const reviewCards = useMemo(
-        () => deferredPicks.map((pick) => ({ id: idOf(pick), card: pick.card as IPlaytestCard })),
+    const deferredCards = useMemo(
+        () => new Map(deferredPicks.map((pick) => [idOf(pick), { id: idOf(pick), card: pick.card as IPlaytestCard }])),
         [deferredPicks]
+    );
+    const reviewCards = useMemo(
+        () => (pickedKey ? pickedKey.split("\n") : []).flatMap((id) => deferredCards.get(id) ?? []),
+        [pickedKey, deferredCards]
     );
     const problems = useMemo(() => new Set(Object.keys(errors).filter((id) => !isEmpty(errors[id]))), [errors]);
 
@@ -294,57 +300,58 @@ function SuggestionPicker({
     // Only as the picks, the filters or the slot change, so the pages beside the one on show stand still
     const browsePage = useMemo(
         () => (
-            <SuggestionBrowser
-                key="browse"
-                className="pt-2"
-                resetKey={slot.number}
-                filter={filter}
-                onFilterChange={setFilter}
-                search={search}
-                onSearchChange={setSearch}
-                sortBy={sortBy}
-                onSortChange={setSortBy}
-                scope={{
-                    faction: slot.faction,
-                    ...(shownSource === "approved" && { approvedFilter: "only" })
-                }}
-                queryExtras={queryExtras}
-                isFactionFixed
-                scrollClassName={BROWSE_SCROLL_CLASS}
-                emptyContent="No suggestions match this slot."
-                leading={
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                        <Tabs
-                            size="sm"
-                            aria-label="Which suggestions to choose from"
-                            selectedKey={shownSource}
-                            disabledKeys={disabledSources}
-                            onSelectionChange={(key) => setChosenSource(key as Source)}
-                        >
-                            <Tab key="pooled" title="Pooled" />
-                            <Tab key="approved" title="Approved" />
-                            <Tab key="all" title="All" />
-                        </Tabs>
-                        {hasConditions && (
-                            <Switch size="sm" isSelected={fitsOnly} onValueChange={setFitsOnly}>
-                                Matches slot conditions
-                            </Switch>
-                        )}
-                    </div>
-                }
-            >
-                {(suggestion) => (
-                    <PickableSuggestion
-                        key={suggestion.id}
-                        suggestion={suggestion}
-                        isPicked={pickedIds.has(suggestion.id ?? "")}
-                        isDimmed={pickedIds.size > 0}
-                        showLikes={sortBy === "likes"}
-                        usedIn={suggestion.id ? used.get(suggestion.id) : undefined}
-                        onToggle={toggle}
-                    />
-                )}
-            </SuggestionBrowser>
+            <div key="browse" className="flex flex-col gap-2 pt-2">
+                {hasConditions && <SlotNeeds conditions={slot.conditions ?? []} />}
+                <SuggestionBrowser
+                    resetKey={slot.number}
+                    filter={filter}
+                    onFilterChange={setFilter}
+                    search={search}
+                    onSearchChange={setSearch}
+                    sortBy={sortBy}
+                    onSortChange={setSortBy}
+                    scope={{
+                        faction: slot.faction,
+                        ...(shownSource === "approved" && { approvedFilter: "only" })
+                    }}
+                    queryExtras={queryExtras}
+                    isFactionFixed
+                    scrollClassName={BROWSE_SCROLL_CLASS}
+                    emptyContent="No suggestions match this slot."
+                    leading={
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                            <Tabs
+                                size="sm"
+                                aria-label="Which suggestions to choose from"
+                                selectedKey={shownSource}
+                                disabledKeys={disabledSources}
+                                onSelectionChange={(key) => setChosenSource(key as Source)}
+                            >
+                                <Tab key="pooled" title="Pooled" />
+                                <Tab key="approved" title="Approved" />
+                                <Tab key="all" title="All" />
+                            </Tabs>
+                            {hasConditions && (
+                                <Switch size="sm" isSelected={fitsOnly} onValueChange={setFitsOnly}>
+                                    Matches slot conditions
+                                </Switch>
+                            )}
+                        </div>
+                    }
+                >
+                    {(suggestion) => (
+                        <PickableSuggestion
+                            key={suggestion.id}
+                            suggestion={suggestion}
+                            isPicked={pickedIds.has(suggestion.id ?? "")}
+                            isDimmed={pickedIds.size > 0}
+                            showLikes={sortBy === "likes"}
+                            usedIn={suggestion.id ? used.get(suggestion.id) : undefined}
+                            onToggle={toggle}
+                        />
+                    )}
+                </SuggestionBrowser>
+            </div>
         ),
         [
             slot,
@@ -425,15 +432,7 @@ function SuggestionPicker({
                 onOpenChange={(open) => !open && onClose()}
             >
                 <ModalContent>
-                    <ModalHeader className="flex items-center gap-2">
-                        <ThronesIcon name={slot.faction} />
-                        <span className="shrink-0">#{slot.number} Add Suggestions</span>
-                        {hasConditions && (
-                            <div className="ml-2 min-w-0 flex-1 text-xs font-normal text-foreground/60">
-                                <SlotOptionsSummary options={slot} />
-                            </div>
-                        )}
-                    </ModalHeader>
+                    <ModalHeader>{title}</ModalHeader>
                     <ModalBody>
                         <SlidingPages currentPage={page} pageProps={SLIDING_PAGE_PROPS} className="-mt-2">
                             {[browsePage, ...(hasReview ? [reviewPage] : []), editPage]}

@@ -16,7 +16,7 @@ import { ApiErrorResponse } from "@/errors";
 import { dataService } from "@/services";
 import { syncProjectCardCount } from "@/utils";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
-import { closeSlotDiscussion, reopenSlotDiscussion } from "@/discord/forums/planningForum";
+import { closeSlotDiscussion, reopenSlotDiscussion, slotDiscussionChanged } from "@/discord/forums/planningForum";
 import { LogCategory } from "common/models/logs";
 
 /** How many slots each faction should have, and - where a template is being laid out - what each one asks for */
@@ -143,7 +143,8 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
     if (changed.length > 0) {
         await dataService.slots.update(changed);
     }
-    // A slot's thread follows it out of play, and back
+    // A slot's thread follows it out of play and back, and its post follows what it asks for
+    updating.forEach((slot) => void slotDiscussionChanged(project.number, slot.number));
     await Promise.all([
         ...closing.map((slot) => closeSlotDiscussion(project, slot)),
         ...reopening.map((slot) => reopenSlotDiscussion(project, slot))

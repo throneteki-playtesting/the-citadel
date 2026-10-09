@@ -1,7 +1,7 @@
 import { BaseElementProps } from "../../types";
 import { IPlaytestCard } from "common/models/cards";
 import { useDeleteDraftMutation, useGetPoolQuery, useGetSuggestionQuery } from "../../api";
-import { useCallback } from "react";
+import { ReactNode, useCallback } from "react";
 import ConfirmModal from "../../components/confirmModal";
 import DraftPoolIcon from "../../components/draftPoolIcon";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -10,6 +10,7 @@ import { suggestionIcons } from "../../constants";
 import { showApiErrorToast } from "../../api/errors";
 
 const DeleteCardModal = ({
+    title,
     isOpen,
     card,
     onClose: onModalClose = () => true,
@@ -51,7 +52,8 @@ const DeleteCardModal = ({
         <ConfirmModal
             isOpen={isOpen}
             isLoading={isDeleting}
-            title={`${isSuggestion ? "Remove" : "Delete"} "${card?.name}"?`}
+            size="md"
+            title={title ?? `${isSuggestion ? "Remove" : "Delete"} "${card?.name}"?`}
             content={
                 <>
                     <p>
@@ -90,6 +92,8 @@ const DeleteCardModal = ({
 };
 
 type DeleteCardModalProps = Omit<BaseElementProps, "children"> & {
+    /** Replaces the question asked of the card by name - eg. where its place in a slot says more */
+    title?: ReactNode;
     isOpen: boolean;
     card?: IPlaytestCard;
     onClose?: () => void;

@@ -27,7 +27,7 @@ import Watermark from "../../components/watermark";
 import { IProject } from "common/models/projects";
 
 // "tab" is durable, shareable state kept in sync via its own search-param scope, not consumed here
-const PROJECT_PARAMS = ["release"] as const;
+const PROJECT_PARAMS = ["release", "slot"] as const;
 type ProjectTab = "development" | "artworks" | "refinements" | "releases";
 
 // A release code implies the releases tab even without one named, so it wins over an absent tab param
@@ -44,9 +44,13 @@ export default function ProjectDetail({ className, style, project: number }: Pro
     const [isEditing, setIsEditing] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     // A release code implies the releases tab, so a deep link needs the one param
-    const { release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release }) =>
-        release ? { highlight: highlightTarget.release(number, release) } : null
-    );
+    const { release: entryRelease } = useConsumableParams(PROJECT_PARAMS, ({ release, slot }) => {
+        if (release) {
+            return { highlight: highlightTarget.release(number, release) };
+        }
+        const slotNumber = Number(slot);
+        return slotNumber ? { highlight: highlightTarget.slot(number, slotNumber) } : null;
+    });
 
     const navigate = useNavigate();
 
@@ -69,7 +73,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     return (
         <div className={classNames("relative", className)} style={style}>
-            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 overflow-x-clip pointer-events-none">
                 <Watermark
                     position="top-right"
                     className={classNames(

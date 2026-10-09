@@ -5,6 +5,7 @@ import {
     ClientEvents,
     Events,
     ForumChannel,
+    GatewayDispatchEvents,
     GuildMember,
     APIUser,
     User,
@@ -16,7 +17,7 @@ import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
-import { isPlanningForum, onPlanningForumMessageDeleted } from "./forums/planningForum";
+import { isPlanningForum, onPlanningForumDeleted, onPlanningForumMessageDeleted } from "./forums/planningForum";
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
 import { isSuggestionForumThread, onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
 import { broadcastResourceChange } from "@/services/sseService";
@@ -34,7 +35,11 @@ export function registerEvents(
 ) {
     function on<E extends keyof ClientEvents>(event: E, handler: (...args: ClientEvents[E]) => Promise<void>) {
         client.on(event, async (...args) => {
-            await discordEventMiddleware(undefined, () => handler(...args));
+            try {
+                await discordEventMiddleware(undefined, () => handler(...args));
+            } catch (err) {
+                logger.error(`[Discord] Failed to handle ${event}`, err);
+            }
         });
     }
 
@@ -133,6 +138,36 @@ export function registerEvents(
         // Starter message URL uses the thread ID for both the channel and message segments
         const starterUrl = `https://discord.com/channels/${thread.guildId}/${thread.id}/${thread.id}`;
         await onForumMessageDeleted(thread.parent.name, starterUrl);
+    });
+
+    on(Events.ChannelDelete, async (channel) => {
+        if (channel instanceof ForumChannel && channel.guildId === guildId && isPlanningForum(channel.name)) {
+            await onPlanningForumDeleted(channel);
+        }
+    });
+
+    // An archived thread, or one made before the bot started, isn't cached - deleting it never raises threadDelete
+    client.on(Events.Raw, async (packet) => {
+        if (packet.t !== GatewayDispatchEvents.ThreadDelete) {
+            return;
+        }
+        const { id, guild_id: threadGuildId, parent_id: parentId } = packet.d;
+        if (threadGuildId !== guildId || !parentId || client.channels.cache.has(id)) {
+            return;
+        }
+
+        const parent = client.channels.cache.get(parentId);
+        if (!(parent instanceof ForumChannel)) {
+            return;
+        }
+
+        try {
+            await discordEventMiddleware(undefined, () =>
+                onForumMessageDeleted(parent.name, `https://discord.com/channels/${threadGuildId}/${id}/${id}`)
+            );
+        } catch (err) {
+            logger.error("[Discord] Failed to handle a deleted thread", err);
+        }
     });
 
     on(Events.MessageDelete, async (message) => {

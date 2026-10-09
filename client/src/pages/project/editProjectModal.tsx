@@ -39,7 +39,7 @@ import { useWizard } from "../../components/wizard/context";
 import UserSelect from "../../components/data/userSelect";
 import { useAuth } from "../../hooks/useAuth";
 import { hasPermission } from "common/utils";
-import { chunk, compact, isEmpty } from "lodash-es";
+import { chunk, compact, isEmpty, omit } from "lodash-es";
 import Permission from "common/models/permissions";
 
 const SLOTS_PAGE = 2;
@@ -116,9 +116,13 @@ export default function EditProjectModal({
 
             // Owners, template and slot counts aren't form fields, so the wizard only holds what it opened with
             const setsCounts = slotGroups && submitted.draft && !templateDefinition?.slots;
+            // The server keeps its own record of the project - what it holds isn't the editor's to send
+            const editable = omit(submitted, "_metadata");
             const validProject = {
-                ...submitted,
+                ...editable,
                 owners,
+                // Cleared is no value at all, which the wizard's merge of the form over the project can't carry
+                emoji: project.emoji,
                 template,
                 ...(setsCounts && { slotCounts: slotCountsOf(slotGroups) })
             };
@@ -149,6 +153,7 @@ export default function EditProjectModal({
             onModalClose,
             onSave,
             owners,
+            project.emoji,
             slotGroups,
             template,
             templateDefinition,
@@ -214,7 +219,11 @@ export default function EditProjectModal({
                                                 </SelectItem>
                                             ))}
                                         </Select>
-                                        <EmojiSelect label="Discord Emoji" defaultValue={project.emoji} />
+                                        <EmojiSelect
+                                            label="Discord Emoji"
+                                            defaultValue={project.emoji}
+                                            onEmojiChange={(emoji) => setProject((prev) => ({ ...prev, emoji }))}
+                                        />
                                     </div>
                                     <div className="grid w-full grid-cols-1 items-start gap-2 sm:grid-cols-2">
                                         <OwnersField

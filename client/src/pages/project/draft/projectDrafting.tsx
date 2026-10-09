@@ -6,7 +6,7 @@ import classNames from "classnames";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { slotConditionIssues } from "common/models/slotConditions";
-import { ISlot, movedOptionVersion, NEW_OPTION_VERSION } from "common/models/slots";
+import { ISlot, movedOptionVersion, NEW_OPTION_VERSION, preferenceLabel } from "common/models/slots";
 import Permission from "common/models/permissions";
 import { parseCardCode } from "common/utils";
 import { DeepPartial } from "common/types";
@@ -24,9 +24,11 @@ import { showApiErrorToast, toNormalizedError } from "../../../api/errors";
 import type { AppDispatch } from "../../../api/store";
 import { cacheNow } from "../../../api/cacheHelpers";
 import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
+import { slotTitle } from "../../../components/slots/slotTitle";
 import { usePermission } from "../../../hooks/usePermission";
 import { useDragSensors } from "../../../hooks/useDragSensors";
 import { useHasOpened } from "../../../hooks/useHasOpened";
+import { openDiscordLink, useDiscordTarget } from "../../../hooks/useDiscordLink";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { useTagManagerOverrides } from "../../../hooks/useTagManagerOverrides";
 import { CARD_BASE, DRAFT_ROW_HEIGHT_CLASS, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
@@ -123,6 +125,9 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         [dragStore]
     );
     useEffect(() => closeSlotMenus, []);
+    // Kept once their modals close, so each title stays as it was while the modal fades out
+    const editorTitle = useRef<string | undefined>(undefined);
+    const deleteTitle = useRef<string | undefined>(undefined);
     const pileElements = useRef(new Map<number, HTMLElement>());
     const canEditSlots = usePermission(Permission.EDIT_SLOTS);
     const sensors = useDragSensors();
@@ -132,6 +137,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [addToPool] = useAddToPoolMutation({ selectFromResult: NO_RESULT });
     const [deleteDraft] = useDeleteDraftMutation({ selectFromResult: NO_RESULT });
     const [startDiscussion] = useStartSlotDiscussionMutation({ selectFromResult: NO_RESULT });
+    const discordTarget = useDiscordTarget();
     const poolHost = useDraftPoolHost();
     const canDraft = usePermission(Permission.CREATE_CARDS);
     const { data: pool } = useGetPoolQuery({ project: project.number }, { skip: !canDraft });
@@ -248,14 +254,12 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const onArrange = useCallback((slot: DraftSlot) => openArrange(slot.number), [openArrange]);
     const onStartDiscussion = useStableCallback(async (slot: DraftSlot) => {
         try {
-            await startDiscussion({ project: project.number, number: slot.number }).unwrap();
-            addToast({
-                color: "success",
-                title: "Discussion opened",
-                description: `Slot #${slot.number} has a thread in the planning forum`
-            });
+            const opened = await startDiscussion({ project: project.number, number: slot.number }).unwrap();
+            if (opened._metadata?.discord?.messageUrl) {
+                openDiscordLink(opened._metadata.discord.messageUrl, discordTarget);
+            }
         } catch (error) {
-            showApiErrorToast(error, { title: "Failed to open discussion" });
+            showApiErrorToast(error, { title: "Failed to start a discussion" });
         }
     });
     const onEditOptions = useCallback((slot: DraftSlot) => {
@@ -534,6 +538,19 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         }
     };
 
+    if (editing?.number !== undefined) {
+        const slot = findDraftSlot(factionSlots, editing.number);
+        const rank = slot?.options.findIndex((option) => option.version === editing.version) ?? -1;
+        const action =
+            editing.version === NEW_OPTION_VERSION || rank < 0 ? "Add New Card" : `Edit ${preferenceLabel(rank)}`;
+        editorTitle.current = slotTitle(project.name, editing.number, action);
+    }
+
+    if (deleting) {
+        const action = deleting.suggestionId ? "Remove" : "Delete";
+        deleteTitle.current = slotTitle(project.name, deleting.number, `${action} "${deleting.name}"?`);
+    }
+
     if (isLoadingCards || isLoadingSlots) {
         return (
             <div className="space-y-2">
@@ -590,6 +607,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                 <DraftDragOverlay factionSlots={factionSlots} onEdit={onEdit} onDelete={onDelete} />
                 {hasOpenedEditor && (
                     <EditCardModal
+                        title={editorTitle.current}
                         isOpen={!!editing}
                         card={editing}
                         origin={editingOrigin}
@@ -634,6 +652,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                     />
                 )}
                 <DeleteCardModal
+                    title={deleteTitle.current}
                     isOpen={!!deleting}
                     card={deleting}
                     onClose={() => setDeleting(undefined)}

@@ -3,13 +3,12 @@ import { addToast, Button, Form, Modal, ModalBody, ModalContent, ModalFooter, Mo
 import { pick } from "lodash-es";
 import { ISlot, ISlotOptions, slotOptionKeys } from "common/models/slots";
 import { Slot } from "common/models/schemas";
-import { factionNames } from "common/utils";
 import { useUpdateSlotOptionsMutation } from "../../api";
 import { showApiErrorToast } from "../../api/errors";
 import { useFormValidation } from "../../hooks/useFormValidation";
 import FormValidationSummary from "../formValidationSummary";
-import ThronesIcon from "../thronesIcon";
 import SlotOptionsEditor from "./slotOptionsEditor";
+import { useSlotTitle } from "./slotTitle";
 import { conditionLabels } from "common/models/slotConditions";
 
 const FORM_ID = "slot-options-form";
@@ -27,6 +26,7 @@ function SlotOptionsForm({ slot, onClose }: { slot: ISlot; onClose: () => void }
     const [draft, setDraft] = useState<ISlotOptions>(() => pick(slot, slotOptionKeys));
     const { errors, validate, isValidationError, clearErrors } = useFormValidation(Slot.Options);
     const [updateOptions, { isLoading }] = useUpdateSlotOptionsMutation();
+    const title = useSlotTitle(slot.project, slot.number);
 
     // Errors are addressed by condition index, so adding or removing one renames every error after it
     const onChange = (next: ISlotOptions) => {
@@ -53,12 +53,7 @@ function SlotOptionsForm({ slot, onClose }: { slot: ISlot; onClose: () => void }
 
     return (
         <>
-            <ModalHeader className="flex items-center gap-2">
-                <ThronesIcon name={slot.faction} />
-                <span>
-                    #{slot.number} {factionNames[slot.faction]} slot
-                </span>
-            </ModalHeader>
+            <ModalHeader>{title}</ModalHeader>
             <ModalBody>
                 <span className="text-sm text-foreground/60">
                     What this slot is looking for. A card that strays from its conditions is flagged, never refused.

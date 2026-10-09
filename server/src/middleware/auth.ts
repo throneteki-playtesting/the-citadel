@@ -157,12 +157,12 @@ export const discordCommandMiddleware = async (
 
 export const discordEventMiddleware = async (
     member: APIGuildMember | GuildMember | undefined,
-    callback: () => void
+    callback: () => Promise<void> | void
 ) => {
     const integration = await fetchInternalIntegration();
 
     const context = createContext("webhook", integration);
-    requestContext.run(context, callback);
+    await requestContext.run(context, callback);
 };
 
 // Runs work which has no originating request (eg. scheduled syncs) under an internal context

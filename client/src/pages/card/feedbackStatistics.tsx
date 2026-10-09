@@ -346,7 +346,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                                 <Button
                                     as={RouterLink}
                                     to={`/review/submit?project=${project}&number=${number}`}
-                                    onClick={onClose}
+                                    onPress={onClose}
                                     color="primary"
                                 >
                                     Submit a new review

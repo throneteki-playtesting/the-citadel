@@ -31,6 +31,7 @@ function emojiKey(guildId: string) {
 
 // Redis is the record; this only saves re-reading it for every line of a message being built
 const EMOJI_CACHE_MS = 60_000;
+const LONG_RATE_LIMIT_MS = 30_000;
 
 class DiscordService {
     private client: Client;
@@ -53,6 +54,8 @@ class DiscordService {
                 "GuildExpressions"
             ],
             partials: [Partials.Message, Partials.Channel],
+            // A request told to wait this long (eg. a second channel rename) fails for its caller to answer, not waits
+            rest: { rejectOnRateLimit: ({ retryAfter }) => retryAfter > LONG_RATE_LIMIT_MS },
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
         });
 

@@ -1,17 +1,14 @@
-import { memo, ReactNode, useCallback, useState } from "react";
+import { memo, ReactNode, useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { motion } from "framer-motion";
 import classNames from "classnames";
 import { IPlaytestCard } from "common/models/cards";
 import { preferenceLabel } from "common/models/slots";
 import { useDragSensors } from "../../../hooks/useDragSensors";
 import { CARD_BASE } from "../../../constants";
 import { dropAnimation } from "../releases/releaseDnd";
-
-const FADE = { duration: 0.2 } as const;
 
 // Cards laid out to be dragged into order of preference, each over a dotted outline marking a place it can go
 export default function SortableCardGrid({
@@ -121,18 +118,20 @@ const SortableOption = memo(function SortableOption({
         id,
         disabled: !isShown
     });
+    // A css transition rather than an animation, so the cell fades in as it is drawn but not when it is moved - an
+    // animation begins again each time its element is put in a new place in the list
+    const [hasMounted, setHasMounted] = useState(false);
+    useEffect(() => setHasMounted(true), []);
+    const opacity = isShown && hasMounted ? 1 : 0;
     return (
         <div className="relative flex flex-col gap-1" style={{ width: cardWidth }}>
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: isShown ? 1 : 0 }}
-                transition={FADE}
-                className="absolute inset-x-0 bottom-0 top-5 border-2 border-dashed border-foreground/20"
-                style={{ borderRadius: cornerRadius(cardWidth, card.type === "plot" && !hasNonPlot) }}
+            <div
+                className="absolute inset-x-0 bottom-0 top-5 border-2 border-dashed border-foreground/20 transition-opacity duration-200"
+                style={{ opacity, borderRadius: cornerRadius(cardWidth, card.type === "plot" && !hasNonPlot) }}
             />
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: isShown ? 1 : 0 }} transition={FADE}>
+            <div className="transition-opacity duration-200" style={{ opacity }}>
                 <RankLabel rank={index} />
-            </motion.div>
+            </div>
             <div
                 ref={setNodeRef}
                 {...attributes}

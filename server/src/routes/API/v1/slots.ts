@@ -57,7 +57,7 @@ import {
     reopenInquiryDiscussion,
     startInquiryDiscussion
 } from "@/discord/forums/refinementForum";
-import { openSlotDiscussion } from "@/discord/forums/planningForum";
+import { openSlotDiscussion, slotDiscussionChanged } from "@/discord/forums/planningForum";
 
 const router = express.Router({ mergeParams: true });
 
@@ -497,6 +497,7 @@ router.put(
 
         const updated = await dataService.slots.update({ ...omit(slot, slotOptionKeys), ...req.body });
         await settleTemplate(project);
+        void slotDiscussionChanged(project.number, slot.number);
 
         await logActivity(
             LogCategory.SLOT,
@@ -542,6 +543,7 @@ router.put(
             }
 
             const updated = await dataService.slots.update({ ...slot, preferences });
+            void slotDiscussionChanged(project.number, slot.number);
 
             await logActivity(
                 LogCategory.SLOT,

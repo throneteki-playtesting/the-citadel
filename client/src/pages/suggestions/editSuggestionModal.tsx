@@ -2,7 +2,8 @@ import { ICard, ICardSuggestion, ChecklistRuleId, ChecklistJustifications, IDeri
 import { IRewardPunishmentOption } from "common/models/settings";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
-import SuggestionEditorGuide, { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuide";
+import SuggestionEditorGuide from "./suggestionEditorGuide";
+import { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuideState";
 import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import RichTextArea from "../../components/richTextArea";
 import {

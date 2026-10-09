@@ -1177,7 +1177,11 @@ const api = createApi({
                 const url = buildUrl(`projects/${project}/sync/discord`, { number, forced });
                 return { url, method: "POST" };
             },
-            invalidatesTags: (result) => generateFor(result, "card")
+            // A draft project syncs no cards, but its planning forum is recorded on the project
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "card"),
+                { type: "project" as const, id: project }
+            ]
         }),
         syncProjectGithub: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
             query: ({ project, number, forced }) => {

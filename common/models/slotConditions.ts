@@ -201,12 +201,12 @@ function conditionIssue(condition: SlotCondition, card: ICard): string | undefin
         case "type":
             return condition.types.includes(card.type)
                 ? undefined
-                : `The slot asks for ${joinOr(condition.types.map(withArticle))}`;
+                : `Slot asks for ${joinOr(condition.types.map(withArticle))}`;
         case "unique":
         case "loyal":
             return !!card[condition.stat] === condition.value
                 ? undefined
-                : `The slot asks for ${condition.value ? "a " : "a non-"}${condition.stat} card`;
+                : `Slot asks for ${condition.value ? "a " : "a non-"}${condition.stat} card`;
         case "icons": {
             const wrong = challengeIcons.filter(
                 (icon) => condition.icons[icon] !== undefined && !!card.icons?.[icon] !== condition.icons[icon]
@@ -217,13 +217,13 @@ function conditionIssue(condition: SlotCondition, card: ICard): string | undefin
             const traits = (card.traits ?? []).map((trait) => trait.toLowerCase());
             return condition.traits.some((trait) => traits.includes(trait.toLowerCase()))
                 ? undefined
-                : `The slot asks for ${joinOr(condition.traits)}`;
+                : `Slot asks for ${joinOr(condition.traits)}`;
         }
         case "keywords": {
             const keywords = deriveFields(card.text ?? "").keywords.map(({ keyword }) => keyword);
             return condition.keywords.some((keyword) => keywords.includes(keyword))
                 ? undefined
-                : `The slot asks for ${joinOr(condition.keywords)}`;
+                : `Slot asks for ${joinOr(condition.keywords)}`;
         }
         default: {
             const value = rangeValue(card, condition.stat);
@@ -231,7 +231,7 @@ function conditionIssue(condition: SlotCondition, card: ICard): string | undefin
             const isOutside =
                 typeof value === "number" && ((min !== undefined && value < min) || (max !== undefined && value > max));
             return isOutside
-                ? `${conditionLabels[condition.stat]} ${value} is outside the slot's ${formatRange(condition)}`
+                ? `${conditionLabels[condition.stat]} ${value} is outside Slot's ${formatRange(condition)}`
                 : undefined;
         }
     }

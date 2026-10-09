@@ -41,7 +41,7 @@ import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
 import { closeSuggestionThreads } from "@/discord/forums/suggestionForum";
-import { deletePlanningForum } from "@/discord/forums/planningForum";
+import { deletePlanningForum, syncProjectPlanning } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { syncDataPullRequests } from "@/github/pullRequests";
 
@@ -343,6 +343,8 @@ router.put(
         // never trust or overwrite them from a general project edit body
         project.cardCount = previous.cardCount;
         project.releases = previous.releases;
+        // Likewise the Discord links, which a replacing save would drop
+        project._metadata = previous._metadata;
 
         if (slotCounts && !previous.draft) {
             throw new ApiErrorResponse(
@@ -504,7 +506,11 @@ router.post(
             case "image":
                 return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
             case "discord":
-                return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
+                // A draft project's Discord is its planning forum, with a permission of its own - told apart below
+                return (
+                    hasPermission(principal, Permission.SYNC_CARD_DISCORD) ||
+                    hasPermission(principal, Permission.READ_DISCORD_PLANNING_FORUM)
+                );
             case "github":
                 return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
             default:
@@ -514,9 +520,32 @@ router.post(
     loadProject,
     asyncHandler<SyncParams, unknown, unknown, { number?: number; forced?: boolean }>(async (req, res) => {
         const project = res.locals.project as IProject;
-        assertSyncableProject(project);
         const { type } = req.params;
         const { number, forced } = req.query;
+
+        if (type === "discord") {
+            const permission = project.draft ? Permission.READ_DISCORD_PLANNING_FORUM : Permission.SYNC_CARD_DISCORD;
+            if (!hasPermission(getContext().principal, permission)) {
+                throw new PermissionErrorResponse();
+            }
+        }
+
+        // A draft project has no cards to sync - its Discord is the planning forum and its slots' threads
+        if (type === "discord" && project.draft) {
+            await syncProjectPlanning(project, forced);
+            if (forced) {
+                await logActivity(
+                    LogCategory.PROJECT,
+                    "project.discord_synced",
+                    "<principal> forced a discord sync for <project>",
+                    { context: { project: projectSnapshot(project) } }
+                );
+            }
+            res.status(StatusCodes.OK).json([]);
+            return;
+        }
+
+        assertSyncableProject(project);
         let cards = await visibleTargets(project.number, number);
 
         switch (type) {

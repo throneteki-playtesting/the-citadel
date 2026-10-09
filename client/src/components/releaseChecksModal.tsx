@@ -283,7 +283,7 @@ export default function ReleaseChecksModal({
                             as={Link}
                             to={viewTargetPath}
                             state={viewTargetState}
-                            onClick={onClose}
+                            onPress={onClose}
                             color="primary"
                             variant="ghost"
                         >
