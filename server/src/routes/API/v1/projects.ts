@@ -22,14 +22,7 @@ import { ApiErrorResponse } from "@/errors";
 import { cloneDeep, omit, xor } from "lodash-es";
 import { factions, IPlaytestCard, pickVisibleCards } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
-import {
-    generateGetResponse,
-    applyToFilter,
-    loadProject,
-    buildExpansionRelease,
-    assertSyncableProject,
-    readOpenSlots
-} from "@/utils";
+import { generateGetResponse, applyToFilter, loadProject, buildExpansionRelease, assertSyncableProject } from "@/utils";
 import { applySlots, requestedSlots, withSlotOrder } from "@/services/draftSlotService";
 import { ProjectStats } from "common/models/stats";
 import { computeProjectProgress } from "@/services/progressService";
@@ -229,7 +222,7 @@ router.post(
         }
         const [cards, slots] = await Promise.all([
             dataService.cards.read({ project: project.number }),
-            readOpenSlots(project.number)
+            dataService.slots.read({ project: project.number })
         ]);
         const unmet = unmetRequirement(initialisationRequirements(project, slots, cards));
         if (unmet) {
@@ -251,9 +244,6 @@ router.post(
 
         project.draft = false;
         project.active = true;
-
-        // Slots are fixed from here, so the closed ones have no way back and go for good
-        await dataService.slots.destroy({ project: project.number, closed: true });
 
         // Each slot's preview thread is handed over to its initial card's, and the slots stop previewing
         const previewed = await dataService.slots.read({ project: project.number });
@@ -345,6 +335,9 @@ router.put(
         project.number = number;
 
         const [previous] = await dataService.projects.read({ number: project.number });
+        if (!previous) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Project #${number} does not exist`);
+        }
         if (!previous.draft && !previous.active) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
@@ -366,7 +359,7 @@ router.put(
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
                 "Invalid Project",
-                "Slots can only be opened or closed while a project is in draft"
+                "Slots can only be added or removed while a project is in draft"
             );
         }
         const slots = previous.draft

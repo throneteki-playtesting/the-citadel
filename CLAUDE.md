@@ -282,6 +282,38 @@ Maps icon name → ThronesDB font Unicode character. Valid icon names (used in b
 
 ---
 
+## Drafting (draft projects)
+
+A draft project is built slot by slot before it is initialised into real cards. Everything below is gated on `project.draft`; owners (`IProject.owners`) hold every project-scoped permission, but only global `EDIT_PROJECTS` may change who the owners are.
+
+### Slots
+
+- **A slot is a place for one card**, with conditions (`SlotCondition[]`, one per stat), the slot options `important`/`notes`, and a preference order where #1 is the **Favoured** card. `fitsSlot` is evaluated server-side for the suggestion filter, since X and "-" pass any range and the generic filter cannot say that.
+- **The editor's Slots page works in groups** (`slotGroups.ts`, `projectSlots.tsx`): factions sharing one scheme share a group. **The order of the groups is the numbering** — a group's slots take the numbers after the groups above it, faction by faction. Groups are draggable by a handle (`@dnd-kit/sortable`, a `DragOverlay` copy of the whole row, dashed outlines beneath every row, rows closing instantly on pickup so dnd-kit measures their final heights); hovering shows the numbers each group would take. Save sends `slotCounts` and `slotOrder` with the project.
+- **Slots are removed, never closed.** Lowering a count deletes a faction's last slots with their cards (a suggestion among them is free to be drafted elsewhere) and closes their Discord threads with a notice. There is no closed state on a slot.
+- **Renumbering** (`renumberSlots` in `draftSlotService.ts`) runs after every slot save and moves slots and their cards (codes included) through `renumberDocuments`: every number is lifted by an offset first, then set down, so old and new numbers never collide. There is no transaction — an interrupted run leaves numbers lifted, and the next save repairs it. Planning threads are refreshed afterwards; **card-forum previews are deliberately not touched**, so the cards are only marked updated.
+- Templates live in `common/models/projects.ts` per project type. A cycle has `Custom` and `Standard` (120 slots); an expansion has `Custom` alone for now, and both are expected to move into configurable settings. A project whose slots stray from its template becomes Custom (`settleTemplate` / `groupsMatchTemplate`).
+- The suggestion pool (`projectPools`) holds suggestions waiting to be placed; a suggestion can be an option **once per project**.
+
+### Reveal
+
+- **A slot's reveal is a snapshot, held on the slot**: `slot._metadata.preview` is the card as it was posted — an `IPlaytestCard` whose own `_metadata.discord` carries the preview post's `messageUrl` and `lastSynced`, the same place any card keeps its post. Read it through `previewOf`, `previewUrlOf` and `previewSyncedAt`; `previewOf` ignores the empty object a client cache can be left holding after a withdrawal (RTK's merge cannot delete a key, and the server's removal arrives as `{}`).
+- **Preview threads change only through the slot's Reveal / Update / Withdraw buttons and Initialise** — never because a card moved, was deleted or lost its place as the Favoured. The only automatic thing is a thread deleted in Discord clearing the slot's state. A card keeps only `_metadata.discord.previewUrl` (`CardDiscordMetadata`, cards only) — its closed thread, reopened if it is revealed again or handed to its initial card.
+- **Which card is the revealed one** is `isPreviewedCard`: by its suggestion if it has one, else by when it was made. **Never by version or number**, which a move changes — the move route re-creates the card, and `create(..., keepCreation)` is what stops that stamping a fresh `created`. `slotReveal(options, preview)` answers with the revealed card still in the slot, or — once it has gone — the preview as a ghost, never both.
+- **The ghost is two things.** While the revealed card is in the slot a ghost copy sits in a layer beneath it inside its `DraggableCard` (its own stacking context, so its badge can never draw over the card); lifting the card leaves it visibly behind. Once the card has left, the ghost becomes a pile entry in the place that card held, keyed apart from every card, which appears and goes with no animation. It is never counted among the slot's options.
+- **Outdated** is `hasSameContent(card, preview, ["version"])` (`common/models/shared.ts`, beside `AUDIT_FIELDS`): the content, not timestamps, since a move rewrites those. `revealStanding` reports unchanged / changed / swapped for the planning thread's "Previewed as … · Unchanged since that reveal" footer.
+- **The dragged card keeps its reveal badge** while it is, or would be, the revealed card of the slot beneath it, and fades it over any other.
+- **Writes to the slot's Discord link and preview are targeted** (`slots.setMetadata`), because they are made after slow Discord calls: writing back the whole slot read beforehand silently undid whatever changed meanwhile — which is how a freshly opened thread's link went missing.
+- Progress of a reveal is a `showLiveToast` (`components/liveToast/`): one toast that spins while `useProgress` reports `working`, then turns into a check or an error and goes green or red in place (a `:has()` rule on a marker in the title, since HeroUI fixes a toast's colour when it opens). Any work with a progress hook can use it.
+
+### Discord
+
+- A draft project gets a `{code}-planning` forum with a thread per slot, and reveal previews live in the card forum. Thread-closing texts are `PREVIEW_NOTICES` in `cardForum.ts`. Rate limits fail fast and are reported as such; a sync with problems does not stamp `lastSynced`.
+- **Paged reads have a stable order**: `doRead` falls back to the record's own keys whenever a page is asked for, so a default (or tied) sort can't repeat or drop records between pages.
+- None of the Discord behaviour was exercised against a real guild before beta.
+
+---
+
 ## Testing — deliberately absent, for now
 
 **No package in this repository has a test framework.** That is a standing decision, not an oversight: nothing here is set up to run tests, and a feature branch is the wrong place to introduce one, since the first package to adopt a runner sets the pattern every other package copies. When testing arrives it should arrive as its own piece of work, covering the repo rather than whichever feature happened to want it first.

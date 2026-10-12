@@ -233,8 +233,6 @@ const SlotFilterExtensions = {
     refinementMeta: Joi.object({ openInquiries: Joi.number() })
 };
 
-const OPEN_SLOTS = { closed: { $ne: true } };
-
 const getQuerySchema = getRequestSchema<ISlotFilterable>(Schemas.Slot.Full.keys(SlotFilterExtensions), {
     project: "asc",
     number: "asc"
@@ -252,9 +250,7 @@ router.get(
     asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
-        // Closed slots are out of the project unless they are asked for by name
-        const asksForClosed = [filter ?? []].flat().some((entry) => "closed" in entry);
-        const normalizedFilter = applyToFilter(filter, asksForClosed ? { project } : { project, ...OPEN_SLOTS });
+        const normalizedFilter = applyToFilter(filter, { project });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
     })
@@ -1232,11 +1228,11 @@ router.post(
     asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const slot = await requireSlot(project.number, req.params.slot);
-        if (!project.draft || slot.closed) {
+        if (!project.draft) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
                 "Invalid Slot",
-                "A discussion can only be opened for an open slot of a project in draft"
+                "A discussion can only be opened for a slot of a project in draft"
             );
         }
 
@@ -1270,7 +1266,7 @@ router.post(
 
 async function readRevealSlot(project: IProject, slotNumber: number) {
     const slot = await requireSlot(project.number, slotNumber);
-    if (!project.draft || slot.closed) {
+    if (!project.draft) {
         throw new ApiErrorResponse(
             StatusCodes.NOT_ACCEPTABLE,
             "Invalid Slot",

@@ -151,7 +151,7 @@ async function untilRateLimited(action: () => Promise<unknown>, what: string): P
 // Runs work on each open slot that has a thread, logging rather than stopping at one that fails
 async function forEachThread(project: IProject, work: (slot: ISlot) => Promise<unknown>) {
     const slots = await dataService.slots.read({ project: project.number });
-    for (const slot of slots.filter((slot) => !slot.closed && slot._metadata?.discord?.messageUrl)) {
+    for (const slot of slots.filter((slot) => slot._metadata?.discord?.messageUrl)) {
         try {
             await work(slot);
         } catch (err) {
@@ -303,7 +303,7 @@ export async function slotDiscussionChanged(projectNumber: number, slotNumber: n
         try {
             const [project] = await dataService.projects.read({ number: projectNumber });
             const [slot] = await dataService.slots.read({ project: projectNumber, number: slotNumber });
-            if (!project?.draft || !slot || slot.closed) {
+            if (!project?.draft || !slot) {
                 return;
             }
             if (slot._metadata?.discord?.messageUrl) {

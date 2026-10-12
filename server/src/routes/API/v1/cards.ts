@@ -20,7 +20,6 @@ import { StatusCodes } from "http-status-codes";
 import { scopeToProject, validateRequest, validateProjectAccess } from "@/middleware/permissions";
 import {
     applyToFilter,
-    assertSlotOpen,
     assertSyncableProject,
     generateGetResponse,
     loadProject,
@@ -374,7 +373,6 @@ router.put(
                 `Card #${number} does not exist for project #${projectNumber}`
             );
         }
-        assertSlotOpen(slot);
         if (project.draft && !/^0\.0\.\d+$/.test(version)) {
             throw new ApiErrorResponse(
                 StatusCodes.BAD_REQUEST,
@@ -518,7 +516,6 @@ router.post(
                     `Slot #${number} does not exist for project #${project.number}`
                 );
             }
-            assertSlotOpen(slot);
             await assertSuggestionsUnused(project.number, req.body.cards);
 
             const code = parseCardCode(false, project.number, number);
@@ -708,7 +705,6 @@ router.post(
                     `Slot #${to} does not exist for project #${projectNumber}`
                 );
             }
-            assertSlotOpen(targetSlot);
 
             const newVersion = movedOptionVersion(
                 version,

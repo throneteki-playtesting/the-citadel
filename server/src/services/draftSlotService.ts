@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { min, omit, partition } from "lodash-es";
+import { min, omit } from "lodash-es";
 import { Faction, factions } from "common/models/cards";
 import {
     CUSTOM_TEMPLATE,
@@ -96,9 +96,7 @@ export async function settleTemplate(project: IProject) {
 
 // Opens or removes slots to reach the counts - removing takes a faction's last, whatever they hold - then numbers them
 export async function applySlots(project: IProject, { counts, options, order }: SlotRequest) {
-    const all = (await dataService.slots.read({ project: project.number })).sort((a, b) => a.number - b.number);
-    // Closed slots from before slots were removed outright have nothing left to come back to
-    const [hidden, slots] = partition(all, (slot) => slot.closed);
+    const slots = (await dataService.slots.read({ project: project.number })).sort((a, b) => a.number - b.number);
     const updating: ISlot[] = [];
     const removing: ISlot[] = [];
     const creating: { faction: Faction; options: ISlotOptions }[] = [];
@@ -130,9 +128,8 @@ export async function applySlots(project: IProject, { counts, options, order }: 
                   false
               )
             : [];
-    const gone = [...removing, ...hidden];
-    if (gone.length > 0) {
-        await dataService.slots.destroy(gone.map((slot) => ({ project: project.number, number: slot.number })));
+    if (removing.length > 0) {
+        await dataService.slots.destroy(removing.map((slot) => ({ project: project.number, number: slot.number })));
     }
     if (updating.length > 0) {
         await dataService.slots.update(updating);
@@ -152,7 +149,7 @@ export async function applySlots(project: IProject, { counts, options, order }: 
     );
     updating.forEach((slot) => void slotDiscussionChanged(project.number, slot.number));
     if (creating.length > 0) {
-        const highest = all.at(-1)?.number ?? 0;
+        const highest = slots.at(-1)?.number ?? 0;
         await dataService.slots.create(
             creating.map(
                 ({ faction, options: asked }, i) =>

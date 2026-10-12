@@ -1,5 +1,4 @@
 import { dataService } from "@/services";
-import { readOpenSlots } from "@/utils";
 import {
     cardLaneBreakdown,
     cardOverallPct,
@@ -96,7 +95,7 @@ export async function computeReleaseCheckParticipation(
 }
 
 export async function computeProjectProgress(project: IProject): Promise<IProjectProgress> {
-    const allSlots = await readOpenSlots(project.number);
+    const allSlots = await dataService.slots.read({ project: project.number });
     const cardPcts = allSlots.map((slot) => cardOverallPct(slot.statuses));
 
     return {

@@ -75,6 +75,19 @@ function virtualStagesFor<T>(
 }
 
 // Shared by both repository base classes' read/count, same pattern as doApplyAudit below
+// Pages are only the same pages from one request to the next if every record has its place, so ties - or no order at
+// all - fall back to the record's own key
+function pagedSort(keys: string[], sort: MongoSort | undefined, perPage?: number) {
+    if (!perPage) {
+        return sort;
+    }
+    const ordered = (sort ?? {}) as Record<string, unknown>;
+    return {
+        ...ordered,
+        ...Object.fromEntries(keys.filter((key) => !(key in ordered)).map((key) => [key, 1]))
+    } as MongoSort;
+}
+
 async function doRead<T, TFilterable extends T>(
     database: MongoDataSource<T>,
     virtualFields: VirtualFieldMap,
@@ -83,7 +96,7 @@ async function doRead<T, TFilterable extends T>(
     page?: number,
     perPage?: number
 ): Promise<TFilterable[]> {
-    const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
+    const sort = pagedSort(database.primaryKeys, orderBy ? (flatten(orderBy) as MongoSort) : undefined, perPage);
     const limit = perPage;
     const skip = (page - 1) * perPage;
     const stages = virtualStagesFor(virtualFields, reading, orderBy);

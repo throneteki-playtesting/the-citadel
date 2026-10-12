@@ -49,7 +49,7 @@ export function buildFactionSlots(cards: IPlaytestCard[] = [], slots: ISlot[] = 
 
 // Where a card dropped on its faction goes: the first open slot it fits, other than the one it is already in
 export const firstFittingSlot = (slots: DraftSlot[] | undefined, card: IPlaytestCard, excluding?: number) =>
-    slots?.find((slot) => slot.number !== excluding && !slot.slot.closed && fitsSlot(slot.slot, card));
+    slots?.find((slot) => slot.number !== excluding && fitsSlot(slot.slot, card));
 
 const isSameDraftSlot = (a: DraftSlot, b: DraftSlot) =>
     a.slot === b.slot && a.options.length === b.options.length && a.options.every((card, i) => card === b.options[i]);

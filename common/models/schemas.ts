@@ -46,8 +46,12 @@ const GithubPRMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
-const JoiXNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X"));
-const JoiXDashNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X", "-"));
+const JoiXNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X"))
+    .messages({ "alternatives.match": '{{#label}} must be a number or "X"' });
+const JoiXDashNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X", "-"))
+    .messages({ "alternatives.match": '{{#label}} must be a number, "X" or "-"' });
 
 const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
@@ -862,7 +866,6 @@ export const Slot = {
             .required()
             .valid(...Cards.factions),
         ...slotOptionFields,
-        closed: Joi.boolean(),
         preferences: slotPreferences,
         faq: RichText,
         statuses: Joi.object({

@@ -64,18 +64,20 @@ router.get(
     }),
     loadProject,
     validateProjectAccess,
-    asyncHandler<{ project: number; version: number }, unknown, unknown, IGetRequest<IPlaytestingUpdate>>(async (req, res) => {
-        const { project, version } = req.params;
-        const { filter, orderBy, page, perPage } = req.query;
-        const response = await getPlaytestingUpdates(
-            applyToFilter(filter, { project, version }),
-            orderBy,
-            page,
-            perPage
-        );
-        const [playtestingUpdate] = response.items;
-        res.status(StatusCodes.OK).json(playtestingUpdate);
-    })
+    asyncHandler<{ project: number; version: number }, unknown, unknown, IGetRequest<IPlaytestingUpdate>>(
+        async (req, res) => {
+            const { project, version } = req.params;
+            const { filter, orderBy, page, perPage } = req.query;
+            const response = await getPlaytestingUpdates(
+                applyToFilter(filter, { project, version }),
+                orderBy,
+                page,
+                perPage
+            );
+            const [playtestingUpdate] = response.items;
+            res.status(StatusCodes.OK).json(playtestingUpdate);
+        }
+    )
 );
 
 // Process playtesting update
