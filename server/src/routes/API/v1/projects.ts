@@ -2,10 +2,11 @@ import express from "express";
 import { Filter } from "common/types";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import * as Schemas from "common/models/schemas";
 import { FactionCardCount, IProject, IProjectSave } from "common/models/projects";
 import { initialisationRequirements, unmetRequirement } from "common/models/initialisation";
+import { previewUrlOf } from "common/models/slots";
 import {
     canChangeProjectOwners,
     scopeToProject,
@@ -18,7 +19,7 @@ import { hasPermission } from "common/utils";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { cloneDeep, xor } from "lodash-es";
+import { cloneDeep, omit, xor } from "lodash-es";
 import { factions, IPlaytestCard, pickVisibleCards } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
 import {
@@ -29,7 +30,7 @@ import {
     assertSyncableProject,
     readOpenSlots
 } from "@/utils";
-import { applySlots, requestedSlots } from "@/services/draftSlotService";
+import { applySlots, requestedSlots, withSlotOrder } from "@/services/draftSlotService";
 import { ProjectStats } from "common/models/stats";
 import { computeProjectProgress } from "@/services/progressService";
 import { syncImage } from "@/rendering/hosting";
@@ -39,7 +40,7 @@ import slots from "./slots";
 import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
+import { clearDiscordMetadata, PREVIEW_NOTICES, syncCardForum, withdrawReveal } from "@/discord/forums/cardForum";
 import { closeSuggestionThreads } from "@/discord/forums/suggestionForum";
 import { deletePlanningForum, syncProjectPlanning } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
@@ -191,11 +192,11 @@ router.post(
         next();
     }),
     asyncHandler<unknown, unknown, IProjectSave, unknown>(async (req, res) => {
-        const { slotCounts, ...body } = req.body;
+        const { slotCounts, slotOrder, ...body } = req.body;
         if (body.owners?.length && !canChangeProjectOwners(res)) {
             throw new PermissionErrorResponse();
         }
-        const slots = requestedSlots(body, slotCounts);
+        const slots = withSlotOrder(requestedSlots(body, slotCounts), slotOrder);
         body.cardCount = factions.reduce((acc, faction) => ({ ...acc, [faction]: 0 }), {} as FactionCardCount);
         body.releases = [];
         let project = await dataService.projects.create(body);
@@ -254,6 +255,19 @@ router.post(
         // Slots are fixed from here, so the closed ones have no way back and go for good
         await dataService.slots.destroy({ project: project.number, closed: true });
 
+        // Each slot's preview thread is handed over to its initial card's, and the slots stop previewing
+        const previewed = await dataService.slots.read({ project: project.number });
+        const previewUrls = new Map(
+            previewed.map((slot) => [slot.number, slot._metadata?.preview && previewUrlOf(slot._metadata.preview)])
+        );
+        await dataService.slots.update(
+            previewed
+                .filter((slot) => slot._metadata?.preview)
+                .map((slot) => ({ ...slot, _metadata: omit(slot._metadata, "preview") })),
+            true,
+            false
+        );
+
         // Expansions ship as one release containing every card - seed it now, as slots are fixed once initialised
         if (project.type === "expansion") {
             const { principal } = getContext();
@@ -268,12 +282,14 @@ router.post(
         // Must be persisted as active before closing threads, as the forum context requires its tag
         project = await dataService.projects.update(project);
 
-        // Preview threads are closed rather than deleted, retaining their discussion for the initial cards
-        await closeThreads(cards);
         clearDiscordMetadata(cards);
 
         for (const card of cards) {
             const newCard: IPlaytestCard = { ...cloneDeep(card), version: "1.0.0", draft: false };
+            const previewUrl = previewUrls.get(card.number);
+            if (previewUrl) {
+                newCard._metadata = { ...newCard._metadata, discord: { previewUrl } };
+            }
             if (newCard.suggestionId) {
                 suggestionNumbers[newCard.suggestionId] = newCard.number;
             }
@@ -322,7 +338,7 @@ router.put(
     }),
     asyncHandler<{ project: number }, unknown, IProjectSave, unknown>(async (req, res) => {
         const { project: number } = req.params;
-        const { slotCounts, ...body } = req.body;
+        const { slotCounts, slotOrder, ...body } = req.body;
         let project: IProject = body;
 
         const newNumber = project.number !== number;
@@ -353,7 +369,9 @@ router.put(
                 "Slots can only be opened or closed while a project is in draft"
             );
         }
-        const slots = previous.draft ? requestedSlots(project, slotCounts, previous) : undefined;
+        const slots = previous.draft
+            ? withSlotOrder(requestedSlots(project, slotCounts, previous), slotOrder)
+            : undefined;
 
         // If the project number changes, we need to destroy + create, as its a primary key
         if (newNumber) {
@@ -393,6 +411,18 @@ router.delete(
     }),
     asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
         const { project: number } = req.params;
+        // A slot still being previewed has an open thread in the card forum, closed while its project can still be read
+        const slots = await dataService.slots.read({ project: number });
+        for (const slot of slots) {
+            const preview = slot._metadata?.preview;
+            if (preview) {
+                await withdrawReveal(preview, PREVIEW_NOTICES.projectDeleted).catch((err) =>
+                    logger.warn(
+                        new Error(`[Discord] Failed to close the preview of slot #${slot.number}`, { cause: err })
+                    )
+                );
+            }
+        }
         const [deleted] = await dataService.projects.destroy({ number });
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);

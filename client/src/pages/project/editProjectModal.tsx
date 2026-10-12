@@ -31,6 +31,7 @@ import {
     groupErrors,
     groupsMatchTemplate,
     slotCountsOf,
+    slotOrderOf,
     SlotGroup,
     SlotOptionErrors
 } from "./slotGroups";
@@ -124,7 +125,8 @@ export default function EditProjectModal({
                 // Cleared is no value at all, which the wizard's merge of the form over the project can't carry
                 emoji: project.emoji,
                 template,
-                ...(setsCounts && { slotCounts: slotCountsOf(slotGroups) })
+                ...(setsCounts && { slotCounts: slotCountsOf(slotGroups) }),
+                ...(slotGroups && submitted.draft && { slotOrder: slotOrderOf(slotGroups) })
             };
             setProject(validProject);
             const newProject = isNew
@@ -375,7 +377,8 @@ function ProjectNumberInput({ className, style, number: initial, isDisabled }: P
     const [number, setNumber] = useState(initial);
     const { setError, clearError } = useWizard();
 
-    const [triggerFetchProject, { currentData: existingProject, isFetching, reset }] = useLazyGetProjectQuery();
+    const [triggerFetchProject, { currentData: existingProject, isFetching, isError, reset }] =
+        useLazyGetProjectQuery();
 
     useEffect(() => {
         if (!number) {
@@ -390,12 +393,13 @@ function ProjectNumberInput({ className, style, number: initial, isDisabled }: P
         if (isFetching) {
             return;
         }
-        if (existingProject) {
+        // A lookup which fails keeps what it last found, so a project deleted since is still there to be read
+        if (existingProject && !isError) {
             setError("number", `Project ${existingProject.code} already exists with that number`);
         } else {
             clearError("number");
         }
-    }, [existingProject, isFetching, setError, clearError]);
+    }, [existingProject, isFetching, isError, setError, clearError]);
 
     return (
         <NumberInput

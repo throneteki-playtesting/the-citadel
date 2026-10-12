@@ -32,7 +32,14 @@ import { factions } from "common/models/cards";
 import Permission from "common/models/permissions";
 import { IProject } from "common/models/projects";
 import { IPlaytestCard } from "common/models/cards";
-import { ISlot, orderByPreference, preferenceLabel } from "common/models/slots";
+import {
+    ISlot,
+    previewUrlOf,
+    orderByPreference,
+    preferenceLabel,
+    revealStanding,
+    RevealStanding
+} from "common/models/slots";
 import { describeCondition, slotConditionIssues } from "common/models/slotConditions";
 import { toDiscord } from "common/richText/toDiscord";
 import { truncateHtml } from "common/richText/truncate";
@@ -75,7 +82,6 @@ const MEMBER_ACCESS = [
     PermissionFlagsBits.AttachFiles
 ];
 const CLOSED_COLOR = 0x6a6a6a;
-const OPEN_COLOR = 0xc5a059;
 
 // Creating a channel, or opening a thread, is what two requests can race into doing twice
 const forumMutex = new Mutex();
@@ -277,7 +283,7 @@ export async function openSlotDiscussion(
                 ...(openedBy && { startedBy: openedBy }),
                 lastSynced: syncedAt
             };
-            emitter.complete(await dataService.slots.update(withDiscord(current, discord), true, false));
+            emitter.complete(await dataService.slots.setMetadata(current, "discord", discord));
             return discord;
         });
     } finally {
@@ -361,12 +367,7 @@ async function syncSlotPost(project: IProject, slot: ISlot, isForced = false) {
                     ...(await buildPost(project, current, cards, discord.startedBy, false)),
                     attachments: []
                 });
-                synced = await dataService.slots.update(
-                    withDiscord(current, { ...discord, lastSynced: syncedAt }),
-                    true,
-                    false,
-                    false
-                );
+                synced = await dataService.slots.setMetadata(current, "discord", { ...discord, lastSynced: syncedAt });
                 logger.info(`[Discord] Updated planning discussion for ${project.code} #${current.number}`);
             }
             finishSync(emitter, synced, problems);
@@ -376,21 +377,22 @@ async function syncSlotPost(project: IProject, slot: ISlot, isForced = false) {
     }
 }
 
-/** Puts a closed slot's thread away - shut and tagged, but kept, since the slot may come back */
+/** Puts a removed slot's thread away - shut and tagged, but kept for its discussion */
 export async function closeSlotDiscussion(project: IProject, slot: ISlot) {
     await withThread(project, slot, async (thread, forum) => {
-        await thread.send(notice(CLOSED_COLOR, ":lock: Slot Closed", "This slot has been closed.", project, slot));
+        await thread.send(
+            notice(CLOSED_COLOR, ":lock: Slot Removed", "This slot has been removed from the project.", project)
+        );
         await thread.setAppliedTags(tagIds(forum, factionNames[slot.faction], CLOSED_TAG_NAME));
         await thread.setArchived(true);
     });
 }
 
-/** Opens a reopened slot's thread again */
-export async function reopenSlotDiscussion(project: IProject, slot: ISlot) {
-    await withThread(project, slot, async (thread, forum) => {
-        await thread.setAppliedTags(tagIds(forum, factionNames[slot.faction]));
-        await thread.send(notice(OPEN_COLOR, ":unlock: Slot Reopened", "This slot has been reopened.", project, slot));
-    });
+/** Brings every slot's thread up to date - its name and post - once the slots' numbers have changed */
+export function refreshPlanningThreads(project: IProject) {
+    const context = getContext();
+    const detached = context.source === "client" ? { ...context, detached: true as const } : context;
+    void requestContext.run(detached, () => forEachThread(project, (slot) => syncSlotPost(project, slot, true)));
 }
 
 function withoutDiscord<T extends { _metadata?: object }>(entity: T): T {
@@ -601,10 +603,6 @@ async function syncAccess(guild: Guild, channel: ForumChannel, project: IProject
     logger.info(`[Discord] Synced access to ${project.code} planning forum`);
 }
 
-function withDiscord(slot: ISlot, discord: SlotDiscord): ISlot {
-    return { ...slot, _metadata: { ...slot._metadata, discord } };
-}
-
 function tagIds(forum: ForumChannel, ...names: string[]) {
     return names
         .map((name) => forum.availableTags.find((tag): tag is GuildForumTag => tag.name === name)?.id)
@@ -621,14 +619,18 @@ async function threadName(slot: ISlot) {
     return `#${slot.number} · ${factionNames[slot.faction]} · Card ${before + 1}`.slice(0, THREAD_NAME_MAX);
 }
 
+const projectUrl = (project: IProject) => `${process.env.CLIENT_HOST}/project/${project.number}`;
+
+const projectButton = (project: IProject) =>
+    new ButtonBuilder().setLabel("Open Project").setURL(projectUrl(project)).setStyle(ButtonStyle.Link);
+
 function linkButtons(project: IProject, slot: ISlot) {
-    const projectUrl = `${process.env.CLIENT_HOST}/project/${project.number}`;
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
             .setLabel("View Slot")
-            .setURL(`${projectUrl}?slot=${slot.number}`)
+            .setURL(`${projectUrl(project)}?slot=${slot.number}`)
             .setStyle(ButtonStyle.Link),
-        new ButtonBuilder().setLabel("Open Project").setURL(projectUrl).setStyle(ButtonStyle.Link)
+        projectButton(project)
     );
 }
 
@@ -713,6 +715,12 @@ async function buildPost(
             );
     }
     slotContainer.addSeparatorComponents(new SeparatorBuilder()).addActionRowComponents(linkButtons(project, slot));
+    const preview = slot._metadata?.preview;
+    if (preview?.name) {
+        slotContainer.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(revealFooter(preview, revealStanding(options, preview)))
+        );
+    }
 
     const optionContainers = shown.map((card, rank) => optionContainer(slot, card, rank));
     if (options.length > 0) {
@@ -734,11 +742,22 @@ async function buildPost(
     };
 }
 
-function notice(color: number, heading: string, body: string, project: IProject, slot: ISlot) {
+const STANDING_TEXT: Record<RevealStanding, string> = {
+    unchanged: "Unchanged since that reveal",
+    changed: "Changed since that reveal",
+    swapped: "Swapped out since that reveal"
+};
+
+// Where the slot was revealed to the card forum, and whether what is discussed here is still what was shown
+function revealFooter(preview: IPlaytestCard, standing: RevealStanding) {
+    return `-# Previewed as [${preview.name}](${previewUrlOf(preview)}) · ${STANDING_TEXT[standing]}`;
+}
+
+function notice(color: number, heading: string, body: string, project: IProject) {
     const container = new ContainerBuilder()
         .setAccentColor(color)
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(`### ${heading}\n${body}`))
-        .addActionRowComponents(linkButtons(project, slot));
+        .addActionRowComponents(new ActionRowBuilder<ButtonBuilder>().addComponents(projectButton(project)));
 
     return {
         components: [container],

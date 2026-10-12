@@ -103,6 +103,8 @@ export interface IPlaytestCard extends ICard, IAuditable {
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;
+            /** A draft project's preview thread once closed - reopened if revealed again, or handed on to the initial card's */
+            previewUrl?: string;
         };
         imageUrl?: string;
     };

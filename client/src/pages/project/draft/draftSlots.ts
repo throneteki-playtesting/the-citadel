@@ -1,6 +1,6 @@
 import { Faction, factions, IPlaytestCard, Type } from "common/models/cards";
 import { asksForPlotsOnly, fitsSlot, SlotCondition, slotConditionIssues } from "common/models/slotConditions";
-import { ISlot, orderByPreference, preferenceLabel } from "common/models/slots";
+import { ISlot, orderByPreference, preferenceLabel, previewUrlOf } from "common/models/slots";
 import { renderPlaytestingCard, SemanticVersion } from "common/utils";
 import { resourceIdFuncs } from "common/resources";
 import { CARRIED_FOR_MS } from "../../../constants";
@@ -16,6 +16,14 @@ export type DraftSlot = {
 };
 
 export type FactionSlots = Map<Faction, DraftSlot[]>;
+
+// A revealed card gone from its slot - in the pile to be seen, but never one of its options
+export type GhostEntry = { ghost: IPlaytestCard };
+export type StackEntry = IPlaytestCard | GhostEntry;
+export const isGhostEntry = (entry: StackEntry): entry is GhostEntry => "ghost" in entry;
+// Keyed apart from the cards, so a card coming back never shares the ghost's key
+export const stackKey = (entry: StackEntry) =>
+    isGhostEntry(entry) ? `ghost-${previewUrlOf(entry.ghost)}` : getDragUid(entry);
 
 export function buildFactionSlots(cards: IPlaytestCard[] = [], slots: ISlot[] = []): FactionSlots {
     const map: FactionSlots = new Map();

@@ -150,10 +150,11 @@ const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof ba
 };
 
 // Saving a draft project may lay out its slots - choosing a template, opening or closing them - so every slot list
-// is refetched along with the project itself
+// is refetched along with the project itself, and its cards too, since closing a slot deletes the cards in it
 const projectSaveTags = (result: IProject | undefined, project: Pick<IProjectSave, "slotCounts">) => [
     ...generateFor(result, "project"),
-    ...(result?.draft || project.slotCounts ? [{ type: "slot" as const, id: undefined }] : [])
+    ...(result?.draft || project.slotCounts ? [{ type: "slot" as const, id: undefined }] : []),
+    ...(result?.draft && project.slotCounts ? [{ type: "card" as const, id: `LIST|${result.number}` }] : [])
 ];
 
 const api = createApi({
@@ -842,6 +843,20 @@ const api = createApi({
             }),
             invalidatesTags: (result) => generateFor(result, "slot")
         }),
+        revealSlot: builder.mutation<ISlot, ISlotRef & { action?: "update" | "replace" }>({
+            query: ({ project, number, action }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`, { action }),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        withdrawSlotReveal: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
         // Drawn in its new order straight away - a drag shouldn't wait on the round trip to settle
         updateSlotPreferences: builder.mutation<ISlot, ISlotRef & { preferences: SemanticVersion[] }>({
             query: ({ project, number, preferences }) => {
@@ -1392,6 +1407,8 @@ export const {
     useAddSlotOptionsMutation,
     useGetPoolQuery,
     useStartSlotDiscussionMutation,
+    useRevealSlotMutation,
+    useWithdrawSlotRevealMutation,
     useAddToPoolMutation,
     useRemoveFromPoolMutation,
     useDeleteDraftMutation,

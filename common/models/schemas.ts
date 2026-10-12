@@ -30,6 +30,8 @@ const DiscordMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
+const CardDiscordMetadata = DiscordMetadata.keys({ previewUrl: Joi.string().uri() });
+
 const GithubIssueMetadata = Joi.object({
     status: Joi.string().valid(...Cards.githubStatuses),
     issueUrl: Joi.string().uri(),
@@ -164,7 +166,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -191,7 +193,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -222,7 +224,7 @@ export const PlaytestingCard = {
         released: Joi.forbidden(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -1104,6 +1106,8 @@ export const Project = {
         template: Joi.string(),
         // Not stored - how many slots each faction should have, which the server opens, creates or closes slots to meet
         slotCounts: Joi.object(Object.fromEntries(Cards.factions.map((faction) => [faction, slotCount]))),
+        // Not stored - the order factions' slots are numbered in, which the server renumbers the slots to match
+        slotOrder: Joi.array().items(Joi.string().valid(...Cards.factions)),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

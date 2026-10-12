@@ -28,8 +28,9 @@ import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../../compone
 import SlidingPages from "../../../components/slidingPages";
 import { SlotNeeds } from "../../../components/slots/slotOptionsSummary";
 import { useSlotTitle } from "../../../components/slots/slotTitle";
-import { EDITOR_CARD_WIDTH, PLOT_RATIO, POOL_READ_LIMIT } from "../../../constants";
+import { EDITOR_CARD_WIDTH, FILTER_CLOSE_HOLD_MS, PLOT_RATIO, POOL_READ_LIMIT } from "../../../constants";
 import { schemaErrors } from "../../../hooks/useFormValidation";
+import { useHeldOpen } from "../../../hooks/useHeldOpen";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import SuggestionBrowser from "../../suggestions/suggestionBrowser";
@@ -83,6 +84,9 @@ function SuggestionPicker({
     const previewRef = useRef<HTMLDivElement>(null);
     const [page, setPage] = useState(BROWSE_PAGE);
     const [chosenSource, setChosenSource] = useState<Source>();
+    // A click which closes the filter drawer must not also be read as one outside the modal beneath it
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const isFilterHeld = useHeldOpen(isFilterOpen, FILTER_CLOSE_HOLD_MS);
     const [fitsOnly, setFitsOnly] = useState(true);
     const [filter, setFilter] = useState<SuggestionFilterValue>(EMPTY_SUGGESTION_FILTER);
     const [search, setSearch] = useState("");
@@ -316,6 +320,7 @@ function SuggestionPicker({
                     }}
                     queryExtras={queryExtras}
                     isFactionFixed
+                    onFilterDrawerOpenChange={setIsFilterOpen}
                     scrollClassName={BROWSE_SCROLL_CLASS}
                     emptyContent="No suggestions match this slot."
                     leading={
@@ -429,6 +434,7 @@ function SuggestionPicker({
                 placement="top-center"
                 size="5xl"
                 scrollBehavior="inside"
+                isDismissable={!isFilterHeld}
                 onOpenChange={(open) => !open && onClose()}
             >
                 <ModalContent>

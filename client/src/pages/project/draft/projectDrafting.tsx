@@ -36,6 +36,8 @@ import EditCardModal, { EditOrigin } from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
 import ArrangeModal from "./arrangeModal";
+import RevealModal from "./revealModal";
+import { RevealAction } from "./revealState";
 import IncomingCards, { IncomingCard } from "./incomingCards";
 import FactionCarousel from "./factionCarousel";
 import DraftPool from "./draftPool";
@@ -109,6 +111,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [deleting, setDeleting] = useState<IPlaytestCard>();
     const [optionsSlot, setOptionsSlot] = useState<ISlot>();
     const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+    const [revealing, setRevealing] = useState<{ number: number; action: RevealAction; isOpen: boolean }>();
     const [arranging, setArranging] = useState<{ number: number; pile: HTMLElement; isLifted: boolean }>();
     const [dragStore] = useState(createDragStore);
     // dnd-kit scrolls the page back to the card's place before a drop animation, so it can fly home - which a card on
@@ -262,6 +265,12 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             showApiErrorToast(error, { title: "Failed to start a discussion" });
         }
     });
+    const onReveal = useCallback(
+        (slot: DraftSlot, action: RevealAction) => setRevealing({ number: slot.number, action, isOpen: true }),
+        []
+    );
+    const onCloseReveal = useCallback(() => setRevealing((current) => current && { ...current, isOpen: false }), []);
+    const revealingSlot = revealing && findDraftSlot(factionSlots, revealing.number);
     const onEditOptions = useCallback((slot: DraftSlot) => {
         setOptionsSlot(slot.slot);
         setIsOptionsOpen(true);
@@ -577,24 +586,28 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                 }}
             >
                 <div className="flex flex-col gap-2">
-                    {[...factionSlots.entries()].map(([faction, slots]) => (
-                        <FactionCarousel
-                            key={faction}
-                            faction={faction}
-                            slots={slots}
-                            totalSlots={slotsData?.items.length ?? 0}
-                            arrangingNumber={arranging?.number}
-                            isLifted={!!arranging?.isLifted}
-                            onNew={onNew}
-                            onSuggestion={onSuggestion}
-                            onArrange={onArrange}
-                            onEditOptions={onEditOptions}
-                            onStartDiscussion={onStartDiscussion}
-                            registerPile={registerPile}
-                            onEdit={onEdit}
-                            onDelete={onDelete}
-                        />
-                    ))}
+                    {[...factionSlots.entries()]
+                        .filter(([, slots]) => slots.length > 0)
+                        .sort(([, a], [, b]) => a[0].number - b[0].number)
+                        .map(([faction, slots]) => (
+                            <FactionCarousel
+                                key={faction}
+                                faction={faction}
+                                slots={slots}
+                                totalSlots={slotsData?.items.length ?? 0}
+                                arrangingNumber={arranging?.number}
+                                isLifted={!!arranging?.isLifted}
+                                onNew={onNew}
+                                onSuggestion={onSuggestion}
+                                onArrange={onArrange}
+                                onEditOptions={onEditOptions}
+                                onStartDiscussion={onStartDiscussion}
+                                onReveal={onReveal}
+                                registerPile={registerPile}
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                            />
+                        ))}
                 </div>
                 {canDraft && (
                     <DraftPool
@@ -639,6 +652,14 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                         pile={pileElements.current.get(flight.slotNumber)!}
                         isReady={isFlightReady}
                         onDone={onFlightDone}
+                    />
+                )}
+                {revealing && revealingSlot && (
+                    <RevealModal
+                        isOpen={revealing.isOpen}
+                        action={revealing.action}
+                        slot={revealingSlot}
+                        onClose={onCloseReveal}
                     />
                 )}
                 <SlotOptionsModal isOpen={isOptionsOpen} slot={optionsSlot} onClose={() => setIsOptionsOpen(false)} />

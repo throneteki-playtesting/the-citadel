@@ -26,7 +26,10 @@ export type IncomingCard = {
     fromControl: CardControl;
 };
 
-// The cards a modal has just added, carried from where they sat there onto their slot's pile - the Favoured last, so it lands on top
+// A ghost stands in the pile but is no card of it, so it takes no place in the count
+const REAL_CARDS = "[data-stack-index]:not([data-stack-ghost])";
+
+// The cards a modal has just added, carried onto their slot's pile - the Favoured last, so it lands on top
 export default function IncomingCards({ cards, pile, isReady, onDone }: IncomingCardsProps) {
     const nodes = useRef(new Map<number, HTMLElement>());
     const hasFlown = useRef(false);
@@ -35,7 +38,7 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
     const [isMorphing, setIsMorphing] = useState(false);
     const [stackWidth] = useState(() => Math.min(pile.clientWidth, pile.clientHeight));
     // What the pile held before the cards came - so the copies which are theirs can be told from the rest
-    const [heldBefore] = useState(() => pile.querySelectorAll("[data-stack-index]").length);
+    const [heldBefore] = useState(() => pile.querySelectorAll(REAL_CARDS).length);
 
     // The pile's own copies are unseen from the moment they arrive, which may be well before the cards set off - they
     // wait while the page scrolls to the slot - or they would show in the pile first, then vanish to be flown in
@@ -44,7 +47,7 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
             if (!isHiding.current) {
                 return;
             }
-            const count = pile.querySelectorAll("[data-stack-index]").length;
+            const count = pile.querySelectorAll(REAL_CARDS).length;
             if (count < heldBefore + cards.length) {
                 return;
             }
@@ -68,7 +71,7 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
         }
         hasFlown.current = true;
         setIsMorphing(true);
-        const count = pile.querySelectorAll("[data-stack-index]").length;
+        const count = pile.querySelectorAll(REAL_CARDS).length;
         const resting = new Set<HTMLElement>();
         const flights = cards.flatMap(({ card, rank, from, isFromUpright, isUpright }) => {
             const node = nodes.current.get(rank);

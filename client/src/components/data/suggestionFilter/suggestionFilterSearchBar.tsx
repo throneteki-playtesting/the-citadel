@@ -20,6 +20,7 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     isDisabled?: boolean;
     // While debouncing or the resulting server search is in flight - shown in place of the clear button
     isSearching?: boolean;
+    onDrawerOpenChange?: (isOpen: boolean) => void;
 };
 
 // Search and Advanced read as one connected control that shrinks to just Advanced while filtering.
@@ -35,9 +36,14 @@ const SuggestionFilterSearchBar = ({
     users,
     isFactionFixed,
     isDisabled,
-    isSearching
+    isSearching,
+    onDrawerOpenChange
 }: SuggestionFilterSearchBarProps) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpenState] = useState(false);
+    const setIsOpen = (open: boolean) => {
+        setIsOpenState(open);
+        onDrawerOpenChange?.(open);
+    };
     const isFiltering = isSuggestionFilterActive(filter);
     const activeCount = countActiveSuggestionFilters(filter);
 

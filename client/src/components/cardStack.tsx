@@ -89,6 +89,7 @@ export default function CardStack<T>({
     isInstant = false,
     cardKey,
     isCarried,
+    isGhost,
     tilt,
     shadow,
     className,
@@ -109,6 +110,7 @@ export default function CardStack<T>({
                             isInstant={isInstant}
                             hasPresence={!!cardKey}
                             isCarried={isCarried}
+                            isGhost={isGhost}
                             tilt={tilt}
                             shadow={shadow}
                         />
@@ -142,6 +144,8 @@ type CardStackProps<T> = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> 
     cardKey?: (card: T) => Key;
     /** Arrives or leaves by being carried (eg. dragged), so it is neither set down nor tossed */
     isCarried?: (card: T) => boolean;
+    /** Left behind by a card which has gone */
+    isGhost?: (card: T) => boolean;
     tilt?: TiltOptions;
     shadow?: boolean;
 };
@@ -180,6 +184,7 @@ function ShuffledCard<T>({
     isInstant,
     hasPresence,
     isCarried: isCarriedCard,
+    isGhost,
     tilt = 0,
     shadow = true
 }: ShuffledCardProps<T>) {
@@ -193,7 +198,9 @@ function ShuffledCard<T>({
     const settled = settledPose(position, cardTilt, tilt, shadow);
 
     const isStill = useReducedMotion() || isInstant;
-    const isSetDownAndTossed = hasPresence && !isStill && !isCarried;
+    // A ghost is left behind rather than set down or tossed
+    const isGhostCard = !!isGhost?.(card);
+    const isSetDownAndTossed = hasPresence && !isStill && !isCarried && !isGhostCard;
     const nodeRef = useRef<HTMLDivElement>(null);
     const [shuffle, setShuffle] = useState<Shuffle>();
     const settledRef = useRef(settled);
@@ -232,11 +239,12 @@ function ShuffledCard<T>({
             <motion.div
                 ref={nodeRef}
                 data-stack-index={index}
+                data-stack-ghost={isGhostCard ? "" : undefined}
                 initial={isSetDownAndTossed ? placingPose(settled) : false}
                 animate={hasPresence ? landedPose(settled) : settled}
                 exit={isSetDownAndTossed ? TOSSED_POSE : GONE_POSE}
                 transition={shuffle || isStill ? INSTANT : STACK_TRANSITION}
-                style={{ zIndex: count - position }}
+                style={{ zIndex: count - position + (isPresent ? 0 : count) }}
                 className={classNames("size-full", isBase ? "relative" : "absolute inset-0", {
                     invisible: !!shuffle
                 })}
@@ -362,6 +370,8 @@ type ShuffledCardProps<T> = {
     isInstant: boolean;
     hasPresence: boolean;
     isCarried?: (card: T) => boolean;
+    /** Left behind by a card which has gone */
+    isGhost?: (card: T) => boolean;
     tilt?: TiltOptions;
     shadow?: boolean;
 };

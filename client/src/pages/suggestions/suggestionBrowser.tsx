@@ -40,6 +40,7 @@ export default function SuggestionBrowser({
     scope,
     queryExtras,
     isFactionFixed,
+    onFilterDrawerOpenChange,
     leading,
     emptyContent,
     animate,
@@ -123,6 +124,7 @@ export default function SuggestionBrowser({
                         traits={filterOptions?.traits ?? []}
                         users={filterOptions?.submitters ?? []}
                         isFactionFixed={isFactionFixed}
+                        onDrawerOpenChange={onFilterDrawerOpenChange}
                         isDisabled={isBusy}
                         isSearching={isSearching}
                         className="min-w-40"
@@ -158,6 +160,8 @@ type SuggestionBrowserProps = {
     queryExtras?: ISuggestionsListQuery;
     /** Takes the faction choice out of the filter drawer, for a scope which already settles it */
     isFactionFixed?: boolean;
+    /** Told as the filter drawer opens and closes, for whatever it sits in to tell it apart from its own dismissal */
+    onFilterDrawerOpenChange?: (isOpen: boolean) => void;
     /** Sits at the head of the controls row */
     leading?: ReactNode;
     emptyContent?: ReactNode;

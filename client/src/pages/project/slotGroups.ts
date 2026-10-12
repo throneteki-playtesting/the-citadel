@@ -1,4 +1,4 @@
-import { isEqual, pick } from "lodash-es";
+import { isEqual, min, pick } from "lodash-es";
 import Joi from "joi";
 import { Faction, factions, IPlaytestCard } from "common/models/cards";
 import { SlotCounts, TemplateSlots } from "common/models/projects";
@@ -83,9 +83,34 @@ export function startingGroups(): SlotGroup[] {
 /** The id the next group split off will take */
 export const nextGroupId = (groups: SlotGroup[]) => Math.max(0, ...groups.map((group) => group.id)) + 1;
 
-// Groups sit in faction order, each placed by the first faction it holds
-const leadOf = (group: SlotGroup) => factions.indexOf(group.factions[0]);
-const inFactionOrder = (groups: SlotGroup[]) => [...groups].sort((a, b) => leadOf(a) - leadOf(b));
+// Groups in the order their slots are numbered, those without slots after - in faction order
+export function inSlotOrder(groups: SlotGroup[], slots: ISlot[]) {
+    const lead = (group: SlotGroup) =>
+        min(
+            group.factions.flatMap((faction) =>
+                slotsOf(slots, faction)
+                    .slice(0, 1)
+                    .map((slot) => slot.number)
+            )
+        ) ?? Infinity;
+    return [...groups].sort((a, b) => lead(a) - lead(b));
+}
+
+// The order the factions' slots are numbered in: group by group, each group's factions one after another
+export const slotOrderOf = (groups: SlotGroup[]) => groups.flatMap((group) => group.factions);
+
+// The numbers each group's slots will take, as the groups stand - a group with no slots takes none
+export function slotRanges(groups: SlotGroup[]) {
+    let taken = 0;
+    return new Map(
+        groups.map((group) => {
+            const size = group.count * group.factions.length;
+            const range = size > 0 ? { from: taken + 1, to: taken + size } : undefined;
+            taken += size;
+            return [group.id, range];
+        })
+    );
+}
 
 // A neutral slot can't ask for loyalty, so a group it joins loses any condition it couldn't hold
 const fitFor = (group: SlotGroup): SlotGroup =>
@@ -99,14 +124,9 @@ const fitFor = (group: SlotGroup): SlotGroup =>
           }
         : group;
 
-// Where a group of the faction alone would sit, were it split off from the groups as they stand
-export function newGroupIndex(groups: SlotGroup[], faction: Faction) {
-    const index = groups.findIndex((group) => {
-        const lead = group.factions.find((member) => member !== faction);
-        return !!lead && factions.indexOf(lead) > factions.indexOf(faction);
-    });
-    return index < 0 ? groups.length : index;
-}
+// Where a group of the faction alone would sit, were it split off - just after the group it leaves
+export const newGroupIndex = (groups: SlotGroup[], faction: Faction) =>
+    groups.findIndex((group) => group.factions.includes(faction)) + 1;
 
 // The faction takes on the target group's slots in place of its own
 export function moveFaction(groups: SlotGroup[], faction: Faction, targetId: number): SlotGroup[] {
@@ -118,7 +138,7 @@ export function moveFaction(groups: SlotGroup[], faction: Faction, targetId: num
                 : { ...group, factions: others };
         })
         .filter((group) => group.factions.length > 0);
-    return inFactionOrder(moved);
+    return moved;
 }
 
 // The faction leaves with a copy of the slots it had, to be changed on its own
@@ -131,7 +151,7 @@ export function splitFaction(groups: SlotGroup[], faction: Faction): SlotGroup[]
               ]
             : [group]
     );
-    return inFactionOrder(split);
+    return split;
 }
 
 export function updateGroup(groups: SlotGroup[], id: number, change: Partial<FactionScheme>): SlotGroup[] {

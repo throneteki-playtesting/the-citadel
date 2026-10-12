@@ -1,11 +1,13 @@
 import { useLayoutEffect, useRef } from "react";
-import { CollisionDetection, DropAnimation } from "@dnd-kit/core";
+import { closestCenter, CollisionDetection, DropAnimation, UniqueIdentifier } from "@dnd-kit/core";
 import { animate } from "framer-motion";
 import { CHIP_DROP_MS, NOTICE_TRANSITION } from "../../constants";
 import { SlotGroup } from "./slotGroups";
 
 export const NEW_GROUP_DROP_ID = "new-group";
 export const groupDropId = (id: number) => `group-${id}`;
+export const groupSortId = (id: number) => `sort-${id}`;
+export const isGroupSortId = (id: UniqueIdentifier) => String(id).startsWith("sort-");
 
 // Read live rather than from dnd-kit's measurements - the new group zone opening mid-drag moves every
 // group under the pointer, and a rect taken at pickup would then point at the row beside it
@@ -20,6 +22,10 @@ export const underPointer: CollisionDetection = ({ droppableContainers, pointerC
     });
     return hit ? [{ id: hit.id }] : [];
 };
+
+// A group in hand is put among the others by its nearest, a faction by what is under the pointer
+export const slotDragCollisions: CollisionDetection = (args) =>
+    isGroupSortId(args.active.id) ? closestCenter(args) : underPointer(args);
 
 // Homes in on the chip's place as it stands each frame - rows are still opening and closing around it,
 // and a flight aimed at where it sat on release lands beside it

@@ -7,7 +7,8 @@ import { BaseElementProps } from "../../../types";
 import { useMemo, useState } from "react";
 import { useGetCardsQuery, useGetSlotsQuery } from "../../../api";
 import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
-import { faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faCheck, faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
 import StatusNotice from "../../../components/statusNotice";
 import { ChecklistItems } from "../../../components/checklist";
@@ -62,7 +63,9 @@ export default function ProjectHeaderDraftNotice({ className, project }: Project
                                 <Button
                                     size="sm"
                                     color="success"
-                                    className="w-full sm:w-auto font-cinzel font-semibold sm:h-12 sm:px-6 sm:text-base"
+                                    variant="flat"
+                                    className="shrink-0"
+                                    startContent={<FontAwesomeIcon icon={faCheck} />}
                                     onPress={() => setIsModalOpen(true)}
                                 >
                                     Initialise Project…
@@ -74,6 +77,7 @@ export default function ProjectHeaderDraftNotice({ className, project }: Project
                         isOpen={isModalOpen}
                         project={project}
                         cards={cardsData?.items ?? []}
+                        slots={slotsData?.items ?? []}
                         isReady={isReady}
                         onClose={() => setIsModalOpen(false)}
                     />

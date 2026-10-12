@@ -110,7 +110,7 @@ interface SyncOperationMap {
     release: "github.data";
     suggestion: "discord";
     project: "discord";
-    slot: "discord";
+    slot: "discord" | "preview";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
 export type SyncStatus = "start" | "progress" | "complete" | "error";

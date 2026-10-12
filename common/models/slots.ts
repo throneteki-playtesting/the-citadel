@@ -1,9 +1,9 @@
 import { isEqual, pick } from "lodash-es";
-import { Faction, factions } from "./cards";
+import { Faction, factions, IPlaytestCard } from "./cards";
 import type { SlotCondition } from "./slotConditions";
 import { areReleaseChecksClosed, ProjectTemplate, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
-import { IAuditable } from "./shared";
+import { hasSameContent, IAuditable } from "./shared";
 import { IArtworkProgress } from "./artwork";
 import { isCheckStale, IRefinementCheck, IRefinementInquiry } from "./refinement";
 import { pruneEmpty, SemanticVersion } from "../utils";
@@ -225,7 +225,59 @@ export interface ISlot extends IAuditable {
             startedBy?: string;
             lastSynced?: Date;
         };
+        /** What has been revealed to the design team from this slot - changed only by revealing, updating or withdrawing */
+        preview?: IPlaytestCard;
     };
+}
+
+/** The slot's preview - its card as posted to the card forum, with that post in its Discord metadata. A cache can still
+ *  hold an empty object where one was withdrawn */
+export const previewOf = (slot: Pick<ISlot, "_metadata">): IPlaytestCard | undefined =>
+    slot._metadata?.preview?.name ? slot._metadata.preview : undefined;
+
+export const previewUrlOf = (preview: IPlaytestCard) => preview._metadata?.discord?.messageUrl ?? "";
+export const previewSyncedAt = (preview: IPlaytestCard) => preview._metadata?.discord?.lastSynced ?? preview.updated;
+
+/** Whether a card is the one a preview was made from - by its suggestion, else by when it was made, never by version */
+export function isPreviewedCard(card: { created: Date | string; suggestionId?: string }, preview: IPlaytestCard) {
+    const { suggestionId, created } = preview;
+    return suggestionId
+        ? card.suggestionId === suggestionId
+        : !card.suggestionId && new Date(card.created).getTime() === new Date(created).getTime();
+}
+
+/** The slot's card which its preview was made from, if it is still there */
+export function previewedCard<C extends { created: Date | string; suggestionId?: string }>(
+    options: C[],
+    preview?: IPlaytestCard
+) {
+    return preview ? options.find((card) => isPreviewedCard(card, preview)) : undefined;
+}
+
+/** Changed since it was posted - what is shown to the design team is no longer the card as it stands */
+export const isPreviewOutdated = (card: IPlaytestCard, preview: IPlaytestCard) =>
+    !hasSameContent(card, preview, ["version"]);
+
+export type RevealStanding = "unchanged" | "changed" | "swapped";
+
+/** How the slot stands against what was posted of it: still the card posted as it was, the same card since edited, or a
+ *  different card - the Favoured now is not the one revealed, or that one has gone */
+export function revealStanding(options: IPlaytestCard[], preview: IPlaytestCard): RevealStanding {
+    const previewed = previewedCard(options, preview);
+    if (!previewed || previewed !== options[0]) {
+        return "swapped";
+    }
+    return isPreviewOutdated(previewed, preview) ? "changed" : "unchanged";
+}
+
+/** What a slot shows of its reveal: the card of it which is still there, or - once that has gone - the preview as posted,
+ *  to stand in the pile as a ghost. Never both, and never counted among the slot's options */
+export function slotReveal<C extends { created: Date | string; suggestionId?: string }>(
+    options: C[],
+    preview?: IPlaytestCard
+) {
+    const previewed = previewedCard(options, preview);
+    return { previewed, ghost: preview && !previewed ? preview : undefined };
 }
 
 // A slot's own settings - its conditions, plus the options every slot always has

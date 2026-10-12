@@ -7,12 +7,15 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faListOl, faSliders, faStarOfLife } from "@fortawesome/free-solid-svg-icons";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import classNames from "classnames";
+import { compact } from "lodash-es";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
+import { previewOf, previewUrlOf, slotReveal } from "common/models/slots";
 import { thronesColors } from "common/utils";
 import CardStack from "../../../components/cardStack";
 import PermissionGate from "../../../components/permissionGate";
 import RadialMenu from "../../../components/radialMenu";
+import { openDiscordLink, useDiscordTarget } from "../../../hooks/useDiscordLink";
 import { usePermission } from "../../../hooks/usePermission";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
@@ -28,16 +31,22 @@ import SlotFrame, { SlotAction } from "./slotFrame";
 import DraftCardContent from "./draftCardContent";
 import { CardHandlers } from "./useCardActions";
 import { DragData, useSlotDrag } from "./draftDragStore";
+import { CardAction } from "./useCardActions";
+import { usePreviewSync } from "./usePreviewSync";
+import { cardRevealActions, RevealAction, revealActions, revealIcons, revealLabels } from "./revealState";
 import { frameShape, QUARTER_TURN, SHAPE_TRANSITION, SHAPE_TRANSITION_CLASS, slotShape, blankShape } from "./slotShape";
 import { setSlotMenuOpen, useIsSlotMenuOpen } from "./slotMenuStore";
 import {
     DraftSlot,
     getDragUid,
     isCarried,
+    isGhostEntry,
     isLandscapeSlot,
     isUprightPlot,
     nextSelection,
-    projectedRank
+    projectedRank,
+    StackEntry,
+    stackKey
 } from "./draftSlots";
 
 export type SlotHandlers = CardHandlers & {
@@ -46,6 +55,7 @@ export type SlotHandlers = CardHandlers & {
     onArrange: (slot: DraftSlot) => void;
     onEditOptions: (slot: DraftSlot) => void;
     onStartDiscussion: (slot: DraftSlot) => Promise<void>;
+    onReveal: (slot: DraftSlot, action: RevealAction) => void;
     registerPile: (number: number, element: HTMLElement | null) => void;
 };
 
@@ -59,15 +69,28 @@ const FactionSlot = memo(function FactionSlot({
     onArrange,
     onEditOptions,
     onStartDiscussion,
+    onReveal,
     registerPile,
     onEdit,
     onDelete
 }: FactionSlotProps) {
     const { isHeld, isReceiving, leavingVersion, incomingType } = useSlotDrag(slot.number);
-    const topIndex = Math.max(0, slot.options.length - 1);
+    const preview = previewOf(slot.slot);
+    const { previewed, ghost } = slotReveal(slot.options, preview);
+    // Bottom to top, matching the stack's own order - a revealed card's ghost takes its place once it has gone
+    const piled = [...slot.options].reverse();
+    const previewedAt = previewed ? piled.indexOf(previewed) : -1;
+    const [ghostAt, setGhostAt] = useState(0);
+    if (previewedAt >= 0 && previewedAt !== ghostAt) {
+        setGhostAt(previewedAt);
+    }
+    const stackedCards: StackEntry[] = [...piled];
+    if (ghost) {
+        stackedCards.splice(Math.min(ghostAt, stackedCards.length), 0, { ghost });
+    }
+    const topIndex = Math.max(0, stackedCards.length - 1);
     const [selectedIndex, setSelectedIndex] = useState(topIndex);
-    // Bottom to top, matching the stack's own order
-    const order = slot.options.map((card) => card.version).reverse();
+    const order = stackedCards.map((entry) => (isGhostEntry(entry) ? "ghost" : entry.version));
     const [previousOrder, setPreviousOrder] = useState(order);
     if (order.join() !== previousOrder.join()) {
         setPreviousOrder(order);
@@ -80,11 +103,40 @@ const FactionSlot = memo(function FactionSlot({
     const canCreate = usePermission(Permission.CREATE_CARDS);
     const canReadSuggestions = usePermission(Permission.READ_SUGGESTIONS);
     const canEditSlot = usePermission(Permission.EDIT_SLOTS);
+    const canReveal = usePermission(Permission.REVEAL_DRAFT_CARDS);
+    const canReadCardForum = usePermission(Permission.READ_DISCORD_CARD_FORUM);
+    const target = useDiscordTarget();
+    const isPreviewBusy = usePreviewSync(slot.slot);
+    const revealable = useMemo(() => revealActions(slot.options, preview), [slot.options, preview]);
+    const hasRevealed = !!preview;
     const discussionUrl = slot.slot._metadata?.discord?.messageUrl;
     const hasArrange = canEditSlot && slot.options.length > 1;
     const slotActions = useMemo(
         (): SlotAction[][] =>
             [
+                [
+                    canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
+                    canReadSuggestions && {
+                        key: "suggestion",
+                        label: "Add Suggestions",
+                        icon: suggestionIcons.base,
+                        onPress: () => onSuggestion(slot)
+                    }
+                ],
+                [
+                    hasArrange && {
+                        key: "arrange",
+                        label: "Arrange",
+                        icon: faListOl,
+                        onPress: () => onArrange(slot)
+                    },
+                    canEditSlot && {
+                        key: "options",
+                        label: "Edit options",
+                        icon: faSliders,
+                        onPress: () => onEditOptions(slot)
+                    }
+                ],
                 [
                     !discussionUrl &&
                         canCreate && {
@@ -93,27 +145,16 @@ const FactionSlot = memo(function FactionSlot({
                             icon: faDiscord,
                             onPress: () => onStartDiscussion(slot)
                         },
-                    hasArrange && {
-                        key: "arrange",
-                        label: "Arrange",
-                        icon: faListOl,
-                        onPress: () => onArrange(slot)
-                    }
-                ],
-                [
-                    canCreate && { key: "new", label: "Add new card", icon: faStarOfLife, onPress: () => onNew(slot) },
-                    canReadSuggestions && {
-                        key: "suggestion",
-                        label: "Add Suggestions",
-                        icon: suggestionIcons.base,
-                        onPress: () => onSuggestion(slot)
-                    },
-                    canEditSlot && {
-                        key: "options",
-                        label: "Edit options",
-                        icon: faSliders,
-                        onPress: () => onEditOptions(slot)
-                    }
+                    ...(canReveal
+                        ? revealable.map(
+                              (action): SlotAction => ({
+                                  key: `reveal-${action}`,
+                                  label: revealLabels[action],
+                                  icon: revealIcons[action],
+                                  onPress: () => onReveal(slot, action)
+                              })
+                          )
+                        : [])
                 ]
             ]
                 .map((group) => group.flatMap((action) => (action ? [action] : [])))
@@ -122,15 +163,51 @@ const FactionSlot = memo(function FactionSlot({
             canCreate,
             canReadSuggestions,
             canEditSlot,
+            canReveal,
+            revealable,
             hasArrange,
             discussionUrl,
             slot,
+            onReveal,
             onNew,
             onSuggestion,
             onEditOptions,
             onStartDiscussion,
             onArrange
         ]
+    );
+    // What each card can do beyond editing and deleting
+    const cardActions = useMemo(
+        () =>
+            new Map(
+                slot.options.map((card) => [
+                    card,
+                    compact([
+                        canReadCardForum &&
+                            preview &&
+                            card === previewed && {
+                                key: "preview-link",
+                                group: "reveal",
+                                label: "Card preview",
+                                icon: faDiscord,
+                                isBusy: isPreviewBusy,
+                                onPress: () => openDiscordLink(previewUrlOf(preview), target)
+                            },
+                        ...(canReveal
+                            ? cardRevealActions(card, slot.options, preview).map(
+                                  (action): CardAction => ({
+                                      key: `reveal-${action}`,
+                                      group: "reveal",
+                                      label: revealLabels[action],
+                                      icon: revealIcons[action],
+                                      onPress: () => onReveal(slot, action)
+                                  })
+                              )
+                            : [])
+                    ])
+                ])
+            ),
+        [canReadCardForum, canReveal, isPreviewBusy, onReveal, preview, previewed, slot, target]
     );
     const onNewHere = useStableCallback(() => onNew(slot));
     const onSuggestionHere = useStableCallback(() => onSuggestion(slot));
@@ -139,7 +216,6 @@ const FactionSlot = memo(function FactionSlot({
         [registerPile, slot.number]
     );
 
-    const stackedCards = [...slot.options].reverse();
     const topCard = stackedCards[Math.min(selectedIndex, stackedCards.length - 1)];
     // A card held over the slot shows it as it would be with that card in it - its shape, and plots standing upright
     // beside one which isn't a plot
@@ -150,6 +226,7 @@ const FactionSlot = memo(function FactionSlot({
         <SlotFrame
             slot={slot.slot}
             actions={slotActions}
+            isRevealed={hasRevealed}
             className={classNames(DRAFT_SLOT_VARIABLES_CLASS, "self-start", SHAPE_TRANSITION_CLASS)}
             style={frameShape(isLandscape)}
         >
@@ -175,7 +252,7 @@ const FactionSlot = memo(function FactionSlot({
                     className={classNames(
                         "absolute inset-0 transition-transform ease-out",
                         isHeld ? "scale-95 duration-[250ms]" : "duration-200",
-                        { invisible: isArranging, "pointer-events-none": !topCard }
+                        { invisible: isArranging, "pointer-events-none": slot.options.length === 0 }
                     )}
                 >
                     <CardStack
@@ -183,31 +260,61 @@ const FactionSlot = memo(function FactionSlot({
                         selectedIndex={selectedIndex}
                         behaviour="stacked"
                         isInstant={isArranging}
-                        cardKey={getDragUid}
-                        isCarried={isCarried}
+                        cardKey={stackKey}
+                        isCarried={(entry) => !isGhostEntry(entry) && isCarried(entry)}
+                        isGhost={isGhostEntry}
                         tilt={DRAFT_STACK_TILT}
                         className="h-full"
                         style={{ zIndex }}
-                        onClick={() => setSelectedIndex((prev) => (prev === 0 ? slot.options.length - 1 : --prev))}
+                        onClick={() => setSelectedIndex((prev) => (prev === 0 ? stackedCards.length - 1 : prev - 1))}
                     >
-                        {(card) => (
-                            <DraggableCard
-                                card={card}
-                                slotNumber={slot.number}
-                                isDraggable={card === topCard}
-                                isHeld={isHeld}
-                            >
+                        {(entry) =>
+                            isGhostEntry(entry) ? (
                                 <DraftCardContent
-                                    card={card}
-                                    rank={projectedRank(slot.options, card, isReceiving, leavingVersion)}
+                                    card={entry.ghost}
+                                    rank={slot.options.length}
                                     slotNumber={slot.number}
-                                    conditions={slot.slot.conditions}
-                                    isUpright={isUprightPlot(card, hasNonPlot)}
+                                    isUpright={isUprightPlot(entry.ghost, hasNonPlot)}
+                                    isGhost
                                     onEdit={onEdit}
                                     onDelete={onDelete}
                                 />
-                            </DraggableCard>
-                        )}
+                            ) : (
+                                <DraggableCard
+                                    card={entry}
+                                    slotNumber={slot.number}
+                                    isDraggable={entry === topCard}
+                                    isHeld={isHeld}
+                                    behind={
+                                        entry === previewed &&
+                                        preview && (
+                                            <DraftCardContent
+                                                card={preview}
+                                                rank={slot.options.length}
+                                                slotNumber={slot.number}
+                                                isUpright={isUprightPlot(preview, hasNonPlot)}
+                                                isGhost
+                                                isCovered
+                                                onEdit={onEdit}
+                                                onDelete={onDelete}
+                                            />
+                                        )
+                                    }
+                                >
+                                    <DraftCardContent
+                                        card={entry}
+                                        rank={projectedRank(slot.options, entry, isReceiving, leavingVersion)}
+                                        slotNumber={slot.number}
+                                        conditions={slot.slot.conditions}
+                                        isUpright={isUprightPlot(entry, hasNonPlot)}
+                                        isRevealed={entry === previewed}
+                                        extraActions={cardActions.get(entry)}
+                                        onEdit={onEdit}
+                                        onDelete={onDelete}
+                                    />
+                                </DraggableCard>
+                            )
+                        }
                     </CardStack>
                 </div>
             </DroppableSlot>
@@ -256,22 +363,25 @@ type DroppableSlotProps = BaseElementProps & {
 };
 
 // Worn by every card in the pile and live only on top - a wrapper added as a card surfaces would remount it mid-tilt
-function DraggableCard({ card, slotNumber, isDraggable, isHeld, children }: DraggableCardProps) {
+function DraggableCard({ card, slotNumber, isDraggable, isHeld, behind, children }: DraggableCardProps) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `card-${getDragUid(card)}`,
         data: { card, slotNumber } satisfies DragData,
         disabled: !isDraggable
     });
     return (
-        <div
-            ref={setNodeRef}
-            {...(isDraggable && { ...listeners, ...attributes })}
-            className={classNames("size-full", {
-                "touch-manipulation cursor-grab active:cursor-grabbing": isDraggable,
-                "opacity-0": isDragging && !isHeld
-            })}
-        >
-            <div className="size-full">{children}</div>
+        <div className="relative size-full">
+            <div className="pointer-events-none absolute inset-0 isolate z-0">{behind}</div>
+            <div
+                ref={setNodeRef}
+                {...(isDraggable && { ...listeners, ...attributes })}
+                className={classNames("relative z-10 size-full", {
+                    "touch-manipulation cursor-grab active:cursor-grabbing": isDraggable,
+                    "opacity-0": isDragging && !isHeld
+                })}
+            >
+                <div className="size-full">{children}</div>
+            </div>
         </div>
     );
 }
@@ -281,6 +391,8 @@ type DraggableCardProps = {
     slotNumber: number;
     isDraggable: boolean;
     isHeld: boolean;
+    /** What lies beneath the card - seen once the card is lifted out of it, and kept below it however it is drawn */
+    behind?: ReactNode;
     children: ReactNode;
 };
 

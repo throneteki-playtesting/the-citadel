@@ -9,6 +9,7 @@ import Crossfade from "../../../components/crossfade";
 import { rotatingDropAnimation } from "../../../animations";
 import { slotShape } from "./slotShape";
 import { DRAFT_SLOT_VARIABLES_CLASS } from "../../../constants";
+import { isPreviewedCard, previewOf } from "common/models/slots";
 import { DraftCardBadges } from "./draftCardContent";
 import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
 import { DragData, DragStoreContext, useDragState } from "./draftDragStore";
@@ -54,6 +55,9 @@ function DraggedCard({ drag, source, over, actions }: DraggedCardProps) {
     const card = slot && slot.faction !== drag.card.faction ? { ...drag.card, faction: slot.faction } : drag.card;
     const rank = isMoving ? 0 : (source?.options.findIndex((option) => option.version === card.version) ?? 0);
     const number = slot?.number ?? drag.slotNumber;
+    // Marked in hand while it is, or would be, the revealed card of the slot under it
+    const preview = slot && previewOf(slot.slot);
+    const isRevealed = !!preview && isPreviewedCard(drag.card, preview);
     // A plot, or a card from the pool, is the size of a slot's - one from a stack is already sized by the card it left
     const hasSlotShape = card.type === "plot" || !!drag.suggestion;
     // The overlay is sized to whatever it was picked up from - a thumbnail in the pool, or a tilted card in a pile - so
@@ -68,7 +72,11 @@ function DraggedCard({ drag, source, over, actions }: DraggedCardProps) {
                 )}
                 style={hasSlotShape ? slotShape(card.type === "plot") : undefined}
             >
-                <DraftCardBadges issues={slotConditionIssues(slot?.slot.conditions, card)} actions={actions} />
+                <DraftCardBadges
+                    issues={slotConditionIssues(slot?.slot.conditions, card)}
+                    actions={actions}
+                    reveal={isRevealed ? "current" : undefined}
+                />
                 <Crossfade contentKey={`${number}|${rank}|${card.faction}`}>
                     <CardPreview
                         orientation={card.type === "plot" ? "horizontal" : undefined}

@@ -78,6 +78,10 @@ export const EXPAND_MOTION = {
 } as const;
 // How long a dropped faction chip takes to reach its group
 export const CHIP_DROP_MS = 250;
+// How long a filter drawer's dismissal is held, so the click which ends it isn't read as one outside what holds it
+export const FILTER_CLOSE_HOLD_MS = 300;
+// How long a live toast waits on its work before giving up on it
+export const LIVE_TOAST_STALLED_MS = 60_000;
 
 // Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
 export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };

@@ -18,6 +18,9 @@ import {
     ISlotOptions,
     ISlotRefinement,
     ISlotRefinementDetail,
+    previewUrlOf,
+    orderByPreference,
+    previewedCard,
     ReleaseCheckCategory,
     resolveFinalCard,
     slotOptionKeys,
@@ -49,7 +52,8 @@ import { isEqual, omit, xor } from "lodash-es";
 import { conditionsBlocker } from "common/models/slotConditions";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { getContext } from "@/middleware/context";
+import { getContext, requestContext } from "@/middleware/context";
+import { createSyncEmitter } from "@/services/sseService";
 import { computeCardProgress } from "@/services/progressService";
 import {
     closeInquiryDiscussion,
@@ -58,6 +62,13 @@ import {
     startInquiryDiscussion
 } from "@/discord/forums/refinementForum";
 import { openSlotDiscussion, slotDiscussionChanged } from "@/discord/forums/planningForum";
+import {
+    revealDraftCard,
+    updateReveal,
+    withClosedThread,
+    withdrawReveal,
+    withoutClosedThread
+} from "@/discord/forums/cardForum";
 
 const router = express.Router({ mergeParams: true });
 
@@ -1254,6 +1265,143 @@ router.post(
         );
 
         res.status(StatusCodes.OK).json(await requireSlot(project.number, slot.number));
+    })
+);
+
+async function readRevealSlot(project: IProject, slotNumber: number) {
+    const slot = await requireSlot(project.number, slotNumber);
+    if (!project.draft || slot.closed) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Slot",
+            "A card can only be revealed from an open slot of a project in draft"
+        );
+    }
+    const cards = await dataService.cards.read({ project: project.number, number: slot.number });
+    const options = orderByPreference(cards, slot.preferences);
+    const preview = slot._metadata?.preview;
+    return { slot, options, preview, previewed: previewedCard(options, preview) };
+}
+
+function notAllowed(message: string) {
+    return new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Slot", message);
+}
+
+// Carries on with the work on a slot's preview after the request is answered, reporting it as it goes
+function previewing(slot: ISlot, step: string, work: () => Promise<ISlot>) {
+    // Detached, so the change reaches the page of whoever asked for it too
+    const context = getContext();
+    const detached = context.source === "client" ? { ...context, detached: true as const } : context;
+    void requestContext.run(detached, async () => {
+        const emitter = createSyncEmitter("slot", "preview", slot);
+        emitter.start();
+        try {
+            emitter.progress(step);
+            emitter.complete(await work());
+        } catch (err) {
+            emitter.error("Failure");
+            logger.warn(
+                new Error(`[Discord] Failed to ${step.toLowerCase()} the preview of slot #${slot.number}`, {
+                    cause: err
+                })
+            );
+        }
+    });
+}
+
+// Reveal a draft slot's Favoured card as a preview, or update the revealed one or replace it. Answered at once
+router.post(
+    "/:slot/reveal",
+    validateRequest(Permission.REVEAL_DRAFT_CARDS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.QUERY]: { action: Joi.string().valid("update", "replace") }
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, { action?: "update" | "replace" }>(
+        async (req, res) => {
+            const project = res.locals.project as IProject;
+            const { action } = req.query;
+            const { slot, options, preview, previewed } = await readRevealSlot(project, req.params.slot);
+            const [favoured] = options;
+
+            if (!preview && !favoured) {
+                throw notAllowed("This slot has no card to reveal");
+            }
+            if (preview && action === "update" && !previewed) {
+                throw notAllowed(
+                    "The card which was revealed is no longer in this slot, so there is nothing to update"
+                );
+            }
+            if (preview && action === "replace" && (!favoured || previewed === favoured)) {
+                throw notAllowed("The Favoured card is already the one revealed");
+            }
+            if (preview && !action) {
+                throw notAllowed("Choose whether to update the reveal or replace it");
+            }
+
+            previewing(slot, !preview ? "Revealing" : action === "update" ? "Updating" : "Replacing", async () => {
+                let next: IPlaytestCard;
+                if (preview && action === "update") {
+                    next = await updateReveal(previewed!, preview);
+                } else {
+                    next = await revealDraftCard(favoured, preview);
+                    // A card keeps the thread it was closed with, to open again if it is revealed again
+                    if (preview && previewed) {
+                        await dataService.cards.update(withClosedThread(previewed, previewUrlOf(preview)), true, false);
+                    }
+                    if (favoured._metadata?.discord?.previewUrl) {
+                        await dataService.cards.update(withoutClosedThread(favoured), true, false);
+                    }
+                }
+                const updated = await dataService.slots.setMetadata(slot, "preview", next);
+                void slotDiscussionChanged(project.number, slot.number);
+
+                await logActivity(
+                    LogCategory.SLOT,
+                    "slot.revealed",
+                    `<principal> revealed a card of slot ${slot.number} in <project>`,
+                    { context: { project: projectSnapshot(project) } }
+                );
+                return updated;
+            });
+
+            res.status(StatusCodes.ACCEPTED).json(slot);
+        }
+    )
+);
+
+// Withdraw a draft slot's preview, closing its thread - the cards themselves are untouched. Answered at once
+router.delete(
+    "/:slot/reveal",
+    validateRequest(Permission.REVEAL_DRAFT_CARDS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot, preview, previewed } = await readRevealSlot(project, req.params.slot);
+        if (!preview) {
+            throw notAllowed("This slot has no card revealed");
+        }
+
+        previewing(slot, "Withdrawing", async () => {
+            await withdrawReveal(preview);
+            if (previewed) {
+                await dataService.cards.update(withClosedThread(previewed, previewUrlOf(preview)), true, false);
+            }
+            const updated = await dataService.slots.setMetadata(slot, "preview", undefined);
+            void slotDiscussionChanged(project.number, slot.number);
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.reveal_withdrawn",
+                `<principal> withdrew the revealed card of slot ${slot.number} in <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
+            return updated;
+        });
+
+        res.status(StatusCodes.ACCEPTED).json(slot);
     })
 );
 

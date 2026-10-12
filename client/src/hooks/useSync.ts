@@ -27,7 +27,7 @@ const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     release: { github: { data: {} } },
     suggestion: { discord: {} },
     project: { discord: {} },
-    slot: { discord: {} }
+    slot: { discord: {}, preview: {} }
 };
 
 // One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }

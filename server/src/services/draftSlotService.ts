@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { omit } from "lodash-es";
+import { min, omit, partition } from "lodash-es";
 import { Faction, factions } from "common/models/cards";
 import {
     CUSTOM_TEMPLATE,
@@ -13,14 +13,20 @@ import { conditionsBlocker } from "common/models/slotConditions";
 import { DefaultSlotStatuses, ISlot, ISlotOptions, matchesTemplate, slotOptionKeys } from "common/models/slots";
 import * as Schemas from "common/models/schemas";
 import { ApiErrorResponse } from "@/errors";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
+import { PREVIEW_NOTICES, withdrawReveal } from "@/discord/forums/cardForum";
 import { syncProjectCardCount } from "@/utils";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
-import { closeSlotDiscussion, reopenSlotDiscussion, slotDiscussionChanged } from "@/discord/forums/planningForum";
+import { closeSlotDiscussion, refreshPlanningThreads, slotDiscussionChanged } from "@/discord/forums/planningForum";
 import { LogCategory } from "common/models/logs";
 
-/** How many slots each faction should have, and - where a template is being laid out - what each one asks for */
-type SlotRequest = { counts: SlotCounts; options?: TemplateSlots };
+/** How many slots each faction should have, what each asks for under a template, and the order they are numbered in */
+type SlotRequest = { counts: SlotCounts; options?: TemplateSlots; order?: Faction[] };
+
+// A save which only reorders still has slots to renumber, though there are no counts to meet
+export function withSlotOrder(request: SlotRequest | undefined, order?: Faction[]): SlotRequest | undefined {
+    return order ? { counts: {}, ...request, order } : request;
+}
 
 // A template is written by hand, so a slot it couldn't have saved through the editor is caught before any are laid out
 function assertTemplateSlots(name: string, slots: TemplateSlots) {
@@ -88,68 +94,65 @@ export async function settleTemplate(project: IProject) {
     return settled;
 }
 
-// Opens, creates or closes slots to reach the counts - closing takes a faction's last slots, whatever they hold
-export async function applySlots(project: IProject, { counts, options }: SlotRequest) {
-    const slots = (await dataService.slots.read({ project: project.number })).sort((a, b) => a.number - b.number);
+// Opens or removes slots to reach the counts - removing takes a faction's last, whatever they hold - then numbers them
+export async function applySlots(project: IProject, { counts, options, order }: SlotRequest) {
+    const all = (await dataService.slots.read({ project: project.number })).sort((a, b) => a.number - b.number);
+    // Closed slots from before slots were removed outright have nothing left to come back to
+    const [hidden, slots] = partition(all, (slot) => slot.closed);
     const updating: ISlot[] = [];
-    const closing: ISlot[] = [];
+    const removing: ISlot[] = [];
     const creating: { faction: Faction; options: ISlotOptions }[] = [];
-    let reopened = 0;
-    const reopening: ISlot[] = [];
 
     for (const faction of factions) {
         const target = counts[faction];
         if (target === undefined) {
             continue;
         }
-        const open = slots.filter((slot) => slot.faction === faction && !slot.closed);
-        const closed = slots.filter((slot) => slot.faction === faction && slot.closed);
-        const kept = open.slice(0, target);
-        const reopeningHere = closed.slice(0, Math.max(0, target - open.length));
+        const own = slots.filter((slot) => slot.faction === faction);
+        const kept = own.slice(0, target);
         const asked = options?.[faction];
         const optionsAt = (position: number) => asked?.[position] ?? {};
 
-        // Closed slots are a faction's last, so kept, reopened and created is also the order of their numbers
-        const staying = [...kept, ...reopeningHere.map((slot) => ({ ...slot, closed: false }))];
-        reopening.push(...reopeningHere);
         if (asked) {
-            updating.push(...staying.map((slot, at) => ({ ...omit(slot, slotOptionKeys), ...optionsAt(at) }) as ISlot));
-        } else {
-            updating.push(...staying.slice(kept.length));
+            updating.push(...kept.map((slot, at) => ({ ...omit(slot, slotOptionKeys), ...optionsAt(at) }) as ISlot));
         }
-        for (let position = staying.length; position < target; position++) {
+        for (let position = kept.length; position < target; position++) {
             creating.push({ faction, options: optionsAt(position) });
         }
-        closing.push(...open.slice(target));
-        reopened += reopeningHere.length;
+        removing.push(...own.slice(target));
     }
 
-    const opened = reopened + creating.length;
-    if (updating.length + closing.length + creating.length === 0) {
-        return project;
-    }
-    const highest = slots.at(-1)?.number ?? 0;
-
-    // A closed slot lets go of its cards, so a suggestion among them is free to be drafted elsewhere
+    // A removed slot lets go of its cards, so a suggestion among them is free to be drafted elsewhere
     const released =
-        closing.length > 0
+        removing.length > 0
             ? await dataService.cards.destroy(
-                  closing.map((slot) => ({ project: project.number, number: slot.number })),
+                  removing.map((slot) => ({ project: project.number, number: slot.number })),
                   false
               )
             : [];
-
-    const changed = [...updating, ...closing.map((slot) => ({ ...slot, closed: true, preferences: undefined }))];
-    if (changed.length > 0) {
-        await dataService.slots.update(changed);
+    const gone = [...removing, ...hidden];
+    if (gone.length > 0) {
+        await dataService.slots.destroy(gone.map((slot) => ({ project: project.number, number: slot.number })));
     }
-    // A slot's thread follows it out of play and back, and its post follows what it asks for
+    if (updating.length > 0) {
+        await dataService.slots.update(updating);
+    }
+    // A removed slot's threads are put away, in the planning forum and the card forum, with what was said in them kept
+    await Promise.all(
+        removing.map(async (slot) => {
+            await closeSlotDiscussion(project, slot);
+            if (slot._metadata?.preview) {
+                await withdrawReveal(slot._metadata.preview, PREVIEW_NOTICES.slotRemoved).catch((err) =>
+                    logger.warn(
+                        new Error(`[Discord] Failed to close the preview of slot #${slot.number}`, { cause: err })
+                    )
+                );
+            }
+        })
+    );
     updating.forEach((slot) => void slotDiscussionChanged(project.number, slot.number));
-    await Promise.all([
-        ...closing.map((slot) => closeSlotDiscussion(project, slot)),
-        ...reopening.map((slot) => reopenSlotDiscussion(project, slot))
-    ]);
     if (creating.length > 0) {
+        const highest = all.at(-1)?.number ?? 0;
         await dataService.slots.create(
             creating.map(
                 ({ faction, options: asked }, i) =>
@@ -164,13 +167,45 @@ export async function applySlots(project: IProject, { counts, options }: SlotReq
         );
     }
 
-    if (opened + closing.length > 0) {
+    if (creating.length + removing.length > 0) {
         await logActivity(
             LogCategory.SLOT,
             "slot.counts_updated",
-            `<principal> opened ${opened} and closed ${closing.length} slots in <project>, releasing ${released.length} cards`,
-            { context: { project: projectSnapshot(project) }, severity: closing.length > 0 ? "warn" : undefined }
+            `<principal> opened ${creating.length} and removed ${removing.length} slots in <project>, releasing ${released.length} cards`,
+            { context: { project: projectSnapshot(project) }, severity: removing.length > 0 ? "warn" : undefined }
         );
     }
+    if (await renumberSlots(project, order)) {
+        refreshPlanningThreads(project);
+    }
     return syncProjectCardCount(project.number);
+}
+
+// Numbers the slots faction by faction in the order given, or as they already stand - returns whether any changed
+export async function renumberSlots(project: IProject, order?: Faction[]) {
+    const slots = await dataService.slots.read({ project: project.number });
+    const lead = (faction: Faction) => min(slots.filter((slot) => slot.faction === faction).map((slot) => slot.number));
+    const sequence = order
+        ? [...new Set([...order, ...factions])]
+        : [...factions].sort(
+              (a, b) => (lead(a) ?? Infinity) - (lead(b) ?? Infinity) || factions.indexOf(a) - factions.indexOf(b)
+          );
+    const numbers = new Map(
+        sequence
+            .flatMap((faction) => slots.filter((slot) => slot.faction === faction).sort((a, b) => a.number - b.number))
+            .map((slot, at) => [slot.number, at + 1])
+    );
+    if ([...numbers].every(([from, to]) => from === to)) {
+        return false;
+    }
+
+    await dataService.cards.renumber(project.number, numbers);
+    await dataService.slots.renumber(project.number, numbers);
+    await logActivity(
+        LogCategory.SLOT,
+        "slot.renumbered",
+        "<principal> changed the order of the slots in <project>, which renumbered them",
+        { context: { project: projectSnapshot(project) } }
+    );
+    return true;
 }

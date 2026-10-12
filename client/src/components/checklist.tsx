@@ -1,10 +1,11 @@
 import { HTMLAttributes, ReactNode, Ref } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
-import { faListCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
+import { faCircleInfo, faListCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import { EASE_STANDARD } from "../constants";
+import { TouchTooltip } from "./touchTooltip";
 
 const ROW_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -42,17 +43,29 @@ export function ChecklistRow({ done, warning, children }: { done: boolean; warni
 export function ChecklistItems({ items }: { items: ChecklistItem[] }) {
     return (
         <Checklist>
-            {items.map(({ label, detail, done, warning }) => (
+            {items.map(({ label, detail, hint, done, warning }) => (
                 <ChecklistRow key={label} done={done} warning={warning}>
                     {label}
                     {detail && <span className="text-foreground/40"> - {detail}</span>}
+                    {hint && <ChecklistHint hint={hint} />}
                 </ChecklistRow>
             ))}
         </Checklist>
     );
 }
 
-type ChecklistItem = { label: string; detail?: string; done: boolean; warning?: boolean };
+/** A row's extra explanation, behind an info icon beside it - the same as a suggestion checklist rule's */
+function ChecklistHint({ hint }: { hint: string }) {
+    return (
+        <TouchTooltip content={<div className="max-w-64 py-1 text-xs leading-relaxed text-foreground/80">{hint}</div>}>
+            <span className="ml-1.5 cursor-help text-foreground/40 hover:text-foreground/70">
+                <FontAwesomeIcon icon={faCircleInfo} />
+            </span>
+        </TouchTooltip>
+    );
+}
+
+type ChecklistItem = { label: string; detail?: string; hint?: string; done: boolean; warning?: boolean };
 
 /** A row's tick on its own - filled for done, empty for not, a warning for done with a caveat */
 export function ChecklistMark({ done, warning, className }: { done: boolean; warning?: boolean; className?: string }) {

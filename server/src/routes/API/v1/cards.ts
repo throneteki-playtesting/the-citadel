@@ -306,14 +306,17 @@ async function unmarkInquiriesAddressed(project: number, number: number, version
 }
 
 // A card as it is held while a draft - unpublished, and carrying nothing from wherever it was copied
-function asDraft<T extends IPlaytestCard>(card: T, code: T["code"]) {
+// A draft project's image is kept, as it is what a revealed card's preview shows until it is updated
+function asDraft<T extends IPlaytestCard>(card: T, code: T["code"], isDraftProject: boolean) {
     card.code = code;
     card.draft = true;
     card.latest = false;
     card.implemented = false;
     if (card._metadata) {
         delete card._metadata.github;
-        delete card._metadata.imageUrl;
+        if (!isDraftProject) {
+            delete card._metadata.imageUrl;
+        }
     }
     return card;
 }
@@ -425,7 +428,7 @@ router.put(
                 : (inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion);
         }
 
-        asDraft(card, code);
+        asDraft(card, code, project.draft);
 
         const process = async (action: "create" | "update") => {
             switch (action) {
@@ -530,7 +533,7 @@ router.post(
                     );
                 }
                 usedVersions.add(version);
-                return asDraft({ ...card, project: project.number, number, version }, code);
+                return asDraft({ ...card, project: project.number, number, version }, code, project.draft);
             });
             await dataService.cards.create(cards, false);
             const added = cards.map((card) => card.version);
@@ -538,7 +541,7 @@ router.post(
                 ...added,
                 ...preferences.filter((version) => !added.includes(version))
             ]);
-            void slotDiscussionChanged(project.number, number);
+            void slotDiscussionChanged(project.number, number, true);
 
             for (const card of cards) {
                 await logActivity(LogCategory.CARD, "card.draft.created", "<principal> created draft <card>", {
@@ -722,7 +725,8 @@ router.post(
 
             // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
             await dataService.cards.destroy({ project: projectNumber, number, version }, false);
-            const [created] = await dataService.cards.create([movedCard], false);
+            // Still the same card, so it keeps when and by whom it was made - what a slot's reveal knows it by
+            const [created] = await dataService.cards.create([movedCard], false, true);
             await updateSlotPreferences(projectNumber, number, withoutPreference(version));
             await updateSlotPreferences(projectNumber, to, preferFirst(newVersion));
             void slotDiscussionChanged(projectNumber, to, true);
