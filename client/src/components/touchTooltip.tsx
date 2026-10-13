@@ -55,13 +55,17 @@ export function TouchTooltip({
         [setOpen]
     );
 
+    // A portalled popover or menu opened from the trigger still bubbles its events through it in React's tree, and
+    // those are not taps on the trigger
     const handlePointerDownCapture = useCallback((event: ReactPointerEvent) => {
-        isTouchRef.current = event.pointerType === "touch";
+        if (triggerRef.current?.contains(event.target as Node)) {
+            isTouchRef.current = event.pointerType === "touch";
+        }
     }, []);
 
     const handleClickCapture = useCallback(
         (event: ReactMouseEvent) => {
-            if (!isTouchRef.current) {
+            if (!isTouchRef.current || !triggerRef.current?.contains(event.target as Node)) {
                 return;
             }
             if (isOpenRef.current) {

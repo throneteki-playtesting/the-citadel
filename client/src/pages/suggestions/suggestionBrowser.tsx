@@ -115,7 +115,7 @@ export default function SuggestionBrowser({
         <div className={classNames("flex w-full min-h-0 flex-col gap-2", className)}>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                 {leading}
-                <div className="flex flex-wrap justify-end items-center gap-2 sm:ml-auto">
+                <div className="flex items-center gap-2 sm:ml-auto">
                     <SuggestionFilterSearchBar
                         search={rawSearch}
                         onSearchChange={setRawSearch}
@@ -127,14 +127,13 @@ export default function SuggestionBrowser({
                         onDrawerOpenChange={onFilterDrawerOpenChange}
                         isDisabled={isBusy}
                         isSearching={isSearching}
-                        className="min-w-40"
                     />
                     <SortSelect
                         options={sortOptions}
                         value={sortBy}
                         isDisabled={isBusy}
                         onChange={onSortChange}
-                        className="w-44 shrink-0"
+                        className="w-32 shrink-0 sm:w-44"
                     />
                 </div>
             </div>

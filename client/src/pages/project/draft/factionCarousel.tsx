@@ -82,9 +82,11 @@ const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlo
                     />
                 }
             />
-            <div className="relative flex h-20 flex-col justify-center sm:flex-row sm:items-center">
-                <div className="text-2xl sm:text-3xl font-cinzel tracking-widest px-4 pt-1 sm:p-4 flex items-center gap-2 sm:grow">
+            <div className="relative flex h-20 flex-col justify-center sm:flex-row sm:items-center sm:gap-2 sm:px-4">
+                <div className="px-4 pt-1 font-cinzel text-2xl tracking-widest sm:p-0 sm:text-3xl">
                     {factionNames[faction]}
+                </div>
+                <div className="flex items-center justify-between gap-2 px-4 pb-1 sm:contents">
                     <AnimatePresence>
                         {target !== undefined && (
                             <motion.span
@@ -98,10 +100,10 @@ const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlo
                             </motion.span>
                         )}
                     </AnimatePresence>
+                    <span className="ml-auto whitespace-nowrap text-small text-default-500">
+                        {slotCount}/{totalSlots} {pluralize(totalSlots, "slot")}
+                    </span>
                 </div>
-                <span className="self-end whitespace-nowrap pb-1 pr-4 text-small text-default-500 sm:self-auto sm:pb-0">
-                    {slotCount}/{totalSlots} {pluralize(totalSlots, "slot")}
-                </span>
             </div>
         </>
     );

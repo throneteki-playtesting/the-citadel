@@ -314,7 +314,7 @@ function SuggestionPicker({
                     scrollClassName={BROWSE_SCROLL_CLASS}
                     emptyContent="No suggestions match this slot."
                     leading={
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <div className="flex items-center justify-between gap-2 sm:justify-start sm:gap-4">
                             <Tabs
                                 size="sm"
                                 aria-label="Which suggestions to choose from"
@@ -328,7 +328,8 @@ function SuggestionPicker({
                             </Tabs>
                             {hasConditions && (
                                 <Switch size="sm" isSelected={fitsOnly} onValueChange={setFitsOnly}>
-                                    Matches slot conditions
+                                    <span className="sm:hidden">Fits slot</span>
+                                    <span className="hidden sm:inline">Matches slot conditions</span>
                                 </Switch>
                             )}
                         </div>
