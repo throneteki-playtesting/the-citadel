@@ -378,8 +378,10 @@ function DraggableCard({ card, slotNumber, isDraggable, isHeld, behind, children
             <div
                 ref={setNodeRef}
                 {...(isDraggable && { ...listeners, ...attributes })}
+                onContextMenu={isDraggable ? (event) => event.preventDefault() : undefined}
                 className={classNames("relative z-10 size-full", {
-                    "touch-manipulation cursor-grab active:cursor-grabbing": isDraggable,
+                    "touch-manipulation select-none [-webkit-touch-callout:none] cursor-grab active:cursor-grabbing":
+                        isDraggable,
                     "opacity-0": isDragging && !isHeld
                 })}
             >
