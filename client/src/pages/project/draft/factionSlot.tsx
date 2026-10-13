@@ -266,7 +266,10 @@ const FactionSlot = memo(function FactionSlot({
                         tilt={DRAFT_STACK_TILT}
                         className="h-full"
                         style={{ zIndex }}
-                        onClick={() => setSelectedIndex((prev) => (prev === 0 ? stackedCards.length - 1 : prev - 1))}
+                        hasCentre
+                        onShuffle={(step) =>
+                            setSelectedIndex((prev) => (prev + step + stackedCards.length) % stackedCards.length)
+                        }
                     >
                         {(entry) =>
                             isGhostEntry(entry) ? (

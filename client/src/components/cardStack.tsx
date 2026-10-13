@@ -1,9 +1,18 @@
-import { Key, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { KeyboardEvent, Key, MouseEvent, RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal, flushSync } from "react-dom";
 import { AnimatePresence, motion, TargetAndTransition, Transition, useIsPresent } from "framer-motion";
 import classNames from "classnames";
 import { EASE_STANDARD } from "../constants";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import {
+    flightSide,
+    SHUFFLE_REACH,
+    SHUFFLE_SIDE,
+    SHUFFLE_STEP,
+    ShuffleDirection,
+    StackZone,
+    zoneAt
+} from "./cardStackZone";
 
 const STACK_TRANSITION: Transition = { duration: 0.4, ease: EASE_STANDARD };
 const SHUFFLE_TRANSITION: Transition = { duration: 0.25, ease: EASE_STANDARD };
@@ -31,7 +40,7 @@ const GONE_POSE: TargetAndTransition = { opacity: 0, transition: INSTANT };
 
 // Just clear of the pile, so the crop switching at the turn never cuts through the card
 function shuffledPose(direction: ShuffleDirection): TargetAndTransition {
-    return { x: `${112 * direction}%`, rotate: 6 * direction, opacity: 1, filter: "brightness(1)" };
+    return { x: `${SHUFFLE_REACH * 100 * direction}%`, rotate: 6 * direction, opacity: 1, filter: "brightness(1)" };
 }
 
 function clippingAncestors(element: HTMLElement): ClippingAncestor[] {
@@ -93,10 +102,59 @@ export default function CardStack<T>({
     tilt,
     shadow,
     className,
+    onShuffle,
+    hasCentre = false,
+    onClick,
+    onKeyDown,
     ...props
 }: CardStackProps<T>) {
+    const rootRef = useRef<HTMLDivElement>(null);
+    const preferredSide = useRef<ShuffleDirection>(undefined);
+    const [flights] = useState<Flights>({ count: 0 });
+    const [landings, setLandings] = useState(0);
+    const canShuffle = behaviour === "stacked" && !!onShuffle && cards.length > 1;
+
+    // The side is only wanted by the shuffle this starts, so it is let go of once that has begun
+    const shuffle = (zone: Exclude<StackZone, "centre">) => {
+        // A card still in the air is landed where it is bound, so the press begins from a settled pile
+        if (flights.count > 0) {
+            flushSync(() => setLandings((count) => count + 1));
+        }
+        preferredSide.current = SHUFFLE_SIDE[zone];
+        onShuffle?.(SHUFFLE_STEP[zone]);
+        setTimeout(() => (preferredSide.current = undefined));
+    };
+    const press = (event: MouseEvent<HTMLDivElement>) => {
+        onClick?.(event);
+        if (canShuffle && rootRef.current) {
+            const zone = zoneAt(event.clientX, rootRef.current.getBoundingClientRect(), hasCentre);
+            if (zone !== "centre") {
+                shuffle(zone);
+            }
+        }
+    };
+    const key = (event: KeyboardEvent<HTMLDivElement>) => {
+        onKeyDown?.(event);
+        if (
+            canShuffle &&
+            event.target === event.currentTarget &&
+            (event.key === "ArrowLeft" || event.key === "ArrowRight")
+        ) {
+            event.preventDefault();
+            shuffle(event.key === "ArrowLeft" ? "left" : "right");
+        }
+    };
     return (
-        <div className={classNames("relative", className)} {...props}>
+        <div
+            ref={rootRef}
+            className={classNames("relative", className, {
+                "rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary": canShuffle
+            })}
+            tabIndex={canShuffle ? 0 : undefined}
+            onClick={press}
+            onKeyDown={key}
+            {...props}
+        >
             <AnimatePresence initial={false}>
                 {behaviour === "stacked" &&
                     cards.map((card, index) => (
@@ -111,6 +169,9 @@ export default function CardStack<T>({
                             hasPresence={!!cardKey}
                             isCarried={isCarried}
                             isGhost={isGhost}
+                            preferredSide={preferredSide}
+                            flights={flights}
+                            landings={landings}
                             tilt={tilt}
                             shadow={shadow}
                         />
@@ -146,6 +207,10 @@ type CardStackProps<T> = Omit<React.HTMLAttributes<HTMLDivElement>, "children"> 
     isCarried?: (card: T) => boolean;
     /** Left behind by a card which has gone */
     isGhost?: (card: T) => boolean;
+    /** "stacked" only: pressing the pile's left or right shuffles it - the step to add to the selection, 1 or -1 */
+    onShuffle?: (step: 1 | -1) => void;
+    /** With `onShuffle`: the middle third of the pile is left to whatever sits there, and does not shuffle */
+    hasCentre?: boolean;
     tilt?: TiltOptions;
     shadow?: boolean;
 };
@@ -185,6 +250,9 @@ function ShuffledCard<T>({
     hasPresence,
     isCarried: isCarriedCard,
     isGhost,
+    preferredSide,
+    flights,
+    landings,
     tilt = 0,
     shadow = true
 }: ShuffledCardProps<T>) {
@@ -225,14 +293,40 @@ function ShuffledCard<T>({
             const rect = pile.getBoundingClientRect();
             const clips = clippingAncestors(pile);
             const box = visibleBox(clips);
-            const direction = box.right - rect.right >= rect.left - box.left ? 1 : -1;
+            const direction = flightSide(
+                preferredSide?.current,
+                rect.left - box.left,
+                box.right - rect.right,
+                rect.width * SHUFFLE_REACH
+            );
             // A card already in the air keeps flying; its destination and crop follow the selection live
             setShuffle(
                 (current) =>
-                    current ?? { pile, rect, clips, direction, from: fromPose, isFromTop: from === 0, snapshot: node }
+                    current ?? {
+                        pile,
+                        rect,
+                        clips,
+                        direction,
+                        from: fromPose,
+                        isFromTop: from === 0,
+                        snapshot: node
+                    }
             );
         }
-    }, [position, count, isStill]);
+    }, [position, count, isStill, preferredSide]);
+
+    useLayoutEffect(() => setShuffle(undefined), [landings]);
+
+    const isFlying = !!shuffle;
+    useEffect(() => {
+        if (!isFlying || !flights) {
+            return;
+        }
+        flights.count++;
+        return () => {
+            flights.count--;
+        };
+    }, [isFlying, flights]);
 
     return (
         <>
@@ -345,11 +439,11 @@ type ShuffleFlightProps = {
     onLanded: () => void;
 };
 
-type ShuffleDirection = 1 | -1;
-
 type Box = { left: number; top: number; right: number; bottom: number };
 
 type ClippingAncestor = { element: HTMLElement; clipsX: boolean; clipsY: boolean };
+
+type Flights = { count: number };
 
 type Shuffle = {
     pile: HTMLElement;
@@ -372,6 +466,12 @@ type ShuffledCardProps<T> = {
     isCarried?: (card: T) => boolean;
     /** Left behind by a card which has gone */
     isGhost?: (card: T) => boolean;
+    /** The side a shuffle was asked for on, read as it begins - it flies out there if it has the room */
+    preferredSide?: RefObject<ShuffleDirection | undefined>;
+    /** How many cards of the pile are in the air, kept by each as it takes off and lands */
+    flights?: Flights;
+    /** Raised to land every card in the air at once, wherever it has got to */
+    landings?: number;
     tilt?: TiltOptions;
     shadow?: boolean;
 };
