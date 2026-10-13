@@ -7,7 +7,6 @@ import classNames from "classnames";
 import { IPlaytestCard } from "common/models/cards";
 import { preferenceLabel } from "common/models/slots";
 import { useDragSensors } from "../../../hooks/useDragSensors";
-import { useSuppressedSelection } from "../../../hooks/useSuppressedSelection";
 import { CARD_BASE } from "../../../constants";
 import { dropAnimation } from "../releases/releaseDnd";
 
@@ -119,15 +118,6 @@ const SortableOption = memo(function SortableOption({
         id,
         disabled: !isShown
     });
-    const [element, setElement] = useState<HTMLDivElement | null>(null);
-    const setRefs = useCallback(
-        (node: HTMLDivElement | null) => {
-            setNodeRef(node);
-            setElement(node);
-        },
-        [setNodeRef]
-    );
-    useSuppressedSelection(element, isShown);
     // A css transition rather than an animation, so the cell fades in as it is drawn but not when it is moved - an
     // animation begins again each time its element is put in a new place in the list
     const [hasMounted, setHasMounted] = useState(false);
@@ -143,11 +133,11 @@ const SortableOption = memo(function SortableOption({
                 <RankLabel rank={index} />
             </div>
             <div
-                ref={setRefs}
+                ref={setNodeRef}
                 {...attributes}
                 {...listeners}
                 style={{ transform: CSS.Transform.toString(transform), transition }}
-                className={classNames("relative touch-manipulation select-none [-webkit-touch-callout:none]", {
+                className={classNames("relative touch-manipulation select-none", {
                     "cursor-grab": isShown,
                     "opacity-0": isDragging
                 })}

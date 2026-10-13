@@ -134,9 +134,6 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const editorTitle = useRef<string | undefined>(undefined);
     const deleteTitle = useRef<string | undefined>(undefined);
     const pileElements = useRef(new Map<number, HTMLElement>());
-    // A finger drifts a little before a hold takes, and that is not the card being moved - so a hold is measured from
-    // where the first move after it began, rather than from where the finger first landed
-    const holdOrigin = useRef<{ x: number; y: number }>(undefined);
     const canEditSlots = usePermission(Permission.EDIT_SLOTS);
     const sensors = useDragSensors();
     // The trigger alone - following the request's status would redraw the page twice for every move
@@ -322,7 +319,6 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         // On touch, a pick-up let go of without moving arranges the pile instead of moving its card
         const optionCount = findDraftSlot(factionSlots, data.slotNumber)?.options.length ?? 0;
         const isHold = "touches" in event.activatorEvent && canEditSlots && optionCount > 1;
-        holdOrigin.current = undefined;
         dragStore.set({ active: data, held: isHold ? data.slotNumber : undefined });
         // A card made from a suggestion which has since been deleted can't go back in the pool - so the pool says so
         // while it is held, rather than accepting a drop which can't happen
@@ -347,11 +343,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     };
 
     const handleDragMove = ({ delta }: DragMoveEvent) => {
-        if (dragStore.get().held === undefined) {
-            return;
-        }
-        holdOrigin.current ??= { x: delta.x, y: delta.y };
-        if (Math.hypot(delta.x - holdOrigin.current.x, delta.y - holdOrigin.current.y) > HOLD_TOLERANCE_PX) {
+        if (dragStore.get().held !== undefined && Math.hypot(delta.x, delta.y) > HOLD_TOLERANCE_PX) {
             dragStore.set({ held: undefined });
         }
     };
