@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useDispatch } from "react-redux";
-import { addToast, Skeleton } from "@heroui/react";
+import { addToast } from "@heroui/react";
 import { DndContext, getClientRect, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
-import classNames from "classnames";
-import { Faction, factions, IPlaytestCard } from "common/models/cards";
+import { createPortal } from "react-dom";
+import { Faction, IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { slotConditionIssues } from "common/models/slotConditions";
 import { ISlot, movedOptionVersion, NEW_OPTION_VERSION, preferenceLabel } from "common/models/slots";
@@ -31,12 +31,14 @@ import { useHasOpened } from "../../../hooks/useHasOpened";
 import { openDiscordLink, useDiscordTarget } from "../../../hooks/useDiscordLink";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { useTagManagerOverrides } from "../../../hooks/useTagManagerOverrides";
-import { CARD_BASE, DRAFT_ROW_HEIGHT_CLASS, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
+import { CARD_BASE, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
 import EditCardModal, { EditOrigin } from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
 import ArrangeModal from "./arrangeModal";
 import RevealModal from "./revealModal";
+import DraftingSkeleton, { DraftPoolSkeleton } from "./draftingSkeleton";
+import Reveal from "../../../components/reveal";
 import { RevealAction } from "./revealState";
 import IncomingCards, { IncomingCard } from "./incomingCards";
 import FactionCarousel from "./factionCarousel";
@@ -562,11 +564,10 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
 
     if (isLoadingCards || isLoadingSlots) {
         return (
-            <div className="space-y-2">
-                {factions.map((faction) => (
-                    <Skeleton key={faction} className={classNames("w-full rounded-md", DRAFT_ROW_HEIGHT_CLASS)} />
-                ))}
-            </div>
+            <>
+                {canDraft && poolHost && createPortal(<DraftPoolSkeleton />, poolHost)}
+                <DraftingSkeleton />
+            </>
         );
     }
 
@@ -585,7 +586,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                     dragStore.endDrop(false);
                 }}
             >
-                <div className="flex flex-col gap-2">
+                <Reveal direction={null} className="flex flex-col gap-2">
                     {[...factionSlots.entries()]
                         .filter(([, slots]) => slots.length > 0)
                         .sort(([, a], [, b]) => a[0].number - b[0].number)
@@ -608,7 +609,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                                 onDelete={onDelete}
                             />
                         ))}
-                </div>
+                </Reveal>
                 {canDraft && (
                     <DraftPool
                         project={project.number}

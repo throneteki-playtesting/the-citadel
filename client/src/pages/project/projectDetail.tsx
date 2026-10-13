@@ -7,6 +7,7 @@ import EditProjectModal from "./editProjectModal";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
+import ProjectHeaderSkeleton from "./projectHeaderSkeleton";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import { DraftPoolHostProvider } from "./draft/draftPoolHost";
@@ -56,7 +57,8 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     if (isLoading) {
         return (
-            <div>
+            <div className="space-y-4">
+                <ProjectHeaderSkeleton />
                 <Skeleton className="w-full h-98 rounded-md" />
             </div>
         );
