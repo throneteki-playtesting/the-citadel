@@ -353,14 +353,15 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         faction ? firstFittingSlot(slotsRef.current.get(faction), data.card, data.slotNumber) : undefined;
 
     const handleDragOver = ({ active, over }: DragOverEvent) => {
-        const target = over?.data.current as { faction?: Faction; number?: number } | undefined;
+        const target = over?.data.current as { faction?: Faction; number?: number; pool?: boolean } | undefined;
         const data = active.data.current as DragData | undefined;
+        const isOverPool = !!target?.pool;
         if (target?.number !== undefined || !data) {
-            dragStore.set({ over: target?.number, overFaction: undefined });
+            dragStore.set({ over: target?.number, overFaction: undefined, isOverPool });
             return;
         }
         const slot = factionSlotFor(target?.faction, data);
-        dragStore.set({ over: slot?.number, overFaction: slot && target?.faction });
+        dragStore.set({ over: slot?.number, overFaction: slot && target?.faction, isOverPool });
     };
 
     const clearDrag = () =>
@@ -369,6 +370,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             over: undefined,
             overFaction: undefined,
             isOrphaned: undefined,
+            isOverPool: undefined,
             held: undefined
         });
 

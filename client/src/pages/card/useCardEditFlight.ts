@@ -3,6 +3,7 @@ import { isEqual } from "lodash-es";
 import { IPlaytestCard } from "common/models/cards";
 import { SlotCondition, slotConditionIssues } from "common/models/slotConditions";
 import { DeepPartial } from "common/types";
+import { useBreakpoint } from "../../hooks/useBreakpoint";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { TransitCardProps } from "../project/draft/transitCard";
 
@@ -32,7 +33,10 @@ export function useCardEditFlight({
     stackWidth,
     onClose
 }: CardEditFlightArgs) {
+    // Below `sm` the editor is simply opened - the card is not carried to a preview which may be out of sight
     const prefersReducedMotion = useReducedMotion();
+    const isSmallScreen = !useBreakpoint("sm");
+    const isStill = prefersReducedMotion || isSmallScreen;
     const previewRef = useRef<HTMLDivElement>(null);
     const faceRef = useRef<HTMLDivElement>(null);
     const [arrived, setArrived] = useState<EditOrigin>();
@@ -110,7 +114,7 @@ export function useCardEditFlight({
         if (revertedTo) {
             return;
         }
-        const hasChanged = !!origin && !prefersReducedMotion && !!initial && !isEqual(card, initial);
+        const hasChanged = !!origin && !isStill && !!initial && !isEqual(card, initial);
         if (!hasChanged) {
             onClose();
             return;
@@ -119,7 +123,7 @@ export function useCardEditFlight({
         revertTimer.current = setTimeout(onClose, REVERT_MS);
     };
 
-    const isFlying = isOpen && !!origin && origin !== arrived && !prefersReducedMotion;
+    const isFlying = isOpen && !!origin && origin !== arrived && !isStill;
     return {
         previewRef,
         faceRef,

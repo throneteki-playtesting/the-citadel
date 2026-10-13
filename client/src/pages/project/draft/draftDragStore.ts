@@ -13,6 +13,8 @@ export type DragData = { card: IPlaytestCard; slotNumber: number; suggestion?: I
 
 type DragState = {
     active?: DragData;
+    /** The card in hand is over the draft pool, where it will be taken in */
+    isOverPool?: boolean;
     /** The slot under the card in hand */
     over?: number;
     /** Set when `over` was chosen for a faction the card is held over, rather than being the slot itself */
@@ -85,6 +87,7 @@ export function createDragStore() {
                 next.over === state.over &&
                 next.overFaction === state.overFaction &&
                 next.isOrphaned === state.isOrphaned &&
+                next.isOverPool === state.isOverPool &&
                 next.held === state.held
             ) {
                 return;

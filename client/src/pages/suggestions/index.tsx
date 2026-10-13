@@ -34,6 +34,8 @@ import {
     faGear,
     faPlus
 } from "@fortawesome/free-solid-svg-icons";
+import FloatingSlot from "../../components/floatingSlot";
+import GuideBubble from "../../components/guideBubble";
 import SuggestionsGuideModal from "./suggestionsGuideModal";
 import SuggestionSettingsModal from "./suggestionSettingsModal";
 import LoadingCard from "../../components/loadingCard";
@@ -238,17 +240,7 @@ function SuggestionsContent() {
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
                         Suggestions
                     </div>
-                    <Button
-                        isIconOnly
-                        color="primary"
-                        variant="flat"
-                        size="sm"
-                        aria-label="Suggestions Guide"
-                        onPress={() => setIsGuideOpen(true)}
-                        className="sm:hidden shrink-0"
-                    >
-                        <FontAwesomeIcon icon={faCircleQuestion} />
-                    </Button>
+                    <GuideBubble label="Suggestions Guide" onOpen={() => setIsGuideOpen(true)} />
                 </div>
                 <div className="flex items-center justify-between gap-2 py-1">
                     <div className="text-sm lg:text-medium text-foreground/70 italic">
@@ -484,6 +476,7 @@ function SuggestionsContent() {
 
             {canEditSettings && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("settings"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("settings")} />
                     <Button
                         isIconOnly
                         radius="full"
@@ -499,6 +492,7 @@ function SuggestionsContent() {
             )}
             {hasStash && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
                     <Badge content={stashCount} color="primary" showOutline={false}>
                         <MyStashDropdown {...stashDropdownProps}>
                             <Button
@@ -517,6 +511,7 @@ function SuggestionsContent() {
             )}
             {canCreate && !hasStash && !!myDraftsCount && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
                     <Badge content={myDraftsCount} color="primary" showOutline={false}>
                         <Button
                             isIconOnly
@@ -534,6 +529,7 @@ function SuggestionsContent() {
             )}
             {canCreate && (
                 <div className="sm:hidden fixed bottom-6 right-4 z-20">
+                    <FloatingSlot index={0} />
                     <Button
                         isIconOnly
                         radius="full"

@@ -292,6 +292,8 @@ Maps icon name → ThronesDB font Unicode character. Valid icon names (used in b
 
 **Write only the field you own after slow external calls.** Whatever was read before a Discord or GitHub call may have changed by the time it returns, and writing the whole record back silently undoes that. A record's metadata is therefore set with a targeted update (`slots.setMetadata`) rather than by re-saving the record.
 
+**Screen size is named by Tailwind's sizes, never by device.** `useBreakpoint(size)` (`hooks/useBreakpoint.ts`) says whether the screen is at least `sm`, `md`, `lg`... wide - the same line as the `sm:` and `md:` classes - so code that can't be markup alone reads `!useBreakpoint("sm")`, not "is a phone". **A page's guide is a `GuideBubble`** (`components/guideBubble.tsx`) below `sm`: a primary bubble at the bottom right, portalled and held to the page and tab on show, opening the same guide modal as the labelled button from `sm` up. It takes the left-most place the page's other floating buttons leave: each of those renders a `FloatingSlot` with its place (0 by the edge, one more for each further left), and `useNextFloatingSlot` gives the guide the next.
+
 **Work with a progress hook uses `showLiveToast`** (`client/src/components/liveToast/`): one toast that spins while `useProgress` reports `working`, then turns into a check or an error and goes green or red in place. The colour follows a marker in the title through a `:has()` rule, since HeroUI fixes a toast's colour when it opens.
 
 ---

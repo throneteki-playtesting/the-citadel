@@ -67,16 +67,19 @@ export function CornerBadge({
                 onClick={onClick}
                 onAuxClick={onAuxClick}
                 className={classNames(
-                    "relative flex items-center justify-center size-8 rounded-full ring-1",
+                    "relative flex items-center justify-center size-[2em] rounded-full ring-1",
                     cornerBadgeDiscFillClasses,
                     cornerBadgeFadeClasses,
                     RING_CLASSES[color],
                     { "animate-pulse": pulse, "cursor-pointer": !!onClick }
                 )}
             >
-                <FontAwesomeIcon icon={icon} className={classNames("text-lg", iconClassName ?? ICON_CLASSES[color])} />
+                <FontAwesomeIcon
+                    icon={icon}
+                    className={classNames("text-[1.125em]", iconClassName ?? ICON_CLASSES[color])}
+                />
                 {count !== undefined && (
-                    <div className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-primary-foreground text-[0.65rem] leading-4 text-center font-bold">
+                    <div className="absolute -bottom-[0.25em] -right-[0.25em] min-w-[1em] h-[1em] px-[0.25em] rounded-full bg-primary text-primary-foreground text-[0.65em] leading-[1em] text-center font-bold">
                         {count}
                     </div>
                 )}
@@ -87,7 +90,8 @@ export function CornerBadge({
 
 export type CardCornerBadge = CornerBadgeProps & { key: string };
 
-/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room */
+/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room.
+ *  Sized in the row's own em, which steps down with the cards on smaller screens. */
 export default function CardCornerBadges({ badges, isolateClicks = false, className, leading }: CardCornerBadgesProps) {
     const shown = badges.filter((badge): badge is CardCornerBadge => !!badge);
     if (shown.length === 0 && !leading) {
@@ -95,7 +99,10 @@ export default function CardCornerBadges({ badges, isolateClicks = false, classN
     }
     return (
         <div
-            className={classNames("absolute top-0 right-0 m-2 z-10 flex items-center gap-1.5", className)}
+            className={classNames(
+                "absolute top-0 right-0 m-[0.5em] z-10 flex items-center gap-[0.375em] text-[0.82rem] sm:text-[0.91rem] md:text-base",
+                className
+            )}
             onClick={
                 isolateClicks
                     ? (e) => {

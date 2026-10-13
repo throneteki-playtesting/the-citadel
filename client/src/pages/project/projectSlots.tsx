@@ -370,7 +370,7 @@ const GroupBlock = memo(function GroupBlock({
                         isOver ? "border-primary" : single ? factionBorderClasses[single] : "border-content3"
                     )}
                 >
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 py-1 pl-1.5 pr-2">
+                    <div className="flex items-center gap-x-2 gap-y-1 py-1 pl-1.5 pr-2">
                         {canReorder && (
                             <button
                                 type="button"
@@ -385,7 +385,7 @@ const GroupBlock = memo(function GroupBlock({
                                 <FontAwesomeIcon icon={faGripVertical} />
                             </button>
                         )}
-                        <div className="flex min-w-0 grow flex-wrap gap-0.5">
+                        <div className="flex min-w-0 flex-1 basis-0 flex-wrap gap-0.5">
                             {group.factions.map((faction) =>
                                 isOverlay ? (
                                     <FactionChip key={faction} faction={faction} />
@@ -409,7 +409,7 @@ const GroupBlock = memo(function GroupBlock({
                             <NumberInput
                                 aria-label={`Slots for ${names}`}
                                 size="sm"
-                                className="w-24"
+                                className="w-20 sm:w-24"
                                 minValue={0}
                                 value={group.count}
                                 isDisabled={!canRegroup}

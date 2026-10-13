@@ -5,6 +5,7 @@ import Permission from "common/models/permissions";
 import { usePermission } from "../../../hooks/usePermission";
 import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
 import DraftingGuideModal from "./draftingGuideModal";
+import GuideBubble from "../../../components/guideBubble";
 
 const DRAFTING_GUIDE_SEEN_KEY = "drafting-guide-seen";
 
@@ -27,17 +28,7 @@ export default function DraftingGuideButton() {
             >
                 Drafting Guide
             </Button>
-            <Button
-                isIconOnly
-                color="primary"
-                variant="flat"
-                size="sm"
-                aria-label="Drafting Guide"
-                onPress={guide.open}
-                className="sm:hidden shrink-0"
-            >
-                <FontAwesomeIcon icon={faCircleQuestion} />
-            </Button>
+            <GuideBubble label="Drafting Guide" onOpen={guide.open} />
             <DraftingGuideModal isOpen={guide.isOpen} onClose={guide.close} />
         </>
     );

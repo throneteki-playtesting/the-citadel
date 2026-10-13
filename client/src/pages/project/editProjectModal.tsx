@@ -200,6 +200,7 @@ export default function EditProjectModal({
                                         <ProjectNumberInput number={project.number} isDisabled={!isNew} />
                                         <ProjectCodeInput code={project.code} />
                                         <Select
+                                            className="col-span-2 sm:col-span-1"
                                             name="type"
                                             label="Type"
                                             renderValue={(types) =>
@@ -219,6 +220,7 @@ export default function EditProjectModal({
                                             ))}
                                         </Select>
                                         <EmojiSelect
+                                            className="col-span-2 sm:col-span-1"
                                             label="Discord Emoji"
                                             defaultValue={project.emoji}
                                             onEmojiChange={(emoji) => setProject((prev) => ({ ...prev, emoji }))}

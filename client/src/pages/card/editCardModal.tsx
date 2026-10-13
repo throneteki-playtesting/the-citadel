@@ -152,7 +152,7 @@ export default function EditCardModal({
                                             <DraftCardBadges issues={flight.shownIssues} actions={[]} isLive />
                                         </ScaledBadges>
                                     </EditorCardPreview>
-                                    <WizardPages className="flex-1 min-w-0">
+                                    <WizardPages className="min-w-0 md:flex-1">
                                         <WizardPage controlledData={getBaseCardValues(card)}>
                                             <CardEditor
                                                 card={card}

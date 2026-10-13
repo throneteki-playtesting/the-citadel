@@ -68,7 +68,8 @@ export default function SlidingPages({
     // The pages' own slide finishing is what ends the journey - the height may not change at all
     // between two pages of the same size, so it has no transition of its own to wait on
     const onTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
-        const isPageSlide = e.propertyName === "transform" && (e.target as HTMLElement).parentElement === e.currentTarget;
+        const isPageSlide =
+            e.propertyName === "transform" && (e.target as HTMLElement).parentElement === e.currentTarget;
         if (isPageSlide) {
             setIsTravelling(false);
         }
@@ -78,7 +79,7 @@ export default function SlidingPages({
         <div
             ref={ref}
             className={classNames(
-                "relative size-full",
+                "relative size-full shrink-0",
                 { "overflow-clip": isMeasured, "transition-height": isTravelling },
                 className
             )}

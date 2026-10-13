@@ -76,6 +76,9 @@ export const EXPAND_MOTION = {
     exit: { height: 0, opacity: 0 },
     transition: NOTICE_TRANSITION
 } as const;
+// How long a card takes to be drawn to the draft pool as it comes over it, and to be let go of as it leaves
+export const POOL_PULL_MS = 150;
+
 // How long a dropped faction chip takes to reach its group
 export const CHIP_DROP_MS = 250;
 // How long a filter drawer's dismissal is held, so the click which ends it isn't read as one outside what holds it
@@ -103,6 +106,17 @@ export const cornerBadgeFadeClasses =
 
 // Where a sort-specific badge sits over a card
 export const cornerBadgeBottomRightClasses = "absolute bottom-0 right-0 m-2 z-10";
+
+// A control among a card's badges is the badge's size, whatever size the row is
+export const CORNER_CONTROL_CLASS = "size-[2em]! min-w-[2em]! text-[0.875em]";
+
+// Floating buttons along the bottom right: the first is this far in, and each further left is a step beyond
+export const FLOATING_SLOT_INSET_REM = 1;
+export const FLOATING_SLOT_STEP_REM = 4;
+
+// Tailwind's own sizes, as the widths at which each begins
+export const BREAKPOINT_WIDTHS = { sm: "40rem", md: "48rem", lg: "64rem", xl: "80rem", "2xl": "96rem" } as const;
+export type Breakpoint = keyof typeof BREAKPOINT_WIDTHS;
 
 // A badge's disc lets the art show through until the badge itself is hovered, when it goes solid for reading
 export const cornerBadgeDiscFillClasses =

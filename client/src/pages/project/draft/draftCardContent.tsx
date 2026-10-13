@@ -18,7 +18,7 @@ import { IPlaytestCard } from "common/models/cards";
 import { SlotCondition, slotConditionIssues } from "common/models/slotConditions";
 import CardCornerBadges, { CornerBadge } from "../../../components/cardCornerBadges";
 import Crossfade from "../../../components/crossfade";
-import { FLAT_BUTTON_CLASS } from "../../../constants";
+import { CORNER_CONTROL_CLASS, FLAT_BUTTON_CLASS } from "../../../constants";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
 import { renderDraftCard } from "./draftSlots";
@@ -255,7 +255,7 @@ export function CardActionsControl({ actions, isButton = false }: { actions: Car
                         size="sm"
                         variant="faded"
                         aria-label={actions[0].label}
-                        className={FLAT_BUTTON_CLASS}
+                        className={classNames(FLAT_BUTTON_CLASS, CORNER_CONTROL_CLASS)}
                         onPress={actions[0].onPress}
                     >
                         <FontAwesomeIcon icon={actions[0].icon} />
@@ -264,7 +264,13 @@ export function CardActionsControl({ actions, isButton = false }: { actions: Car
             ) : (
                 <Dropdown>
                     <DropdownTrigger>
-                        <Button isIconOnly radius="full" size="sm" variant="faded" className={FLAT_BUTTON_CLASS}>
+                        <Button
+                            isIconOnly
+                            radius="full"
+                            size="sm"
+                            variant="faded"
+                            className={classNames(FLAT_BUTTON_CLASS, CORNER_CONTROL_CLASS)}
+                        >
                             <FontAwesomeIcon icon={faEllipsis} />
                         </Button>
                     </DropdownTrigger>

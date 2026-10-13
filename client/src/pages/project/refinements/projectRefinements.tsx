@@ -278,7 +278,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
     return (
         <>
             {isLoading ? (
-                <RefinementsSkeleton project={project} onOpenGuide={guide.open} />
+                <RefinementsSkeleton project={project} onOpenGuide={guide.open} isActive={isActive} />
             ) : (
                 <div ref={containerRef} className="scroll-mt-20">
                     <SlidingPages currentPage={isEditing ? 2 : 1} history="refinements" onPageChange={onPageChange}>
@@ -310,6 +310,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
                     title="Refinements"
                     guideLabel="Refinement Guide"
                     onOpenGuide={guide.open}
+                    isActive={isActive}
                 />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
@@ -609,7 +610,15 @@ function RefinementRowSkeleton() {
     );
 }
 
-function RefinementsSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
+function RefinementsSkeleton({
+    project,
+    onOpenGuide,
+    isActive
+}: {
+    project: IProject;
+    onOpenGuide: () => void;
+    isActive: boolean;
+}) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
@@ -619,6 +628,7 @@ function RefinementsSkeleton({ project, onOpenGuide }: { project: IProject; onOp
                 title="Refinements"
                 guideLabel="Refinement Guide"
                 onOpenGuide={onOpenGuide}
+                isActive={isActive}
             />
             <div className="flex flex-col gap-1.5">
                 {[designStatuses.length, inquirySeverities.length, project.releases.length].map((chips, row) => (
