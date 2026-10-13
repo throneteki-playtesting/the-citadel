@@ -282,6 +282,20 @@ Maps icon name → ThronesDB font Unicode character. Valid icon names (used in b
 
 ---
 
+## Shared Sync & Data Practices
+
+**Syncs run as a batch, and only what is created is put in order.** `server/src/concurrency.ts` is the one standard for every sync (Discord, GitHub, anything else). `inOrder` starts every item at once and `orderedStep` wraps just the call which creates something whose place matters — a thread, an announcement, an issue — taken in the items' order: by project / number / version for cards, reviews and issues, by slot number for slot threads, by project and version or release number for announcements, by when it was made for anything without a number. Everything else (rendering, reads, edits, DMs) overlaps freely, and a new sync should not process its items one by one. `syncInOrder` adds one lock per item, taken in that same order up front so overlapping runs can neither double-create nor deadlock; `keyedMutex` is the per-key lock. A run-level lock stays only where a run persists what it posted (the announcement and release-check syncs), and the data pull request commits one project at a time because the projects share a branch. Forum order follows creation only if the forum is sorted by creation time.
+
+**Paged reads have a stable order.** `doRead` (`data/repositories/shared.ts`) falls back to the record's own keys whenever a page is asked for, so a default or tied sort can't repeat or drop records between pages.
+
+**Records are compared and re-created by their content, not their auditing.** `AUDIT_FIELDS` and `hasSameContent(a, b, ignoring)` (`common/models/shared.ts`, beside `IAuditable`) compare two records ignoring `_metadata`, who made them and when; the repositories use the same function to decide whether an update changed anything. `create(..., keepCreation)` lets a record re-created under a new key (a card moved to another slot) keep when and by whom it was made.
+
+**Write only the field you own after slow external calls.** Whatever was read before a Discord or GitHub call may have changed by the time it returns, and writing the whole record back silently undoes that. A record's metadata is therefore set with a targeted update (`slots.setMetadata`) rather than by re-saving the record.
+
+**Work with a progress hook uses `showLiveToast`** (`client/src/components/liveToast/`): one toast that spins while `useProgress` reports `working`, then turns into a check or an error and goes green or red in place. The colour follows a marker in the title through a `:has()` rule, since HeroUI fixes a toast's colour when it opens.
+
+---
+
 ## Drafting (draft projects)
 
 A draft project is built slot by slot before it is initialised into real cards. Everything below is gated on `project.draft`; owners (`IProject.owners`) hold every project-scoped permission, but only global `EDIT_PROJECTS` may change who the owners are.
@@ -303,14 +317,10 @@ A draft project is built slot by slot before it is initialised into real cards. 
 - **The ghost is two things.** While the revealed card is in the slot a ghost copy sits in a layer beneath it inside its `DraggableCard` (its own stacking context, so its badge can never draw over the card); lifting the card leaves it visibly behind. Once the card has left, the ghost becomes a pile entry in the place that card held, keyed apart from every card, which appears and goes with no animation. It is never counted among the slot's options.
 - **Outdated** is `hasSameContent(card, preview, ["version"])` (`common/models/shared.ts`, beside `AUDIT_FIELDS`): the content, not timestamps, since a move rewrites those. `revealStanding` reports unchanged / changed / swapped for the planning thread's "Previewed as … · Unchanged since that reveal" footer.
 - **The dragged card keeps its reveal badge** while it is, or would be, the revealed card of the slot beneath it, and fades it over any other.
-- **Writes to the slot's Discord link and preview are targeted** (`slots.setMetadata`), because they are made after slow Discord calls: writing back the whole slot read beforehand silently undid whatever changed meanwhile — which is how a freshly opened thread's link went missing.
-- Progress of a reveal is a `showLiveToast` (`components/liveToast/`): one toast that spins while `useProgress` reports `working`, then turns into a check or an error and goes green or red in place (a `:has()` rule on a marker in the title, since HeroUI fixes a toast's colour when it opens). Any work with a progress hook can use it.
 
 ### Discord
 
-- A draft project gets a `{code}-planning` forum with a thread per slot, and reveal previews live in the card forum. Thread-closing texts are `PREVIEW_NOTICES` in `cardForum.ts`. Rate limits fail fast and are reported as such; a sync with problems does not stamp `lastSynced`.
-- **Paged reads have a stable order**: `doRead` falls back to the record's own keys whenever a page is asked for, so a default (or tied) sort can't repeat or drop records between pages.
-- None of the Discord behaviour was exercised against a real guild before beta.
+- A draft project gets a `{code}-planning` forum with a thread per slot, and reveal previews live in the card forum. Thread-closing texts are `PREVIEW_NOTICES` in `cardForum.ts`. A slot's Discord link and preview are written with `slots.setMetadata`, never by writing the slot back (see Shared Sync & Data Practices).
 
 ---
 

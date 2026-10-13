@@ -40,14 +40,13 @@ import { useWizard } from "../../components/wizard/context";
 import UserSelect from "../../components/data/userSelect";
 import { useAuth } from "../../hooks/useAuth";
 import { hasPermission } from "common/utils";
-import { chunk, compact, isEmpty, omit } from "lodash-es";
+import { compact, isEmpty, omit } from "lodash-es";
 import Permission from "common/models/permissions";
 
 const SLOTS_PAGE = 2;
 // The slots page has no form fields of its own - what it edits is held here and merged in on submit
 const NO_PAGE_DATA = {};
 // A group of eight factions changes eight slots at a time, so their saves go out a few together
-const SLOT_SAVES_AT_ONCE = 6;
 
 const DefaultProjectValues: DeepPartial<IProject> = {
     active: false,
@@ -137,13 +136,11 @@ export default function EditProjectModal({
             if (slotGroups) {
                 const { items } = await getSlots({ project: newProject.number }).unwrap();
                 const changed = changedSlotOptions(slotGroups, items);
-                for (const saves of chunk(changed, SLOT_SAVES_AT_ONCE)) {
-                    await Promise.all(
-                        saves.map(({ number, options }) =>
-                            updateSlotOptions({ project: newProject.number, number, ...options }).unwrap()
-                        )
-                    );
-                }
+                await Promise.all(
+                    changed.map(({ number, options }) =>
+                        updateSlotOptions({ project: newProject.number, number, ...options }).unwrap()
+                    )
+                );
             }
             onSave?.(newProject);
             onModalClose?.(true);

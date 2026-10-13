@@ -20,30 +20,20 @@ import { factionNames, isPreview, parseCardCode } from "common/utils";
 import { createSyncEmitter } from "@/services/sseService";
 import { syncImage } from "@/rendering/hosting";
 import { User } from "common/models/auth";
-import { Mutex } from "async-mutex";
+import { byCard, cardLock, orderedStep, syncBatch } from "@/concurrency";
 
-const syncReviewForumMutex = new Mutex();
+// A review's place among reviews: its card's, then its reviewer
+const byReview = (a: IPlaytestReview, b: IPlaytestReview) => byCard(a, b) || a.reviewer.localeCompare(b.reviewer);
+const reviewLock = (review: IPlaytestReview) => `${cardLock(review)}|${review.reviewer}`;
 
 export async function syncReviewForum(reviews: IPlaytestReview[], forced?: boolean): Promise<IPlaytestReview[]> {
-    const release = await syncReviewForumMutex.acquire();
-    // Created and started before the context resolves, so a context failure still fails them properly.
-    const emitters = new Map(reviews.map((review) => [review, createSyncEmitter("review", "discord", review)]));
-    emitters.forEach((emitter) => emitter.start());
-    try {
-        const context = await getPlaytestingReviewContext();
-        const results: IPlaytestReview[] = [];
-        for (const review of reviews) {
-            results.push(await syncReviewThread(review, context, emitters.get(review)!, forced));
-            emitters.delete(review);
-        }
-        return results;
-    } catch (err) {
-        // Only reached by the context resolution above - per-review failures are already handled.
-        emitters.forEach((emitter) => emitter.error("Failure"));
-        throw err;
-    } finally {
-        release();
-    }
+    return await syncBatch(reviews, {
+        emitterFor: (review) => createSyncEmitter("review", "discord", review),
+        context: getPlaytestingReviewContext,
+        key: reviewLock,
+        order: byReview,
+        work: (review, context, emitter) => syncReviewThread(review, context, emitter, forced)
+    });
 }
 
 async function syncReviewThread(
@@ -265,15 +255,15 @@ async function createThreadFor(
     const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
     const autoArchiveDuration = context.channel.defaultAutoArchiveDuration;
 
-    const thread = await context.channel.threads.create({
-        name,
-        reason,
-        message,
-        appliedTags: tags.map((tag) => tag.id),
-        autoArchiveDuration
-    });
-
-    return thread;
+    return await orderedStep(() =>
+        context.channel.threads.create({
+            name,
+            reason,
+            message,
+            appliedTags: tags.map((tag) => tag.id),
+            autoArchiveDuration
+        })
+    );
 }
 async function getThreadFor(review: IPlaytestReview) {
     const { messageId: threadId } = extractFromURL(review._metadata.discord.messageUrl);

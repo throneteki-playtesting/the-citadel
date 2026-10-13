@@ -31,6 +31,7 @@ import { factionNames, isInitial, isPreview } from "common/utils";
 import { getTimeLockedImageUrl, syncImage } from "@/rendering/hosting";
 import { capitalize, merge, omit } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
+import { byCard, cardLock, orderedStep, syncBatch } from "@/concurrency";
 import { Mutex } from "async-mutex";
 
 const syncCardForumMutex = new Mutex();
@@ -41,25 +42,13 @@ const syncCardForumMutex = new Mutex();
  * @param cards Cards to sync
  */
 export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
-    const release = await syncCardForumMutex.acquire();
-    // Created and started before the context resolves, so a context failure still fails them properly.
-    const emitters = new Map(cards.map((card) => [card, createSyncEmitter("card", "discord", card)]));
-    emitters.forEach((emitter) => emitter.start());
-    try {
-        const context = await getCardForumContext();
-        const results: IPlaytestCard[] = [];
-        for (const card of cards) {
-            results.push(await syncCardThread(card, context, emitters.get(card)!, forced));
-            emitters.delete(card);
-        }
-        return results;
-    } catch (err) {
-        // Only reached by the context resolution above - per-card failures are already handled.
-        emitters.forEach((emitter) => emitter.error("Failure"));
-        throw err;
-    } finally {
-        release();
-    }
+    return await syncBatch(cards, {
+        emitterFor: (card) => createSyncEmitter("card", "discord", card),
+        context: () => getCardForumContext(),
+        key: cardLock,
+        order: byCard,
+        work: (card, context, emitter) => syncCardThread(card, context, emitter, forced)
+    });
 }
 
 async function syncCardThread(
@@ -521,39 +510,39 @@ const previewOf = (card: IPlaytestCard, messageUrl: string): IPlaytestCard => ({
     _metadata: { discord: { messageUrl, lastSynced: new Date() } }
 });
 
-/** Posts a draft project's card as a preview thread, closing the preview it replaces with a link to the new */
-export async function revealDraftCard(card: IPlaytestCard, replacing?: IPlaytestCard) {
+// Only making a draft project's tag is shared work, so only that is done one at a time - the previews go side by side
+async function getRevealContext(project: number) {
     const release = await syncCardForumMutex.acquire();
     try {
-        const context = await getCardForumContext(card.project);
-        const revealed = (await reopenPreview(card, context)) ?? (await createPreview(card, context));
-        const { messageUrl } = revealed._metadata.discord;
-        if (replacing) {
-            await closePreview(
-                replacing,
-                context,
-                `### Preview replaced\nThe preview of this slot is now [${revealed.name}](${messageUrl}).`
-            );
-        }
-        return previewOf(revealed, messageUrl);
+        return await getCardForumContext(project);
     } finally {
         release();
     }
 }
 
+/** Posts a draft project's card as a preview thread, closing the preview it replaces with a link to the new */
+export async function revealDraftCard(card: IPlaytestCard, replacing?: IPlaytestCard) {
+    const context = await getRevealContext(card.project);
+    const revealed = (await reopenPreview(card, context)) ?? (await createPreview(card, context));
+    const { messageUrl } = revealed._metadata.discord;
+    if (replacing) {
+        await closePreview(
+            replacing,
+            context,
+            `### Preview replaced\nThe preview of this slot is now [${revealed.name}](${messageUrl}).`
+        );
+    }
+    return previewOf(revealed, messageUrl);
+}
+
 /** Brings a preview up to date in place - its post, and its thread's name and tags - from the card as it is now */
 export async function updateReveal(card: IPlaytestCard, preview: IPlaytestCard) {
-    const release = await syncCardForumMutex.acquire();
-    try {
-        const context = await getCardForumContext(card.project);
-        const refreshed = await refreshPreview(
-            { ...card, _metadata: { ...card._metadata, discord: { messageUrl: previewUrlOf(preview) } } },
-            context
-        );
-        return previewOf(refreshed, previewUrlOf(preview));
-    } finally {
-        release();
-    }
+    const context = await getRevealContext(card.project);
+    const refreshed = await refreshPreview(
+        { ...card, _metadata: { ...card._metadata, discord: { messageUrl: previewUrlOf(preview) } } },
+        context
+    );
+    return previewOf(refreshed, previewUrlOf(preview));
 }
 
 async function refreshPreview(card: IPlaytestCard, context: CardForumContext) {
@@ -623,13 +612,7 @@ export const PREVIEW_NOTICES = {
 
 /** Closes a preview thread, saying it is withdrawn - its card, if there is one, is left as it is */
 export async function withdrawReveal(preview: IPlaytestCard, notice = PREVIEW_NOTICES.withdrawn) {
-    const release = await syncCardForumMutex.acquire();
-    try {
-        const context = await getCardForumContext(preview.project);
-        await closePreview(preview, context, notice);
-    } finally {
-        release();
-    }
+    await closePreview(preview, await getRevealContext(preview.project), notice);
 }
 
 export async function deleteDraft(card: IPlaytestCard) {
@@ -856,15 +839,15 @@ async function createThreadFor(
     const tags = tagsFor(card, context);
     const autoArchiveDuration = context.channel.defaultAutoArchiveDuration;
 
-    const thread = await context.channel.threads.create({
-        name,
-        reason,
-        message,
-        appliedTags: tags.map((tag) => tag.id),
-        autoArchiveDuration
-    });
-
-    return thread;
+    return await orderedStep(() =>
+        context.channel.threads.create({
+            name,
+            reason,
+            message,
+            appliedTags: tags.map((tag) => tag.id),
+            autoArchiveDuration
+        })
+    );
 }
 async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
     try {

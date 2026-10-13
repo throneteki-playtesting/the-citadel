@@ -11,7 +11,7 @@ import {
     TextDisplayBuilder
 } from "discord.js";
 import { Mutex } from "async-mutex";
-import { merge, min } from "lodash-es";
+import { compact, merge, min } from "lodash-es";
 import { IPlaytestingUpdate, IProject, PlaytestingUpdateState } from "common/models/projects";
 import { IPlaytestCard, NoteType } from "common/models/cards";
 import { PLAYTESTING_TEAM_ROLE_NAME } from "common/models/auth";
@@ -23,6 +23,7 @@ import { truncateHtml } from "common/richText/truncate";
 import { announceToOperations } from "./operations";
 import { dataService, discordService, logger } from "@/services";
 import { createSyncEmitter } from "@/services/sseService";
+import { byNumber, inOrder, orderedStep } from "@/concurrency";
 
 const PLAYTESTING_ANNOUNCEMENTS_CHANNEL_NAME = "playtest-announcements";
 
@@ -47,22 +48,28 @@ export async function syncPlaytestingUpdateAnnouncements(
         emitters.forEach((emitter) => emitter.start());
 
         const context = await getAnnouncementContext();
-        const synced: IPlaytestingUpdate[] = [];
-
-        for (const { project, playtestingUpdate } of stale) {
+        // Announced at once, but posted in the order of their projects and versions
+        const ordered = [...stale].sort(
+            (a, b) =>
+                byNumber(a.playtestingUpdate.project, b.playtestingUpdate.project) ||
+                byNumber(a.playtestingUpdate.version, b.playtestingUpdate.version)
+        );
+        const results = await inOrder(ordered, async ({ project, playtestingUpdate }) => {
             const emitter = emitters.get(playtestingUpdate);
             try {
                 emitter.progress(playtestingUpdate._metadata?.discord?.messageUrl ? "Updating" : "Announcing");
                 await postOrEdit(project, playtestingUpdate, context);
                 merge(playtestingUpdate, { _metadata: { discord: { lastSynced: new Date() } } });
-                synced.push(playtestingUpdate);
+                return playtestingUpdate;
             } catch (err) {
                 emitter.error("Failure");
                 emitters.delete(playtestingUpdate);
                 const label = `${project.code} v${playtestingUpdate.version}`;
                 logger.warn(new Error(`[Discord] Failed to sync announcement for ${label}`, { cause: err }));
+                return undefined;
             }
-        }
+        });
+        const synced = compact(results);
 
         if (synced.length === 0) {
             return [];
@@ -134,7 +141,9 @@ async function postOrEdit(project: IProject, playtestingUpdate: IPlaytestingUpda
     }
 
     logger.info(`[Discord] Announcing ${project.code} playtesting update v${playtestingUpdate.version}`);
-    const posted = await context.channel.send({ ...announcement, allowedMentions: { parse: ["roles"] } });
+    const posted = await orderedStep(() =>
+        context.channel.send({ ...announcement, allowedMentions: { parse: ["roles"] } })
+    );
     merge(playtestingUpdate, { _metadata: { discord: { messageUrl: posted.url } } });
 
     await announceToOperations(project, playtestingUpdate, cards);

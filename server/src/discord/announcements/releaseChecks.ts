@@ -12,6 +12,7 @@ import {
 } from "discord.js";
 import { Mutex } from "async-mutex";
 import { merge } from "lodash-es";
+import { byNumber, inOrder, orderedStep } from "@/concurrency";
 import { IProject, IProjectRelease } from "common/models/projects";
 import { IReleaseCheckCard, IReleaseCheckParticipation } from "common/models/slots";
 import { plural } from "../utils";
@@ -38,11 +39,30 @@ export async function syncReleaseChecks(projects: IProject[], forced?: boolean):
         }
 
         const context = await getAnnouncementContext();
-        const results: IProject[] = [];
-        for (const project of projects) {
-            results.push(targets.includes(project) ? await syncProjectReleases(project, context, forced) : project);
-        }
-        return results;
+        // Every release at once, though posted in the order of their projects and numbers
+        const pending = targets
+            .flatMap((project) =>
+                project.releases.filter((r) => needsSync(r, forced)).map((release) => ({ project, release }))
+            )
+            .sort(
+                (a, b) => byNumber(a.project.number, b.project.number) || byNumber(a.release.number, b.release.number)
+            );
+        const changed = new Set<IProject>();
+        await inOrder(pending, async ({ project, release }) => {
+            if (await syncRelease(project, release, context)) {
+                changed.add(project);
+            }
+        });
+        // Sync off, or persisting the message url would immediately re-enter this function
+        const persisted = new Map(
+            await Promise.all(
+                [...changed].map(async (project) => {
+                    const [updated] = await dataService.projects.update([project], true, false, false);
+                    return [project, updated] as const;
+                })
+            )
+        );
+        return projects.map((project) => persisted.get(project) ?? project);
     } catch (err) {
         logger.warn(new Error("[Discord] Failed to sync release checks", { cause: err }));
         return projects;
@@ -83,35 +103,21 @@ function needsSync(release: IProjectRelease, forced?: boolean) {
     return !lastSynced || release.updated > lastSynced;
 }
 
-async function syncProjectReleases(
-    project: IProject,
-    context: AnnouncementContext,
-    forced?: boolean
-): Promise<IProject> {
-    let changed = false;
-
-    for (const release of project.releases.filter((r) => needsSync(r, forced))) {
-        try {
-            if (release.status === "confirming") {
-                const cards = await computeReleaseCheckCards(project.number, release.code);
-                const participation = await computeReleaseCheckParticipation(cards);
-                await postOrEdit(project, release, cards, participation, context);
-            } else {
-                await close(project, release, context);
-            }
-            merge(release, { _metadata: { discord: { lastSynced: new Date() } } });
-            changed = true;
-        } catch (err) {
-            logger.warn(new Error(`[Discord] Failed to sync release checks for ${release.code}`, { cause: err }));
+async function syncRelease(project: IProject, release: IProjectRelease, context: AnnouncementContext) {
+    try {
+        if (release.status === "confirming") {
+            const cards = await computeReleaseCheckCards(project.number, release.code);
+            const participation = await computeReleaseCheckParticipation(cards);
+            await postOrEdit(project, release, cards, participation, context);
+        } else {
+            await close(project, release, context);
         }
+        merge(release, { _metadata: { discord: { lastSynced: new Date() } } });
+        return true;
+    } catch (err) {
+        logger.warn(new Error(`[Discord] Failed to sync release checks for ${release.code}`, { cause: err }));
+        return false;
     }
-
-    if (!changed) {
-        return project;
-    }
-    // Sync off, or persisting the message url would immediately re-enter this function
-    const [updated] = await dataService.projects.update([project], true, false, false);
-    return updated;
 }
 
 async function postOrEdit(
@@ -131,7 +137,9 @@ async function postOrEdit(
     }
 
     logger.info(`[Discord] Announcing release checks for ${release.code}`);
-    const posted = await context.channel.send({ ...announcement, allowedMentions: { parse: ["roles"] } });
+    const posted = await orderedStep(() =>
+        context.channel.send({ ...announcement, allowedMentions: { parse: ["roles"] } })
+    );
     merge(release, { _metadata: { discord: { messageUrl: posted.url } } });
 }
 

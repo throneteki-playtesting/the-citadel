@@ -406,16 +406,18 @@ router.delete(
         const { project: number } = req.params;
         // A slot still being previewed has an open thread in the card forum, closed while its project can still be read
         const slots = await dataService.slots.read({ project: number });
-        for (const slot of slots) {
-            const preview = slot._metadata?.preview;
-            if (preview) {
-                await withdrawReveal(preview, PREVIEW_NOTICES.projectDeleted).catch((err) =>
-                    logger.warn(
-                        new Error(`[Discord] Failed to close the preview of slot #${slot.number}`, { cause: err })
-                    )
-                );
-            }
-        }
+        await Promise.all(
+            slots.map(async (slot) => {
+                const preview = slot._metadata?.preview;
+                if (preview) {
+                    await withdrawReveal(preview, PREVIEW_NOTICES.projectDeleted).catch((err) =>
+                        logger.warn(
+                            new Error(`[Discord] Failed to close the preview of slot #${slot.number}`, { cause: err })
+                        )
+                    );
+                }
+            })
+        );
         const [deleted] = await dataService.projects.destroy({ number });
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);

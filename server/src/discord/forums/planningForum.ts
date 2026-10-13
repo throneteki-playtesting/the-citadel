@@ -24,7 +24,7 @@ import {
     TextDisplayBuilder,
     ThreadChannel
 } from "discord.js";
-import { Mutex } from "async-mutex";
+import { inOrder, keyedMutex, orderedStep } from "@/concurrency";
 import { compact, isEmpty, omit } from "lodash-es";
 import { createSyncEmitter, SyncEmitter } from "@/services/sseService";
 import { SyncDataMap, SyncOperation } from "@/types";
@@ -83,9 +83,10 @@ const MEMBER_ACCESS = [
 ];
 const CLOSED_COLOR = 0x6a6a6a;
 
-// Creating a channel, or opening a thread, is what two requests can race into doing twice
-const forumMutex = new Mutex();
-const discussionMutex = new Mutex();
+// Creating a channel, or opening a thread, is what two requests can race into doing twice - so each forum and each slot
+// is done by one at a time, while different ones go side by side
+const forumMutex = keyedMutex<Pick<IProject, "number">>(({ number }) => String(number));
+const slotMutex = keyedMutex<Pick<ISlot, "project" | "number">>(({ project, number }) => `${project}|${number}`);
 
 type SlotDiscord = NonNullable<NonNullable<ISlot["_metadata"]>["discord"]>;
 // A sync which went through but couldn't do all it meant to, and when it can be tried again if that is known
@@ -148,10 +149,11 @@ async function untilRateLimited(action: () => Promise<unknown>, what: string): P
     }
 }
 
-// Runs work on each open slot that has a thread, logging rather than stopping at one that fails
+// Runs work on every slot that has a thread at once, leaving Discord to pace it, and logging any that fail
 async function forEachThread(project: IProject, work: (slot: ISlot) => Promise<unknown>) {
     const slots = await dataService.slots.read({ project: project.number });
-    for (const slot of slots.filter((slot) => slot._metadata?.discord?.messageUrl)) {
+    const threaded = slots.filter((slot) => slot._metadata?.discord?.messageUrl).sort((a, b) => a.number - b.number);
+    await inOrder(threaded, async (slot) => {
         try {
             await work(slot);
         } catch (err) {
@@ -161,7 +163,7 @@ async function forEachThread(project: IProject, work: (slot: ISlot) => Promise<u
                 })
             );
         }
-    }
+    });
 }
 
 /** Makes sure a draft project's planning forum exists and is right, unless it was synced since the project changed */
@@ -184,12 +186,13 @@ export async function syncPlanningForum(project: IProject, forced = false): Prom
 
 /** Brings the access of every draft project's existing forum in line with the roles and owners it is meant for */
 export async function syncPlanningForumAccess() {
-    // One at a time, so the many role updates of a daily sync find the work already done rather than redoing it
-    const release = await forumMutex.acquire();
-    try {
-        const guild = await discordService.getGuild();
-        const projects = await dataService.projects.read({ draft: true });
-        for (const project of projects) {
+    const guild = await discordService.getGuild();
+    const projects = await dataService.projects.read({ draft: true });
+    // Every forum at once, though one forum's access is done by one at a time, so the many role updates of a daily sync
+    // find the work already done rather than redoing it
+    await Promise.all(
+        projects.map(async (project) => {
+            const release = await forumMutex(project).acquire();
             try {
                 const channel = await findForum(guild, project);
                 if (channel) {
@@ -199,23 +202,25 @@ export async function syncPlanningForumAccess() {
                 logger.warn(
                     new Error(`[Discord] Failed to sync planning forum access for ${project.code}`, { cause: err })
                 );
+            } finally {
+                release();
             }
-        }
-    } finally {
-        release();
-    }
+        })
+    );
 }
 
 /** Makes every draft project's forum, and any thread of its slots which has gone missing, whole again */
 export async function syncAllPlanningForums() {
     const projects = await dataService.projects.read({ draft: true });
-    for (const project of projects) {
-        try {
-            await syncProjectPlanning(project, true);
-        } catch (err) {
-            logger.warn(new Error(`[Discord] Failed to sync planning forum for ${project.code}`, { cause: err }));
-        }
-    }
+    await Promise.all(
+        projects.map(async (project) => {
+            try {
+                await syncProjectPlanning(project, true);
+            } catch (err) {
+                logger.warn(new Error(`[Discord] Failed to sync planning forum for ${project.code}`, { cause: err }));
+            }
+        })
+    );
 }
 
 /** One draft project's forum, made if it is missing, and the thread of each slot which has one made whole again */
@@ -250,7 +255,7 @@ export async function openSlotDiscussion(
     slot: ISlot,
     startedBy?: string
 ): Promise<SlotDiscord | undefined> {
-    const release = await discussionMutex.acquire();
+    const release = await slotMutex(slot).acquire();
     try {
         const [current] = await dataService.slots.read({ project: slot.project, number: slot.number });
         if (!current) {
@@ -264,17 +269,22 @@ export async function openSlotDiscussion(
         const syncedAt = new Date();
         return await reporting("slot", current, async (emitter) => {
             emitter.progress("Creating");
-            const { forum } = await ensureForum(project);
+            const guild = await discordService.getGuild();
+            const forum = (await findForum(guild, project)) ?? (await ensureForum(project)).forum;
             // A thread made again keeps its first opener, without telling them a second time
             const openedBy = startedBy ?? existing?.startedBy;
             const cards = await dataService.cards.read({ project: current.project, number: current.number });
-            const thread = await forum.threads.create({
-                name: await threadName(current),
-                reason: `Planning discussion for ${project.code} #${current.number}`,
-                message: await buildPost(project, current, cards, openedBy, !!startedBy),
-                appliedTags: tagIds(forum, factionNames[current.faction]),
-                autoArchiveDuration: forum.defaultAutoArchiveDuration
-            });
+            const name = await threadName(current);
+            const message = await buildPost(project, current, cards, openedBy, !!startedBy);
+            const thread = await orderedStep(() =>
+                forum.threads.create({
+                    name,
+                    reason: `Planning discussion for ${project.code} #${current.number}`,
+                    message,
+                    appliedTags: tagIds(forum, factionNames[current.faction]),
+                    autoArchiveDuration: forum.defaultAutoArchiveDuration
+                })
+            );
 
             logger.info(`[Discord] Opened planning discussion for ${project.code} #${current.number}`);
             // A forum thread's opening message carries the thread's id, so the one url stands for both
@@ -322,7 +332,7 @@ export async function slotDiscussionChanged(projectNumber: number, slotNumber: n
 
 // Brings a slot's thread name and post up to date - the post once the slot, or a card in it, changed since it was written
 async function syncSlotPost(project: IProject, slot: ISlot, isForced = false) {
-    const release = await discussionMutex.acquire();
+    const release = await slotMutex(slot).acquire();
     try {
         // Stamped as it starts, so a change made while it is written still finds the post stale
         const syncedAt = new Date();
@@ -410,13 +420,15 @@ export async function onPlanningForumDeleted(channel: ForumChannel) {
 
     logger.info(`[Discord] Planning forum deleted: ${channel.name}`);
     await dataService.projects.update(affected.map(withoutDiscord), true, false);
-    for (const project of affected) {
-        const slots = await dataService.slots.read({ project: project.number });
-        const threaded = slots.filter((slot) => slot._metadata?.discord);
-        if (threaded.length > 0) {
-            await dataService.slots.update(threaded.map(withoutDiscord), true, false);
-        }
-    }
+    await Promise.all(
+        affected.map(async (project) => {
+            const slots = await dataService.slots.read({ project: project.number });
+            const threaded = slots.filter((slot) => slot._metadata?.discord);
+            if (threaded.length > 0) {
+                await dataService.slots.update(threaded.map(withoutDiscord), true, false);
+            }
+        })
+    );
 }
 
 // Forgets the thread of a slot deleted in Discord - it is made again when next started, by hand or by a card
@@ -521,7 +533,7 @@ async function createForum(guild: Guild, project: IProject) {
 
 // Found or made, put right, and its url and sync time recorded on the project
 async function ensureForum(project: IProject) {
-    const release = await forumMutex.acquire();
+    const release = await forumMutex(project).acquire();
     try {
         // Re-read, as the project a caller holds may be a save behind the one which recorded the forum
         const [stored] = await dataService.projects.read({ number: project.number });
@@ -568,12 +580,10 @@ async function syncAccess(guild: Guild, channel: ForumChannel, project: IProject
         access.set(id, { type, allow: permissions.reduce((total, permission) => total | permission, 0n), deny: 0n });
 
     roles.forEach((role) => allow(role.discordId, OverwriteType.Role, MEMBER_ACCESS));
-    for (const owner of project.owners ?? []) {
-        const member = await guild.members.fetch(owner).catch(() => undefined);
-        if (member) {
-            allow(member.id, OverwriteType.Member, MEMBER_ACCESS);
-        }
-    }
+    const owners = await Promise.all(
+        (project.owners ?? []).map((owner) => guild.members.fetch(owner).catch(() => undefined))
+    );
+    compact(owners).forEach((member) => allow(member.id, OverwriteType.Member, MEMBER_ACCESS));
     if (guild.members.me) {
         allow(guild.members.me.id, OverwriteType.Member, BOT_ACCESS);
     }

@@ -31,13 +31,7 @@ export class Database<T> {
         if (context.source === "client") {
             void requestContext.run({ ...context, detached: true }, () => runSyncsByPriority(syncs));
         } else {
-            for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
-                try {
-                    await func();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
+            await runSyncsByPriority(syncs);
         }
     }
 }
