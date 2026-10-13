@@ -89,6 +89,9 @@ export const LIVE_TOAST_STALLED_MS = 60_000;
 // Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
 export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };
 
+// A modal scrolling inside its body may fill a phone's height, less the base's own margin
+export const modalInsideBaseClasses = "max-h-[calc(100%_-_0.5rem)] sm:max-h-[calc(100%_-_8rem)]";
+
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
 

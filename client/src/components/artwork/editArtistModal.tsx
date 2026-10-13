@@ -3,7 +3,6 @@ import {
     Button,
     Form,
     Input,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -13,6 +12,7 @@ import {
     Switch,
     Textarea
 } from "@heroui/react";
+import Modal from "../modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
@@ -124,7 +124,7 @@ export default function EditArtistModal({ isOpen, artist, slot, onClose, onSaved
         setDraft((previous) => ({ ...previous, payment: previous.payment && { ...previous.payment, [key]: value } }));
 
     return (
-        <Modal isOpen={isOpen} placement="center" scrollBehavior="inside" onOpenChange={(open) => !open && onClose()}>
+        <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>{artist ? "Edit Artist" : "New Artist"}</span>

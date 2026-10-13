@@ -1,7 +1,8 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import { ICardSuggestion } from "common/models/cards";
-import { Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import { ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGetSuggestionsQuery } from "../../api";
@@ -79,7 +80,7 @@ export default function MyDraftsModal({ isOpen, onClose, onSelectDraft }: MyDraf
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} size="5xl" placement="center" scrollBehavior="inside">
+        <Modal isOpen={isOpen} onClose={onClose} size="5xl">
             <ModalContent>
                 <ModalHeader>My Drafts</ModalHeader>
                 <ModalBody className="pb-6">

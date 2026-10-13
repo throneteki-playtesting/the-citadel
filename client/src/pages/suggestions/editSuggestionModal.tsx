@@ -4,7 +4,8 @@ import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import SuggestionEditorGuide from "./suggestionEditorGuide";
 import { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuideState";
-import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import RichTextArea from "../../components/richTextArea";
 import {
     useCreateSuggestionMutation,
@@ -786,11 +787,9 @@ const EditSuggestionModal = ({
         <>
             <Modal
                 isOpen={isOpen && !isConfirmingDeleteDraft && !showGuide}
-                placement="top-center"
                 onOpenChange={(isOpen) => !isOpen && closeEditor()}
                 isDismissable={false}
                 size="5xl"
-                scrollBehavior="inside"
             >
                 <ModalContent>
                     {(onClose) => (

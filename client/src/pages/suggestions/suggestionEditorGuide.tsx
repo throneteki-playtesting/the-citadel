@@ -10,7 +10,8 @@ import {
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, Checkbox, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { BaseElementProps } from "../../types";
 import { isSuggestionEditorGuideDismissed, SUGGESTION_EDITOR_GUIDE_DISMISSED_KEY } from "./suggestionEditorGuideState";
 
@@ -77,14 +78,7 @@ export default function SuggestionEditorGuide({
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="3xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onDismiss()}
-        >
+        <Modal isOpen={isOpen} size="3xl" onOpenChange={(open) => !open && onDismiss()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-1 font-cinzel text-lg sm:text-2xl">
                     Creating a Suggestion

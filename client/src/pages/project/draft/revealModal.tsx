@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { CardPreview } from "@agot/card-preview";
 import { IPlaytestCard } from "common/models/cards";
 import { previewedCard, previewOf } from "common/models/slots";
@@ -55,13 +56,7 @@ export default function RevealModal({ isOpen, action, slot, onClose }: RevealMod
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            size={before && after ? "xl" : "md"}
-            placement="center"
-            scrollBehavior="inside"
-        >
+        <Modal isOpen={isOpen} onClose={onClose} size={before && after ? "xl" : "md"}>
             <ModalContent>
                 <ModalHeader>{title}</ModalHeader>
                 <ModalBody>

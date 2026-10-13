@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { addToast, Button, Form, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { addToast, Button, Form, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../modal";
 import { pick } from "lodash-es";
 import { ISlot, ISlotOptions, slotOptionKeys } from "common/models/slots";
 import { Slot } from "common/models/schemas";
@@ -15,7 +16,7 @@ const FORM_ID = "slot-options-form";
 
 export default function SlotOptionsModal({ isOpen, slot, onClose }: SlotOptionsModalProps) {
     return (
-        <Modal isOpen={isOpen} onClose={onClose} size="lg" placement="center" scrollBehavior="inside">
+        <Modal isOpen={isOpen} onClose={onClose} size="lg">
             <ModalContent>{slot && <SlotOptionsForm slot={slot} onClose={onClose} />}</ModalContent>
         </Modal>
     );

@@ -5,13 +5,13 @@ import {
     Alert,
     Card,
     Checkbox,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
     ModalHeader,
     Skeleton
 } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { Wizard, WizardBack, WizardNext, WizardPage, WizardPages, ValidationSummary } from "../../../components/wizard";
 import { PlaytestingUpdate } from "common/models/schemas";
@@ -135,13 +135,7 @@ export default function CreatePlaytestingUpdateModal({
     }, [eligibleDrafts, isDraftsLoading, isSlotsLoading, selectedCards, toggleCard]);
 
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="top-center"
-            size="4xl"
-            scrollBehavior="inside"
-            onOpenChange={(isOpen) => !isOpen && onModalClose()}
-        >
+        <Modal isOpen={isOpen} size="4xl" onOpenChange={(isOpen) => !isOpen && onModalClose()}>
             <ModalContent>
                 {(onClose) => (
                     <Wizard schema={PlaytestingUpdate.Draft} onSubmit={onSubmit} data={playtestingUpdate}>

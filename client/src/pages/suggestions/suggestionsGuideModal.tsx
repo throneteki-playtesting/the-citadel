@@ -1,6 +1,7 @@
 import { faArrowRight, faComments, faPenToSquare, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { BaseElementProps } from "../../types";
@@ -34,14 +35,7 @@ export default function SuggestionsGuideModal({
     onViewAll
 }: SuggestionsGuideModalProps) {
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="2xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="2xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 {(close) => (
                     <>

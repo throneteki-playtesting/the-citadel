@@ -2,7 +2,8 @@ import { IPlaytestCard } from "common/models/cards";
 import { NEW_OPTION_VERSION } from "common/models/slots";
 import { SlotCondition } from "common/models/slotConditions";
 import { BaseElementProps } from "../../types";
-import { Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { usePutDraftCardMutation } from "../../api";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
@@ -116,11 +117,9 @@ export default function EditCardModal({
         <>
             <Modal
                 isOpen={isOpen}
-                placement="top-center"
                 onOpenChange={(isOpen) => !isOpen && flight.cancel()}
                 isDismissable={false}
                 size="5xl"
-                scrollBehavior="inside"
                 motionProps={origin ? FADE_ONLY : undefined}
             >
                 <ModalContent>

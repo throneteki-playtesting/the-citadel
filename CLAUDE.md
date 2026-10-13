@@ -18,6 +18,12 @@ Stack: React + TipTap (frontend), Node/Express + Redis (backend), shared `common
 
 ---
 
+## Modals
+
+**Every modal is `client/src/components/modal.tsx`, never HeroUI's `Modal` directly** (`ModalContent`/`ModalHeader`/`ModalBody`/`ModalFooter` still come from HeroUI). It is HeroUI's with two defaults changed — `placement="center"` and `scrollBehavior="inside"` — so neither is written at a call site. Scrolling inside the body is what keeps the header and the top-right close button on screen however long the content runs; below `sm` the base may grow to the full screen height less its own margin, where HeroUI holds back 8rem at every width. No modal carries a height cap of its own any more; one that ever needs to should prefix it `sm:` for the same reason. Two modals opt out of `inside` on purpose, and so let their close button scroll away with a tall modal on a phone: `publishReleaseModal` (`outside`) and `arrangeModal` (`normal`, with a scrolling wrapper of its own for the card flights).
+
+---
+
 ## Artwork System
 
 ### Model (`common/models/artwork.ts`)

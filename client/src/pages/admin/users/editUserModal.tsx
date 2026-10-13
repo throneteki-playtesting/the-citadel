@@ -1,4 +1,5 @@
-import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
 import { useUpdateUserMutation } from "../../../api";
@@ -65,7 +66,7 @@ export default function EditUserModal({ user, guestUser, onOpenChange, onSave: o
     }, [user]);
 
     return (
-        <Modal isOpen={!!user} size="2xl" scrollBehavior="inside" placement="top-center" onOpenChange={onOpenChange}>
+        <Modal isOpen={!!user} size="2xl" onOpenChange={onOpenChange}>
             <ModalContent>
                 {(onClose) => (
                     <>

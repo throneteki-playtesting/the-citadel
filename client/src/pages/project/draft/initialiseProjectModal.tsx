@@ -4,13 +4,13 @@ import {
     AccordionItem,
     addToast,
     Button,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
     ModalHeader,
     Skeleton
 } from "@heroui/react";
+import Modal from "../../../components/modal";
 import {
     faArrowUpRightFromSquare,
     faBoxArchive,
@@ -127,7 +127,7 @@ export default function InitialiseProjectModal({
     );
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} size="2xl" placement="center" scrollBehavior="inside">
+        <Modal isOpen={isOpen} onClose={onClose} size="2xl">
             <ModalContent>
                 <ModalHeader className="font-cinzel text-medium lg:text-large">Send the Raven?</ModalHeader>
                 <ModalBody>

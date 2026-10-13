@@ -8,7 +8,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 
 // In the order a draft is worked through
 const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
@@ -48,14 +49,7 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
 
 export default function DraftingGuideModal({ isOpen, onClose }: DraftingGuideModalProps) {
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="3xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="3xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 {(close) => (
                     <>

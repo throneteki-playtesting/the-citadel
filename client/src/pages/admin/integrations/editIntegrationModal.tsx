@@ -1,14 +1,5 @@
-import {
-    addToast,
-    Button,
-    Input,
-    Modal,
-    ModalBody,
-    ModalContent,
-    ModalFooter,
-    ModalHeader,
-    Switch
-} from "@heroui/react";
+import { addToast, Button, Input, ModalBody, ModalContent, ModalFooter, ModalHeader, Switch } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
 import { useCreateIntegrationMutation, useUpdateIntegrationMutation } from "../../../api";
@@ -82,7 +73,7 @@ export default function EditIntegrationModal({ isOpen, integration, onOpenChange
     ]);
 
     return (
-        <Modal isOpen={isOpen} size="2xl" scrollBehavior="inside" placement="top-center" onOpenChange={onOpenChange}>
+        <Modal isOpen={isOpen} size="2xl" onOpenChange={onOpenChange}>
             <ModalContent>
                 {(onClose) => (
                     <>

@@ -1,6 +1,7 @@
 import { faHandPointer, faPencil, faRocket } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { BaseElementProps } from "../../../types";
 
@@ -26,14 +27,7 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
  *  overview, not a stepped flow, since there's nothing here a viewer needs to do in order. */
 export default function ReleasesGuideModal({ isOpen, onClose }: ReleasesGuideModalProps) {
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="3xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="3xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 {(close) => (
                     <>

@@ -3,7 +3,6 @@ import {
     Button,
     DatePicker,
     Input,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -12,6 +11,7 @@ import {
     Select,
     SelectItem
 } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { parseDate } from "@internationalized/date";
 import { useEffect, useState } from "react";
 import classNames from "classnames";
@@ -124,7 +124,7 @@ export default function EditReleaseModal({
     };
 
     return (
-        <Modal isOpen={isOpen} placement="center" onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}>
+        <Modal isOpen={isOpen} onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}>
             <ModalContent>
                 {(onClose) => (
                     <Wizard schema={Release.Draft} onSubmit={onSubmit} data={release}>

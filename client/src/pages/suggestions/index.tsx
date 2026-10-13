@@ -8,7 +8,8 @@ import { SuggestionMigration, useGetSuggestionMigrationQuery, useGetSuggestionsF
 import { showApiErrorToast } from "../../api/errors";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import { addToast, Badge, Button, Modal, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import { addToast, Badge, Button, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import Modal from "../../components/modal";
 import SectionTitle from "../../components/sectionTitle";
 import CardGrid from "../../components/cardGrid";
 import StatsGrid from "../../components/statsGrid";
@@ -450,7 +451,7 @@ function SuggestionsContent() {
                 onReturnToDrafts={() => setIsDraftsOpen(true)}
             />
 
-            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} placement="center" size="sm">
+            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} size="sm">
                 <ModalContent>
                     <ModalBody className="flex flex-row items-center gap-3 py-6">
                         <Spinner size="sm" />

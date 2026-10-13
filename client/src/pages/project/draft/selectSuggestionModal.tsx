@@ -1,16 +1,6 @@
 import { HTMLAttributes, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import {
-    addToast,
-    Button,
-    Modal,
-    ModalBody,
-    ModalContent,
-    ModalFooter,
-    ModalHeader,
-    Switch,
-    Tab,
-    Tabs
-} from "@heroui/react";
+import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader, Switch, Tab, Tabs } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { FormValidationContext } from "@react-stately/form";
 import { isEmpty } from "lodash-es";
 import { ICard, ICardSuggestion, IPlaytestCard } from "common/models/cards";
@@ -49,9 +39,9 @@ const REVIEW_PAGE = 2;
 const NO_ERRORS = {};
 const SLIDING_PAGE_PROPS = () => ({ [SLIDING_PAGE_ATTRIBUTE]: "" }) as HTMLAttributes<HTMLDivElement>;
 // What the modal's own header, controls and footer leave of the screen, so a region of cards scrolls rather than the modal
-const BROWSE_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-25rem)] px-2 py-0.5";
-const REVIEW_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-28rem)] px-2 py-1";
-const EDIT_SCROLL_CLASS = "max-h-[calc(100vh-22rem)] overflow-y-auto pt-2";
+const BROWSE_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-17.5rem)] sm:max-h-[calc(100vh-25rem)] px-2 py-0.5";
+const REVIEW_SCROLL_CLASS = "-mx-2 max-h-[calc(100vh-20.5rem)] sm:max-h-[calc(100vh-28rem)] px-2 py-1";
+const EDIT_SCROLL_CLASS = "max-h-[calc(100vh-14.5rem)] sm:max-h-[calc(100vh-22rem)] overflow-y-auto pt-2";
 
 type Source = "pooled" | "approved" | "all";
 /** A suggestion chosen for the slot, and the card it will go in as - which may be edited before it does */
@@ -429,14 +419,7 @@ function SuggestionPicker({
 
     return (
         <>
-            <Modal
-                isOpen={isOpen}
-                placement="top-center"
-                size="5xl"
-                scrollBehavior="inside"
-                isDismissable={!isFilterHeld}
-                onOpenChange={(open) => !open && onClose()}
-            >
+            <Modal isOpen={isOpen} size="5xl" isDismissable={!isFilterHeld} onOpenChange={(open) => !open && onClose()}>
                 <ModalContent>
                     <ModalHeader>{title}</ModalHeader>
                     <ModalBody>

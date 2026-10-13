@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { animate } from "framer-motion";
 import classNames from "classnames";
 import { CardPreview } from "@agot/card-preview";
@@ -105,6 +106,7 @@ export default function ArrangeModal({ project, slot, pile, onLifted, onClosed }
     return (
         <Modal
             isOpen
+            scrollBehavior="normal"
             size="5xl"
             disableAnimation
             isDismissable={isSettled}

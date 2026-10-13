@@ -2,7 +2,6 @@ import { CUSTOM_TEMPLATE, IProject, projectTemplateOf, projectTemplates, Type, t
 import {
     addToast,
     Input,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -11,6 +10,7 @@ import {
     Select,
     SelectItem
 } from "@heroui/react";
+import Modal from "../../components/modal";
 import { BaseElementProps } from "../../types";
 import { DeepPartial } from "common/types";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -175,13 +175,7 @@ export default function EditProjectModal({
     );
 
     return (
-        <Modal
-            isOpen={isOpen}
-            size="2xl"
-            placement="center"
-            scrollBehavior="inside"
-            onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}
-        >
+        <Modal isOpen={isOpen} size="2xl" onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}>
             <ModalContent>
                 {(onClose) => (
                     <Wizard

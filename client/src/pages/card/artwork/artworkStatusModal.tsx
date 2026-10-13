@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRight, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { ArtworkStatus } from "common/models/slots";
@@ -82,7 +83,7 @@ export default function ArtworkStatusModal({
     };
 
     return (
-        <Modal isOpen={isOpen} placement="center" onOpenChange={(open) => !open && onClose()}>
+        <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Artwork Status</span>

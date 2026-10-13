@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Form, Input, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, Form, Input, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { InquirySeverity, IRefinementInquiry, INQUIRY_SUMMARY_MAX } from "common/models/refinement";
 import { Slot } from "common/models/schemas";
 import { IPlaytestCard } from "common/models/cards";
@@ -58,7 +59,7 @@ export default function InquiryModal({ isOpen, project, number, inquiry, card, v
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} size="4xl" scrollBehavior="inside">
+        <Modal isOpen={isOpen} onClose={onClose} size="4xl">
             <ModalContent>
                 <ModalHeader>{inquiry ? `Edit inquiry #${inquiry.inquiry}` : "Raise an inquiry"}</ModalHeader>
                 <ModalBody>
