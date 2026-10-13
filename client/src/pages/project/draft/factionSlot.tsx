@@ -1,4 +1,5 @@
 import { memo, ReactNode, useCallback, useMemo, useState } from "react";
+import { useSuppressedSelection } from "../../../hooks/useSuppressedSelection";
 import { Button, Tooltip } from "@heroui/react";
 import { motion } from "framer-motion";
 import { CardBlank } from "@agot/card-preview";
@@ -372,13 +373,21 @@ function DraggableCard({ card, slotNumber, isDraggable, isHeld, behind, children
         data: { card, slotNumber } satisfies DragData,
         disabled: !isDraggable
     });
+    const [element, setElement] = useState<HTMLDivElement | null>(null);
+    const setRefs = useCallback(
+        (node: HTMLDivElement | null) => {
+            setNodeRef(node);
+            setElement(node);
+        },
+        [setNodeRef]
+    );
+    useSuppressedSelection(element, isDraggable);
     return (
         <div className="relative size-full">
             <div className="pointer-events-none absolute inset-0 isolate z-0">{behind}</div>
             <div
-                ref={setNodeRef}
+                ref={setRefs}
                 {...(isDraggable && { ...listeners, ...attributes })}
-                onContextMenu={isDraggable ? (event) => event.preventDefault() : undefined}
                 className={classNames("relative z-10 size-full", {
                     "touch-manipulation select-none [-webkit-touch-callout:none] cursor-grab active:cursor-grabbing":
                         isDraggable,
