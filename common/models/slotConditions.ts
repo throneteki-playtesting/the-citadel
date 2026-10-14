@@ -167,10 +167,15 @@ export function asksForPlotsOnly(conditions: SlotCondition[] = []) {
 // Where a card strays from its slot's conditions, worded for a warning beside it. X and "-" never stray.
 // A card still being written is `isLenient`: what hasn't been given a value yet isn't a stray, only what has
 export function slotConditionIssues(conditions: SlotCondition[] = [], card: ICard, isLenient = false) {
-    return conditions.flatMap((condition) => {
-        const issue = isLenient && isBlank(condition, card) ? undefined : conditionIssue(condition, card);
-        return issue ? [issue] : [];
-    });
+    return slotConditionVerdicts(conditions, card, isLenient).flatMap(({ issue }) => (issue ? [issue] : []));
+}
+
+// Each condition beside where the card strays from it, if it does - for showing which of them a card meets
+export function slotConditionVerdicts(conditions: SlotCondition[] = [], card: ICard, isLenient = false) {
+    return conditions.map((condition) => ({
+        condition,
+        issue: isLenient && isBlank(condition, card) ? undefined : conditionIssue(condition, card)
+    }));
 }
 
 // Whether a card could go into the slot with nothing to warn about - its faction's, and within every condition

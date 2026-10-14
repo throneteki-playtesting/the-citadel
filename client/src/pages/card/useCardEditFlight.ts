@@ -24,15 +24,7 @@ export type EditOrigin = {
 type Flight = Omit<TransitCardProps, "onDone">;
 
 // A card edited from its stack is carried to the editor and back - or, cancelled after changes, shown as it was first
-export function useCardEditFlight({
-    isOpen,
-    initial,
-    card,
-    origin,
-    conditions,
-    stackWidth,
-    onClose
-}: CardEditFlightArgs) {
+export function useCardEditFlight({ isOpen, initial, card, origin, conditions, onClose }: CardEditFlightArgs) {
     // Below `sm` the editor is simply opened - the card is not carried to a preview which may be out of sight
     const prefersReducedMotion = useReducedMotion();
     const isSmallScreen = !useBreakpoint("sm");
@@ -51,12 +43,11 @@ export function useCardEditFlight({
         }
     }
     const revertTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-    const referenceWidth = stackWidth ?? (origin && Math.min(origin.from.width, origin.from.height));
 
     // What the card flying home needs after the modal's own props have cleared away beneath it
     const issues = slotConditionIssues(conditions, card as IPlaytestCard, true);
     const shownIssues = useRef(issues);
-    const latest = useRef({ card, origin, arrived, conditions, referenceWidth, original: initial, revertedTo });
+    const latest = useRef({ card, origin, arrived, conditions, original: initial, revertedTo });
     useLayoutEffect(() => {
         if (isOpen) {
             shownIssues.current = issues;
@@ -66,7 +57,6 @@ export function useCardEditFlight({
             origin,
             arrived,
             conditions: conditions ?? latest.current.conditions,
-            referenceWidth,
             original: initial ?? latest.current.original,
             revertedTo
         };
@@ -99,7 +89,6 @@ export function useCardEditFlight({
                 from: face.getBoundingClientRect(),
                 fromControl: "none",
                 toControl: "menu",
-                stackWidth: rest.referenceWidth ?? Math.min(leaving.from.width, leaving.from.height),
                 source: preview,
                 getTarget: () => (leaving.source.isConnected ? leaving.source : undefined)
             });
@@ -128,7 +117,6 @@ export function useCardEditFlight({
         previewRef,
         faceRef,
         revertedTo,
-        referenceWidth,
         shownIssues: isOpen ? issues : shownIssues.current,
         cancel,
         forward:
@@ -141,7 +129,6 @@ export function useCardEditFlight({
                       from: origin.from,
                       fromControl: "menu" as const,
                       toControl: "none" as const,
-                      stackWidth: referenceWidth ?? Math.min(origin.from.width, origin.from.height),
                       source: origin.source,
                       isSourceHeld: true,
                       getTarget: () => previewRef.current,
@@ -160,6 +147,5 @@ type CardEditFlightArgs = {
     card: DeepPartial<IPlaytestCard>;
     origin?: EditOrigin;
     conditions?: SlotCondition[];
-    stackWidth?: number;
     onClose: () => void;
 };

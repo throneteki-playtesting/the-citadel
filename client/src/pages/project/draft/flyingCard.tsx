@@ -2,7 +2,7 @@ import { Ref } from "react";
 import { motion, Transition } from "framer-motion";
 import { CardPreview } from "@agot/card-preview";
 import { IPlaytestCard } from "common/models/cards";
-import { CardActionsControl, DraftCardBadges } from "./draftCardContent";
+import { CardActionsControl, SlotCardBadges } from "../../../components/slots/slotCardBadges";
 import { renderDraftCard } from "./draftSlots";
 import { EDIT_ACTION, MENU_ACTIONS } from "./cardMenuActions";
 
@@ -18,7 +18,6 @@ export default function FlyingCard({
     issues,
     fromControl,
     toControl,
-    stackWidth,
     isMorphing,
     transition,
     zIndex,
@@ -34,32 +33,24 @@ export default function FlyingCard({
                 orientation={isUpright ? "vertical" : undefined}
                 card={renderDraftCard(card, rank, card.number)}
             />
-            <div
-                className="absolute inset-0 z-10 origin-top-right"
-                style={{ transform: `scale(${Math.min(from.width, from.height) / stackWidth})` }}
-            >
-                <DraftCardBadges
-                    issues={issues}
-                    actions={[]}
-                    trailing={
-                        <ControlMorph
-                            from={fromControl}
-                            to={toControl}
-                            isMorphing={isMorphing}
-                            transition={transition}
-                        />
-                    }
-                />
-            </div>
+            <SlotCardBadges
+                issues={issues}
+                actions={[]}
+                trailing={
+                    <ControlMorph from={fromControl} to={toControl} isMorphing={isMorphing} transition={transition} />
+                }
+            />
         </div>
     );
 }
 
-const CONTROL_PX = 32;
-const BADGE_GAP_PX = 6;
-const widthOf = (control: CardControl) => (control === "none" ? 0 : CONTROL_PX);
+// In the badge row's own em, so the control is sized with the card it sits on
+const CONTROL_EM = 2;
+const BADGE_GAP_EM = 0.375;
+const widthOf = (control: CardControl) => (control === "none" ? 0 : CONTROL_EM);
 // A control with no width still has the row's gap beside it, which is taken back so the badges beside it settle flush
-const gapTaken = (width: number) => -BADGE_GAP_PX * (1 - width / CONTROL_PX);
+const gapTaken = (width: number) => -BADGE_GAP_EM * (1 - width / CONTROL_EM);
+const em = (value: number) => `${value}em`;
 
 // One control turning into another: the first fades out as the second fades in, and the room they take opens or closes
 // with them, so the badges beside it glide rather than jump
@@ -67,8 +58,8 @@ export function ControlMorph({ from, to, isMorphing, transition }: ControlMorphP
     const width = widthOf(isMorphing ? to : from);
     return (
         <motion.div
-            initial={{ width: widthOf(from), marginLeft: gapTaken(widthOf(from)) }}
-            animate={{ width, marginLeft: gapTaken(width) }}
+            initial={{ width: em(widthOf(from)), marginLeft: em(gapTaken(widthOf(from))) }}
+            animate={{ width: em(width), marginLeft: em(gapTaken(width)) }}
             transition={transition}
             className="grid justify-items-start"
         >
@@ -124,8 +115,6 @@ type FlyingCardProps = {
     issues: string[];
     fromControl: CardControl;
     toControl: CardControl;
-    /** The width a card is drawn at in its stack, where the badges are their regular size - they scale with the card from there */
-    stackWidth: number;
     /** The journey has begun, so the control starts to change */
     isMorphing: boolean;
     transition: Transition;

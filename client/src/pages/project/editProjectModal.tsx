@@ -85,8 +85,8 @@ export default function EditProjectModal({
 
     const isNew = useMemo(() => !initial?.number, [initial?.number]);
     const templateDefinition = type && projectTemplateOf({ type, template });
-    // A template with slots of its own leaves nothing to set for a project with none yet
-    const hasSlotsPage = !!templateDefinition && (!templateDefinition.slots || !isNew);
+    // A template's own slots leave a new project nothing to set, and an initialised one edits each slot on its own
+    const hasSlotsPage = !!templateDefinition && (isNew ? !templateDefinition.slots : !!initial?.draft);
 
     const onTypeChange = (next: Type) => {
         setType(next);

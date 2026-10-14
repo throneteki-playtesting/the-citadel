@@ -108,7 +108,6 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [editing, setEditing] = useState<DeepPartial<IPlaytestCard>>();
     // Where an edited card sat in its stack, so it can be carried from there to the editor
     const [editingOrigin, setEditingOrigin] = useState<EditOrigin>();
-    const [editingWidth, setEditingWidth] = useState<number>();
     const [suggesting, setSuggesting] = useState<{
         slot: ISlot;
         hasNonPlot: boolean;
@@ -203,7 +202,6 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const onNew = useCallback(
         (slot: DraftSlot) => {
             setEditingOrigin(undefined);
-            setEditingWidth(portraitWidth(pileElements.current.get(slot.number)));
             setEditing({
                 project: project.number,
                 number: slot.number,
@@ -325,7 +323,6 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                   }
                 : undefined
         );
-        setEditingWidth(undefined);
         setEditing(card);
     }, []);
     const onDelete = useCallback((card: IPlaytestCard) => setDeleting(card), []);
@@ -659,11 +656,14 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                         isOpen={!!editing}
                         card={editing}
                         origin={editingOrigin}
-                        stackWidth={editingWidth}
                         conditions={
                             editing?.number === undefined
                                 ? undefined
                                 : findDraftSlot(factionSlots, editing.number)?.slot.conditions
+                        }
+                        isImportant={
+                            editing?.number !== undefined &&
+                            !!findDraftSlot(factionSlots, editing.number)?.slot.important
                         }
                         onClose={onCloseEditor}
                         onSave={onCardSaved}

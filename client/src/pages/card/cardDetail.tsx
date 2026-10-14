@@ -3,7 +3,7 @@ import { BaseElementProps } from "../../types";
 import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useGetCardQuery,
     useGetCardsQuery,
@@ -12,6 +12,7 @@ import {
     useGetSlotQuery
 } from "../../api";
 import { cardVersionRank, IPlaytestCard } from "common/models/cards";
+import { ISlotOptions } from "common/models/slots";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
@@ -22,6 +23,7 @@ import {
     faPencil,
     faPlus,
     faScroll,
+    faSliders,
     faThumbsUp,
     faTrash
 } from "@fortawesome/free-solid-svg-icons";
@@ -54,6 +56,8 @@ import DeckSummaries from "./deckSummaries";
 import FeedbackStatistics from "./feedbackStatistics";
 import CardProgress from "./cardProgress";
 import ReleaseChecksModal from "../../components/releaseChecksModal";
+import SlotOptionsModal from "../../components/slots/slotOptionsModal";
+import { useSlotTitle } from "../../components/slots/slotTitle";
 import usePageTitle from "../../hooks/usePageTitle";
 import useSwipe from "../../hooks/useSwipe";
 import useConsumableParams from "../../hooks/useConsumableParams";
@@ -79,11 +83,14 @@ export default function CardDetail({ className, style, project: projectNumber, n
         number,
         version: "visible"
     });
+    // The header holds the slot's chips, so the page waits for them rather than have them pop in
+    const canReadSlots = usePermission(Permission.READ_SLOTS);
+    const { isLoading: isLoadingSlot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadSlots });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     // Consumed once here for the whole page - two callers would each strip their own keys and race
     const { releaseCheck: entryReleaseCheck } = useConsumableParams(CARD_PARAMS);
 
-    if (isLoadingProject || isLoadingCard) {
+    if (isLoadingProject || isLoadingCard || isLoadingSlot) {
         return (
             <div>
                 <Skeleton className="w-full h-98 rounded-md" />
@@ -238,6 +245,8 @@ function LimitedCardVersion({ className, style, project, number }: CardVersionsP
 
 function FullCardVersions({ className, style, project, number }: CardVersionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project, number } });
+    const canReadSlots = usePermission(Permission.READ_SLOTS);
+    const { data: slot } = useGetSlotQuery({ project, number }, { skip: !canReadSlots });
     const [selectedIndex, setSelectedIndex] = useState<number | undefined>();
     const [searchParams] = useSearchParams();
     // Allows auto-selecting of specific version (eg. ?version=1.0.0)
@@ -347,7 +356,7 @@ function FullCardVersions({ className, style, project, number }: CardVersionsPro
     return (
         <div className={classNames("flex flex-col min-w-0", columnClass, className)} style={style}>
             <div className="flex items-center">
-                <DraftActions project={project} number={number} className="shrink-0" />
+                <DraftActions project={project} number={number} slot={slot} className="shrink-0" />
                 <div className="relative flex-1 min-w-0 px-4">
                     <div ref={tabsRef}>
                         <Tabs
@@ -535,7 +544,12 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
     const canSubmitReview = usePermission(Permission.MAKE_REVIEWS);
     const canReadFeedback = usePermission(Permission.READ_RELEASE_CHECKS);
-    const { data: slot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadFeedback });
+    const canEditSlot = usePermission(Permission.EDIT_SLOTS);
+    const { data: slot } = useGetSlotQuery(
+        { project: projectNumber, number },
+        { skip: !canReadFeedback && !canEditSlot }
+    );
+    const [isEditingSlot, setIsEditingSlot] = useState(false);
     const { data: project } = useGetProjectQuery({ number: projectNumber });
     // Allows deep-linking straight into the modal (eg. the capsule buttons, or Discord's /checks)
     const [feedbackOpen, setFeedbackOpen] = useState(entryReleaseCheck === "1");
@@ -578,6 +592,13 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
             <HeaderActions
                 items={[
                     ...statusItems,
+                    canEditSlot &&
+                        !!slot && {
+                            key: "slot-options",
+                            title: "Edit Slot Options",
+                            icon: <FontAwesomeIcon icon={faSliders} size="xl" />,
+                            onPress: () => setIsEditingSlot(true)
+                        },
                     canReadFeedback && {
                         key: "release-checks",
                         title: "Release Checks",
@@ -603,6 +624,7 @@ function ButtonSection({ className, style, project: projectNumber, number, entry
                 number={number}
                 releaseStatus={release?.status}
             />
+            {isEditingSlot && slot && <SlotOptionsModal isOpen slot={slot} onClose={() => setIsEditingSlot(false)} />}
         </div>
     );
 }
@@ -620,6 +642,7 @@ export function DraftActions({
     style,
     project: projectNumber,
     number,
+    slot,
     showDivider = true
 }: DraftActionsProps) {
     const { data: cardsData, isLoading } = useGetCardsQuery({ filter: { project: projectNumber, number } });
@@ -629,6 +652,17 @@ export function DraftActions({
     const canCreateDraft = usePermission(Permission.CREATE_CARDS);
     const canEditDraft = usePermission(Permission.EDIT_CARDS);
     const canDeleteDraft = usePermission(Permission.DELETE_CARDS);
+    // Titled as drafting titles them, and held while a modal closes so its title doesn't change as it fades
+    const editorAction = useRef("New Draft");
+    const deleteAction = useRef("");
+    if (editing) {
+        editorAction.current = editing.draft ? "Edit Draft" : "New Draft";
+    }
+    if (deleting) {
+        deleteAction.current = `${deleting.suggestionId ? "Remove" : "Delete"} "${deleting.name}"?`;
+    }
+    const editorTitle = useSlotTitle(projectNumber, number, editorAction.current);
+    const deleteTitle = useSlotTitle(projectNumber, number, deleteAction.current);
 
     const onNewDraft = useCallback((latest: IPlaytestCard) => {
         const draft = cloneDeep(latest);
@@ -702,8 +736,11 @@ export function DraftActions({
             ))}
             {showDivider && <Divider orientation="vertical" className="h-5 mx-1" />}
             <EditCardModal
+                title={editorTitle}
                 isOpen={!!editing}
                 card={editing}
+                conditions={slot?.conditions}
+                isImportant={slot?.important}
                 onClose={() => setEditing(undefined)}
                 onSave={(card) =>
                     addToast({
@@ -714,6 +751,7 @@ export function DraftActions({
                 }
             />
             <DeleteCardModal
+                title={deleteTitle}
                 isOpen={!!deleting}
                 card={deleting}
                 onClose={() => setDeleting(undefined)}
@@ -731,5 +769,7 @@ export function DraftActions({
 type DraftActionsProps = Omit<BaseElementProps, "children"> & {
     project: number;
     number: number;
+    /** The card's slot, from the caller - a list of cards already holds every slot */
+    slot?: ISlotOptions;
     showDivider?: boolean;
 };

@@ -27,11 +27,11 @@ import {
     suggestionIcons
 } from "../../../constants";
 import { BaseElementProps } from "../../../types";
-import SlotFrame, { SlotAction } from "./slotFrame";
+import SlotFrame, { SlotAction } from "../../../components/slots/slotFrame";
 import DraftCardContent from "./draftCardContent";
 import { CardHandlers } from "./useCardActions";
 import { DragData, useSlotDrag } from "./draftDragStore";
-import { CardAction } from "./useCardActions";
+import { CardAction } from "../../../components/slots/slotCardBadges";
 import { usePreviewSync } from "./usePreviewSync";
 import { cardRevealActions, RevealAction, revealActions, revealIcons, revealLabels } from "./revealState";
 import { frameShape, QUARTER_TURN, SHAPE_TRANSITION, SHAPE_TRANSITION_CLASS, slotShape, blankShape } from "./slotShape";

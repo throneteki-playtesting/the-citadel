@@ -2,12 +2,7 @@ import { faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { IPlaytestCard } from "common/models/cards";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../../hooks/usePermission";
-import { SlotAction } from "./slotFrame";
-
-export type CardAction = SlotAction & {
-    className?: string;
-    /** Actions of one group sit together in the menu, set apart from the next */ group?: string;
-};
+import { CardAction } from "../../../components/slots/slotCardBadges";
 
 export type CardHandlers = {
     onEdit: (card: IPlaytestCard) => void;

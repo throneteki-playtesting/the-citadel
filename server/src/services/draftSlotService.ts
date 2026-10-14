@@ -74,10 +74,10 @@ export function requestedSlots(project: IProject, slotCounts?: SlotCounts, previ
     return { counts: templateCounts(template), options: isChosen ? template.slots : undefined } as SlotRequest;
 }
 
-// A project whose slots stray from its template, however they came to, is no longer that template's
+// A draft straying from its template becomes custom - once initialised, the template is only where its slots started
 export async function settleTemplate(project: IProject) {
     const template = projectTemplateOf(project);
-    if (!template?.slots) {
+    if (!project.draft || !template?.slots) {
         return project;
     }
     const slots = await dataService.slots.read({ project: project.number });

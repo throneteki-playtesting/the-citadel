@@ -3,7 +3,7 @@ import { faPencil } from "@fortawesome/free-solid-svg-icons";
 import { CardPreview } from "@agot/card-preview";
 import { slotConditionIssues } from "common/models/slotConditions";
 import { ISlot } from "common/models/slots";
-import { DraftCardBadges } from "./draftCardContent";
+import { SlotCardBadges } from "../../../components/slots/slotCardBadges";
 import { isUprightPlot, renderDraftCard } from "./draftSlots";
 import SortableCardGrid, { SortableCard } from "./sortableCardGrid";
 
@@ -21,7 +21,7 @@ const ReviewPicks = memo(function ReviewPicks({
     const renderCard = useCallback(
         ({ id, card }: SortableCard, rank: number) => (
             <>
-                <DraftCardBadges
+                <SlotCardBadges
                     issues={slotConditionIssues(slot.conditions, card)}
                     actions={[{ key: "edit", label: "Edit", icon: faPencil, onPress: () => onEdit(id) }]}
                     hasProblem={problems.has(id)}

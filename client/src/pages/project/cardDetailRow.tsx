@@ -6,7 +6,7 @@ import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck } from "@fortawesome/free-solid-svg-icons";
 import { challengeIcons, Faction, IPlaytestCard, plotStats } from "common/models/cards";
-import { IReleaseCheck } from "common/models/slots";
+import { IReleaseCheck, ISlot } from "common/models/slots";
 import { parseCardCode, thronesColors, titleCase, typeNames } from "common/utils";
 import { stripUrlProtocol } from "../../utils";
 import { factionAccentClasses, reorderTransition } from "../../constants";
@@ -21,10 +21,12 @@ import {
 } from "../../components/cardEditor/components/plotModifiers";
 import { DraftActions } from "../card/cardDetail";
 import ReleaseCheckButton from "./releases/releaseCheckButton";
+import { conditionLines } from "../../components/slots/conditionLines";
 
 /** One card's raw data for the detail view - only the fields not already on `card`, resolved from its slot */
 export interface ICardDetailRow {
     card: IPlaytestCard;
+    slot?: ISlot;
     illustrator?: string;
     portfolio?: string;
     /** "Free Commission", or who paid for a commissioned piece - undefined for any other artwork type */
@@ -57,6 +59,7 @@ function areRowPropsEqual(prev: CardDetailRowProps, next: CardDetailRowProps): b
     return (
         prev.onOpenReleaseCheck === next.onOpenReleaseCheck &&
         prev.entry.card === next.entry.card &&
+        prev.entry.slot === next.entry.slot &&
         prev.entry.illustrator === next.entry.illustrator &&
         prev.entry.portfolio === next.entry.portfolio &&
         prev.entry.commissionNote === next.entry.commissionNote &&
@@ -134,7 +137,12 @@ const CardDetailRow = memo(function CardDetailRow({ entry, onOpenReleaseCheck }:
                                 onPress={() => onOpenReleaseCheck(card)}
                             />
                         )}
-                        <DraftActions project={card.project} number={card.number} showDivider={false} />
+                        <DraftActions
+                            project={card.project}
+                            number={card.number}
+                            slot={entry.slot}
+                            showDivider={false}
+                        />
                     </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -173,6 +181,18 @@ const CardDetailRow = memo(function CardDetailRow({ entry, onOpenReleaseCheck }:
                                 "-"
                             )
                         )}
+                        {!!entry.slot?.conditions?.length &&
+                            renderField(
+                                "Slot Needs",
+                                <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
+                                    {entry.slot.conditions.flatMap(conditionLines).map(({ key, token, text }) => (
+                                        <span key={key} className="inline-flex items-center gap-1">
+                                            {token}
+                                            {text}
+                                        </span>
+                                    ))}
+                                </span>
+                            )}
                         {showsPlacement &&
                             entry.releaseNumber !== undefined &&
                             renderField("Release #", entry.releaseNumber)}

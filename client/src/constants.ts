@@ -107,8 +107,11 @@ export const avatarBubbleClasses =
 export const cornerBadgeFadeClasses =
     "transition-[opacity,background-color] duration-200 group-hover:opacity-50 hover:!opacity-100";
 
-// Where a sort-specific badge sits over a card
-export const cornerBadgeBottomRightClasses = "absolute bottom-0 right-0 m-2 z-10";
+// Said wherever a card strays from its slot's conditions
+export const SLOT_STRAY_TITLE = "Doesn't Fit Its Slot";
+
+// Where a sort-specific badge sits over a card, within its CardBadgeLayer
+export const cornerBadgeBottomRightClasses = "absolute bottom-0 right-0 m-[0.5em]";
 
 // A control among a card's badges is the badge's size, whatever size the row is
 export const CORNER_CONTROL_CLASS = "size-[2em]! min-w-[2em]! text-[0.875em]";

@@ -10,8 +10,8 @@ import { rotatingDropAnimation } from "../../../animations";
 import { slotShape } from "./slotShape";
 import { DRAFT_SLOT_LIST_SELECTOR, DRAFT_SLOT_VARIABLES_CLASS, POOL_PULL_MS } from "../../../constants";
 import { isPreviewedCard, previewOf } from "common/models/slots";
-import { DraftCardBadges } from "./draftCardContent";
-import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
+import { CardHandlers, useCardActions } from "./useCardActions";
+import { CardAction, SlotCardBadges } from "../../../components/slots/slotCardBadges";
 import { DragData, DragStoreContext, useDragState } from "./draftDragStore";
 import { poolDropAnimation } from "./poolDropAnimation";
 import { useHeldOpen } from "../../../hooks/useHeldOpen";
@@ -100,7 +100,7 @@ function DraggedCard({ drag, source, over, isOverPool, actions }: DraggedCardPro
                 )}
                 style={shape}
             >
-                <DraftCardBadges
+                <SlotCardBadges
                     issues={slotConditionIssues(slot?.slot.conditions, card)}
                     actions={actions}
                     reveal={isRevealed ? "current" : undefined}

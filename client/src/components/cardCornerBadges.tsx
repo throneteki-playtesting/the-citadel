@@ -90,34 +90,41 @@ export function CornerBadge({
 
 export type CardCornerBadge = CornerBadgeProps & { key: string };
 
-/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room.
- *  Sized in the row's own em, which steps down with the cards on smaller screens. */
+// Sized from the card beneath, so a badge keeps its share of it at any size - only its contents take pointer events
+export function CardBadgeLayer({ children }: { children: ReactNode }) {
+    return (
+        <div className="pointer-events-none absolute inset-0 z-10 [container-type:size]">
+            <div className="relative size-full text-[7cqmin] *:pointer-events-auto">{children}</div>
+        </div>
+    );
+}
+
+/** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room */
 export default function CardCornerBadges({ badges, isolateClicks = false, className, leading }: CardCornerBadgesProps) {
     const shown = badges.filter((badge): badge is CardCornerBadge => !!badge);
     if (shown.length === 0 && !leading) {
         return null;
     }
     return (
-        <div
-            className={classNames(
-                "absolute top-0 right-0 m-[0.5em] z-10 flex items-center gap-[0.375em] text-[0.82rem] sm:text-[0.91rem] md:text-base",
-                className
-            )}
-            onClick={
-                isolateClicks
-                    ? (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                      }
-                    : undefined
-            }
-            onPointerDown={isolateClicks ? (e) => e.stopPropagation() : undefined}
-        >
-            {leading}
-            {shown.map(({ key, ...badge }) => (
-                <CornerBadge key={key} {...badge} />
-            ))}
-        </div>
+        <CardBadgeLayer>
+            <div
+                className={classNames("absolute top-0 right-0 m-[0.5em] flex items-center gap-[0.375em]", className)}
+                onClick={
+                    isolateClicks
+                        ? (e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                          }
+                        : undefined
+                }
+                onPointerDown={isolateClicks ? (e) => e.stopPropagation() : undefined}
+            >
+                {leading}
+                {shown.map(({ key, ...badge }) => (
+                    <CornerBadge key={key} {...badge} />
+                ))}
+            </div>
+        </CardBadgeLayer>
     );
 }
 

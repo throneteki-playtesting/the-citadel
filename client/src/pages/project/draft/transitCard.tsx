@@ -28,7 +28,6 @@ export default function TransitCard({
     from,
     fromControl,
     toControl,
-    stackWidth,
     source,
     isSourceHeld = false,
     getTarget,
@@ -112,7 +111,6 @@ export default function TransitCard({
             issues={issues}
             fromControl={fromControl}
             toControl={toControl}
-            stackWidth={stackWidth}
             isMorphing={isMorphing}
             transition={TRANSIT}
             zIndex={ABOVE_PAGE}
@@ -129,8 +127,6 @@ export type TransitCardProps = {
     from: DOMRect;
     fromControl: CardControl;
     toControl: CardControl;
-    /** The width a card is drawn at in its stack */
-    stackWidth: number;
     /** Where the card sits now, hidden while its copy is away */
     source?: HTMLElement;
     /** The source stays hidden once the card has arrived, for whoever is holding the card there to show it again */

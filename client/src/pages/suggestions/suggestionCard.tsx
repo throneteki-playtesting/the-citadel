@@ -235,7 +235,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                 key="reactions"
                                 {...touchBadgeFade}
                                 className={classNames(
-                                    "flex items-center p-0.5 rounded-full ring-1 ring-primary/70",
+                                    "flex items-center p-[0.125em] rounded-full ring-1 ring-primary/70",
                                     cornerBadgeDiscFillClasses,
                                     isBadge
                                         ? cornerBadgeFadeClasses
@@ -282,7 +282,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                                     disabled={!!pending}
                                                     onClick={() => onOptionPress(type)}
                                                     className={classNames(
-                                                        "flex items-center justify-center size-7 rounded-full transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
+                                                        "flex items-center justify-center size-[1.75em] rounded-full transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
                                                         {
                                                             "opacity-30": isOtherPending(pending, type),
                                                             "hover:bg-primary/25 disabled:hover:bg-transparent":
@@ -293,7 +293,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                                     <FontAwesomeIcon
                                                         icon={isBadge ? MY_REACTION_BADGES[type].icon : icon}
                                                         className={classNames(
-                                                            "text-lg transition-colors duration-200",
+                                                            "text-[1.125em] transition-colors duration-200",
                                                             isBadge
                                                                 ? MY_REACTION_BADGES[type].colorClass
                                                                 : "text-primary"

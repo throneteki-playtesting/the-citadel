@@ -36,7 +36,6 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
     // Off once the cards have landed, when the pile's copies are shown again
     const isHiding = useRef(true);
     const [isMorphing, setIsMorphing] = useState(false);
-    const [stackWidth] = useState(() => Math.min(pile.clientWidth, pile.clientHeight));
     // What the pile held before the cards came - so the copies which are theirs can be told from the rest
     const [heldBefore] = useState(() => pile.querySelectorAll(REAL_CARDS).length);
 
@@ -133,7 +132,6 @@ export default function IncomingCards({ cards, pile, isReady, onDone }: Incoming
                     issues={issues}
                     fromControl={fromControl}
                     toControl="menu"
-                    stackWidth={stackWidth}
                     isMorphing={isMorphing}
                     transition={{ ...FLIGHT, delay: landingDelay(cards.length, rank) }}
                     zIndex={ABOVE_PAGE + cards.length - rank}

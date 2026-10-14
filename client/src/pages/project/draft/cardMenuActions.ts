@@ -1,5 +1,5 @@
 import { faPencil, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { CardAction } from "./useCardActions";
+import { CardAction } from "../../../components/slots/slotCardBadges";
 
 const noop = () => undefined;
 export const EDIT_ACTION: CardAction = { key: "edit", label: "Edit", icon: faPencil, onPress: noop };

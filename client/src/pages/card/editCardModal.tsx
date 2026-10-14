@@ -17,10 +17,9 @@ import { useIsReleaseBound } from "../../hooks/useIsReleaseBound";
 import StatusNotice from "../../components/statusNotice";
 import { faFlagCheckered } from "@fortawesome/free-solid-svg-icons";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
-import { DraftCardBadges } from "../project/draft/draftCardContent";
+import { SlotCardBadges } from "../../components/slots/slotCardBadges";
 import { renderDraftCard as renderStackCard } from "../project/draft/draftSlots";
 import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
-import ScaledBadges from "../project/draft/scaledBadges";
 import TransitCard from "../project/draft/transitCard";
 import { EDITOR_CARD_WIDTH } from "../../constants";
 import { useStableCallback } from "../../hooks/useStableCallback";
@@ -40,7 +39,7 @@ export default function EditCardModal({
     card: initial,
     origin,
     conditions,
-    stackWidth,
+    isImportant = false,
     onClose: onModalClose = () => true,
     onSave = () => true
 }: EditCardModalProps) {
@@ -54,7 +53,6 @@ export default function EditCardModal({
         card,
         origin,
         conditions,
-        stackWidth,
         onClose: onModalCloseStable
     });
     const { previewRef, faceRef, revertedTo } = flight;
@@ -99,6 +97,7 @@ export default function EditCardModal({
 
     // Cancelling a card which came from a stack shows it as it was before the modal goes, to be carried home as it was
     const shown = revertedTo ?? card;
+    const renamedFrom = isImportant && initial?.name && card.name !== initial.name ? initial.name : undefined;
 
     // Drawn as it is in its stack when it came from one, rather than as a draft
     const renderDraftCard = useMemo(() => {
@@ -147,9 +146,12 @@ export default function EditCardModal({
                                         verticalWidth={EDITOR_CARD_WIDTH.modal}
                                         className="self-center md:self-start"
                                     >
-                                        <ScaledBadges referenceWidth={flight.referenceWidth}>
-                                            <DraftCardBadges issues={flight.shownIssues} actions={[]} isLive />
-                                        </ScaledBadges>
+                                        <SlotCardBadges
+                                            issues={flight.shownIssues}
+                                            actions={[]}
+                                            renamedFrom={renamedFrom}
+                                            isLive
+                                        />
                                     </EditorCardPreview>
                                     <WizardPages className="min-w-0 md:flex-1">
                                         <WizardPage controlledData={getBaseCardValues(card)}>
@@ -200,8 +202,8 @@ type EditCardModalProps = Omit<BaseElementProps, "children"> & {
     card?: DeepPartial<IPlaytestCard>;
     /** What the card's slot asks for, so the card says so live whenever it doesn't measure up */
     conditions?: SlotCondition[];
-    /** The width a card is drawn at in its stack, which its badges are sized from */
-    stackWidth?: number;
+    /** Its slot is one the project must deliver, so a change to its name is warned against */
+    isImportant?: boolean;
     /** The card was opened from its stack, so it is drawn and carried as it is there */
     origin?: EditOrigin;
     onClose?: () => void;

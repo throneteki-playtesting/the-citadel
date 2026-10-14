@@ -12,7 +12,7 @@ import { showApiErrorToast } from "../../../api/errors";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { slotConditionIssues } from "common/models/slotConditions";
-import { DraftCardBadges } from "./draftCardContent";
+import { SlotCardBadges } from "../../../components/slots/slotCardBadges";
 import { ControlMorph } from "./flyingCard";
 import { DraftSlot, isUprightPlot, renderDraftCard } from "./draftSlots";
 import { FLIGHT, LIT, pileCardPose, towardsPile } from "./pilePose";
@@ -213,7 +213,7 @@ function OptionCard({ card, rank, hasNonPlot, issues, isClosing, isOverlay }: Op
     return (
         <>
             <div className="pointer-events-none absolute inset-0 z-10">
-                <DraftCardBadges
+                <SlotCardBadges
                     issues={issues}
                     actions={[]}
                     trailing={

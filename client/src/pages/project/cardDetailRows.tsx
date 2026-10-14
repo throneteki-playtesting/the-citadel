@@ -31,6 +31,7 @@ function buildRowData(
 
         return {
             card,
+            slot,
             illustrator: card.illustrator || (artwork && illustratorName(artwork, artists)),
             portfolio: creditedArtist?.portfolio,
             commissionNote: commissionPaymentLabel(commissioned),

@@ -26,12 +26,11 @@ import { useStableCallback } from "../../../hooks/useStableCallback";
 import SuggestionBrowser from "../../suggestions/suggestionBrowser";
 import { SortOption } from "../../suggestions/suggestionSortOptions";
 import useSuggestionServerFilter from "../../suggestions/suggestionServerFilter";
-import { DraftCardBadges } from "./draftCardContent";
+import { SlotCardBadges } from "../../../components/slots/slotCardBadges";
 import { isUprightPlot, renderDraftCard } from "./draftSlots";
 import { IncomingCard } from "./incomingCards";
 import PickableSuggestion from "./pickableSuggestion";
 import ReviewPicks from "./reviewPicks";
-import ScaledBadges from "./scaledBadges";
 import TransitCard, { SLIDING_PAGE_ATTRIBUTE, TransitCardProps } from "./transitCard";
 
 const BROWSE_PAGE = 1;
@@ -181,7 +180,6 @@ function SuggestionPicker({
             isUpright: !isFromEditor && isUprightPlot(card, slotHasNonPlot),
             issues: slotConditionIssues(slot.conditions, card, isFromEditor),
             from,
-            stackWidth: cardWidth,
             ...ends
         });
     };
@@ -396,13 +394,11 @@ function SuggestionPicker({
                             verticalWidth={EDITOR_CARD_WIDTH.modal}
                             className="self-center md:self-start"
                         >
-                            <ScaledBadges referenceWidth={cardWidth}>
-                                <DraftCardBadges
-                                    issues={slotConditionIssues(slot.conditions, editing.card as IPlaytestCard, true)}
-                                    actions={[]}
-                                    isLive
-                                />
-                            </ScaledBadges>
+                            <SlotCardBadges
+                                issues={slotConditionIssues(slot.conditions, editing.card as IPlaytestCard, true)}
+                                actions={[]}
+                                isLive
+                            />
                         </EditorCardPreview>
                         <FormValidationContext.Provider value={errors[editingId ?? ""] ?? NO_ERRORS}>
                             <CardEditor
