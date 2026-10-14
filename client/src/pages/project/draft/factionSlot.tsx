@@ -22,6 +22,7 @@ import { useStableCallback } from "../../../hooks/useStableCallback";
 import {
     DRAFT_SLOT_VARIABLES_CLASS,
     DRAFT_STACK_TILT,
+    DRAFT_WRAPPED_SLOT_CLASS,
     FLAT_BUTTON_CLASS,
     RADIAL_ITEM_CLASS,
     suggestionIcons
@@ -64,6 +65,7 @@ const FactionSlot = memo(function FactionSlot({
     zIndex,
     isArranging,
     isLifted,
+    isWrapped = false,
     onNew,
     onSuggestion,
     onArrange,
@@ -74,7 +76,9 @@ const FactionSlot = memo(function FactionSlot({
     onEdit,
     onDelete
 }: FactionSlotProps) {
-    const { isHeld, isReceiving, leavingVersion, incomingType } = useSlotDrag(slot.number);
+    const { isHeld, isReceiving, leavingVersion, incomingType: heldType } = useSlotDrag(slot.number);
+    // Reshaped under a held card, a wrapped slot could wrap out from under it - so it waits for the card to land
+    const incomingType = isWrapped ? undefined : heldType;
     const preview = previewOf(slot.slot);
     const { previewed, ghost } = slotReveal(slot.options, preview);
     // Bottom to top, matching the stack's own order - a revealed card's ghost takes its place once it has gone
@@ -222,12 +226,12 @@ const FactionSlot = memo(function FactionSlot({
     const hasNonPlot =
         slot.options.some((card) => card.type !== "plot") || (incomingType !== undefined && incomingType !== "plot");
     const isLandscape = isLandscapeSlot(slot.slot.conditions, slot.options, incomingType);
-    return (
+    const frame = (
         <SlotFrame
             slot={slot.slot}
             actions={slotActions}
             isRevealed={hasRevealed}
-            className={classNames(DRAFT_SLOT_VARIABLES_CLASS, "self-start", SHAPE_TRANSITION_CLASS)}
+            className={SHAPE_TRANSITION_CLASS}
             style={frameShape(isLandscape)}
         >
             <DroppableSlot
@@ -323,6 +327,16 @@ const FactionSlot = memo(function FactionSlot({
             </DroppableSlot>
         </SlotFrame>
     );
+    // The place snaps to its new shape so the row settles at once and can glide, while the frame eases into it
+    return (
+        <div
+            data-draft-slot={slot.number}
+            className={classNames("shrink-0", isWrapped ? DRAFT_WRAPPED_SLOT_CLASS : DRAFT_SLOT_VARIABLES_CLASS)}
+            style={frameShape(isLandscape)}
+        >
+            {frame}
+        </div>
+    );
 });
 
 export default FactionSlot;
@@ -333,6 +347,8 @@ type FactionSlotProps = SlotHandlers & {
     isArranging: boolean;
     /** Its cards have left for Arrange, so the pile is put back in order unseen, ready for them to land on */
     isLifted: boolean;
+    /** Wrapped in an expanded faction and sized from its width, rather than in a scrolling row */
+    isWrapped?: boolean;
 };
 
 function DroppableSlot({ className, slot, isLandscape, isHeld, isTargeted, children }: DroppableSlotProps) {

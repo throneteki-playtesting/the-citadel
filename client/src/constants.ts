@@ -142,6 +142,17 @@ export const DRAFT_ROW_HEIGHT_CLASS = "h-72 sm:h-80 md:h-[22rem]";
 // The row's height and a plot slot's width at each breakpoint, as variables so a slot can be sized from either
 export const DRAFT_SLOT_VARIABLES_CLASS =
     "[--row:18rem] sm:[--row:20rem] md:[--row:22rem] [--plot:16rem] sm:[--plot:18rem] md:[--plot:20rem]";
+// The same variables for wrapped slots: --card is the widest card letting --cols vertical or --plot-cols plot slots fit
+// across --draft-w, a plot being that card on its side. A pixel is held back so a full row never rounds onto the next
+export const DRAFT_GRID_VARIABLES_CLASS = classNames(
+    "[--cols:2] sm:[--cols:3] lg:[--cols:4] [--plot-cols:1] sm:[--plot-cols:2] lg:[--plot-cols:3]",
+    "[--card:min((var(--draft-w)_-_1px_-_(var(--cols)_-_1)_*_0.5rem)_/_var(--cols)_-_0.5rem_-_2px,((var(--draft-w)_-_1px_-_(var(--plot-cols)_-_1)_*_0.5rem)_/_var(--plot-cols)_-_0.5rem_-_2px)_*_240_/_333)]",
+    "[--row:calc(var(--card)_*_333_/_240_+_3.25rem_+_2px)]",
+    "[--plot:calc(var(--card)_*_333_/_240_+_0.5rem_+_2px)]"
+);
+// A wrapped slot's variables, sized against the grid holding it - anything outside one is given --draft-w in pixels
+export const DRAFT_WRAPPED_SLOT_CLASS = classNames("[--draft-w:100cqw]", DRAFT_GRID_VARIABLES_CLASS);
+export const DRAFT_GRID_SELECTOR = "[data-draft-grid]";
 export const DRAFT_PLOT_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
 export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12";
 

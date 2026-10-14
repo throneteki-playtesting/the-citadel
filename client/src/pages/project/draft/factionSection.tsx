@@ -1,4 +1,7 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
+import { Button, Tooltip } from "@heroui/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faChevronDown } from "@fortawesome/free-solid-svg-icons";
 import { useDroppable } from "@dnd-kit/core";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
@@ -6,24 +9,32 @@ import { Faction } from "common/models/cards";
 import { factionNames, pluralize } from "common/utils";
 import ThronesIcon from "../../../components/thronesIcon";
 import Watermark from "../../../components/watermark";
-import { DRAFT_ROW_HEIGHT_CLASS, watermarkClasses } from "../../../constants";
+import { DRAFT_ROW_HEIGHT_CLASS, FLAT_BUTTON_CLASS, watermarkClasses } from "../../../constants";
+import { useGlidingChildren } from "../../../hooks/useGlidingChildren";
 import FactionSlot, { SlotHandlers } from "./factionSlot";
 import { useDragState } from "./draftDragStore";
 import { DraftSlot, firstFittingSlot } from "./draftSlots";
+import { SHAPE_KEYFRAME_TIMING } from "./slotShape";
+import { toggleFactionExpanded, useIsFactionExpanded } from "./expandedFactionsStore";
 
-const FactionCarousel = memo(function FactionCarousel({
+// A faction's slots in one scrolling row, or wrapped when expanded - the same slots, so expanding only moves them
+const FactionSection = memo(function FactionSection({
+    project,
     faction,
     slots,
     totalSlots,
     arrangingNumber,
     isLifted,
     ...handlers
-}: FactionCarouselProps) {
+}: FactionSectionProps) {
+    const isExpanded = useIsFactionExpanded(project, faction);
     // A card held over the faction is placed in the first slot it fits - and with none, the faction takes no drops
     const active = useDragState((state) => state.active);
     const isFull = useMemo(() => !!active && !firstFittingSlot(slots, active.card, active.slotNumber), [slots, active]);
     const { setNodeRef } = useDroppable({ id: `faction-${faction}`, data: { faction }, disabled: isFull });
     const isTargeted = useDragState((state) => state.overFaction === faction);
+    const [slotList, setSlotList] = useState<HTMLDivElement | null>(null);
+    useGlidingChildren(slotList, SHAPE_KEYFRAME_TIMING);
     return (
         <div
             ref={setNodeRef}
@@ -32,13 +43,29 @@ const FactionCarousel = memo(function FactionCarousel({
                 "border-content3": !isTargeted
             })}
         >
-            <FactionHeader faction={faction} slotCount={slots.length} totalSlots={totalSlots} />
-            <div className="relative">
-                <div
-                    data-carousel-scroller
-                    className={classNames(
-                        "w-full flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden gap-2 p-2",
+            <FactionHeader
+                project={project}
+                faction={faction}
+                slotCount={slots.length}
+                totalSlots={totalSlots}
+                isExpanded={isExpanded}
+            />
+            <div
+                data-carousel-scroller={isExpanded ? undefined : true}
+                className={classNames(
+                    "relative p-2",
+                    !isExpanded && [
+                        "overflow-x-auto overflow-y-hidden scroll-smooth [&::-webkit-scrollbar]:hidden",
                         DRAFT_ROW_HEIGHT_CLASS
+                    ]
+                )}
+            >
+                <div
+                    ref={setSlotList}
+                    data-draft-grid={isExpanded ? true : undefined}
+                    className={classNames(
+                        "relative flex gap-2",
+                        isExpanded ? "@container flex-wrap justify-center" : "h-full"
                     )}
                 >
                     {slots.map((slot, index) => (
@@ -48,6 +75,7 @@ const FactionCarousel = memo(function FactionCarousel({
                             zIndex={slots.length - index}
                             isArranging={arrangingNumber === slot.number}
                             isLifted={arrangingNumber === slot.number && isLifted}
+                            isWrapped={isExpanded}
                             {...handlers}
                         />
                     ))}
@@ -57,9 +85,10 @@ const FactionCarousel = memo(function FactionCarousel({
     );
 });
 
-export default FactionCarousel;
+export default FactionSection;
 
-type FactionCarouselProps = SlotHandlers & {
+type FactionSectionProps = SlotHandlers & {
+    project: number;
     faction: Faction;
     slots: DraftSlot[];
     totalSlots: number;
@@ -67,8 +96,15 @@ type FactionCarouselProps = SlotHandlers & {
     isLifted: boolean;
 };
 
-// Apart from the row, so a change to one slot's cards never redraws the faction's title
-const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlots }: FactionHeaderProps) {
+// Apart from the slots, so a change to one slot's cards never redraws the faction's title
+const FactionHeader = memo(function FactionHeader({
+    project,
+    faction,
+    slotCount,
+    totalSlots,
+    isExpanded
+}: FactionHeaderProps) {
+    const toggleLabel = `${isExpanded ? "Collapse" : "Expand"} ${factionNames[faction]}`;
     // The slot a card held over the faction would go into
     const target = useDragState((state) => (state.overFaction === faction ? state.over : undefined));
     return (
@@ -103,6 +139,24 @@ const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlo
                     <span className="ml-auto whitespace-nowrap text-small text-default-500">
                         {slotCount}/{totalSlots} {pluralize(totalSlots, "slot")}
                     </span>
+                    <Tooltip content={isExpanded ? "Collapse" : "Expand"}>
+                        <Button
+                            isIconOnly
+                            size="sm"
+                            variant="light"
+                            aria-label={toggleLabel}
+                            aria-expanded={isExpanded}
+                            className={FLAT_BUTTON_CLASS}
+                            onPress={() => toggleFactionExpanded(project, faction)}
+                        >
+                            <FontAwesomeIcon
+                                icon={faChevronDown}
+                                className={classNames("transition-transform duration-200", {
+                                    "rotate-180": isExpanded
+                                })}
+                            />
+                        </Button>
+                    </Tooltip>
                 </div>
             </div>
         </>
@@ -110,7 +164,9 @@ const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlo
 });
 
 type FactionHeaderProps = {
+    project: number;
     faction: Faction;
     slotCount: number;
     totalSlots: number;
+    isExpanded: boolean;
 };

@@ -39,9 +39,14 @@ import ArrangeModal from "./arrangeModal";
 import RevealModal from "./revealModal";
 import DraftingSkeleton, { DraftPoolSkeleton } from "./draftingSkeleton";
 import Reveal from "../../../components/reveal";
+import SectionTitle from "../../../components/sectionTitle";
+import { useGlidingChildren } from "../../../hooks/useGlidingChildren";
 import { RevealAction } from "./revealState";
 import IncomingCards, { IncomingCard } from "./incomingCards";
-import FactionCarousel from "./factionCarousel";
+import FactionSection from "./factionSection";
+import ExpandAllButton from "./expandAllButton";
+import { isAnyFactionExpanded } from "./expandedFactionsStore";
+import { SHAPE_KEYFRAME_TIMING } from "./slotShape";
 import DraftPool from "./draftPool";
 import { useDraftPoolHost } from "./useDraftPoolHost";
 import { closeSlotMenus } from "./slotMenuStore";
@@ -116,6 +121,8 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [revealing, setRevealing] = useState<{ number: number; action: RevealAction; isOpen: boolean }>();
     const [arranging, setArranging] = useState<{ number: number; pile: HTMLElement; isLifted: boolean }>();
     const [dragStore] = useState(createDragStore);
+    const [factionColumn, setFactionColumn] = useState<HTMLDivElement | null>(null);
+    useGlidingChildren(factionColumn, SHAPE_KEYFRAME_TIMING);
     // dnd-kit scrolls the page back to the card's place before a drop animation, so it can fly home - which a card on
     // its way to the pool is not doing. It is told that card is in view, and so left where the page is
     const measuring = useMemo(
@@ -162,6 +169,14 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const slotsRef = useRef(factionSlots);
     slotsRef.current = factionSlots;
     const arrangingSlot = arranging && findDraftSlot(factionSlots, arranging.number);
+    const shownFactions = useMemo(
+        () =>
+            [...factionSlots.entries()]
+                .filter(([, slots]) => slots.length > 0)
+                .sort(([, a], [, b]) => a[0].number - b[0].number),
+        [factionSlots]
+    );
+    const shownFactionNames = useMemo(() => shownFactions.map(([faction]) => faction), [shownFactions]);
 
     // Stable, so the memoised slots only redraw when their own data changes
     const registerPile = useCallback((number: number, element: HTMLElement | null) => {
@@ -564,12 +579,20 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
         deleteTitle.current = slotTitle(project.name, deleting.number, `${action} "${deleting.name}"?`);
     }
 
+    const toolbar = (
+        <div className="flex items-center gap-2">
+            <SectionTitle className="flex-1">Slots</SectionTitle>
+            <ExpandAllButton project={project.number} factions={shownFactionNames} />
+        </div>
+    );
+
     if (isLoadingCards || isLoadingSlots) {
         return (
-            <>
+            <div className="flex flex-col gap-2">
                 {canDraft && poolHost && createPortal(<DraftPoolSkeleton />, poolHost)}
-                <DraftingSkeleton />
-            </>
+                {toolbar}
+                <DraftingSkeleton isExpanded={isAnyFactionExpanded(project.number)} />
+            </div>
         );
     }
 
@@ -589,12 +612,12 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                 }}
             >
                 <Reveal direction={null} className="flex flex-col gap-2">
-                    {[...factionSlots.entries()]
-                        .filter(([, slots]) => slots.length > 0)
-                        .sort(([, a], [, b]) => a[0].number - b[0].number)
-                        .map(([faction, slots]) => (
-                            <FactionCarousel
+                    {toolbar}
+                    <div ref={setFactionColumn} className="relative flex flex-col gap-2">
+                        {shownFactions.map(([faction, slots]) => (
+                            <FactionSection
                                 key={faction}
+                                project={project.number}
                                 faction={faction}
                                 slots={slots}
                                 totalSlots={slotsData?.items.length ?? 0}
@@ -611,6 +634,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
                                 onDelete={onDelete}
                             />
                         ))}
+                    </div>
                 </Reveal>
                 {canDraft && (
                     <DraftPool

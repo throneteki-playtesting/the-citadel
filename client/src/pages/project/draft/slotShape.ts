@@ -4,6 +4,11 @@ import { EASE_STANDARD } from "../../../constants";
 export const QUARTER_TURN = 90;
 const SHAPE_SECONDS = 0.5;
 export const SHAPE_TRANSITION = { duration: SHAPE_SECONDS, ease: EASE_STANDARD } as const;
+// SHAPE_TRANSITION for the Web Animations API, so a slot moved by another's change of shape keeps step with it
+export const SHAPE_KEYFRAME_TIMING: KeyframeAnimationOptions = {
+    duration: SHAPE_SECONDS * 1000,
+    easing: `cubic-bezier(${EASE_STANDARD.join(",")})`
+};
 // Eased as SHAPE_TRANSITION is, so what is sized in CSS and what is turned by framer keep step
 const SHAPE_EASE_CLASS = "duration-500 ease-[cubic-bezier(0.65,0,0.35,1)]";
 export const SHAPE_TRANSITION_CLASS = `transition-[width,height,outline-color] ${SHAPE_EASE_CLASS}`;
@@ -20,7 +25,7 @@ const shapeOf = (shapes: Shapes, isLandscape: boolean) => (isLandscape ? shapes.
 
 const FRAME: Shapes = {
     landscape: { width: "var(--plot)", height: `calc(${LANDSCAPE_WIDTH} * ${CARD_RATIO} + 2.25rem + 2px)` },
-    portrait: { width: `calc(${PORTRAIT_HEIGHT} * ${CARD_RATIO} + 0.5rem + 2px)`, height: "100%" }
+    portrait: { width: `calc(${PORTRAIT_HEIGHT} * ${CARD_RATIO} + 0.5rem + 2px)`, height: "calc(var(--row) - 1rem)" }
 };
 const SLOT: Shapes = {
     landscape: { width: `calc(${LANDSCAPE_WIDTH})`, height: `calc(${LANDSCAPE_WIDTH} * ${CARD_RATIO})` },

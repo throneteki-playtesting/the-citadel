@@ -1,4 +1,4 @@
-import { memo, useContext, useMemo } from "react";
+import { CSSProperties, memo, useContext, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { DragOverlay, Modifier } from "@dnd-kit/core";
 import { snapCenterToCursor } from "@dnd-kit/modifiers";
@@ -8,7 +8,12 @@ import { slotConditionIssues } from "common/models/slotConditions";
 import Crossfade from "../../../components/crossfade";
 import { rotatingDropAnimation } from "../../../animations";
 import { slotShape } from "./slotShape";
-import { DRAFT_SLOT_VARIABLES_CLASS, POOL_PULL_MS } from "../../../constants";
+import {
+    DRAFT_GRID_SELECTOR,
+    DRAFT_GRID_VARIABLES_CLASS,
+    DRAFT_SLOT_VARIABLES_CLASS,
+    POOL_PULL_MS
+} from "../../../constants";
 import { isPreviewedCard, previewOf } from "common/models/slots";
 import { DraftCardBadges } from "./draftCardContent";
 import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
@@ -81,6 +86,14 @@ function DraggedCard({ drag, source, over, isOverPool, actions }: DraggedCardPro
     const isRevealed = !!preview && isPreviewedCard(drag.card, preview);
     // A plot, or a card from the pool, is the size of a slot's - one from a stack is already sized by the card it left
     const hasSlotShape = card.type === "plot" || !!drag.suggestion;
+    // The width of the grid it was lifted from - or of any, for a card from the pool - as nothing sizes it in hand
+    const [gridWidth] = useState(() => {
+        const home = document.querySelector(`[data-draft-slot="${drag.slotNumber}"]`);
+        return (home ? home.closest(DRAFT_GRID_SELECTOR) : document.querySelector(DRAFT_GRID_SELECTOR))?.clientWidth;
+    });
+    const shape: CSSProperties | undefined = hasSlotShape
+        ? { ...slotShape(card.type === "plot"), ...(gridWidth && { "--draft-w": `${gridWidth}px` }) }
+        : undefined;
     // The overlay is sized to whatever it was picked up from - a thumbnail in the pool, or a tilted card in a pile - so
     // the card is centred in it rather than hung from its corner, and sits where that was and under the cursor
     return (
@@ -89,10 +102,10 @@ function DraggedCard({ drag, source, over, isOverPool, actions }: DraggedCardPro
                 data-drag-card
                 className={classNames(
                     "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grabbing transition-[scale,opacity] duration-200 ease-out",
-                    hasSlotShape ? DRAFT_SLOT_VARIABLES_CLASS : "size-full",
+                    hasSlotShape ? (gridWidth ? DRAFT_GRID_VARIABLES_CLASS : DRAFT_SLOT_VARIABLES_CLASS) : "size-full",
                     isOverPool && "scale-50 opacity-60 sm:opacity-100"
                 )}
-                style={hasSlotShape ? slotShape(card.type === "plot") : undefined}
+                style={shape}
             >
                 <DraftCardBadges
                     issues={slotConditionIssues(slot?.slot.conditions, card)}
