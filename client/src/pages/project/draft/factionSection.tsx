@@ -19,7 +19,6 @@ import { toggleFactionExpanded, useIsFactionExpanded } from "./expandedFactionsS
 
 // A faction's slots in one scrolling row, or wrapped when expanded - the same slots, so expanding only moves them
 const FactionSection = memo(function FactionSection({
-    project,
     faction,
     slots,
     totalSlots,
@@ -27,7 +26,7 @@ const FactionSection = memo(function FactionSection({
     isLifted,
     ...handlers
 }: FactionSectionProps) {
-    const isExpanded = useIsFactionExpanded(project, faction);
+    const isExpanded = useIsFactionExpanded(faction);
     // A card held over the faction is placed in the first slot it fits - and with none, the faction takes no drops
     const active = useDragState((state) => state.active);
     const isFull = useMemo(() => !!active && !firstFittingSlot(slots, active.card, active.slotNumber), [slots, active]);
@@ -43,13 +42,7 @@ const FactionSection = memo(function FactionSection({
                 "border-content3": !isTargeted
             })}
         >
-            <FactionHeader
-                project={project}
-                faction={faction}
-                slotCount={slots.length}
-                totalSlots={totalSlots}
-                isExpanded={isExpanded}
-            />
+            <FactionHeader faction={faction} slotCount={slots.length} totalSlots={totalSlots} isExpanded={isExpanded} />
             <div
                 data-carousel-scroller={isExpanded ? undefined : true}
                 className={classNames(
@@ -88,7 +81,6 @@ const FactionSection = memo(function FactionSection({
 export default FactionSection;
 
 type FactionSectionProps = SlotHandlers & {
-    project: number;
     faction: Faction;
     slots: DraftSlot[];
     totalSlots: number;
@@ -97,13 +89,7 @@ type FactionSectionProps = SlotHandlers & {
 };
 
 // Apart from the slots, so a change to one slot's cards never redraws the faction's title
-const FactionHeader = memo(function FactionHeader({
-    project,
-    faction,
-    slotCount,
-    totalSlots,
-    isExpanded
-}: FactionHeaderProps) {
+const FactionHeader = memo(function FactionHeader({ faction, slotCount, totalSlots, isExpanded }: FactionHeaderProps) {
     const toggleLabel = `${isExpanded ? "Collapse" : "Expand"} ${factionNames[faction]}`;
     // The slot a card held over the faction would go into
     const target = useDragState((state) => (state.overFaction === faction ? state.over : undefined));
@@ -147,7 +133,7 @@ const FactionHeader = memo(function FactionHeader({
                             aria-label={toggleLabel}
                             aria-expanded={isExpanded}
                             className={FLAT_BUTTON_CLASS}
-                            onPress={() => toggleFactionExpanded(project, faction)}
+                            onPress={() => toggleFactionExpanded(faction)}
                         >
                             <FontAwesomeIcon
                                 icon={faChevronDown}
@@ -164,7 +150,6 @@ const FactionHeader = memo(function FactionHeader({
 });
 
 type FactionHeaderProps = {
-    project: number;
     faction: Faction;
     slotCount: number;
     totalSlots: number;

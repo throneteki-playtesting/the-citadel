@@ -1,8 +1,9 @@
 import { useSyncExternalStore } from "react";
 import { Faction, factions } from "common/models/cards";
+import { DRAFT_EXPANDED_ALL } from "../../../constants";
 
-// Which factions of each draft are expanded, remembered per browser, outside React so a toggle redraws only its faction
-const expandedByProject = new Map<number, ReadonlySet<Faction>>();
+// Which factions of the draft on show are expanded, outside React so a toggle redraws only its faction
+let expanded: ReadonlySet<Faction> = new Set();
 const listeners = new Set<() => void>();
 
 const subscribe = (listener: () => void) => {
@@ -10,58 +11,50 @@ const subscribe = (listener: () => void) => {
     return () => listeners.delete(listener);
 };
 
-const storageKey = (project: number) => `draft.expanded.${project}`;
-
-function read(project: number): ReadonlySet<Faction> {
-    try {
-        const stored: unknown = JSON.parse(localStorage.getItem(storageKey(project)) ?? "[]");
-        return new Set(Array.isArray(stored) ? factions.filter((faction) => stored.includes(faction)) : []);
-    } catch {
-        return new Set();
-    }
-}
-
-function expandedIn(project: number) {
-    let expanded = expandedByProject.get(project);
-    if (!expanded) {
-        expanded = read(project);
-        expandedByProject.set(project, expanded);
-    }
-    return expanded;
-}
-
-function setExpanded(project: number, expanded: ReadonlySet<Faction>) {
-    expandedByProject.set(project, expanded);
-    try {
-        localStorage.setItem(storageKey(project), JSON.stringify([...expanded]));
-    } catch {
-        // Without storage it lasts for this visit alone
-    }
-
+function setExpanded(next: ReadonlySet<Faction>) {
+    expanded = next;
     listeners.forEach((listener) => listener());
 }
 
-export function toggleFactionExpanded(project: number, faction: Faction) {
-    const next = new Set(expandedIn(project));
+// Taken from the url as the board opens, before anything reads it
+export function seedExpandedFactions(param: string | null) {
+    const named = param?.split(",") ?? [];
+    expanded = new Set(param === DRAFT_EXPANDED_ALL ? factions : factions.filter((faction) => named.includes(faction)));
+}
+
+// The url's value for the factions on show - "all" while every one is expanded, and none with nothing expanded
+export function expandedParam(expanded: ReadonlySet<Faction>, shown: Faction[]) {
+    if (expanded.size === 0) {
+        return undefined;
+    }
+    if (shown.length > 0 && shown.every((faction) => expanded.has(faction))) {
+        return DRAFT_EXPANDED_ALL;
+    }
+    return factions.filter((faction) => expanded.has(faction)).join(",");
+}
+
+export function toggleFactionExpanded(faction: Faction) {
+    const next = new Set(expanded);
     if (!next.delete(faction)) {
         next.add(faction);
     }
-    setExpanded(project, next);
+    setExpanded(next);
 }
 
-export function setFactionsExpanded(project: number, expanded: Faction[]) {
-    setExpanded(project, new Set(expanded));
+export function setFactionsExpanded(next: Faction[]) {
+    setExpanded(new Set(next));
 }
 
-export const isAnyFactionExpanded = (project: number) => expandedIn(project).size > 0;
+export const isAnyFactionExpanded = () => expanded.size > 0;
 
-export function useIsFactionExpanded(project: number, faction: Faction) {
-    return useSyncExternalStore(subscribe, () => expandedIn(project).has(faction));
+export function useExpandedFactions() {
+    return useSyncExternalStore(subscribe, () => expanded);
 }
 
-export function useAreFactionsExpanded(project: number, shown: Faction[]) {
-    return useSyncExternalStore(
-        subscribe,
-        () => shown.length > 0 && shown.every((faction) => expandedIn(project).has(faction))
-    );
+export function useIsFactionExpanded(faction: Faction) {
+    return useSyncExternalStore(subscribe, () => expanded.has(faction));
+}
+
+export function useAreFactionsExpanded(shown: Faction[]) {
+    return useSyncExternalStore(subscribe, () => shown.length > 0 && shown.every((faction) => expanded.has(faction)));
 }

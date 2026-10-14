@@ -153,6 +153,9 @@ export const DRAFT_GRID_VARIABLES_CLASS = classNames(
 // A wrapped slot's variables, sized against the grid holding it - anything outside one is given --draft-w in pixels
 export const DRAFT_WRAPPED_SLOT_CLASS = classNames("[--draft-w:100cqw]", DRAFT_GRID_VARIABLES_CLASS);
 export const DRAFT_GRID_SELECTOR = "[data-draft-grid]";
+// The url param naming the draft's expanded factions, and its value for every one of them
+export const DRAFT_EXPANDED_PARAM = "expanded";
+export const DRAFT_EXPANDED_ALL = "all";
 export const DRAFT_PLOT_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
 export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12";
 

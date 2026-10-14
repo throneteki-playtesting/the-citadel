@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import { addToast } from "@heroui/react";
 import { DndContext, getClientRect, DragEndEvent, DragMoveEvent, DragOverEvent, DragStartEvent } from "@dnd-kit/core";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { Faction, IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { slotConditionIssues } from "common/models/slotConditions";
@@ -31,7 +32,7 @@ import { useHasOpened } from "../../../hooks/useHasOpened";
 import { openDiscordLink, useDiscordTarget } from "../../../hooks/useDiscordLink";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import { useTagManagerOverrides } from "../../../hooks/useTagManagerOverrides";
-import { CARD_BASE, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
+import { CARD_BASE, DRAFT_EXPANDED_PARAM, HOLD_TOLERANCE_PX, POOL_DROP_START_PATIENCE_MS } from "../../../constants";
 import EditCardModal, { EditOrigin } from "../../card/editCardModal";
 import DeleteCardModal from "../../card/deleteCardModal";
 import SelectSuggestionModal from "./selectSuggestionModal";
@@ -45,7 +46,8 @@ import { RevealAction } from "./revealState";
 import IncomingCards, { IncomingCard } from "./incomingCards";
 import FactionSection from "./factionSection";
 import ExpandAllButton from "./expandAllButton";
-import { isAnyFactionExpanded } from "./expandedFactionsStore";
+import ExpandedFactionsParam from "./expandedFactionsParam";
+import { isAnyFactionExpanded, seedExpandedFactions } from "./expandedFactionsStore";
 import { SHAPE_KEYFRAME_TIMING } from "./slotShape";
 import DraftPool from "./draftPool";
 import { useDraftPoolHost } from "./useDraftPoolHost";
@@ -121,6 +123,12 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const [revealing, setRevealing] = useState<{ number: number; action: RevealAction; isOpen: boolean }>();
     const [arranging, setArranging] = useState<{ number: number; pile: HTMLElement; isLifted: boolean }>();
     const [dragStore] = useState(createDragStore);
+    const [searchParams] = useSearchParams();
+    const [seededProject, setSeededProject] = useState<number>();
+    if (seededProject !== project.number) {
+        seedExpandedFactions(searchParams.get(DRAFT_EXPANDED_PARAM));
+        setSeededProject(project.number);
+    }
     const [factionColumn, setFactionColumn] = useState<HTMLDivElement | null>(null);
     useGlidingChildren(factionColumn, SHAPE_KEYFRAME_TIMING);
     // dnd-kit scrolls the page back to the card's place before a drop animation, so it can fly home - which a card on
@@ -581,8 +589,8 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
 
     const toolbar = (
         <div className="flex items-center gap-2">
-            <SectionTitle className="flex-1">Slots</SectionTitle>
-            <ExpandAllButton project={project.number} factions={shownFactionNames} />
+            <SectionTitle className="flex-1">Project Slots</SectionTitle>
+            <ExpandAllButton factions={shownFactionNames} />
         </div>
     );
 
@@ -591,7 +599,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             <div className="flex flex-col gap-2">
                 {canDraft && poolHost && createPortal(<DraftPoolSkeleton />, poolHost)}
                 {toolbar}
-                <DraftingSkeleton isExpanded={isAnyFactionExpanded(project.number)} />
+                <DraftingSkeleton isExpanded={isAnyFactionExpanded()} />
             </div>
         );
     }
@@ -613,11 +621,11 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             >
                 <Reveal direction={null} className="flex flex-col gap-2">
                     {toolbar}
+                    <ExpandedFactionsParam factions={shownFactionNames} />
                     <div ref={setFactionColumn} className="relative flex flex-col gap-2">
                         {shownFactions.map(([faction, slots]) => (
                             <FactionSection
                                 key={faction}
-                                project={project.number}
                                 faction={faction}
                                 slots={slots}
                                 totalSlots={slotsData?.items.length ?? 0}

@@ -99,7 +99,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
                         onDelete={() => setIsDeleting(true)}
                     />
                     {project.draft ? (
-                        <ProjectDrafting project={project} />
+                        <ScopedSearchParamsProvider>
+                            <ProjectDrafting project={project} />
+                        </ScopedSearchParamsProvider>
                     ) : (
                         <ScopedSearchParamsProvider>
                             <ProjectTabsSection project={project} entryRelease={entryRelease} />

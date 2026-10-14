@@ -7,8 +7,8 @@ import { Faction } from "common/models/cards";
 import { setFactionsExpanded, useAreFactionsExpanded } from "./expandedFactionsStore";
 
 // Expands every faction while any is collapsed, otherwise collapses them all
-const ExpandAllButton = memo(function ExpandAllButton({ project, factions }: ExpandAllButtonProps) {
-    const isAllExpanded = useAreFactionsExpanded(project, factions);
+const ExpandAllButton = memo(function ExpandAllButton({ factions }: ExpandAllButtonProps) {
+    const isAllExpanded = useAreFactionsExpanded(factions);
     return (
         <Button
             size="sm"
@@ -20,7 +20,7 @@ const ExpandAllButton = memo(function ExpandAllButton({ project, factions }: Exp
                     className={classNames("transition-transform duration-200", { "rotate-180": isAllExpanded })}
                 />
             }
-            onPress={() => setFactionsExpanded(project, isAllExpanded ? [] : factions)}
+            onPress={() => setFactionsExpanded(isAllExpanded ? [] : factions)}
         >
             {isAllExpanded ? "Collapse all" : "Expand all"}
         </Button>
@@ -30,7 +30,6 @@ const ExpandAllButton = memo(function ExpandAllButton({ project, factions }: Exp
 export default ExpandAllButton;
 
 type ExpandAllButtonProps = {
-    project: number;
     /** The factions on show, in a stable array */
     factions: Faction[];
 };
