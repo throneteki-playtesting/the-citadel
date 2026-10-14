@@ -15,7 +15,14 @@ import FloatingPanel from "../../../components/floatingPanel";
 import SuggestionCardPreview from "../../../components/suggestionCardPreview";
 import { useHasOpened } from "../../../hooks/useHasOpened";
 import { useStableCallback } from "../../../hooks/useStableCallback";
-import { FLAT_BUTTON_CLASS, POOL_CARD_GRID_CLASS, POOL_READ_LIMIT, POOL_STATUS_FADE } from "../../../constants";
+import { CardBadgeLayer } from "../../../components/cardCornerBadges";
+import {
+    CORNER_CONTROL_CLASS,
+    FLAT_BUTTON_CLASS,
+    POOL_CARD_GRID_CLASS,
+    POOL_READ_LIMIT,
+    POOL_STATUS_FADE
+} from "../../../constants";
 import { DragData, POOLED_FROM, useDragState } from "./draftDragStore";
 
 const SKELETON_CARDS = [0, 1, 2, 3];
@@ -318,25 +325,27 @@ const PoolCard = memo(function PoolCard({ suggestion, project, isInteractive, on
                 orientation={suggestion.card.type === "plot" ? undefined : "vertical"}
                 rounded
             />
-            <div
-                className="absolute right-1.5 top-1.5 opacity-25 transition-opacity hover:opacity-90 group-hover:opacity-90"
-                onPointerDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-            >
-                <Tooltip content="Remove from this pool" color="danger">
-                    <Button
-                        isIconOnly
-                        radius="full"
-                        size="sm"
-                        variant="faded"
-                        aria-label={`Remove ${suggestion.card.name} from this project's pool`}
-                        className={classNames(FLAT_BUTTON_CLASS, "text-danger")}
-                        onPress={() => suggestion.id && onRemove(suggestion.id)}
-                    >
-                        <FontAwesomeIcon icon={faXmark} className="text-lg" />
-                    </Button>
-                </Tooltip>
-            </div>
+            <CardBadgeLayer>
+                <div
+                    className="absolute right-0 top-0 m-[0.5em] opacity-25 transition-opacity hover:opacity-90 group-hover:opacity-90"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <Tooltip content="Remove from this pool" color="danger">
+                        <Button
+                            isIconOnly
+                            radius="full"
+                            size="sm"
+                            variant="faded"
+                            aria-label={`Remove ${suggestion.card.name} from this project's pool`}
+                            className={classNames(FLAT_BUTTON_CLASS, CORNER_CONTROL_CLASS, "text-danger")}
+                            onPress={() => suggestion.id && onRemove(suggestion.id)}
+                        >
+                            <FontAwesomeIcon icon={faXmark} />
+                        </Button>
+                    </Tooltip>
+                </div>
+            </CardBadgeLayer>
         </li>
     );
 });

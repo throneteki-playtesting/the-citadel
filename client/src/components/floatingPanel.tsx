@@ -74,7 +74,7 @@ export default function FloatingPanel({
                 {isOpen && (
                     <motion.div
                         key="backdrop"
-                        className="fixed inset-0 z-20 bg-black/60"
+                        className="fixed inset-0 z-50 bg-black/60"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
@@ -93,7 +93,7 @@ export default function FloatingPanel({
                 animate={isOpen ? target : away}
                 transition={OPEN_TRANSITION}
                 onAnimationComplete={() => (isOpen ? setIsSettled(true) : onClosed?.())}
-                className={classNames("fixed z-30 flex flex-col border-2 border-content3 bg-content1 shadow-2xl", {
+                className={classNames("fixed z-50 flex flex-col border-2 border-content3 bg-content1 shadow-2xl", {
                     "pointer-events-none": !isOpen
                 })}
             >

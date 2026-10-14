@@ -1,23 +1,23 @@
 import { SCROLL_PATIENCE_MS, SCROLL_STILL_FRAMES } from "../../../constants";
 
-// Brings a slot into view if any of it is out of view - down the page and along its carousel, each only as far as it
-// needs - resolving once it has stopped moving. A slot already wholly on show is left exactly where it is
+// Centres a slot which is any way out of view - down the page, and along its row while collapsed - resolving once it
+// has stopped moving. A slot already wholly on show is left exactly where it is
 export function scrollToSlot(pile: HTMLElement | undefined) {
     return new Promise<void>((resolve) => {
-        const scroller = pile?.closest("[data-carousel-scroller]");
-        if (!pile || !scroller) {
+        if (!pile) {
             resolve();
             return;
         }
+        const scroller = pile.closest("[data-carousel-scroller]");
         const slot = pile.getBoundingClientRect();
-        const view = scroller.getBoundingClientRect();
-        const isAcross = slot.left < view.left || slot.right > view.right;
+        const view = scroller?.getBoundingClientRect();
+        const isAcross = !!view && (slot.left < view.left || slot.right > view.right);
         const isDown = slot.top < 0 || slot.bottom > window.innerHeight;
         if (!isAcross && !isDown) {
             resolve();
             return;
         }
-        if (isAcross) {
+        if (scroller && view && isAcross) {
             scroller.scrollBy({
                 left: slot.left + slot.width / 2 - (view.left + view.width / 2),
                 behavior: "smooth"
