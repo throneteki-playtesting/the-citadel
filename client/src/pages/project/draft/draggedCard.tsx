@@ -8,12 +8,7 @@ import { slotConditionIssues } from "common/models/slotConditions";
 import Crossfade from "../../../components/crossfade";
 import { rotatingDropAnimation } from "../../../animations";
 import { slotShape } from "./slotShape";
-import {
-    DRAFT_GRID_SELECTOR,
-    DRAFT_GRID_VARIABLES_CLASS,
-    DRAFT_SLOT_VARIABLES_CLASS,
-    POOL_PULL_MS
-} from "../../../constants";
+import { DRAFT_SLOT_LIST_SELECTOR, DRAFT_SLOT_VARIABLES_CLASS, POOL_PULL_MS } from "../../../constants";
 import { isPreviewedCard, previewOf } from "common/models/slots";
 import { DraftCardBadges } from "./draftCardContent";
 import { CardAction, CardHandlers, useCardActions } from "./useCardActions";
@@ -86,13 +81,11 @@ function DraggedCard({ drag, source, over, isOverPool, actions }: DraggedCardPro
     const isRevealed = !!preview && isPreviewedCard(drag.card, preview);
     // A plot, or a card from the pool, is the size of a slot's - one from a stack is already sized by the card it left
     const hasSlotShape = card.type === "plot" || !!drag.suggestion;
-    // The width of the grid it was lifted from - or of any, for a card from the pool - as nothing sizes it in hand
-    const [gridWidth] = useState(() => {
-        const home = document.querySelector(`[data-draft-slot="${drag.slotNumber}"]`);
-        return (home ? home.closest(DRAFT_GRID_SELECTOR) : document.querySelector(DRAFT_GRID_SELECTOR))?.clientWidth;
-    });
-    const shape: CSSProperties | undefined = hasSlotShape
-        ? { ...slotShape(card.type === "plot"), ...(gridWidth && { "--draft-w": `${gridWidth}px` }) }
+    // Every faction's slot list is as wide as the next, so any of them gives the width its slots are sized against
+    const [listWidth] = useState(() => document.querySelector(DRAFT_SLOT_LIST_SELECTOR)?.clientWidth);
+    const isSlotSized = hasSlotShape && listWidth !== undefined;
+    const shape: (CSSProperties & { "--draft-w"?: string }) | undefined = isSlotSized
+        ? { ...slotShape(card.type === "plot"), "--draft-w": `${listWidth}px` }
         : undefined;
     // The overlay is sized to whatever it was picked up from - a thumbnail in the pool, or a tilted card in a pile - so
     // the card is centred in it rather than hung from its corner, and sits where that was and under the cursor
@@ -102,7 +95,7 @@ function DraggedCard({ drag, source, over, isOverPool, actions }: DraggedCardPro
                 data-drag-card
                 className={classNames(
                     "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-grabbing transition-[scale,opacity] duration-200 ease-out",
-                    hasSlotShape ? (gridWidth ? DRAFT_GRID_VARIABLES_CLASS : DRAFT_SLOT_VARIABLES_CLASS) : "size-full",
+                    isSlotSized ? DRAFT_SLOT_VARIABLES_CLASS : "size-full",
                     isOverPool && "scale-50 opacity-60 sm:opacity-100"
                 )}
                 style={shape}

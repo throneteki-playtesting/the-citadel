@@ -20,9 +20,8 @@ import { usePermission } from "../../../hooks/usePermission";
 import { useReducedMotion } from "../../../hooks/useReducedMotion";
 import { useStableCallback } from "../../../hooks/useStableCallback";
 import {
-    DRAFT_SLOT_VARIABLES_CLASS,
+    DRAFT_SLOT_SIZE_CLASS,
     DRAFT_STACK_TILT,
-    DRAFT_WRAPPED_SLOT_CLASS,
     FLAT_BUTTON_CLASS,
     RADIAL_ITEM_CLASS,
     suggestionIcons
@@ -329,11 +328,7 @@ const FactionSlot = memo(function FactionSlot({
     );
     // The place snaps to its new shape so the row settles at once and can glide, while the frame eases into it
     return (
-        <div
-            data-draft-slot={slot.number}
-            className={classNames("shrink-0", isWrapped ? DRAFT_WRAPPED_SLOT_CLASS : DRAFT_SLOT_VARIABLES_CLASS)}
-            style={frameShape(isLandscape)}
-        >
+        <div className={classNames("shrink-0", DRAFT_SLOT_SIZE_CLASS)} style={frameShape(isLandscape)}>
             {frame}
         </div>
     );
@@ -347,7 +342,7 @@ type FactionSlotProps = SlotHandlers & {
     isArranging: boolean;
     /** Its cards have left for Arrange, so the pile is put back in order unseen, ready for them to land on */
     isLifted: boolean;
-    /** Wrapped in an expanded faction and sized from its width, rather than in a scrolling row */
+    /** Wrapped in an expanded faction, so it waits for a held card to land before taking its shape */
     isWrapped?: boolean;
 };
 

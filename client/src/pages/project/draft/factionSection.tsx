@@ -9,7 +9,7 @@ import { Faction } from "common/models/cards";
 import { factionNames, pluralize } from "common/utils";
 import ThronesIcon from "../../../components/thronesIcon";
 import Watermark from "../../../components/watermark";
-import { DRAFT_ROW_HEIGHT_CLASS, FLAT_BUTTON_CLASS, watermarkClasses } from "../../../constants";
+import { FLAT_BUTTON_CLASS, watermarkClasses } from "../../../constants";
 import { useGlidingChildren } from "../../../hooks/useGlidingChildren";
 import FactionSlot, { SlotHandlers } from "./factionSlot";
 import { useDragState } from "./draftDragStore";
@@ -47,19 +47,15 @@ const FactionSection = memo(function FactionSection({
                 data-carousel-scroller={isExpanded ? undefined : true}
                 className={classNames(
                     "relative p-2",
-                    !isExpanded && [
-                        "overflow-x-auto overflow-y-hidden scroll-smooth [&::-webkit-scrollbar]:hidden",
-                        DRAFT_ROW_HEIGHT_CLASS
-                    ]
+                    !isExpanded && "overflow-x-auto overflow-y-hidden scroll-smooth [&::-webkit-scrollbar]:hidden"
                 )}
             >
                 <div
                     ref={setSlotList}
-                    data-draft-grid={isExpanded ? true : undefined}
-                    className={classNames(
-                        "relative flex gap-2",
-                        isExpanded ? "@container flex-wrap justify-center" : "h-full"
-                    )}
+                    data-draft-slots
+                    className={classNames("@container relative flex gap-2", {
+                        "flex-wrap justify-center": isExpanded
+                    })}
                 >
                     {slots.map((slot, index) => (
                         <FactionSlot

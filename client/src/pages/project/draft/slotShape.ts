@@ -14,8 +14,8 @@ const SHAPE_EASE_CLASS = "duration-500 ease-[cubic-bezier(0.65,0,0.35,1)]";
 export const SHAPE_TRANSITION_CLASS = `transition-[width,height,outline-color] ${SHAPE_EASE_CLASS}`;
 export const SIZE_TRANSITION_CLASS = `transition-[width,height] ${SHAPE_EASE_CLASS}`;
 
-// A slot's shapes, sized outright so a slot changing between them can ease. The row's height less the scroller's
-// padding (1rem), the frame's (0.5rem), its border (2px) and its header strip (1.75rem) is a vertical card's height
+// A slot's shapes, sized outright so a slot changing between them can ease. --row less 1rem, the frame's padding
+// (0.5rem), border (2px) and header strip (1.75rem) is a vertical card's height
 const PORTRAIT_HEIGHT = "(var(--row) - 3.25rem - 2px)";
 const LANDSCAPE_WIDTH = "(var(--plot) - 0.5rem - 2px)";
 const CARD_RATIO = "240 / 333";
