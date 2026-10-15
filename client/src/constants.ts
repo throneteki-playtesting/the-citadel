@@ -161,7 +161,7 @@ export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:si
 // The card face as card-preview draws it, before scaling to fit
 export const CARD_BASE = { width: 240, height: 333, cornerRadius: 12 } as const;
 // The width a vertical card is drawn at beside the inputs of each card editor
-export const EDITOR_CARD_WIDTH = { modal: 256, suggestion: 288, page: 344 } as const;
+export const EDITOR_CARD_WIDTH = { modal: 256, suggestion: 288 } as const;
 // How much wider a plot lies than a vertical card - the same card on its side
 export const PLOT_RATIO = CARD_BASE.height / CARD_BASE.width;
 export const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
