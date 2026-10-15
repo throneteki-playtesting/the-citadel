@@ -298,6 +298,8 @@ export type ISuggestionsListQuery = {
     unseen?: boolean;
     /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */
     myReactions?: string;
+    /** Keeps suggestions ignored-by-me in, where neither of the above narrows by reaction - for counting the whole pool */
+    includeIgnored?: boolean;
     /** Only legacy suggestions a project card may already have been developed from - MANAGE_SUGGESTIONS_ARCHIVE only */
     developed?: boolean;
     /** Only suggestions which fit a draft project's slot, named as "{project}:{slot}" - see fitsSlot */

@@ -6,6 +6,7 @@ import { SuggestionFilterValue } from "../../components/data/suggestionFilter";
 import SectionTitle from "../../components/sectionTitle";
 import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
 import SuggestionSpread from "./suggestionSpread";
+import { ACTIVE_SUGGESTIONS_QUERY } from "./activeSuggestionsQuery";
 import SuggestionStats, { Breakdown } from "./suggestionStats";
 import { SpreadSelection, selectionFromSegments, selectionSegments } from "./spreadSelection";
 import { decodeSegments, encodeSegments } from "./suggestionFilterUrl";
@@ -45,7 +46,7 @@ export default function SuggestionStatistics({ isActive, onOpen }: SuggestionSta
     );
     useSearchParamsScope("suggestion-statistics", isActive, scopeParams);
 
-    const { data: suggestionsData, isLoading } = useGetSuggestionsQuery();
+    const { data: suggestionsData, isLoading } = useGetSuggestionsQuery(ACTIVE_SUGGESTIONS_QUERY);
     const suggestions = useMemo(() => suggestionsData?.items ?? [], [suggestionsData?.items]);
     // Held for the settings too, so the chart doesn't open on one range and hop to the default
     const isStatsLoading = isLoading || isSettingsLoading;

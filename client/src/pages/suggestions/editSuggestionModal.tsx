@@ -1129,7 +1129,7 @@ const EditSuggestionModal = ({
                                         <div
                                             className={classNames(
                                                 "hidden md:flex md:shrink-0 md:min-h-0 md:flex-col md:pr-6",
-                                                isPlot ? "md:w-[calc(18rem*333/240)]" : "md:w-72"
+                                                isPlot ? "md:w-[calc(18rem*333/240+2rem)]" : "md:w-80"
                                             )}
                                         >
                                             <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-2 pb-3">

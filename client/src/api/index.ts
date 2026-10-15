@@ -88,8 +88,6 @@ export type SuggestionsFeed = {
         unreacted: number;
         mine: number;
         myDrafts: number;
-        /** Unarchived legacy suggestions, awaiting completion - counted apart from everything above */
-        legacy: number;
         myLegacy: number;
         /** Legacy suggestions a project card may already have been developed from - only counted for those who
          *  can archive them as that card (MANAGE_SUGGESTIONS_ARCHIVE), otherwise always 0 */

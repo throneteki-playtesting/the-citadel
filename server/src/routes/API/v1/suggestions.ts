@@ -75,6 +75,7 @@ const getQuerySchema = (
     // ISuggestionsListQuery's comment for why these two can't go through the generic filter schema
     unseen: Joi.boolean(),
     myReactions: Joi.string(),
+    includeIgnored: Joi.boolean(),
     // Handled by applyPossiblyDevelopedFilter below - it depends on the cards collection, not the suggestion itself
     developed: Joi.boolean(),
     // Handled by applySlotFitFilter below - the conditions are the slot's, read where they are kept
@@ -98,7 +99,11 @@ const applyReactionVisibilityFilter = asyncHandler<
         return;
     }
 
-    const { unseen, myReactions } = req.query;
+    const { unseen, myReactions, includeIgnored } = req.query;
+    if (includeIgnored && !unseen && !myReactions) {
+        next();
+        return;
+    }
     const reactionCondition = unseen
         ? { $exists: false }
         : myReactions
@@ -520,8 +525,7 @@ router.get(
             canManageArchive ? getPossiblyDevelopedSuggestionIds().then((ids) => ids.length) : 0
         ]);
 
-        // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail.
-        // Stats are unaffected: they're aggregate counts, not a personalised "look at this" list.
+        // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail
         const recentCandidates = discordId
             ? newest.filter((s) => s._metadata?.engagement?.reactions?.[discordId]?.type !== "ignore")
             : newest;

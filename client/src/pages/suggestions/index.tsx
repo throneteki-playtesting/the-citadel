@@ -8,7 +8,7 @@ import { SuggestionMigration, useGetSuggestionMigrationQuery, useGetSuggestionsF
 import { showApiErrorToast } from "../../api/errors";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import { addToast, Badge, Button, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import { addToast, Badge, Button, Chip, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
 import Modal from "../../components/modal";
 import SectionTitle from "../../components/sectionTitle";
 import CardGrid from "../../components/cardGrid";
@@ -238,8 +238,13 @@ function SuggestionsContent() {
         <div className="flex flex-col gap-5">
             <div className="px-4 md:px-0 space-y-2 md:space-y-4">
                 <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
-                        Suggestions
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                        <span className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
+                            Suggestions
+                        </span>
+                        <Chip size="sm" color="warning" variant="flat" className="font-cinzel font-semibold uppercase">
+                            Beta
+                        </Chip>
                     </div>
                     <GuideBubble label="Suggestions Guide" onOpen={() => setIsGuideOpen(true)} />
                 </div>
@@ -330,11 +335,7 @@ function SuggestionsContent() {
                             <StatCard
                                 label="Active Suggestions"
                                 value={feed?.stats.total}
-                                footer={
-                                    feed &&
-                                    `across ${feed.stats.totalSubmitters} users` +
-                                        (feed.stats.legacy > 0 ? `, including ${feed.stats.legacy} legacy` : "")
-                                }
+                                footer={feed && `not ignored by you, across ${feed.stats.totalSubmitters} users`}
                                 isLoading={isLoading}
                                 onPress={() => openAll()}
                             />
