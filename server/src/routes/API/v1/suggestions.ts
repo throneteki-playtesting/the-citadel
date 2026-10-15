@@ -508,12 +508,11 @@ router.get(
         const discordId = "discordId" in principal ? principal.discordId : undefined;
         const canManageArchive = hasPermission(principal, Permission.MANAGE_SUGGESTIONS_ARCHIVE);
 
-        const baseFilter = canManageArchive ? {} : { archived: { $exists: false } as const };
         // Legacy suggestions sit in the rail by the date they reached the design team's spreadsheet, so they only
         // show here when that was recent
         const [newest, stats, possiblyDeveloped] = await Promise.all([
             dataService.suggestions.read(
-                { ...baseFilter, draft: false },
+                { archived: { $exists: false }, draft: false },
                 { updated: "desc" },
                 1,
                 FEED_WORKING_SET_SIZE
