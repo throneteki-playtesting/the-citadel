@@ -1,8 +1,16 @@
 /** One entry per question asked on the suggestion form - title, blurb, help-tooltip intent/examples,
  *  and, for the plain yes/no questions, their tile labels/descriptions. */
 
+import { GameModeType } from "../models/cards";
+
 export interface SuggestionQuestionOption {
     value: boolean;
+    label: string;
+    description: string;
+}
+
+export interface SuggestionGameModeOption {
+    value: GameModeType;
     label: string;
     description: string;
 }
@@ -25,6 +33,8 @@ export interface SuggestionQuestionMeta {
     /** Present only for the plain yes/no questions (Iconic, Natural Trigger, Safely Limited) - their
      *  two answer tiles' labels/descriptions. */
     options?: [SuggestionQuestionOption, SuggestionQuestionOption];
+    /** Present only for the game modes question - one tile per mode, any number of which may be chosen */
+    gameModes?: SuggestionGameModeOption[];
 }
 
 export const SUGGESTION_QUESTIONS: Record<string, SuggestionQuestionMeta> = {
@@ -46,6 +56,24 @@ export const SUGGESTION_QUESTIONS: Record<string, SuggestionQuestionMeta> = {
                 description: "Leans on a recognizable reference from the source material."
             },
             { value: false, label: "Not Iconic", description: "An original or generic design, no specific reference." }
+        ]
+    },
+    intendedGameModes: {
+        title: "Game Modes",
+        blurb: "The game modes this design is meant to be played in.",
+        question: "Which game modes is this aimed at?",
+        intent: "A card can behave very differently one-on-one than at a table of several players. Choose every mode this design was built for - at least one - so reviewers judge it against the right game.",
+        gameModes: [
+            {
+                value: "Joust",
+                label: "Joust",
+                description: "Two players, head to head."
+            },
+            {
+                value: "Melee",
+                label: "Melee",
+                description: "Three or more players, each against the rest."
+            }
         ]
     },
     triggeredAbilityCount: {

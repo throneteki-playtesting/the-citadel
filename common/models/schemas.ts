@@ -13,6 +13,7 @@ import { logCategories, logSeverities } from "./logs";
 import { sanitiseHtml } from "../richText/sanitise";
 import { PIVOT_POINT_MAX_LENGTH } from "../designGuidelines/pivotPoints";
 import { DEFAULT_NEUTRAL_WEIGHT, DEFAULT_TREND_RANGE, trendRanges } from "./settings";
+import { findTagKindClash, tagKindLabels } from "../designGuidelines/suggestionTags";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
@@ -292,7 +293,12 @@ const questionsFields = {
     triggeredAbilityCount: Joi.number().integer().min(0).default(0),
     naturalTrigger: Joi.boolean(),
     repeatabilityRestricted: Joi.boolean(),
-    iconic: Joi.boolean()
+    iconic: Joi.boolean(),
+    // Which game modes the design is meant for - a draft may leave it empty, a submission may not
+    intendedGameModes: Joi.array()
+        .items(Joi.string().valid(...Cards.gameModeTypes))
+        .unique()
+        .default([])
 };
 
 const QuestionsPartial = Joi.object({
@@ -313,7 +319,11 @@ const Questions = Joi.object({
         is: Joi.number().greater(0).required(),
         then: Joi.boolean().required()
     }),
-    iconic: Joi.boolean().required()
+    iconic: Joi.boolean().required(),
+    intendedGameModes: questionsFields.intendedGameModes.min(1).required().messages({
+        "array.min": "Choose at least one game mode",
+        "any.required": "Choose at least one game mode"
+    })
 });
 
 // Always server-computed via deriveFields() before validation runs - a client-sent value is
@@ -573,8 +583,13 @@ export const RewardDownsideOption = {
             "any.required": "Provide a description",
             "string.empty": "Provide a description"
         }),
-        examples: Joi.array().items(Joi.string().trim()).default([]),
-        tags: Joi.array().items(Joi.string().trim()).default([]),
+        aspects: Joi.array().items(Joi.string().trim().lowercase()).unique().default([]),
+        archetypes: Joi.array().items(Joi.string().trim().lowercase()).unique().default([]),
+        keywords: Joi.array()
+            .items(Joi.string().valid(...keywordNames))
+            .unique()
+            .default([]),
+        requiresLoyalty: Joi.boolean(),
         enabled: Joi.boolean().default(true)
     })
 };
@@ -586,11 +601,24 @@ export const Settings = {
             minimumLikesThreshold: Joi.number().integer().min(1).default(3),
             rewardOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
             downsideOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
-            loyaltyTags: Joi.array().items(Joi.string().trim()).default([]),
             neutralWeight: Joi.number().min(1).max(10).precision(1).default(DEFAULT_NEUTRAL_WEIGHT),
             defaultTrendRange: Joi.string()
                 .valid(...trendRanges)
                 .default(DEFAULT_TREND_RANGE)
+        }).custom((value, helpers) => {
+            if (value.downsideOptions.some((option: { requiresLoyalty?: boolean }) => option.requiresLoyalty)) {
+                return helpers.message({ custom: "Only rewards can require loyalty" });
+            }
+            // A tag's colour is looked up from its kind, so it can only be one - an archetype can't also be an
+            // aspect, and an aspect given to a reward can't also be a drawback on a downside.
+            const clash = findTagKindClash(value.rewardOptions, value.downsideOptions);
+            if (clash) {
+                const [first, second] = clash.kinds;
+                return helpers.message({
+                    custom: `"${clash.tag}" is used as both ${tagKindLabels[first].toLowerCase()} and ${tagKindLabels[second].toLowerCase()}`
+                });
+            }
+            return value;
         })
     }
 };

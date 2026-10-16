@@ -29,6 +29,7 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         tags,
         iconic,
+        intendedGameModes,
         legacy,
         archived,
         segments,
@@ -107,6 +108,13 @@ export default function useSuggestionFilterPredicate(
             if (iconic !== undefined && !!suggestion.questions?.iconic !== iconic) {
                 return false;
             }
+            if (
+                intendedGameModes &&
+                intendedGameModes.length > 0 &&
+                !intendedGameModes.some((mode) => suggestion.questions?.intendedGameModes?.includes(mode))
+            ) {
+                return false;
+            }
             if (legacy !== undefined && !!suggestion.legacy !== legacy) {
                 return false;
             }
@@ -125,6 +133,7 @@ export default function useSuggestionFilterPredicate(
         myReactions,
         tags,
         iconic,
+        intendedGameModes,
         legacy,
         archived,
         segments,

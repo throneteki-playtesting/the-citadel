@@ -316,8 +316,7 @@ async function assertChecklistJustified(suggestion: ICardSuggestion) {
         pivotPoints: suggestion.pivotPoints ?? [],
         plotMedian,
         rewardOptions: settings?.rewardOptions ?? [],
-        downsideOptions: settings?.downsideOptions ?? [],
-        loyaltyTags: settings?.loyaltyTags ?? []
+        downsideOptions: settings?.downsideOptions ?? []
     });
 
     const fields: ApiFieldError[] = results

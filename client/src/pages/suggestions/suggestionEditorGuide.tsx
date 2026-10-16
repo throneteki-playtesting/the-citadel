@@ -24,7 +24,8 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     {
         icon: faWandMagicSparkles,
         title: "Theme & Abilities",
-        description: "Rate how thematically iconic the design is, and describe how its abilities behave."
+        description:
+            "Rate how thematically iconic the design is, choose the game modes it is for, and describe how its abilities behave."
     },
     {
         icon: faScaleBalanced,

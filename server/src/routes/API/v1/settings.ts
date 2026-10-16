@@ -4,7 +4,8 @@ import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express from "express";
 import { celebrate, Joi, Segments } from "@/celebrate";
-import { IRewardDownsideOption, ISettingsMap, ISuggestionsSettings, SettingsType } from "common/models/settings";
+import { ISettingsMap, ISuggestionsSettings, SettingsType } from "common/models/settings";
+import { changedTagIds } from "common/designGuidelines/suggestionTags";
 import { dataService } from "@/services";
 import { getContext } from "@/middleware/context";
 import { PermissionErrorResponse, validateRequest } from "@/middleware/permissions";
@@ -80,30 +81,6 @@ async function assertNoBlockedRemovals(current: ISuggestionsSettings | undefined
     if (blocked.length > 0) {
         throw new ApiErrorResponse(StatusCodes.CONFLICT, "Invalid Data", `${blocked.join("; ")} - clear those first`);
     }
-}
-
-// Order-independent - reordering a reward/downside's own tag list isn't a change worth resyncing over.
-function sameTagSet(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) {
-        return false;
-    }
-    const setA = new Set(a);
-    return b.every((tag) => setA.has(tag));
-}
-
-// Ids present in both old and new arrays whose OWN tags actually changed - a brand-new or removed id
-// never needs a resync (nothing could reference it, or assertNoBlockedRemovals already blocked it).
-function changedTagIds(current: IRewardDownsideOption[] | undefined, next: IRewardDownsideOption[]): string[] {
-    if (!current) {
-        return [];
-    }
-    const previousTagsById = new Map(current.map((option) => [option.id, option.tags]));
-    return next
-        .filter((option) => {
-            const previousTags = previousTagsById.get(option.id);
-            return previousTags !== undefined && !sameTagSet(previousTags, option.tags);
-        })
-        .map((option) => option.id);
 }
 
 router.get(

@@ -158,6 +158,9 @@ export interface ILabeledCard extends ICard {
     workInProgress: boolean;
 }
 
+export const gameModeTypes = ["Joust", "Melee"] as const;
+export type GameModeType = (typeof gameModeTypes)[number];
+
 /** Questions asked of a suggestion's submitter - distinct from `IDerivedFields`, which is computed
  *  automatically from `card.text` and never asked of anyone. */
 export interface ISuggestionQuestions {
@@ -173,6 +176,8 @@ export interface ISuggestionQuestions {
     repeatabilityRestricted?: boolean;
     /** all card types - feeds the strength calc only for characters, otherwise a plain filter */
     iconic?: boolean;
+    /** The game modes this design is meant to be played in - at least one once submitted */
+    intendedGameModes?: GameModeType[];
 }
 
 export type TriggerType =

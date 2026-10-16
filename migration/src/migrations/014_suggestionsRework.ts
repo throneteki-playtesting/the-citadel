@@ -7,307 +7,510 @@ const BATCH_SIZE = 500;
 
 const USED_FOR_PROJECT_REGEX = /^Used for (\S+) card #(\d+)$/;
 
-// Placeholder seed data for the new settings-backed reward/downside registry, copied from the
-// now-deleted rewardTypes.ts - replace these *_SEED arrays in place once a real list arrives.
-const REWARD_OPTIONS_SEED: { label: string; description: string; examples: string[]; tags: string[] }[] = [
+// Seed for the reward/downside registry - see common/designGuidelines/suggestionTags for the tag kinds
+interface OptionSeed {
+    label: string;
+    description: string;
+    aspects: string[];
+    archetypes: string[];
+    keywords?: string[];
+    requiresLoyalty?: boolean;
+}
+
+const REWARD_OPTIONS_SEED: OptionSeed[] = [
     {
         label: "Gains Gold",
         description: "Adds gold to a player's pool",
-        examples: ['Antler Men: "gain 1 gold"'],
-        tags: ["gold", "economy", "income"]
+        aspects: ["economy"],
+        archetypes: ["good stuff"]
+    },
+    {
+        label: "Reduces Your Costs",
+        description: "Lowers what you pay to marshal or play a card",
+        aspects: ["economy"],
+        archetypes: ["good stuff"]
+    },
+    {
+        label: "Gold-on-Card Tokens",
+        description: "Places gold tokens on a card (its own economy, distinct from the gold pool)",
+        aspects: ["economy"],
+        archetypes: ["good stuff"],
+        keywords: ["Bestow"]
+    },
+    {
+        label: "Raises Your Income",
+        description: "Increases the income value of a plot you control",
+        aspects: ["economy", "plot manipulation"],
+        archetypes: ["good stuff"]
+    },
+    {
+        label: "Denies Opponent Gold",
+        description: "Lowers an opponent's income, takes their gold, or raises what they pay",
+        aspects: ["economy", "plot manipulation"],
+        archetypes: ["choke"]
     },
     {
         label: "Draws Cards",
-        description: "Draws cards from a deck",
-        examples: ['Jon Arryn: "draw 2 cards"'],
-        tags: ["draw", "cards", "card advantage"]
+        description: "Draws cards from your deck",
+        aspects: ["draw", "card advantage"],
+        archetypes: ["attrition"],
+        keywords: ["Insight"]
     },
     {
-        label: "Modifies Income",
-        description: "Changes a plot's income value",
-        examples: ['Lannisport: "+1 Income"'],
-        tags: ["gold", "income", "plot"]
+        label: "Denies Opponent Draw",
+        description: "Stops an opponent drawing cards, or makes them draw fewer",
+        aspects: ["draw"],
+        archetypes: ["choke"]
+    },
+    {
+        label: "Raises Your Reserve",
+        description: "Increases the reserve value of a plot you control",
+        aspects: ["hand size", "plot manipulation"],
+        archetypes: ["attrition"]
+    },
+    {
+        label: "Lowers Opponent's Reserve",
+        description: "Decreases the reserve value of an opponent's plot",
+        aspects: ["hand size", "plot manipulation"],
+        archetypes: ["choke"]
+    },
+    {
+        label: "Discards From Opponent's Hand",
+        description: "Forces an opponent to discard cards from their hand",
+        aspects: ["hand disruption", "card advantage"],
+        archetypes: ["choke"]
+    },
+    {
+        label: "Reveals Opponent's Hand",
+        description: "Reveals or looks at an opponent's hand",
+        aspects: ["information"],
+        archetypes: ["control"]
+    },
+    {
+        label: "Mills Opponent's Deck",
+        description: "Discards cards from the top of an opponent's deck",
+        aspects: ["deck disruption"],
+        archetypes: ["choke"],
+        keywords: ["Pillage"]
+    },
+
+    {
+        label: "Searches Your Deck",
+        description: "Searches your deck for a specific card",
+        aspects: ["deck manipulation"],
+        archetypes: ["combo"]
+    },
+    {
+        label: "Looks At Your Deck",
+        description: "Looks at or reorders the top of your deck",
+        aspects: ["deck manipulation"],
+        archetypes: ["combo"]
+    },
+    {
+        label: "Recurs to Hand",
+        description: "Returns a card from your discard or dead pile to your hand",
+        aspects: ["recursion", "card advantage"],
+        archetypes: ["attrition"]
+    },
+    {
+        label: "Recurs Into Play",
+        description: "Puts a card into play from your discard or dead pile",
+        aspects: ["recursion", "put into play"],
+        archetypes: ["attrition", "tempo"]
+    },
+    {
+        label: "Puts Into Play From Hand",
+        description: "Puts a card into play from your hand outside normal marshaling",
+        aspects: ["put into play"],
+        archetypes: ["tempo"],
+        keywords: ["Ambush"]
+    },
+    {
+        label: "Shadows Movement",
+        description: "Moves a card into or out of shadows",
+        aspects: ["zone movement"],
+        archetypes: ["shadows"],
+        keywords: ["Shadow"]
     },
     {
         label: "Modifies Initiative",
         description: "Changes a plot's initiative value",
-        examples: ['The Wolfswood: "+1 Initiative"'],
-        tags: ["initiative", "plot"]
+        aspects: ["initiative", "plot manipulation"],
+        archetypes: ["tempo"]
     },
     {
-        label: "Modifies Claim",
-        description: "Changes a plot's claim value, or swaps which claim type applies",
-        examples: ['Trial by Combat: "apply military claim instead"'],
-        tags: ["claim", "plot"]
+        label: "Plot Deck Manipulation",
+        description: "Chooses, reuses or recycles plot cards",
+        aspects: ["plot deck"],
+        archetypes: ["combo"]
+    },
+
+    {
+        label: "Gains Power From Challenges",
+        description: "Gains power for winning or taking part in challenges",
+        aspects: ["power gain"],
+        archetypes: ["rush"],
+        keywords: ["Renown"]
     },
     {
-        label: "Modifies Reserve",
-        description: "Changes a plot's reserve value",
-        examples: ['Stony Shore Thrall: "reduce the reserve value...by 1"'],
-        tags: ["reserve", "plot"]
+        label: "Gains Power Outside Challenges",
+        description: "Gains power without needing to win a challenge",
+        aspects: ["power gain"],
+        archetypes: ["passive"]
     },
     {
-        label: "Reduces Costs",
-        description: "Lowers what a player pays to marshal/play a card",
-        examples: ['Squire: "reduce the cost of the next Army...by 1"'],
-        tags: ["discount", "cost reduction"]
+        label: "Moves Opponent's Power to You",
+        description: "Takes power from an opponent's card and gives it to yours",
+        aspects: ["power manipulation", "power gain"],
+        archetypes: ["rush", "control"]
     },
     {
-        label: "Gold-on-Card Tokens",
-        description: "Places or removes gold tokens on a card (its own sub-economy, distinct from the gold pool)",
-        examples: ['Ashemark Councilor: "each of those cards gains 1 gold"'],
-        tags: ["gold token", "economy"]
+        label: "Discards Opponent's Power",
+        description: "Removes power from an opponent's cards",
+        aspects: ["power manipulation"],
+        archetypes: ["control"]
     },
     {
-        label: "Stat Modification",
-        description: "Changes a character's STR or a card's printed cost",
-        examples: ['Grey Worm\'s Spear: "each defending character gets -1 STR"'],
-        tags: ["buff", "debuff", "str", "strength"]
+        label: "Dominance Bonus",
+        description: "Adds to your dominance, or rewards winning it",
+        aspects: ["dominance"],
+        archetypes: ["passive"]
     },
     {
-        label: "Icon Manipulation",
-        description: "Adds or removes challenge icons",
-        examples: ['The Blackfish: "gains an intrigue icon"'],
-        tags: ["icon", "challenge icon"]
+        label: "Unopposed Bonus",
+        description: "Rewards winning a challenge unopposed",
+        aspects: ["unopposed"],
+        archetypes: ["aggro"]
+    },
+
+    {
+        label: "Boosts One Character's STR",
+        description: "Raises the STR of a single character",
+        aspects: ["challenge strength"],
+        archetypes: ["go tall"]
     },
     {
-        label: "Keyword Granting/Removal",
-        description: "Grants or strips a keyword",
-        examples: ['Support of Saltcliffe: "gains stealth"'],
-        tags: ["keyword", "grant", "strip keyword"]
+        label: "Boosts Each Character's STR",
+        description: "Raises the STR of every character in a group",
+        aspects: ["challenge strength"],
+        archetypes: ["go wide"]
     },
     {
-        label: "Trait/Faction Modification",
-        description: "Grants/removes a trait, or changes faction affiliation",
-        examples: ['The Wall: "gains the Night\'s Watch affiliation and loses all other faction affiliations"'],
-        tags: ["trait", "faction", "affiliation"]
+        label: "Reduces STR",
+        description: "Lowers the STR of a character, possibly killing it",
+        aspects: ["challenge strength"],
+        archetypes: ["burn", "control"]
     },
     {
-        label: "Kneel or Stand",
-        description: "Kneels or stands a card",
-        examples: ['Lordsport Shipwright: "choose and kneel a location"'],
-        tags: ["kneel", "stand", "tap", "untap"]
+        label: "Gains Icons",
+        description: "Gives a character a challenge icon",
+        aspects: ["icons"],
+        archetypes: ["aggro"]
     },
     {
-        label: "Challenge Participation",
-        description: "Adds/removes a character from a challenge, or suppresses its STR contribution",
-        examples: ['Mace Tyrell: "remove it from the challenge"'],
-        tags: ["challenge", "participation"]
+        label: "Removes Icons",
+        description: "Removes a challenge icon from a character",
+        aspects: ["icons"],
+        archetypes: ["control"]
     },
     {
-        label: "Extra Challenge/Action",
-        description: "Grants an additional challenge, marshal, or play opportunity",
-        examples: ['A Storm of Swords: "initiate an additional military challenge"'],
-        tags: ["extra action", "additional challenge"]
+        label: "Adds to a Challenge",
+        description: "Adds a character to a challenge",
+        aspects: ["challenge participation"],
+        archetypes: ["tempo"]
     },
     {
-        label: "Removal or Kill",
-        description: "Kills a character or discards a card from play",
-        examples: ["Ser Willam Wells (kill effect)"],
-        tags: ["kill", "removal", "discard from play"]
+        label: "Removes From a Challenge",
+        description: "Removes a character from a challenge, or stops its STR counting",
+        aspects: ["challenge participation"],
+        archetypes: ["control"]
     },
     {
-        label: "Return to Hand (Bounce)",
-        description: "Returns a card to its owner's hand, without killing it",
-        examples: ['The Father: "return each of those characters to its owner\'s hand"'],
-        tags: ["bounce", "return"]
+        label: "Evasion",
+        description: "Gets past defenders - stealth, or a character that cannot be declared as a defender",
+        aspects: ["evasion"],
+        archetypes: ["aggro"],
+        keywords: ["Stealth"]
     },
     {
-        label: "Recursion",
-        description: "Returns a card from discard/dead pile into play or hand",
-        examples: ['Burning Bright: "put an Army or Knight character into play from your discard pile"'],
-        tags: ["recur", "reanimate", "from discard"]
+        label: "Extra Challenge",
+        description: "Grants an additional challenge",
+        aspects: ["extra challenges"],
+        archetypes: ["aggro"]
     },
     {
-        label: "Cheat Into Play",
-        description: "Puts a card into play outside normal marshaling",
-        examples: ['Hear Me Roar!: "put a Lannister character into play from your hand"'],
-        tags: ["cheat", "free play", "put into play"]
+        label: "Increases Claim",
+        description: "Raises the claim value of a challenge you win",
+        aspects: ["claim"],
+        archetypes: ["aggro"]
     },
     {
-        label: "Control Change",
-        description: "Changes who controls a card, without it leaving play",
-        examples: ['Winterfell: "take control of that character"'],
-        tags: ["steal", "control", "take"]
+        label: "Reduces Claim",
+        description: "Lowers the claim value of a challenge an opponent wins",
+        aspects: ["claim"],
+        archetypes: ["defensive"]
     },
     {
-        label: "Zone Movement",
-        description: "Moves a card to/from a non-play zone (shadows, removed from game)",
-        examples: ['Journey to Oldtown: "remove it from the game until the beginning of the next plot phase"'],
-        tags: ["shadows", "exile", "remove from game"]
+        label: "Changes Claim Type",
+        description: "Swaps which claim type applies",
+        aspects: ["claim"],
+        archetypes: ["aggro"]
     },
     {
-        label: "Attachment Manipulation",
-        description: "Attaches, moves, or detaches an attachment",
-        examples: ['Arya\'s Gift: "move an attachment...to another eligible character"'],
-        tags: ["attachment", "move attachment"]
+        label: "Prevents Challenges Against You",
+        description: "Stops opponents challenging you, or limits how they can",
+        aspects: ["restriction", "challenge participation"],
+        archetypes: ["defensive"]
+    },
+
+    {
+        label: "Kills a Character",
+        description: "Kills a character",
+        aspects: ["kill"],
+        archetypes: ["control"]
     },
     {
-        label: "Search or Tutor",
-        description: "Searches the deck for a specific card",
-        examples: ['Muster: "search your deck for a Knight character"'],
-        tags: ["search", "tutor", "deck search"]
+        label: "Discards a Card From Play",
+        description: "Discards a location, attachment or other card from play",
+        aspects: ["discard from play"],
+        archetypes: ["control"]
     },
     {
-        label: "Deck Manipulation",
-        description: "Looks at, reorders, or mills cards from a deck",
-        examples: ['Doran Martell: "look at the top 2 cards of your deck"'],
-        tags: ["deck", "mill", "reorder", "scry"]
+        label: "Removes From Game",
+        description: "Removes a card from the game",
+        aspects: ["zone movement"],
+        archetypes: ["control"]
     },
     {
-        label: "Hand Disruption",
-        description: "Forces discard from, or reveals, an opponent's hand",
-        examples: ['Heads on Spikes: "discard 1 card at random from that player\'s hand"'],
-        tags: ["discard", "hand attack"]
+        label: "Returns Opponent's Card to Hand",
+        description: "Returns an opponent's card to their hand, without killing it",
+        aspects: ["bounce"],
+        archetypes: ["tempo"]
     },
     {
-        label: "Protection",
-        description: "Standing immunity from being killed/targeted",
-        examples: ["Valyrian Steel Armor"],
-        tags: ["immune", "cannot be killed"]
+        label: "Takes Control",
+        description: "Takes control of a card without it leaving play",
+        aspects: ["control change", "card advantage"],
+        archetypes: ["control"]
     },
     {
-        label: "Save Effect",
-        description: "Reactively rescues a card that would be killed/discarded",
-        examples: ['Ghost: "sacrifice Ghost to save him"'],
-        tags: ["save", "rescue", "prevent death"]
+        label: "Kneels Opponent's Card",
+        description: "Kneels a card an opponent controls",
+        aspects: ["kneel"],
+        archetypes: ["tempo"],
+        keywords: ["Intimidate", "Assault"]
     },
     {
-        label: "Denial/Restriction",
-        description: "Forbids a player from taking an action",
-        examples: ['Marching Orders: "you cannot marshal locations or attachments"'],
-        tags: ["restrict", "deny", "lockdown"]
+        label: "Stands Your Card",
+        description: "Stands a card you control",
+        aspects: ["stand"],
+        archetypes: ["tempo", "defensive"]
     },
     {
-        label: "Cancel/Negate",
+        label: "Blanks Text",
+        description: "Treats a card's printed text box as blank",
+        aspects: ["blanking"],
+        archetypes: ["control"],
+        keywords: ["Assault"]
+    },
+    {
+        label: "Grants a Keyword",
+        description: "Gives a card a keyword",
+        aspects: ["keyword manipulation"],
+        archetypes: ["good stuff"]
+    },
+    {
+        label: "Removes a Keyword",
+        description: "Takes a keyword away from a card",
+        aspects: ["keyword manipulation"],
+        archetypes: ["control"]
+    },
+    {
+        label: "Gains Trait/Affiliation",
+        description: "Gives a card a trait or a faction affiliation",
+        aspects: ["trait manipulation"],
+        archetypes: ["tribal"]
+    },
+    {
+        label: "Removes Trait/Affiliation",
+        description: "Takes a trait or faction affiliation away from a card",
+        aspects: ["trait manipulation"],
+        archetypes: ["control"]
+    },
+    {
+        label: "Attaches an Attachment",
+        description: "Plays or attaches an attachment from outside the normal marshaling",
+        aspects: ["attachments"],
+        archetypes: ["go tall"]
+    },
+    {
+        label: "Moves an Attachment",
+        description: "Moves an attachment to another card, or detaches it",
+        aspects: ["attachments"],
+        archetypes: ["tempo"]
+    },
+    {
+        label: "Grants Immunity",
+        description: "Makes a card immune to being killed, discarded or targeted",
+        aspects: ["protection"],
+        archetypes: ["go tall"]
+    },
+    {
+        label: "Saves From Leaving Play",
+        description: "Rescues a card that would be killed or discarded",
+        aspects: ["protection"],
+        archetypes: ["attrition"]
+    },
+    {
+        label: "Cancels",
         description: "Cancels a triggered ability or event before it resolves",
-        examples: ['The Hand\'s Judgment: "cancel those effects"'],
-        tags: ["cancel", "counter", "negate"]
+        aspects: ["cancel"],
+        archetypes: ["control"]
     },
     {
-        label: "Ability Blanking",
-        description: "Treats a card's printed text as blank",
-        examples: ['Fortified Position: "treat each character as if its printed text box were blank"'],
-        tags: ["blank", "silence", "text removal"]
-    },
-    {
-        label: "Power Manipulation",
-        description: "Adds, removes, or moves power",
-        examples: ['Tyene Sand: "move 1 power from the winning opponent\'s faction card to a character you control"'],
-        tags: ["power", "move power"]
+        label: "Restricts Opponent's Plays",
+        description: "Forbids an opponent from marshaling or playing certain cards, or taking an action",
+        aspects: ["restriction"],
+        archetypes: ["choke"]
     }
 ];
 
-const DOWNSIDE_OPTIONS_SEED: { label: string; description: string; examples: string[]; tags: string[] }[] = [
+// A downside's archetype is the deck where it costs least
+const DOWNSIDE_OPTIONS_SEED: OptionSeed[] = [
     {
         label: "Hits You Too",
-        description: "Non-discriminating effect hits every player/card, including your own",
-        examples: ['Valar Morghulis: "Kill each character"'],
-        tags: ["board wipe", "symmetric"]
+        description: "A non-discriminating effect which hits every player's cards, including your own",
+        aspects: ["symmetric"],
+        archetypes: ["control"]
     },
     {
         label: "Restricted Action",
         description: "Forbidden from something you'd normally want to do",
-        examples: ['Sneak Attack: "You cannot initiate more than 1 challenge"'],
-        tags: ["restriction", "cannot"]
-    },
-    {
-        label: "Reduced Stats/Plot Values",
-        description: "A printed negative modifier on the card itself",
-        examples: ['Winterfell: "-2 Initiative"'],
-        tags: ["debuff", "negative stat"]
-    },
-    {
-        label: "Deployment/Attachment Restriction",
-        description: "Can't be enhanced, duplicated, or only attaches narrowly",
-        examples: ['The Holy Hundred: "No attachments except Weapon"'],
-        tags: ["no attachments", "restriction"]
+        aspects: ["tempo loss"],
+        archetypes: []
     },
     {
         label: "Stays Knelt / Enters Knelt",
-        description: "Denied normal readiness",
-        examples: ['Sansa Stark: "enters play knelt"'],
-        tags: ["knelt", "enters knelt"]
+        description: "Enters play knelt, or doesn't stand as normal",
+        aspects: ["tempo loss"],
+        archetypes: []
+    },
+    {
+        label: "Reduced Stats/Plot Values",
+        description: "Lowers a character's STR or a plot's values",
+        aspects: ["stat penalty"],
+        archetypes: []
+    },
+    {
+        label: "Deployment Restriction",
+        description: "Limits how and how often it can be put into play or attached to",
+        aspects: ["deployment limit"],
+        archetypes: [],
+        keywords: ["Limited"]
     },
     {
         label: "Kill Your Own Character",
-        description: "Forces killing one of your own characters as a consequence",
-        examples: ['Ser Gregor Clegane: "choose and kill a character you control"'],
-        tags: ["self kill", "sacrifice"]
+        description: "Requires killing or sacrificing a character you control",
+        aspects: ["self sacrifice"],
+        archetypes: ["go wide"]
     },
     {
         label: "Removes Itself From the Board",
-        description: "Undoes its own presence after delivering value",
-        examples: ['Arianne Martell: "return Arianne Martell to your hand (cannot be saved)"'],
-        tags: ["bounce itself", "returns to hand"]
-    },
-    {
-        label: "Ongoing Upkeep or It Dies",
-        description: "Must be continuously fed or it sacrifices/leaves",
-        examples: ['Second Sons: "sacrifice Second Sons unless you discard 1 gold from it"'],
-        tags: ["upkeep", "maintenance cost"]
-    },
-    {
-        label: "Hand It to an Opponent",
-        description: "The card (or another) changes control to an opponent",
-        examples: ['The Frostfangs: "give control of it to an opponent"'],
-        tags: ["cede control", "give control"]
-    },
-    {
-        label: "Anyone May Use It",
-        description: "Ability is explicitly usable by any player",
-        examples: ['Bronn: "(Any player may initiate this ability.)"'],
-        tags: ["any player", "shared ability"]
-    },
-    {
-        label: "Opponent Gains Value",
-        description: "Resolving it hands opponents cards/gold/power (includes the Prized (X) keyword)",
-        examples: ['Theon Greyjoy: "each opponent gains 2 power for their faction"'],
-        tags: ["opponent benefit", "prized"]
-    },
-    {
-        label: "Opponent Picks the Outcome",
-        description: "An opponent chooses which branch resolves",
-        examples: ['Poor Fellows: "the losing opponent chooses"'],
-        tags: ["opponent chooses", "loses control of outcome"]
+        description: "Returns itself to hand or leaves play",
+        aspects: ["self sacrifice"],
+        archetypes: []
     },
     {
         label: "Discard Your Own Cards",
-        description: "Lose hand cards (often randomly) as a consequence",
-        examples: ['Moon Boy: "discard 1 card at random from your hand"'],
-        tags: ["self discard", "hand loss"]
+        description: "Requires discarding cards from your own hand",
+        aspects: ["self sacrifice"],
+        archetypes: []
     },
     {
         label: "Burn Your Own Deck",
-        description: "Cards discarded/reordered from your own deck as the cost of payoff",
-        examples: ['Chiswyck: "discard the top card of your deck"'],
-        tags: ["self mill", "deck loss"]
+        description: "Discards cards from the top of your own deck",
+        aspects: ["self sacrifice"],
+        archetypes: []
     },
     {
-        label: "Harder to Protect",
-        description: 'Explicitly waives normal "cannot be saved" protection',
-        examples: ['Jon Arryn: "cannot be saved"'],
-        tags: ["cannot be saved", "fragile"]
+        label: "Ongoing Upkeep or It Dies",
+        description: "Must be paid for each round, or it leaves play",
+        aspects: ["upkeep"],
+        archetypes: []
     },
     {
-        label: "Backfires If It Doesn't Work",
-        description: "A gamble - failing costs you on top of not getting the effect",
-        examples: ['Choosing the Spear: "if you lose the challenge, choose and kill a character you control"'],
-        tags: ["gamble", "risk"]
+        label: "Hand It to an Opponent",
+        description: "Control of the card passes to an opponent",
+        aspects: ["opponent benefit"],
+        archetypes: []
+    },
+    {
+        label: "Anyone May Use It",
+        description: "Its ability can be used by any player",
+        aspects: ["opponent benefit"],
+        archetypes: []
+    },
+    {
+        label: "Opponent Gains Value",
+        description: "An opponent gains something from it, such as gold, power or cards",
+        aspects: ["opponent benefit"],
+        archetypes: [],
+        keywords: ["Prized"]
+    },
+    {
+        label: "Opponent Picks the Outcome",
+        description: "An opponent chooses the target or result",
+        aspects: ["opponent benefit"],
+        archetypes: []
     },
     {
         label: "Reveal Your Hand",
-        description: "Forces revealing your own hand",
-        examples: ['No Surprises: "reveal your hand" (rare - 2 known cards)'],
-        tags: ["reveal hand", "information"]
+        description: "Reveals your hand to an opponent",
+        aspects: ["opponent benefit"],
+        archetypes: []
+    },
+    {
+        label: "Harder to Protect",
+        description: "Cannot be saved, or is discarded instead of returning to hand",
+        aspects: ["fragile"],
+        archetypes: [],
+        keywords: ["Terminal"]
+    },
+    {
+        label: "Backfires If It Doesn't Work",
+        description: "Has a penalty if its condition isn't met or its gamble fails",
+        aspects: ["risk"],
+        archetypes: []
     },
     {
         label: "Blanks Its Own Text",
-        description: "The card can pay to blank its own printed text",
-        examples: ["Tycho Nestoris (rare - 1 known card)"],
-        tags: ["blank itself", "self-silence"]
+        description: "Treats its own printed text box as blank",
+        aspects: ["self blank"],
+        archetypes: []
+    },
+    {
+        label: "Trait-Restricted",
+        description: "Only works with, or counts, a specific trait",
+        aspects: ["narrow"],
+        archetypes: ["tribal"]
+    },
+    {
+        label: "Needs a Specific Card",
+        description: "Only works alongside a particular card or set of cards",
+        aspects: ["narrow"],
+        archetypes: ["combo"]
+    },
+    {
+        label: "Needs a Wide Board",
+        description: "Scales with, or needs, several characters in play",
+        aspects: ["narrow"],
+        archetypes: ["go wide"]
     }
 ];
+
+function seedOption({ keywords = [], ...entry }: OptionSeed) {
+    return { id: crypto.randomUUID(), ...entry, keywords, enabled: true };
+}
 
 async function seedSuggestionsSettings(destDb: Db, dryRun: boolean) {
     const collection = destDb.collection("settings");
@@ -328,20 +531,15 @@ async function seedSuggestionsSettings(destDb: Db, dryRun: boolean) {
         type: "suggestions",
         data: {
             minimumLikesThreshold: 3,
-            loyaltyTags: [],
-            rewardOptions: REWARD_OPTIONS_SEED.map((entry) => ({ id: crypto.randomUUID(), ...entry, enabled: true })),
-            downsideOptions: DOWNSIDE_OPTIONS_SEED.map((entry) => ({
-                id: crypto.randomUUID(),
-                ...entry,
-                enabled: true
-            }))
+            rewardOptions: REWARD_OPTIONS_SEED.map(seedOption),
+            downsideOptions: DOWNSIDE_OPTIONS_SEED.map(seedOption)
         },
         created: now,
         createdBy: "system",
         updated: now,
         updatedBy: "system"
     });
-    log.success("Seeded suggestions settings (minimumLikesThreshold, rewardOptions, downsideOptions, loyaltyTags)");
+    log.success("Seeded suggestions settings (minimumLikesThreshold, rewardOptions, downsideOptions)");
 }
 
 export const migration: Migration = {
@@ -352,7 +550,7 @@ export const migration: Migration = {
         "archivedReason (string) into a structured archived object, and moves likedBy/approvedBy/approvedAt " +
         "under _metadata.engagement as Like/Dislike/Ignore reactions (normalizing any bare-discordId-array " +
         "likedBy entries along the way); also seeds a settings document for suggestions (minimumLikesThreshold, " +
-        "rewardOptions, downsideOptions, loyaltyTags), replacing the old static reward/punishment type registries, " +
+        "rewardOptions, downsideOptions), replacing the old static reward/punishment type registries, " +
         "and reintroduces `tags` as the (empty, since questions.rewards/downsides are also reset here) " +
         "server-computed union of the newly-empty selection's reward/downside tags",
 
@@ -373,7 +571,8 @@ export const migration: Migration = {
                 questions: {
                     rewards: [],
                     downsides: [],
-                    iconic: false
+                    iconic: false,
+                    intendedGameModes: []
                 },
                 derived: deriveFields(doc.card?.text ?? ""),
                 // Reuses a field name an older, unrelated "tags" concept occupied (dropped below) - set

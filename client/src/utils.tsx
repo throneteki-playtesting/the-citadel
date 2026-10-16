@@ -5,26 +5,14 @@ import { SemanticVersion, THRONESDB_URL } from "common/utils";
 import { valid } from "semver";
 import { VERTICAL_CARD_WIDTH_REM } from "./constants";
 
-/** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce".
- *  Shared by SearchTagPicker and the suggestion settings reward/downside search. */
-export function fuzzyMatch(text: string, query: string) {
+/** Whether every word of the query appears somewhere in the text, in any order */
+export function containsAllWords(text: string, query: string) {
     const t = text.toLowerCase();
-    const q = query.toLowerCase().trim();
-    if (!q) {
-        return true;
-    }
-    let ti = 0;
-    for (const c of q) {
-        if (c === " ") {
-            continue;
-        }
-        ti = t.indexOf(c, ti);
-        if (ti === -1) {
-            return false;
-        }
-        ti++;
-    }
-    return true;
+    return query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean)
+        .every((word) => t.includes(word));
 }
 
 /** Strips a leading http(s):// (or protocol-relative //) and any leading/trailing slashes, for display. */

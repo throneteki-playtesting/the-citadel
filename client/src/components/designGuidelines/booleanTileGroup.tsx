@@ -1,7 +1,7 @@
 import { memo } from "react";
 import classNames from "classnames";
 import { BaseElementProps } from "../../types";
-import { answerTileClasses } from "../../constants";
+import AnswerTileButton from "./answerTileButton";
 
 interface BooleanTileOption {
     value: boolean;
@@ -14,32 +14,16 @@ interface BooleanTileOption {
 const BooleanTileGroup = ({ className, style, options, value, onChange, isDisabled }: BooleanTileGroupProps) => {
     return (
         <div className={classNames("grid grid-cols-1 sm:grid-cols-2 gap-2", className)} style={style}>
-            {options.map((option) => {
-                const isOn = value !== undefined && value === option.value;
-                return (
-                    <button
-                        type="button"
-                        key={String(option.value)}
-                        disabled={isDisabled}
-                        aria-pressed={isOn}
-                        onClick={() => onChange(option.value)}
-                        className={classNames(
-                            "flex flex-col gap-1 rounded-lg border p-2.5 text-left transition-colors",
-                            answerTileClasses(isOn, isDisabled)
-                        )}
-                    >
-                        <span
-                            className={classNames(
-                                "text-sm font-semibold",
-                                isOn ? "text-primary" : "text-foreground/80"
-                            )}
-                        >
-                            {option.label}
-                        </span>
-                        <span className="text-xs text-foreground/60">{option.description}</span>
-                    </button>
-                );
-            })}
+            {options.map((option) => (
+                <AnswerTileButton
+                    key={String(option.value)}
+                    label={option.label}
+                    description={option.description}
+                    isOn={value !== undefined && value === option.value}
+                    isDisabled={isDisabled}
+                    onPress={() => onChange(option.value)}
+                />
+            ))}
         </div>
     );
 };

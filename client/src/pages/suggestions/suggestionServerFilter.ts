@@ -81,7 +81,19 @@ export default function useSuggestionServerFilter(
 ): SingleOrArray<Filter<ICardSuggestionFilterable>> | undefined {
     // unseen/myReactions must never reach cardExplodable - handled separately via
     // suggestionListQueryExtras; leaking either into `card.*` fails ICard filter validation.
-    const { traits, mine, byUsers, approvedFilter, tags, iconic, legacy, archived, segments, ...rest } = value;
+    const {
+        traits,
+        mine,
+        byUsers,
+        approvedFilter,
+        tags,
+        iconic,
+        intendedGameModes,
+        legacy,
+        archived,
+        segments,
+        ...rest
+    } = value;
     const cardExplodable = omit(rest, ["unseen", "myReactions", "developed"]);
     const { currentUserId } = context;
 
@@ -123,8 +135,14 @@ export default function useSuggestionServerFilter(
         // filters exactly like `card.traits`'s own elementwise match.
         setNonEmpty(base, "tags", tags);
 
+        const questions: Record<string, unknown> = {};
         if (iconic !== undefined) {
-            base.questions = { iconic };
+            questions.iconic = iconic;
+        }
+        // An array field filters elementwise, like `tags` - any of the modes picked
+        setNonEmpty(questions, "intendedGameModes", intendedGameModes);
+        if (Object.keys(questions).length > 0) {
+            base.questions = questions;
         }
 
         // Completing a legacy suggestion removes the key rather than setting it false, and a boolean
@@ -155,6 +173,7 @@ export default function useSuggestionServerFilter(
         approvedFilter,
         tags,
         iconic,
+        intendedGameModes,
         legacy,
         archived,
         segments,

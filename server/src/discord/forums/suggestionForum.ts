@@ -457,8 +457,7 @@ async function checklistSummary(suggestion: ICardSuggestion): Promise<string | u
         pivotPoints: suggestion.pivotPoints,
         plotMedian,
         rewardOptions: settings?.rewardOptions ?? [],
-        downsideOptions: settings?.downsideOptions ?? [],
-        loyaltyTags: settings?.loyaltyTags ?? []
+        downsideOptions: settings?.downsideOptions ?? []
     });
     if (results.length === 0) {
         return undefined;
@@ -481,6 +480,10 @@ async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICa
     const downsideLabels = labelsFor(settings?.downsideOptions ?? [], suggestion.questions.downsides);
     if (downsideLabels.length > 0) {
         answers.push(`⚠️ **Downsides:** ${downsideLabels.join(", ")}`);
+    }
+    const gameModes = suggestion.questions.intendedGameModes ?? [];
+    if (gameModes.length > 0) {
+        answers.push(`🎲 **Game Modes:** ${gameModes.join(", ")}`);
     }
     if (suggestion.questions.naturalTrigger !== undefined) {
         answers.push(`🎯 **Natural Trigger:** ${suggestion.questions.naturalTrigger ? "Yes" : "No"}`);

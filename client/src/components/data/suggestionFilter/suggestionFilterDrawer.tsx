@@ -16,6 +16,8 @@ import {
     challengeIcons,
     Faction,
     factions,
+    GameModeType,
+    gameModeTypes,
     Icons,
     ReactionType,
     Type,
@@ -23,20 +25,20 @@ import {
 } from "common/models/cards";
 import { factionNames, typeNames, escapeRegExp } from "common/utils";
 import { EASE_STANDARD, factionBgClasses, factionBorderClasses } from "../../../constants";
-import { useGetSettingsQuery, useGetSuggestionsFeedQuery } from "../../../api";
+import { useGetSuggestionsFeedQuery } from "../../../api";
+import { TAG_KIND_ORDER } from "../../designGuidelines/tagColors";
+import { useTagKinds } from "../../../hooks/useTagKinds";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../../hooks/usePermission";
-import { IRewardDownsideOption } from "common/models/settings";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEyeSlash, faThumbsDown, faThumbsUp, faXmark, IconDefinition } from "@fortawesome/free-solid-svg-icons";
 import ThronesIcon from "../../thronesIcon";
 import UserAvatar from "../../userAvatar";
 import SearchableMultiSelect from "../searchableMultiSelect";
+import KeyedMultiSelectField from "../keyedMultiSelectField";
 import { ToggleButtonGroup, BooleanToggle, NumericFilterInput } from "../filters";
 import { NumericFilterValue, decodeNumericOperators, numericOperators } from "../filters/numeric";
 import { EMPTY_SUGGESTION_FILTER, isSuggestionFilterActive, SuggestionFilterValue, SuggestionSegment } from "./types";
-
-const EMPTY_OPTIONS: IRewardDownsideOption[] = [];
 
 const SEGMENT_SECTION_FOLD = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -84,6 +86,7 @@ type InternalState = {
     myReactions: ReactionType[];
     tags: string[];
     iconic?: boolean;
+    intendedGameModes: GameModeType[];
     legacy?: boolean;
     archived: boolean;
     developed: boolean;
@@ -130,6 +133,7 @@ function decode(value: SuggestionFilterValue): InternalState {
         myReactions: value.myReactions ?? [],
         tags: value.tags ?? [],
         iconic: value.iconic,
+        intendedGameModes: value.intendedGameModes ?? [],
         legacy: value.legacy,
         archived: value.archived === true,
         developed: value.developed === true,
@@ -179,58 +183,12 @@ function compose(state: InternalState): SuggestionFilterValue {
         myReactions: state.myReactions.length > 0 ? state.myReactions : undefined,
         tags: state.tags.length > 0 ? state.tags : undefined,
         iconic: state.iconic,
+        intendedGameModes: state.intendedGameModes.length > 0 ? state.intendedGameModes : undefined,
         legacy: state.legacy,
         archived: state.archived || undefined,
         developed: state.developed || undefined,
         segments: state.segments.length > 0 ? state.segments : undefined
     };
-}
-
-// Same search+chips pattern as cardFilterDrawer.tsx's MultiSelectField, generalised to id/label pairs
-// so it also covers the tags list below (not just bare strings).
-type KeyedOption = { key: string; label: string };
-type KeyedMultiSelectFieldProps = {
-    placeholder: string;
-    options: KeyedOption[];
-    value: string[];
-    onChange: (value: string[]) => void;
-    /** Tags are free-text phrases with no natural casing of their own - true for that field only. */
-    uppercase?: boolean;
-};
-
-function KeyedMultiSelectField({ placeholder, options, value, onChange, uppercase }: KeyedMultiSelectFieldProps) {
-    const [search, setSearch] = useState("");
-
-    const items = useMemo(() => {
-        const term = search.trim().toLowerCase();
-        const filtered = term ? options.filter((option) => option.label.toLowerCase().includes(term)) : options;
-        const missingSelected = options.filter(
-            (option) => value.includes(option.key) && !filtered.some((f) => f.key === option.key)
-        );
-        return [...missingSelected, ...filtered];
-    }, [options, search, value]);
-
-    const handleSelectionChange = (keys: SharedSelection) => {
-        onChange(keys === "all" ? items.map((item) => item.key) : ([...keys] as string[]));
-    };
-
-    return (
-        <SearchableMultiSelect
-            size="md"
-            radius="sm"
-            placeholder={placeholder}
-            items={items}
-            getKey={(item) => item.key}
-            renderItem={(item) => <span className={classNames(uppercase && "uppercase")}>{item.label}</span>}
-            getChipLabel={(item) => <span className={classNames(uppercase && "uppercase")}>{item.label}</span>}
-            selectedKeys={value}
-            onSelectionChange={handleSelectionChange}
-            search={search}
-            onSearchChange={setSearch}
-            hasMore={false}
-            onLoadMore={() => undefined}
-        />
-    );
 }
 
 // Same shape as KeyedMultiSelectField, but for discordId/displayname pairs, so each row/chip can carry
@@ -315,13 +273,17 @@ const SuggestionFilterDrawer = ({
     const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
     const { data: feed } = useGetSuggestionsFeedQuery(undefined, { skip: !canManageArchive });
     const hasPossiblyDeveloped = (feed?.stats.possiblyDeveloped ?? 0) > 0;
-    const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
-    const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_OPTIONS;
-    const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_OPTIONS;
-    // Every tag defined across either registry - the only way left to reach reward/downside ids.
+    // Every tag in use, archetypes first
+    const tagKindMap = useTagKinds();
     const tagOptions = useMemo(
-        () => [...new Set([...rewardOptions, ...downsideOptions].flatMap((option) => option.tags))],
-        [rewardOptions, downsideOptions]
+        () =>
+            [...tagKindMap.entries()]
+                .sort(
+                    ([tagA, kindA], [tagB, kindB]) =>
+                        TAG_KIND_ORDER[kindA] - TAG_KIND_ORDER[kindB] || tagA.localeCompare(tagB)
+                )
+                .map(([tag]) => tag),
+        [tagKindMap]
     );
 
     const update = (patch: Partial<InternalState>) => {
@@ -413,6 +375,11 @@ const SuggestionFilterDrawer = ({
                         value={internal.iconic}
                         onChange={(iconic) => update({ iconic })}
                     />
+                    <ToggleButtonGroup
+                        options={gameModeTypes.map((mode) => ({ key: mode, label: mode }))}
+                        value={internal.intendedGameModes}
+                        onChange={(next) => update({ intendedGameModes: next as GameModeType[] })}
+                    />
                     <BooleanToggle
                         trueLabel="Legacy"
                         falseLabel="Not Legacy"
@@ -474,6 +441,7 @@ const SuggestionFilterDrawer = ({
                     value={internal.tags}
                     onChange={(tags) => update({ tags })}
                     uppercase
+                    getKind={(tag) => tagKindMap.get(tag)}
                 />
                 <UserMultiSelectField
                     placeholder="Search users..."

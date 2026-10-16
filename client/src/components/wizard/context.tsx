@@ -1,16 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DeepPartial } from "common/types";
 import Joi from "joi";
 import { createContext, useContext } from "react";
 
-export const WizardContext = createContext<WizardContextProps<any> | null>(null);
+export const WizardContext = createContext<WizardContextProps | null>(null);
 
-export function useWizard<T>(): WizardContextProps<T> {
+export function useWizard(): WizardContextProps {
     const context = useContext(WizardContext);
     if (!context) {
         throw new Error("Wizard components must be used within a Wizard provider");
     }
-    return context as WizardContextProps<T>;
+    return context;
 }
 
 // Scoped to the single `WizardPage` a field lives on, not the global current-page - every page is
@@ -72,13 +71,11 @@ export function titleizeFieldName(name: string): string {
 
 export type WizardFieldMeta = { onPage: number; label: string };
 
-export type WizardContextProps<T> = {
+export type WizardContextProps = {
     id: string;
     currentPage: number;
     totalPages: number;
     setTotalPages: React.Dispatch<React.SetStateAction<number>>;
-    data: DeepPartial<T>;
-    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>;
     isFirstPage: boolean;
     isLastPage: boolean;
     validationErrors: Record<string, string>;

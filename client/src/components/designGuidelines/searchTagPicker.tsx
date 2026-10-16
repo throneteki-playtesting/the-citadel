@@ -4,9 +4,12 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faMagnifyingGlass } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
+import { TagKind } from "common/designGuidelines/suggestionTags";
 import { BaseElementProps } from "../../types";
+import TagChip from "./tagChip";
+import AutoAddedMark from "./autoAddedMark";
 import { EASE_STANDARD } from "../../constants";
-import { fuzzyMatch } from "../../utils";
+import { containsAllWords } from "../../utils";
 
 const ROW_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 
@@ -14,14 +17,9 @@ export interface SearchTagOption {
     id: string;
     label: string;
     description: string;
-    /** Both a hidden search target and a user-visible label on the row itself */
-    tags: string[];
-}
-
-/** "card advantage" -> "Card advantage" - tags are already free-text phrases, not camelCase keys, so
- *  this only needs to capitalize the first letter rather than split words apart. */
-function tagLabel(tag: string) {
-    return tag.charAt(0).toUpperCase() + tag.slice(1);
+    /** Hidden search targets as well as the coloured chips shown on the row itself */
+    aspects: string[];
+    archetypes: string[];
 }
 
 /** Search + tag picker for a small fixed taxonomy - too many options (30+) to browse cold via a plain
@@ -32,6 +30,8 @@ const SearchTagPicker = memo(function SearchTagPicker({
     options,
     value,
     onChange,
+    aspectKind,
+    marks,
     isDisabled,
     placeholder = "Search…"
 }: SearchTagPickerProps) {
@@ -40,8 +40,8 @@ const SearchTagPicker = memo(function SearchTagPicker({
     const filtered = useMemo(
         () =>
             options.filter((o) => {
-                const haystack = [o.label, ...o.tags].join(" ");
-                return fuzzyMatch(haystack, query);
+                const haystack = [o.label, ...o.archetypes, ...o.aspects].join(" ");
+                return containsAllWords(haystack, query);
             }),
         [options, query]
     );
@@ -122,16 +122,21 @@ const SearchTagPicker = memo(function SearchTagPicker({
                                 >
                                     {isOn && <FontAwesomeIcon icon={faCheck} />}
                                 </span>
-                                <span className="flex flex-col">
-                                    <span className="text-sm font-medium">{option.label}</span>
+                                <span className="flex min-w-0 flex-col">
+                                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                                        {option.label}
+                                        {isOn && marks?.[option.id] && <AutoAddedMark keywords={marks[option.id]} />}
+                                    </span>
                                     <span className="text-xs text-foreground/50">{option.description}</span>
                                 </span>
-                                {option.tags.length > 0 && (
-                                    <span
-                                        className="ml-auto max-w-[40%] truncate text-xxs uppercase tracking-wide text-foreground/40 shrink-0"
-                                        title={option.tags.join(", ")}
-                                    >
-                                        {option.tags.map(tagLabel).join(", ")}
+                                {option.archetypes.length + option.aspects.length > 0 && (
+                                    <span className="ml-auto flex max-w-[40%] shrink-0 flex-wrap justify-end gap-1">
+                                        {option.archetypes.map((tag) => (
+                                            <TagChip key={`archetype-${tag}`} tag={tag} kind="archetype" />
+                                        ))}
+                                        {option.aspects.map((tag) => (
+                                            <TagChip key={`aspect-${tag}`} tag={tag} kind={aspectKind} />
+                                        ))}
                                     </span>
                                 )}
                             </motion.button>
@@ -148,6 +153,10 @@ type SearchTagPickerProps = Omit<BaseElementProps, "children"> & {
     options: SearchTagOption[];
     value: string[];
     onChange: (value: string[]) => void;
+    /** What the options' aspects are called, and so which colour - aspects for rewards, drawbacks for downsides */
+    aspectKind: TagKind;
+    /** Selections the card text made rather than the designer: option id -> the keywords which added it */
+    marks?: Record<string, string[]>;
     isDisabled?: boolean;
     placeholder?: string;
 };

@@ -49,12 +49,10 @@ export function checklistRules(input: {
     pivotPoints: string[];
     /** only needed for plot-type suggestions */
     plotMedian?: number;
-    rewardOptions: { id: string; label: string; tags: string[] }[];
+    rewardOptions: { id: string; label: string; requiresLoyalty?: boolean }[];
     downsideOptions: { id: string; label: string }[];
-    /** Tags which, when present on a selected reward, trigger the loyaltyConsistency rule below */
-    loyaltyTags: string[];
 }): RuleResult[] {
-    const { card, questions, pivotPoints, plotMedian, rewardOptions, downsideOptions, loyaltyTags } = input;
+    const { card, questions, pivotPoints, plotMedian, rewardOptions, downsideOptions } = input;
     const results: RuleResult[] = [];
 
     if (card.type === "character") {
@@ -116,9 +114,7 @@ export function checklistRules(input: {
     }
 
     const loyaltyTaggedRewards =
-        questions.rewards?.filter((id) =>
-            rewardOptions.find((r) => r.id === id)?.tags.some((t) => loyaltyTags.includes(t))
-        ) ?? [];
+        questions.rewards?.filter((id) => rewardOptions.find((r) => r.id === id)?.requiresLoyalty) ?? [];
     if (card.faction !== "neutral" && loyaltyTaggedRewards.length > 0) {
         results.push({
             rule: "loyaltyConsistency",

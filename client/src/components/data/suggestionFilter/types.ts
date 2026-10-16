@@ -1,4 +1,4 @@
-import { challengeIcons, Faction, ICard, ReactionType, Type } from "common/models/cards";
+import { challengeIcons, Faction, GameModeType, ICard, ReactionType, Type } from "common/models/cards";
 import { Explodable } from "common/types";
 
 // One faction, optionally narrowed to one of its card types - a Suggestion Spread selection, which `faction`
@@ -24,6 +24,8 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     // exactly like `traits`, rather than needing reward/downside ids resolved client-side.
     tags?: string[];
     iconic?: boolean;
+    // Matches a suggestion meant for ANY of these game modes
+    intendedGameModes?: GameModeType[];
     // true narrows to legacy suggestions (imported, awaiting completion), false hides them
     legacy?: boolean;
     // Archived suggestions only when true - otherwise never, so unset is the same as false. Only a
@@ -77,6 +79,7 @@ export function countActiveSuggestionFilters(value: SuggestionFilterValue): numb
     if (value.myReactions && value.myReactions.length > 0) count++;
     if (value.tags && value.tags.length > 0) count++;
     if (value.iconic !== undefined) count++;
+    if (value.intendedGameModes && value.intendedGameModes.length > 0) count++;
     if (value.legacy !== undefined) count++;
     if (value.archived) count++;
     if (value.developed) count++;

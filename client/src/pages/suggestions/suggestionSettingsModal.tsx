@@ -23,6 +23,14 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faPencil, faPlus, faTrash, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { isDirty } from "common/utils";
+import { keywordNames } from "common/designGuidelines/deriveFields";
+import {
+    changedTagIds,
+    findTagKindClash,
+    optionTags,
+    tagKindLabels,
+    TagKind
+} from "common/designGuidelines/suggestionTags";
 import {
     DEFAULT_NEUTRAL_WEIGHT,
     DEFAULT_TREND_RANGE,
@@ -37,10 +45,10 @@ import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
 import { useFormValidation } from "../../hooks/useFormValidation";
 import FormValidationSummary from "../../components/formValidationSummary";
-import ComboBox from "../../components/combobox";
-import ExamplesInput from "./examplesInput";
+import KeyedMultiSelectField from "../../components/data/keyedMultiSelectField";
+import TagChip from "../../components/designGuidelines/tagChip";
 import { showApiErrorToast } from "../../api/errors";
-import { fuzzyMatch } from "../../utils";
+import { containsAllWords } from "../../utils";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { EASE_STANDARD } from "../../constants";
 import { scrollableTabs } from "../../hooks/useSelectedTabInView";
@@ -65,35 +73,53 @@ type Draft = IRewardDownsideOption;
 // The modal's single local edit session - everything a footer Save writes in one PATCH.
 type SettingsDraft = {
     minimumLikesThreshold: number;
-    loyaltyTags: string[];
     neutralWeight: number;
     defaultTrendRange: TrendRange;
     rewardOptions: OptionWithUsage[];
     downsideOptions: OptionWithUsage[];
 };
 
+const ASPECT_KIND: Record<Kind, TagKind> = { rewardOptions: "aspect", downsideOptions: "drawback" };
+
+// Pick from the tags in use, or type a new one and press enter - always lowercase, so "Tempo" and "tempo" are one tag
+function TagsField({
+    label,
+    values,
+    suggestions,
+    kind,
+    onChange
+}: {
+    label: string;
+    values: string[];
+    suggestions: string[];
+    kind: TagKind;
+    onChange: (values: string[]) => void;
+}) {
+    const options = useMemo(
+        () => [...new Set([...suggestions, ...values])].map((tag) => ({ key: tag, label: tag })),
+        [suggestions, values]
+    );
+    return (
+        <KeyedMultiSelectField
+            label={label}
+            placeholder="Pick one, or type a new one and press enter"
+            options={options}
+            value={values}
+            onChange={onChange}
+            uppercase
+            getKind={() => kind}
+            onCreate={(text) => {
+                const tag = text.trim().toLowerCase();
+                if (tag && !values.includes(tag)) {
+                    onChange([...values, tag]);
+                }
+            }}
+        />
+    );
+}
+
 function stripUsage(options: OptionWithUsage[]): IRewardDownsideOption[] {
     return options.map((option) => omit(option, "usageCount"));
-}
-
-// Order-independent - matches the same comparison the settings route uses server-side to decide
-// whether a save needs to bulk-resync suggestion tags (server/src/routes/API/v1/settings.ts).
-function sameTagSet(a: string[], b: string[]): boolean {
-    if (a.length !== b.length) {
-        return false;
-    }
-    const setA = new Set(a);
-    return b.every((tag) => setA.has(tag));
-}
-
-// Whether saving would trigger the (slower) bulk tag resync - only an EXISTING option's own tags
-// changing counts, matching the server's own resync trigger exactly.
-function hasChangedTags(original: OptionWithUsage[], current: OptionWithUsage[]): boolean {
-    const originalTagsById = new Map(original.map((option) => [option.id, option.tags]));
-    return current.some((option) => {
-        const originalTags = originalTagsById.get(option.id);
-        return originalTags !== undefined && !sameTagSet(originalTags, option.tags);
-    });
 }
 
 /** Reward/downside option settings, as a modal rather than its own page. One edit session: every row
@@ -134,7 +160,6 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
         if (isOpen && data && !draft && !isFetching) {
             const snapshot: SettingsDraft = {
                 minimumLikesThreshold: data.minimumLikesThreshold,
-                loyaltyTags: data.loyaltyTags,
                 neutralWeight: data.neutralWeight ?? DEFAULT_NEUTRAL_WEIGHT,
                 defaultTrendRange: isTrendRange(data.defaultTrendRange) ? data.defaultTrendRange : DEFAULT_TREND_RANGE,
                 rewardOptions: data.rewardOptions,
@@ -153,11 +178,17 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
         }
     }, [isOpen]);
 
-    // Every tag currently defined on a reward type - loyalty tags are drawn from that same vocabulary.
-    const rewardTagOptions = useMemo(
-        () => [...new Set((draft?.rewardOptions ?? []).flatMap((option) => option.tags))],
-        [draft?.rewardOptions]
-    );
+    // Each field offers what the draft already uses, so a new tag is on offer to the next option before saving
+    const vocabulary = useMemo(() => {
+        const unique = (values: string[]) => [...new Set(values)].sort();
+        const rewards = draft?.rewardOptions ?? [];
+        const downsides = draft?.downsideOptions ?? [];
+        return {
+            rewardOptions: { aspects: unique(rewards.flatMap((option) => option.aspects)) },
+            downsideOptions: { aspects: unique(downsides.flatMap((option) => option.aspects)) },
+            archetypes: unique([...rewards, ...downsides].flatMap((option) => option.archetypes))
+        };
+    }, [draft?.rewardOptions, draft?.downsideOptions]);
 
     const updateOptions = (kind: Kind, updater: (options: OptionWithUsage[]) => OptionWithUsage[]) => {
         setDraft((previous) => previous && { ...previous, [kind]: updater(previous[kind]) });
@@ -186,16 +217,25 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
     const rewardOptionsDirty = isDirty(originalRef.current?.rewardOptions, draft?.rewardOptions);
     const downsideOptionsDirty = isDirty(originalRef.current?.downsideOptions, draft?.downsideOptions);
 
-    // Mirrors the server's own trigger for the bulk suggestion-tags resync - shown so a slower save
-    // isn't a surprise, not to gate anything (the server decides for real, this is just a heads-up).
+    // Mirrors the server's trigger for resyncing suggestion tags, as a heads-up that the save will be slower
     const willResyncTags =
         !!originalRef.current &&
         !!draft &&
-        (hasChangedTags(originalRef.current.rewardOptions, draft.rewardOptions) ||
-            hasChangedTags(originalRef.current.downsideOptions, draft.downsideOptions));
+        (changedTagIds(originalRef.current.rewardOptions, draft.rewardOptions).length > 0 ||
+            changedTagIds(originalRef.current.downsideOptions, draft.downsideOptions).length > 0);
 
     const onSave = async () => {
         if (!draft) {
+            return;
+        }
+        // The server refuses this too - caught here to skip the round trip
+        const clash = findTagKindClash(draft.rewardOptions, draft.downsideOptions);
+        if (clash) {
+            addToast({
+                title: "Can't save settings",
+                color: "danger",
+                description: `"${clash.tag}" is used as both ${clash.kinds.map((kind) => tagKindLabels[kind].toLowerCase()).join(" and ")}`
+            });
             return;
         }
         try {
@@ -203,7 +243,6 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                 type: "suggestions",
                 data: {
                     minimumLikesThreshold: draft.minimumLikesThreshold,
-                    loyaltyTags: draft.loyaltyTags,
                     neutralWeight: draft.neutralWeight,
                     defaultTrendRange: draft.defaultTrendRange,
                     rewardOptions: stripUsage(draft.rewardOptions),
@@ -292,27 +331,6 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                             <SelectItem key={option.key}>{option.label}</SelectItem>
                                         ))}
                                     </Select>
-                                    <Select
-                                        aria-label="Loyalty tags"
-                                        label="Loyalty tags"
-                                        description="Reward tags that trigger the loyalty checklist rule"
-                                        selectionMode="multiple"
-                                        placeholder="No loyalty tags selected"
-                                        classNames={{ value: "uppercase tracking-wide" }}
-                                        selectedKeys={new Set(draft.loyaltyTags)}
-                                        onSelectionChange={(keys) =>
-                                            setDraft(
-                                                (previous) =>
-                                                    previous && { ...previous, loyaltyTags: [...keys] as string[] }
-                                            )
-                                        }
-                                    >
-                                        {rewardTagOptions.map((tag) => (
-                                            <SelectItem key={tag} textValue={tag}>
-                                                <span className="uppercase tracking-wide">{tag}</span>
-                                            </SelectItem>
-                                        ))}
-                                    </Select>
                                 </div>
                             </div>
 
@@ -332,7 +350,10 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                         title={<TabTitle label="Rewards" isDirty={rewardOptionsDirty} />}
                                     >
                                         <RewardDownsideList
+                                            kind="rewardOptions"
                                             kindLabel="Reward Type"
+                                            aspectSuggestions={vocabulary.rewardOptions.aspects}
+                                            archetypeSuggestions={vocabulary.archetypes}
                                             options={draft.rewardOptions}
                                             originalOptions={originalRef.current?.rewardOptions ?? []}
                                             isOpen={isOpen}
@@ -348,7 +369,10 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                     >
                                         {hasViewedDownsides && (
                                             <RewardDownsideList
+                                                kind="downsideOptions"
                                                 kindLabel="Downside Type"
+                                                aspectSuggestions={vocabulary.downsideOptions.aspects}
+                                                archetypeSuggestions={vocabulary.archetypes}
                                                 options={draft.downsideOptions}
                                                 originalOptions={originalRef.current?.downsideOptions ?? []}
                                                 isOpen={isOpen}
@@ -435,7 +459,10 @@ function SettingsSkeleton() {
 }
 
 function RewardDownsideList({
+    kind,
     kindLabel,
+    aspectSuggestions,
+    archetypeSuggestions,
     options,
     originalOptions,
     isOpen,
@@ -444,7 +471,10 @@ function RewardDownsideList({
     onToggleEnabled,
     onDelete
 }: {
+    kind: Kind;
     kindLabel: string;
+    aspectSuggestions: string[];
+    archetypeSuggestions: string[];
     options: OptionWithUsage[];
     originalOptions: OptionWithUsage[];
     isOpen: boolean;
@@ -477,7 +507,10 @@ function RewardDownsideList({
             options.filter(
                 (option) =>
                     option.id === editingId ||
-                    fuzzyMatch([option.label, option.description, ...option.tags].join(" "), debouncedSearch)
+                    containsAllWords(
+                        [option.label, option.description, ...optionTags(option), ...option.keywords].join(" "),
+                        debouncedSearch
+                    )
             ),
         [options, debouncedSearch, editingId]
     );
@@ -504,8 +537,9 @@ function RewardDownsideList({
             id: crypto.randomUUID(),
             label: "",
             description: "",
-            examples: [],
-            tags: [],
+            aspects: [],
+            archetypes: [],
+            keywords: [],
             enabled: true,
             usageCount: 0
         };
@@ -553,7 +587,7 @@ function RewardDownsideList({
                 <Input
                     size="sm"
                     className="flex-1"
-                    placeholder={`Search ${kindLabel.toLowerCase()}s by name or tag…`}
+                    placeholder={`Search ${kindLabel.toLowerCase()}s by name, tag or keyword…`}
                     value={search}
                     onValueChange={setSearch}
                     startContent={<FontAwesomeIcon icon={faMagnifyingGlass} className="text-foreground/40" />}
@@ -601,6 +635,9 @@ function RewardDownsideList({
                                 isEditing={editingId === option.id}
                                 isOtherEditing={isAnyEditing && editingId !== option.id}
                                 isNew={pendingNew?.id === option.id}
+                                kind={kind}
+                                aspectSuggestions={aspectSuggestions}
+                                archetypeSuggestions={archetypeSuggestions}
                                 onEdit={startEdit}
                                 onCollapse={collapseRow}
                                 onSubmit={submitRow}
@@ -622,6 +659,9 @@ const OptionRow = memo(function OptionRow({
     isEditing,
     isOtherEditing,
     isNew,
+    kind,
+    aspectSuggestions,
+    archetypeSuggestions,
     onEdit,
     onCollapse,
     onSubmit,
@@ -633,6 +673,9 @@ const OptionRow = memo(function OptionRow({
     isEditing: boolean;
     isOtherEditing: boolean;
     isNew: boolean;
+    kind: Kind;
+    aspectSuggestions: string[];
+    archetypeSuggestions: string[];
     onEdit: (id: string) => void;
     onCollapse: (id: string) => void;
     onSubmit: (option: IRewardDownsideOption) => void;
@@ -674,8 +717,10 @@ const OptionRow = memo(function OptionRow({
             id: draft.id,
             label: draft.label.trim(),
             description: draft.description.trim(),
-            examples: draft.examples,
-            tags: draft.tags,
+            aspects: draft.aspects,
+            archetypes: draft.archetypes,
+            keywords: draft.keywords,
+            requiresLoyalty: draft.requiresLoyalty || undefined,
             enabled: draft.enabled
         };
         if (!validate(body)) {
@@ -707,6 +752,7 @@ const OptionRow = memo(function OptionRow({
                 <div className="min-h-0 overflow-hidden">
                     <RowSummary
                         option={option}
+                        kind={kind}
                         isDirty={isDirty}
                         isOtherEditing={isOtherEditing}
                         onEdit={() => onEdit(option.id)}
@@ -730,6 +776,9 @@ const OptionRow = memo(function OptionRow({
                             errors={errors}
                             formId={FORM_ID}
                             isNew={isNew}
+                            kind={kind}
+                            aspectSuggestions={aspectSuggestions}
+                            archetypeSuggestions={archetypeSuggestions}
                             onCollapse={() => onCollapse(option.id)}
                             onSubmit={(e) => {
                                 e.preventDefault();
@@ -745,6 +794,7 @@ const OptionRow = memo(function OptionRow({
 
 function RowSummary({
     option,
+    kind,
     isDirty,
     isOtherEditing,
     onEdit,
@@ -752,6 +802,7 @@ function RowSummary({
     onDelete
 }: {
     option: OptionWithUsage;
+    kind: Kind;
     isDirty: boolean;
     isOtherEditing: boolean;
     onEdit: () => void;
@@ -774,13 +825,15 @@ function RowSummary({
         </div>
     );
 
-    const tags = option.tags.length > 0 && (
-        <div
-            className="min-w-0 flex-1 sm:flex-none sm:max-w-[30%] truncate text-xxs uppercase tracking-wide text-foreground/40"
-            title={option.tags.join(", ")}
-        >
-            {option.tags.join(", ")}
-        </div>
+    const aspectKind = ASPECT_KIND[kind];
+    const chips = [
+        ...option.archetypes.map((tag) => <TagChip key={`archetype-${tag}`} tag={tag} kind="archetype" />),
+        ...option.aspects.map((tag) => <TagChip key={`aspect-${tag}`} tag={tag} kind={aspectKind} />),
+        ...option.keywords.map((keyword) => <TagChip key={`keyword-${keyword}`} tag={keyword} />),
+        ...(option.requiresLoyalty ? [<TagChip key="loyalty" tag="loyalty check" />] : [])
+    ];
+    const tags = chips.length > 0 && (
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1 sm:max-w-[45%] sm:flex-none">{chips}</div>
     );
 
     const usage = (
@@ -852,6 +905,9 @@ function RowEditor({
     errors,
     formId,
     isNew,
+    kind,
+    aspectSuggestions,
+    archetypeSuggestions,
     onCollapse,
     onSubmit
 }: {
@@ -860,9 +916,13 @@ function RowEditor({
     errors: Record<string, string>;
     formId: string;
     isNew: boolean;
+    kind: Kind;
+    aspectSuggestions: string[];
+    archetypeSuggestions: string[];
     onCollapse: () => void;
     onSubmit: (e: FormEvent<HTMLFormElement>) => void;
 }) {
+    const aspectKind = ASPECT_KIND[kind];
     return (
         <Form id={formId} validationErrors={errors} className="flex flex-col gap-3 pt-1" onSubmit={onSubmit}>
             <Input
@@ -881,21 +941,43 @@ function RowEditor({
                 value={draft.description}
                 onValueChange={(value) => set("description", value)}
             />
-            <ComboBox
-                label="Tags"
-                placeholder="Type and press enter"
-                values={draft.tags}
-                onChange={(tags) => set("tags", tags)}
-                chip={{
-                    color: "default",
-                    variant: "flat",
-                    className: "rounded-sm p-0 pr-0.5 border-1 border-content2 uppercase tracking-wide"
-                }}
+            <TagsField
+                label={kind === "rewardOptions" ? "Aspects" : "Drawbacks"}
+                values={draft.aspects}
+                suggestions={aspectSuggestions}
+                kind={aspectKind}
+                onChange={(aspects) => set("aspects", aspects)}
             />
-            <div className="flex w-full flex-col gap-1">
-                <span className="text-sm">Examples</span>
-                <ExamplesInput value={draft.examples} onChange={(examples) => set("examples", examples)} />
-            </div>
+            <TagsField
+                label="Archetypes"
+                values={draft.archetypes}
+                suggestions={archetypeSuggestions}
+                kind="archetype"
+                onChange={(archetypes) => set("archetypes", archetypes)}
+            />
+            <Select
+                label="Keywords"
+                aria-label="Keywords"
+                description="Added to a suggestion automatically when its card text has one of these keywords"
+                selectionMode="multiple"
+                placeholder="No keywords"
+                selectedKeys={new Set(draft.keywords)}
+                onSelectionChange={(keys) => set("keywords", [...keys] as string[])}
+            >
+                {keywordNames.map((keyword) => (
+                    <SelectItem key={keyword}>{keyword}</SelectItem>
+                ))}
+            </Select>
+            {kind === "rewardOptions" && (
+                <Switch isSelected={!!draft.requiresLoyalty} onValueChange={(value) => set("requiresLoyalty", value)}>
+                    <div className="flex flex-col">
+                        <span className="text-sm">Requires loyalty</span>
+                        <span className="text-xs text-foreground/50">
+                            A card granting this is expected to be marked Loyal
+                        </span>
+                    </div>
+                </Switch>
+            )}
             <Switch isSelected={draft.enabled} onValueChange={(value) => set("enabled", value)}>
                 <div className="flex flex-col">
                     <span className="text-sm">Enabled</span>

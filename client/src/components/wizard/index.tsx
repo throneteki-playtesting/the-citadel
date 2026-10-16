@@ -35,16 +35,28 @@ import {
 
 export { default as ValidationSummary } from "./components/validationSummary";
 
+// Module level, so a caller leaving these out doesn't give the Wizard a new function every render
+const IGNORE_SUBMIT = () => undefined;
+const IGNORE_VALIDATION_ERROR = () => true;
+
 export function Wizard<T>({
     schema,
     data: initial,
     page: initialPage = 1,
-    onSubmit = () => undefined,
-    onValidationError = () => true,
+    onSubmit = IGNORE_SUBMIT,
+    onValidationError = IGNORE_VALIDATION_ERROR,
     onPageChange,
     children
 }: WizardProps<T>) {
-    const [internalData, setInternalData] = useState(initial ?? ({} as DeepPartial<T>));
+    // What the pages have submitted, merged over the caller's data for the final validation.
+    // A ref rather than state, so edits don't re-render the Wizard.
+    const internalData = useRef(initial ?? ({} as DeepPartial<T>));
+    const [id] = useState(() =>
+        crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString()
+    );
+    // Read when needed, so an inline onSubmit doesn't change the context every render
+    const latest = useRef({ schema, onSubmit, onValidationError });
+    latest.current = { schema, onSubmit, onValidationError };
     const [currentPage, setCurrentPage] = useState(initialPage);
     const [fieldErrors, setFieldErrors] = useState<Record<string, WizardFieldError>>({});
     const [totalPages, setTotalPages] = useState(0);
@@ -59,7 +71,7 @@ export function Wizard<T>({
     const isLastPage = useMemo(() => currentPage >= totalPages, [currentPage, totalPages]);
 
     useEffect(() => {
-        setInternalData(initial ?? ({} as DeepPartial<T>));
+        internalData.current = initial ?? ({} as DeepPartial<T>);
     }, [initial]);
 
     useEffect(() => {
@@ -121,71 +133,68 @@ export function Wizard<T>({
         [setServerErrors]
     );
 
-    const validate = useCallback(
-        (data: Record<string, any>, partial = false, schemaOverride?: Joi.Schema) => {
-            const { error } = (schemaOverride ?? schema).validate(data, {
-                allowUnknown: true,
-                abortEarly: false,
-                errors: { label: false }
+    const validate = useCallback((data: Record<string, any>, partial = false, schemaOverride?: Joi.Schema) => {
+        const { error } = (schemaOverride ?? latest.current.schema).validate(data, {
+            allowUnknown: true,
+            abortEarly: false,
+            errors: { label: false }
+        });
+
+        // Flattened once, reused below - a page submitting only *part* of an object another page
+        // shares needs the exact leaf path checked, or every sibling left for later reads missing.
+        const flatData = flatten(data as object) as Record<string, unknown>;
+
+        // See isPathCovered - an object-level error would otherwise always look untouched and get
+        // silently dropped, even though this page plainly submitted it.
+        const touchedKeys = Object.keys(flatData);
+        const isTouched = (path: string) => isPathCovered(path, touchedKeys);
+
+        const inputErrors: Record<string, string> = {};
+        if (error) {
+            error.details.forEach((detail) => {
+                const inputId = detail.path.join(".");
+                // A page only answers for paths it lists - a sibling left for a later page is
+                // absent and mustn't block Next; a key it DOES list must surface its own error.
+                if (partial && !isTouched(inputId)) {
+                    return;
+                }
+                const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
+                inputErrors[inputId] = message;
             });
+        }
 
-            // Flattened once, reused below - a page submitting only *part* of an object another page
-            // shares needs the exact leaf path checked, or every sibling left for later reads missing.
-            const flatData = flatten(data as object) as Record<string, unknown>;
-
-            // See isPathCovered - an object-level error would otherwise always look untouched and get
-            // silently dropped, even though this page plainly submitted it.
-            const touchedKeys = Object.keys(flatData);
-            const isTouched = (path: string) => isPathCovered(path, touchedKeys);
-
-            const inputErrors: Record<string, string> = {};
-            if (error) {
-                error.details.forEach((detail) => {
-                    const inputId = detail.path.join(".");
-                    // A page only answers for paths it lists - a sibling left for a later page is
-                    // absent and mustn't block Next; a key it DOES list must surface its own error.
-                    if (partial && !isTouched(inputId)) {
-                        return;
-                    }
-                    const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
-                    inputErrors[inputId] = message;
-                });
-            }
-
-            setFieldErrors((prev) => {
-                const next = { ...prev };
-                Object.keys(next).forEach((path) => {
-                    if (next[path]?.source !== "external" && isTouched(path)) {
-                        delete next[path];
-                    }
-                });
-                Object.entries(inputErrors).forEach(([path, message]) => {
-                    next[path] = { message, source: "schema" };
-                });
-                return next;
+        setFieldErrors((prev) => {
+            const next = { ...prev };
+            Object.keys(next).forEach((path) => {
+                if (next[path]?.source !== "external" && isTouched(path)) {
+                    delete next[path];
+                }
             });
+            Object.entries(inputErrors).forEach(([path, message]) => {
+                next[path] = { message, source: "schema" };
+            });
+            return next;
+        });
 
-            if (Object.keys(inputErrors).length > 0) {
-                console.error("Validation Error Details:", inputErrors);
-                onValidationError(inputErrors, partial);
-                return false;
-            }
-            return true;
-        },
-        [onValidationError, schema]
-    );
+        if (Object.keys(inputErrors).length > 0) {
+            console.error("Validation Error Details:", inputErrors);
+            latest.current.onValidationError(inputErrors, partial);
+            return false;
+        }
+        return true;
+    }, []);
 
     const onPageSubmit = useCallback(
         async (data: Record<string, any>) => {
             const pageData = data ?? {};
 
             if (validate(pageData, true)) {
-                const submitData = merge({}, internalData, pageData);
-                setInternalData(submitData);
+                const submitData = merge({}, internalData.current, pageData);
+                internalData.current = submitData;
                 if (isLastPage) {
                     if (validate(submitData as Record<string, any>)) {
                         try {
-                            await onSubmit(submitData as T, isValidationError);
+                            await latest.current.onSubmit(submitData as T, isValidationError);
                         } catch (err) {
                             if (!isValidationError(err)) {
                                 showApiErrorToast(err);
@@ -197,7 +206,7 @@ export function Wizard<T>({
                 }
             }
         },
-        [validate, isLastPage, internalData, onSubmit, totalPages, isValidationError]
+        [validate, isLastPage, totalPages, isValidationError]
     );
 
     const onPageBack = useCallback(() => {
@@ -211,14 +220,12 @@ export function Wizard<T>({
         [validate]
     );
 
-    const contextValue = useMemo<WizardContextProps<T>>(
+    const contextValue = useMemo<WizardContextProps>(
         () => ({
-            id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
+            id,
             currentPage,
             totalPages,
             setTotalPages,
-            data: internalData,
-            setData: setInternalData,
             isFirstPage,
             isLastPage,
             validationErrors,
@@ -234,9 +241,9 @@ export function Wizard<T>({
             validateForm
         }),
         [
+            id,
             currentPage,
             totalPages,
-            internalData,
             isFirstPage,
             isLastPage,
             validationErrors,

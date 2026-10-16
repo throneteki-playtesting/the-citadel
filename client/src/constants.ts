@@ -83,6 +83,8 @@ export const POOL_PULL_MS = 150;
 export const CHIP_DROP_MS = 250;
 // How long a filter drawer's dismissal is held, so the click which ends it isn't read as one outside what holds it
 export const FILTER_CLOSE_HOLD_MS = 300;
+// How long after a keystroke a dropdown list is kept from taking focus off its search box
+export const FOCUS_GUARD_MS = 1000;
 // How long a live toast waits on its work before giving up on it
 export const LIVE_TOAST_STALLED_MS = 60_000;
 

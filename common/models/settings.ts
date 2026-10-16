@@ -9,10 +9,14 @@ export interface IRewardDownsideOption {
     id: string;
     label: string;
     description: string;
-    /** Short, illustrative example strings - not gameplay-verified rules text */
-    examples: string[];
-    /** Both a search target and a user-visible label on the option itself */
-    tags: string[];
+    /** What part of the game this touches - a search tag, and a user-visible label on the option itself */
+    aspects: string[];
+    /** The deck it suits - a search tag, and a user-visible label on the option itself */
+    archetypes: string[];
+    /** Card keywords (see `keywordNames`) which add this option to a suggestion when they appear in its text */
+    keywords: string[];
+    /** Rewards only - a card granting this is expected to be marked Loyal (the loyaltyConsistency rule) */
+    requiresLoyalty?: boolean;
     /** Disabled hides an option from new selections, but it stays valid/rendered wherever already selected */
     enabled: boolean;
 }
@@ -21,8 +25,6 @@ export interface ISuggestionsSettings {
     minimumLikesThreshold: number;
     rewardOptions: IRewardDownsideOption[];
     downsideOptions: IRewardDownsideOption[];
-    /** Tags which, when present on a selected reward, trigger the loyalty-consistency checklist rule */
-    loyaltyTags: string[];
     /** How many times a single faction's share the neutral pool is expected to hold, per card type */
     neutralWeight: number;
     /** Which span the Suggestion Statistics chart opens on - anyone can still switch it on the page */

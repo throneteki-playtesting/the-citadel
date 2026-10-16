@@ -3,6 +3,8 @@ import {
     challengeIcons,
     Faction,
     factions,
+    GameModeType,
+    gameModeTypes,
     Icons,
     ReactionType,
     Type,
@@ -114,6 +116,7 @@ export function suggestionFilterToParams(filter: SuggestionFilterValue): Record<
     set("myReactions", encodeArray(filter.myReactions));
     set("tags", encodeArray(filter.tags));
     set("iconic", encodeBoolean(filter.iconic));
+    set("modes", encodeArray(filter.intendedGameModes));
     set("legacy", encodeBoolean(filter.legacy));
     set("archived", filter.archived ? "true" : undefined);
     set("developed", filter.developed ? "true" : undefined);
@@ -143,6 +146,9 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
     const loyalRaw = params.get("loyal");
     const uniqueRaw = params.get("unique");
     const iconicRaw = params.get("iconic");
+    const intendedGameModes = decodeArray(params.get("modes")).filter((entry): entry is GameModeType =>
+        (gameModeTypes as readonly string[]).includes(entry)
+    );
     const approvedFilterRaw = params.get("approvedFilter");
     const myReactions = decodeArray(params.get("myReactions")).filter(
         (entry): entry is ReactionType => entry === "like" || entry === "dislike" || entry === "ignore"
@@ -173,6 +179,7 @@ export function suggestionFilterFromParams(params: URLSearchParams): SuggestionF
         myReactions: myReactions.length > 0 ? myReactions : undefined,
         tags: tags.length > 0 ? tags : undefined,
         iconic: decodeBoolean(iconicRaw),
+        intendedGameModes: intendedGameModes.length > 0 ? intendedGameModes : undefined,
         legacy: decodeBoolean(params.get("legacy")),
         archived: params.get("archived") === "true" ? true : undefined,
         developed: params.get("developed") === "true" ? true : undefined,

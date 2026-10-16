@@ -1,12 +1,19 @@
 import { Chip, Select, SelectItem, SelectProps, SharedSelection } from "@heroui/react";
 import { useInfiniteScroll } from "@heroui/use-infinite-scroll";
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { KeyboardEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmarkCircle } from "@fortawesome/free-solid-svg-icons";
-import { BaseElementProps } from "../../types";
+import { BaseElementProps, UIColor } from "../../types";
+import { useInputFocusGuard } from "../../hooks/useInputFocusGuard";
 
 const SENTINEL_KEY = "__searchable-select-sentinel__";
+
+// A negative offset draws the focus ring inside, where the list's scroll container can't clip it
+const ITEM_CLASS_NAMES = {
+    title: "min-w-0 overflow-hidden",
+    base: "data-[focus-visible=true]:outline-offset-[-2px]"
+};
 
 function SearchableMultiSelect<T extends object>({
     className,
@@ -23,6 +30,7 @@ function SearchableMultiSelect<T extends object>({
     renderItem,
     renderSelected,
     getChipLabel,
+    getChipColor,
     chipClassName,
     hideChipsInInput,
     keepSearchOnSelect,
@@ -32,15 +40,20 @@ function SearchableMultiSelect<T extends object>({
     onSearchChange,
     hasMore,
     onLoadMore,
+    onCreate,
+    isCompact,
+    itemClassName,
     isLoading,
     isDisabled
 }: SearchableMultiSelectProps<T>) {
     const [isOpen, setIsOpen] = useState(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const { guard: guardFocus, release: releaseFocusGuard } = useInputFocusGuard(inputRef);
     const [, scrollRef] = useInfiniteScroll({ hasMore, isEnabled: isOpen, shouldUseLoader: false, onLoadMore });
     const sentinel = useRef({} as T).current;
 
     const collectionItems = useMemo(() => [...items, sentinel], [items, sentinel]);
+    // The always-selected sentinel keeps the collection non-empty; it must not count towards the clear button
     const selectedKeysWithSentinel = useMemo(() => [...selectedKeys, SENTINEL_KEY], [selectedKeys]);
 
     const term = search.trim();
@@ -59,14 +72,14 @@ function SearchableMultiSelect<T extends object>({
     // The shared "list of labeled things" chip look (matches TraitsInput) - only used when the caller
     // hasn't supplied its own renderSelected (eg. userSelect's avatar rows stay fully custom).
     const defaultRenderSelected = (selectedItems: T[]) => (
-        <div className="flex flex-wrap gap-1 py-1">
+        <div className={classNames("flex flex-wrap gap-1", !isCompact && "py-1")}>
             {selectedItems.map((item) => {
                 const key = getKey(item);
                 return (
                     <Chip
                         key={key}
                         variant="flat"
-                        color="default"
+                        color={getChipColor?.(item) ?? "default"}
                         className={classNames("rounded-sm p-0 pr-0.5 border-1 border-content2", chipClassName)}
                         onClose={() => onSelectionChange(new Set(selectedKeys.filter((k) => k !== key)))}
                     >
@@ -90,13 +103,36 @@ function SearchableMultiSelect<T extends object>({
         onSelectionChange(new Set([...keys].filter((key) => key !== SENTINEL_KEY)));
     };
 
+    const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            releaseFocusGuard();
+        }
+        if (e.key === "Enter" && onCreate && term) {
+            // Stops a surrounding form taking Enter as a submit
+            e.preventDefault();
+            // The listbox picks a highlighted item; with nothing to pick, the text is a new one
+            const hasMatch = items.some((item) => !selectedKeys.includes(getKey(item)) && !isHidden(item));
+            if (!hasMatch) {
+                e.stopPropagation();
+                onCreate(term);
+                onSearchChange("");
+                return;
+            }
+        }
+        // Keys the listbox is entitled to while the search field has focus - everything
+        // else is editing the term
+        if (!["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"].includes(e.key)) {
+            e.stopPropagation();
+        }
+    };
+
     // onPointerDown stops HeroUI's own trigger toggle from fighting our controlled isOpen; onKeyDown
     // stops typed characters from bubbling into HeroUI's listbox "type to select" handling.
     const renderValue = (selected: { data?: T | null }[]) => {
         const selectedItems = selected.map((s) => s.data).filter((s): s is T => s != null && s !== sentinel);
         return (
             <div
-                className="flex flex-wrap items-center gap-1 w-full py-1 cursor-text"
+                className={classNames("flex flex-wrap items-center gap-1 w-full cursor-text", !isCompact && "py-1")}
                 onPointerDown={(e) => {
                     e.stopPropagation();
                     inputRef.current?.focus();
@@ -110,16 +146,11 @@ function SearchableMultiSelect<T extends object>({
                     aria-label={label ? `${label} search` : "Search"}
                     value={search}
                     onChange={(e) => {
+                        guardFocus();
                         onSearchChange(e.target.value);
                         setIsOpen(true);
                     }}
-                    onKeyDown={(e) => {
-                        // Keys the listbox is entitled to while the search field has focus - everything
-                        // else is editing the term
-                        if (!["ArrowDown", "ArrowUp", "Enter", "Escape", "Tab"].includes(e.key)) {
-                            e.stopPropagation();
-                        }
-                    }}
+                    onKeyDown={onInputKeyDown}
                     placeholder={hideChipsInInput || selectedItems.length === 0 ? placeholder : undefined}
                     className="flex-1 min-w-[80px] bg-transparent outline-none text-foreground mx-1"
                 />
@@ -161,10 +192,9 @@ function SearchableMultiSelect<T extends object>({
             selectedKeys={selectedKeysWithSentinel}
             renderValue={renderValue}
             onSelectionChange={handleSelectionChange}
-            // The sentinel item is always "selected", so Select's own isClearable check would show the
-            // clear button permanently - gate it on the real selection instead.
             isClearable={selectedKeys.length > 0}
             onClear={() => onSelectionChange(new Set())}
+            classNames={isCompact ? { trigger: "min-h-9 px-2 py-1" } : undefined}
             className={className}
             style={style}
         >
@@ -174,13 +204,8 @@ function SearchableMultiSelect<T extends object>({
                 ) : (
                     <SelectItem
                         key={getKey(item)}
-                        className={classNames(isHidden(item) && "hidden")}
-                        classNames={{
-                            title: "min-w-0 overflow-hidden",
-                            // The listbox's own scroll container clips the focus ring's default
-                            // OUTSIDE offset near an edge - a negative offset draws it INSIDE instead.
-                            base: "data-[focus-visible=true]:outline-offset-[-2px]"
-                        }}
+                        className={classNames(isHidden(item) && "hidden", itemClassName)}
+                        classNames={ITEM_CLASS_NAMES}
                     >
                         {renderItem(item)}
                     </SelectItem>
@@ -210,6 +235,8 @@ type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     /** Enables the shared default chip UI in place of `renderSelected`, showing this label per selected
      *  item with its own remove (x). Leave unset for a caller needing custom chip content. */
     getChipLabel?: (item: T) => ReactNode;
+    /** The colour of each default chip. Only applies alongside `getChipLabel`. */
+    getChipColor?: (item: T) => UIColor;
     /** Extra classes merged onto each default chip - eg. "uppercase tracking-wide" for a tag list.
      *  Only applies alongside `getChipLabel`; a custom `renderSelected` owns its own styling. */
     chipClassName?: string;
@@ -224,6 +251,12 @@ type SearchableMultiSelectProps<T> = Omit<BaseElementProps, "children"> & {
     onSearchChange: (value: string) => void;
     hasMore: boolean;
     onLoadMore: () => void;
+    /** Pressing enter on text matching nothing offered hands it here, to be added as an item of its own */
+    onCreate?: (text: string) => void;
+    /** Tightens the padding around the chips and the search, for a field which sits among many */
+    isCompact?: boolean;
+    /** Extra classes on each option in the dropdown */
+    itemClassName?: string;
     isLoading?: boolean;
     isDisabled?: boolean;
 };

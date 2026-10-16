@@ -1,4 +1,11 @@
-import { ICard, ICardSuggestion, ChecklistRuleId, ChecklistJustifications, IDerivedFields } from "common/models/cards";
+import {
+    ICard,
+    ICardSuggestion,
+    ChecklistRuleId,
+    ChecklistJustifications,
+    GameModeType,
+    IDerivedFields
+} from "common/models/cards";
 import { IRewardDownsideOption } from "common/models/settings";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
@@ -6,7 +13,6 @@ import SuggestionEditorGuide from "./suggestionEditorGuide";
 import { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuideState";
 import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
 import Modal from "../../components/modal";
-import RichTextArea from "../../components/richTextArea";
 import {
     useCreateSuggestionMutation,
     useDeleteSuggestionMutation,
@@ -19,7 +25,7 @@ import {
     SuggestionMigration
 } from "../../api";
 import ConfirmModal from "../../components/confirmModal";
-import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
@@ -28,29 +34,21 @@ import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { useWizard } from "../../components/wizard/context";
 import { CardSuggestion } from "common/models/schemas";
-import CardPickerDropdown from "../../components/data/cardPickerDropdown";
-import SelectedCardImages from "../../components/data/selectedCardImages";
 import { useAuth } from "../../hooks/useAuth";
+import { useStableCallback } from "../../hooks/useStableCallback";
 import { showApiErrorToast } from "../../api/errors";
+import { isEqual } from "lodash-es";
 import { deriveFields } from "common/designGuidelines/deriveFields";
 import { checklistRules, RuleResult } from "common/designGuidelines/checklistRules";
-import SearchTagPicker from "../../components/designGuidelines/searchTagPicker";
-import PivotPointsInput from "../../components/designGuidelines/pivotPointsInput";
-import BooleanTileGroup from "../../components/designGuidelines/booleanTileGroup";
-import CountStepper from "../../components/designGuidelines/countStepper";
-import QuestionHelpIcon from "../../components/designGuidelines/questionHelpIcon";
-import { SUGGESTION_QUESTIONS, SuggestionQuestionMeta } from "common/designGuidelines/suggestionQuestions";
+import { useKeywordSelections } from "./useKeywordSelections";
 import {
-    FullChecklist,
     MiniChecklist,
     MiniChecklistIcons,
     MiniChecklistNotice
 } from "../../components/designGuidelines/suggestionChecklist";
-import SectionTitle from "../../components/sectionTitle";
-import SectionBlurb from "../../components/sectionBlurb";
 import StatusNotice from "../../components/statusNotice";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { EASE_STANDARD, EDITOR_CARD_WIDTH } from "../../constants";
+import { EDITOR_CARD_WIDTH } from "../../constants";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@fortawesome/free-solid-svg-icons";
@@ -60,12 +58,13 @@ import useUser from "../../hooks/useUser";
 import MigrateMergeChoice from "./migrateMergeChoice";
 import LegacyThreadChoice, { POST_FRESH } from "./legacyThreadChoice";
 import MigrationBanner from "./migrationBanner";
-
-const RAIL_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
+import { ContextPage, QuestionsPage, ReviewPage, RewardsPage } from "./suggestionEditorPages";
+import { RAIL_TRANSITION } from "./editorTransition";
 
 // A `?? []` fallback creates a new array every render, defeating a memoized child's memo just as
 // surely as an unstable callback would - one shared empty reference instead.
 const EMPTY_STRINGS: string[] = [];
+const EMPTY_MODES: GameModeType[] = [];
 
 // Same reasoning, for the settings query's reward/downside lists while they're still loading
 const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
@@ -74,52 +73,18 @@ const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
 const EMPTY_JUSTIFICATIONS: DeepPartial<ChecklistJustifications> = {};
 const EMPTY_SUGGESTIONS: ICardSuggestion[] = [];
 
-/** Marks a section title whose answer the submit-time schema actually requires */
-function RequiredMark() {
-    return (
-        <span className="text-danger" aria-label="required">
-            {" "}
-            *
-        </span>
-    );
-}
-
-/** Wraps a required, non-native control (no `name` a HeroUI `Form` can bind to) so an unanswered
- *  Next shows the same invalid-input language HeroUI's own fields use, not an invented style. */
-function RequiredField({ name, children }: { name: string; children: ReactNode }) {
-    const { validationErrors } = useWizard();
-    const error = validationErrors[name];
-    return (
-        <div className="flex flex-col gap-1">
-            <div className={classNames("rounded-medium", error && "bg-danger-50 -m-2 p-2")}>{children}</div>
-            {error && <div className="pt-1 text-tiny text-danger">{error}</div>}
-        </div>
-    );
-}
-
-/** Title (+ RequiredMark) and blurb (+ QuestionHelpIcon, only once there's a `.question` to explain) -
- *  shared by every question section in this wizard bar the one with a differently-laid-out blurb row. */
-function QuestionHeader({ question, required }: { question: SuggestionQuestionMeta; required?: boolean }) {
-    return (
-        <>
-            <SectionTitle size="sm">
-                {question.title}
-                {required && <RequiredMark />}
-            </SectionTitle>
-            <SectionBlurb>
-                {question.question ?? question.blurb}
-                {question.question && <QuestionHelpIcon question={question} />}
-            </SectionBlurb>
-        </>
-    );
-}
-
 /** Replaced by the engagement-clear warning on the last page - both stay mounted, stacked in one CSS
  *  grid cell, crossfading only opacity (not height), avoiding the "fighting for space" jitter. */
-function ChecklistRail({ results, suggestion }: { results: RuleResult[]; suggestion: DeepPartial<ICardSuggestion> }) {
+const ChecklistRail = memo(function ChecklistRail({
+    results,
+    hasEngagement
+}: {
+    results: RuleResult[];
+    hasEngagement: boolean;
+}) {
     const { isLastPage } = useWizard();
 
-    if (!hasEngagementToClear(suggestion)) {
+    if (!hasEngagement) {
         return (
             <AnimatePresence initial={false}>
                 {!isLastPage && results.length > 0 && (
@@ -163,11 +128,17 @@ function ChecklistRail({ results, suggestion }: { results: RuleResult[]; suggest
             </div>
         </div>
     );
-}
+});
 
 /** Mobile's collapsed resting bar - the same "on the last page, the checklist doesn't repeat itself"
  *  rule, but a text label rather than nothing, since a completely empty control invites no tap at all. */
-function MobileChecklistBar({ results, onExpand }: { results: RuleResult[]; onExpand: () => void }) {
+const MobileChecklistBar = memo(function MobileChecklistBar({
+    results,
+    onExpand
+}: {
+    results: RuleResult[];
+    onExpand: () => void;
+}) {
     const { isLastPage } = useWizard();
     return (
         <button
@@ -204,7 +175,7 @@ function MobileChecklistBar({ results, onExpand }: { results: RuleResult[]; onEx
             <FontAwesomeIcon icon={faChevronUp} className="shrink-0 text-foreground/40" />
         </button>
     );
-}
+});
 
 /** The mobile overlay's own header + checklist - same last-page collapse, this time down to nothing
  *  (not even the label), since the card preview below it is the whole point of opening this panel then. */
@@ -243,15 +214,16 @@ function MobileChecklistReveal({ results, onCollapse }: { results: RuleResult[];
     );
 }
 
-function SaveDraftButton({
+const SaveDraftButton = memo(function SaveDraftButton({
     suggestionId,
-    data,
+    getData,
     isDisabled,
     onSaved,
     onClose
 }: {
     suggestionId?: string;
-    data: DeepPartial<ICardSuggestion>;
+    /** Read when pressed, so the button isn't redrawn by every edit to what it will save */
+    getData: () => DeepPartial<ICardSuggestion>;
     isDisabled?: boolean;
     onSaved: (suggestion: ICardSuggestion) => void;
     onClose: () => void;
@@ -261,6 +233,7 @@ function SaveDraftButton({
     const { isValidationError, validateForm } = useWizard();
 
     const onPress = async () => {
+        const data = getData();
         // Validates against the permissive draft schema before saving.
         if (!validateForm(data, CardSuggestion.DraftSave)) {
             return;
@@ -288,7 +261,7 @@ function SaveDraftButton({
             Save Draft
         </Button>
     );
-}
+});
 
 function editorTitle(isSavedDraft: boolean, isMigrating: boolean, isLegacy: boolean) {
     if (isSavedDraft) {
@@ -319,8 +292,8 @@ const ENGAGEMENT_CLEAR_MESSAGE =
 
 /** A small pulsing icon in the footer, not a full sentence - the row's width is mostly spoken for
  *  already; the explanation lives behind a tap/hover instead. */
-function EngagementClearIcon({ suggestion }: { suggestion: DeepPartial<ICardSuggestion> }) {
-    if (!hasEngagementToClear(suggestion)) {
+function EngagementClearIcon({ hasEngagement }: { hasEngagement: boolean }) {
+    if (!hasEngagement) {
         return null;
     }
     return (
@@ -340,11 +313,11 @@ function EngagementClearIcon({ suggestion }: { suggestion: DeepPartial<ICardSugg
 
 /** Desktop-only wrapper adding the last-page fade EngagementClearIcon doesn't own itself -
  *  ChecklistRail's own crossfade takes over once this fades out. */
-function DesktopEngagementClearIcon({ suggestion }: { suggestion: DeepPartial<ICardSuggestion> }) {
+function DesktopEngagementClearIcon({ hasEngagement }: { hasEngagement: boolean }) {
     const { isLastPage } = useWizard();
     return (
         <AnimatePresence>
-            {hasEngagementToClear(suggestion) && !isLastPage && (
+            {hasEngagement && !isLastPage && (
                 <motion.div
                     key="engagement-clear-icon"
                     initial={{ opacity: 0, scale: 0.8 }}
@@ -352,15 +325,16 @@ function DesktopEngagementClearIcon({ suggestion }: { suggestion: DeepPartial<IC
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.15 }}
                 >
-                    <EngagementClearIcon suggestion={suggestion} />
+                    <EngagementClearIcon hasEngagement={hasEngagement} />
                 </motion.div>
             )}
         </AnimatePresence>
     );
 }
 
-function SavedDraftActions({
-    suggestion,
+const SavedDraftActions = memo(function SavedDraftActions({
+    suggestionId,
+    getSuggestion,
     hasCardBasics,
     isLoading,
     onDeleteRequested,
@@ -368,7 +342,8 @@ function SavedDraftActions({
     onSaveClose,
     onCancel
 }: {
-    suggestion: DeepPartial<ICardSuggestion>;
+    suggestionId?: string;
+    getSuggestion: () => DeepPartial<ICardSuggestion>;
     hasCardBasics: boolean;
     isLoading: boolean;
     onDeleteRequested: () => void;
@@ -382,8 +357,8 @@ function SavedDraftActions({
                 Delete Draft
             </Button>
             <SaveDraftButton
-                suggestionId={suggestion.id}
-                data={suggestion}
+                suggestionId={suggestionId}
+                getData={getSuggestion}
                 isDisabled={!hasCardBasics}
                 onSaved={onSaved}
                 onClose={onSaveClose}
@@ -392,23 +367,31 @@ function SavedDraftActions({
             <WizardNext isLoading={isLoading} isDisabled={!hasCardBasics} color="primary" />
         </>
     );
-}
+});
 
 // Shared by the desktop rail and mobile footer - only the engagement-clear icon differs between them.
-function StandardActions({
-    suggestion,
+const StandardActions = memo(function StandardActions({
+    suggestionId,
+    isDraft,
+    getSuggestion,
     hasCardBasics,
     isLoading,
-    engagementIcon,
+    engagement,
+    hasEngagement,
     isSubmitBlocked = false,
     onSaved,
     onSaveClose,
     onCancel
 }: {
-    suggestion: DeepPartial<ICardSuggestion>;
+    suggestionId?: string;
+    /** Whether it's still a draft - which is also true of one never saved */
+    isDraft: boolean;
+    getSuggestion: () => DeepPartial<ICardSuggestion>;
     hasCardBasics: boolean;
     isLoading: boolean;
-    engagementIcon: ReactNode;
+    /** Which of the two sets of actions this is - the desktop rail fades its icon out on the last page */
+    engagement: "desktop" | "mobile";
+    hasEngagement: boolean;
     /** Holds Submit back on the last page while it still has a question of its own unanswered */
     isSubmitBlocked?: boolean;
     onSaved: (suggestion: ICardSuggestion) => void;
@@ -418,12 +401,16 @@ function StandardActions({
     const { isLastPage } = useWizard();
     return (
         <>
-            {engagementIcon}
+            {engagement === "desktop" ? (
+                <DesktopEngagementClearIcon hasEngagement={hasEngagement} />
+            ) : (
+                <EngagementClearIcon hasEngagement={hasEngagement} />
+            )}
             <WizardBack onCancel={onCancel} />
-            {suggestion.draft !== false && (
+            {isDraft && (
                 <SaveDraftButton
-                    suggestionId={suggestion.id}
-                    data={suggestion}
+                    suggestionId={suggestionId}
+                    getData={getSuggestion}
                     isDisabled={!hasCardBasics}
                     onSaved={onSaved}
                     onClose={onSaveClose}
@@ -436,7 +423,7 @@ function StandardActions({
             />
         </>
     );
-}
+});
 
 const EditSuggestionModal = ({
     isOpen,
@@ -468,6 +455,7 @@ const EditSuggestionModal = ({
     // The mobile rail's peek state - collapsed (icons only) is the resting state, expanded shows
     // the checklist + card. See the AnimatePresence block near the footer for the fade choreography.
     const [railExpanded, setRailExpanded] = useState(false);
+    const expandRail = useCallback(() => setRailExpanded(true), []);
 
     // Lifted here since the Wizard unmounts (and loses its own page state) behind the guide/delete-confirm.
     const [wizardPage, setWizardPage] = useState(1);
@@ -489,7 +477,7 @@ const EditSuggestionModal = ({
     const submitterName = useUser(suggestion.createdBy ?? user?.discordId).user?.displayname;
 
     useEffect(() => {
-        setSuggestion({ ...initial });
+        setSuggestion({ ...initial, derived: deriveFields(initial?.card?.text ?? "") });
         setMergeId(undefined);
         setLegacyThread(undefined);
         if (!initial?.id) {
@@ -539,21 +527,12 @@ const EditSuggestionModal = ({
     const onMergeChange = (id?: string) => {
         setMergeId(id);
         const merging = mergeCandidates.find((candidate) => candidate.id === id);
-        setSuggestion((prev) => ({ ...prev, card: merging?.card ?? initial?.card }));
+        resetKeywordSelections((merging?.card ?? initial?.card)?.text);
+        const mergedCard = merging?.card ?? initial?.card;
+        setSuggestion((prev) => ({ ...prev, card: mergedCard, derived: deriveFields(mergedCard?.text ?? "") }));
     };
 
-    // `derived` is kept live client-side too, mirroring the server's own recompute on save - lets
-    // the checklist/validation work without waiting on a round trip.
-    useEffect(() => {
-        const derived = deriveFields(suggestion.card?.text ?? "");
-        setSuggestion((prev) => ({ ...prev, derived }));
-    }, [suggestion.card?.text]);
-
     const { card, questions, derived, pivotPoints } = suggestion;
-
-    // Natural Trigger/Safely Limited only mean anything once there's a triggered ability to ask
-    // about - gates their visibility, matching the `required()` conditional in the submit-time schema.
-    const hasTriggeredAbilities = (questions?.triggeredAbilityCount ?? 0) > 0;
 
     // checklistRules()/renderCardSuggestion() are real work (keyword scans, a layout pass), and
     // `card` gets a new identity on every keystroke - deferring lets typing paint first.
@@ -567,8 +546,7 @@ const EditSuggestionModal = ({
         skip: deferredCard?.type !== "plot"
     });
 
-    // Reward/downside options and loyalty tags now live in settings rather than a static import - a
-    // safe empty default keeps the checklist rendering while the query is still loading.
+    // An empty default keeps the checklist rendering while the query loads
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
     const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
     const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
@@ -590,6 +568,34 @@ const EditSuggestionModal = ({
         [downsideOptions, suggestion.questions?.downsides]
     );
 
+    const selectedOptionIds = useMemo(
+        () => [
+            ...(suggestion.questions?.rewards ?? EMPTY_STRINGS),
+            ...(suggestion.questions?.downsides ?? EMPTY_STRINGS)
+        ],
+        [suggestion.questions?.rewards, suggestion.questions?.downsides]
+    );
+    const {
+        marks: keywordMarks,
+        reset: resetKeywordSelections,
+        onCardTextChange,
+        settleRewards,
+        settleDownsides
+    } = useKeywordSelections({
+        rewardOptions,
+        downsideOptions,
+        selectedIds: selectedOptionIds,
+        updateSelections: (update) =>
+            setSuggestion((prev) => {
+                const next = update({
+                    rewards: (prev.questions?.rewards ?? EMPTY_STRINGS) as string[],
+                    downsides: (prev.questions?.downsides ?? EMPTY_STRINGS) as string[]
+                });
+                return { ...prev, questions: { ...prev.questions, ...next } };
+            })
+    });
+    useEffect(() => resetKeywordSelections(initial?.card?.text), [initial, resetKeywordSelections]);
+
     // Narrowed to only what checklistRules() actually reads - a whole-object dependency was
     // recomputing (and re-rendering every row) on every Notes/justification keystroke too.
     const checklistResults = useMemo(() => {
@@ -610,8 +616,7 @@ const EditSuggestionModal = ({
             pivotPoints: (deferredPivotPoints ?? []).filter((p): p is string => !!p),
             plotMedian: plotPoolMedian?.median,
             rewardOptions,
-            downsideOptions,
-            loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
+            downsideOptions
         });
     }, [
         deferredCard,
@@ -620,8 +625,7 @@ const EditSuggestionModal = ({
         deferredPivotPoints,
         plotPoolMedian,
         rewardOptions,
-        downsideOptions,
-        suggestionSettings?.loyaltyTags
+        downsideOptions
     ]);
 
     // Nothing worth saving or moving on from until the design has at least these two basics -
@@ -646,18 +650,45 @@ const EditSuggestionModal = ({
         }));
     }, []);
 
-    const onCardUpdate = useCallback((card: DeepPartial<ICard>) => setSuggestion((prev) => ({ ...prev, card })), []);
+    // `derived` mirrors the server's recompute on save, kept with the edit itself rather than in a later effect
+    const onCardUpdate = useCallback(
+        (card: DeepPartial<ICard>) => {
+            const derived = deriveFields(card.text ?? "");
+            onCardTextChange(
+                card.text,
+                derived.keywords.map(({ keyword }) => keyword)
+            );
+            setSuggestion((prev) => ({
+                ...prev,
+                card,
+                derived: isEqual(prev.derived, derived) ? prev.derived : derived
+            }));
+        },
+        [onCardTextChange]
+    );
 
     const onRewardsChange = useCallback(
-        (rewards: string[]) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, rewards } })),
-        []
+        (rewards: string[]) => {
+            settleRewards(rewards);
+            setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, rewards } }));
+        },
+        [settleRewards]
     );
     const onDownsidesChange = useCallback(
-        (downsides: string[]) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, downsides } })),
-        []
+        (downsides: string[]) => {
+            settleDownsides(downsides);
+            setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, downsides } }));
+        },
+        [settleDownsides]
     );
+    const onNotesChange = useCallback((notes: string | undefined) => setSuggestion((prev) => ({ ...prev, notes })), []);
     const onIconicChange = useCallback(
         (iconic: boolean) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, iconic } })),
+        []
+    );
+    const onIntendedGameModesChange = useCallback(
+        (intendedGameModes: GameModeType[]) =>
+            setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, intendedGameModes } })),
         []
     );
     // Dropping the count back to 0 clears Natural Trigger/Safely Limited so a stale answer can't resurface.
@@ -748,12 +779,18 @@ const EditSuggestionModal = ({
     };
 
     // Closes the editor, reopening "My Drafts" behind it if this was an existing saved draft.
-    const closeEditor = () => {
+    // Stable, with the getter below, so the buttons taking them don't re-render on every edit
+    const closeEditor = useStableCallback(() => {
         onModalClose();
         if (isSavedDraft) {
             onReturnToDrafts();
         }
-    };
+    });
+    const requestDelete = useCallback(() => setIsConfirmingDeleteDraft(true), []);
+    const suggestionRef = useRef(suggestion);
+    suggestionRef.current = suggestion;
+    const getSuggestion = useCallback(() => suggestionRef.current, []);
+    const hasEngagement = hasEngagementToClear(suggestion);
 
     // Only closes the confirmation (and the editor for good) once the delete has actually gone
     // through - a failure leaves both exactly where they were, error surfaced by toast.
@@ -874,112 +911,33 @@ const EditSuggestionModal = ({
                                                             naturalTrigger: suggestion.questions?.naturalTrigger,
                                                             repeatabilityRestricted:
                                                                 suggestion.questions?.repeatabilityRestricted,
-                                                            iconic: suggestion.questions?.iconic
+                                                            iconic: suggestion.questions?.iconic,
+                                                            intendedGameModes:
+                                                                suggestion.questions?.intendedGameModes ?? EMPTY_MODES
                                                         }
                                                     }}
                                                 >
-                                                    <div className="flex flex-col gap-5 w-full">
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.iconic}
-                                                                required
-                                                            />
-                                                            <RequiredField name="questions.iconic">
-                                                                <BooleanTileGroup
-                                                                    options={SUGGESTION_QUESTIONS.iconic.options!}
-                                                                    value={suggestion.questions?.iconic}
-                                                                    onChange={onIconicChange}
-                                                                />
-                                                            </RequiredField>
-                                                        </div>
-
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <SectionTitle size="sm">
-                                                                {SUGGESTION_QUESTIONS.triggeredAbilityCount.title}
-                                                            </SectionTitle>
-                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                                                <SectionBlurb className="flex-1 min-w-0">
-                                                                    {
-                                                                        SUGGESTION_QUESTIONS.triggeredAbilityCount
-                                                                            .question
-                                                                    }
-                                                                    <QuestionHelpIcon
-                                                                        question={
-                                                                            SUGGESTION_QUESTIONS.triggeredAbilityCount
-                                                                        }
-                                                                    />
-                                                                </SectionBlurb>
-                                                                <CountStepper
-                                                                    className="shrink-0"
-                                                                    value={suggestion.questions?.triggeredAbilityCount}
-                                                                    onChange={onTriggeredAbilityCountChange}
-                                                                    max={20}
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        <AnimatePresence initial={false}>
-                                                            {hasTriggeredAbilities && (
-                                                                <motion.div
-                                                                    key="triggered-ability-details"
-                                                                    initial={{ height: 0, opacity: 0 }}
-                                                                    animate={{ height: "auto", opacity: 1 }}
-                                                                    exit={{ height: 0, opacity: 0 }}
-                                                                    transition={RAIL_TRANSITION}
-                                                                    className="overflow-hidden"
-                                                                >
-                                                                    <div className="flex flex-col gap-5">
-                                                                        <div className="flex flex-col gap-2 w-full">
-                                                                            <QuestionHeader
-                                                                                question={
-                                                                                    SUGGESTION_QUESTIONS.naturalTrigger
-                                                                                }
-                                                                                required
-                                                                            />
-                                                                            <RequiredField name="questions.naturalTrigger">
-                                                                                <BooleanTileGroup
-                                                                                    options={
-                                                                                        SUGGESTION_QUESTIONS
-                                                                                            .naturalTrigger.options!
-                                                                                    }
-                                                                                    value={
-                                                                                        suggestion.questions
-                                                                                            ?.naturalTrigger
-                                                                                    }
-                                                                                    onChange={onNaturalTriggerChange}
-                                                                                />
-                                                                            </RequiredField>
-                                                                        </div>
-
-                                                                        <div className="flex flex-col gap-2 w-full">
-                                                                            <QuestionHeader
-                                                                                question={
-                                                                                    SUGGESTION_QUESTIONS.repeatabilityRestricted
-                                                                                }
-                                                                                required
-                                                                            />
-                                                                            <RequiredField name="questions.repeatabilityRestricted">
-                                                                                <BooleanTileGroup
-                                                                                    options={
-                                                                                        SUGGESTION_QUESTIONS
-                                                                                            .repeatabilityRestricted
-                                                                                            .options!
-                                                                                    }
-                                                                                    value={
-                                                                                        suggestion.questions
-                                                                                            ?.repeatabilityRestricted
-                                                                                    }
-                                                                                    onChange={
-                                                                                        onRepeatabilityRestrictedChange
-                                                                                    }
-                                                                                />
-                                                                            </RequiredField>
-                                                                        </div>
-                                                                    </div>
-                                                                </motion.div>
-                                                            )}
-                                                        </AnimatePresence>
-                                                    </div>
+                                                    <QuestionsPage
+                                                        iconic={suggestion.questions?.iconic}
+                                                        intendedGameModes={
+                                                            (suggestion.questions?.intendedGameModes ??
+                                                                EMPTY_MODES) as GameModeType[]
+                                                        }
+                                                        triggeredAbilityCount={
+                                                            suggestion.questions?.triggeredAbilityCount
+                                                        }
+                                                        naturalTrigger={suggestion.questions?.naturalTrigger}
+                                                        repeatabilityRestricted={
+                                                            suggestion.questions?.repeatabilityRestricted
+                                                        }
+                                                        onIconicChange={onIconicChange}
+                                                        onIntendedGameModesChange={onIntendedGameModesChange}
+                                                        onTriggeredAbilityCountChange={onTriggeredAbilityCountChange}
+                                                        onNaturalTriggerChange={onNaturalTriggerChange}
+                                                        onRepeatabilityRestrictedChange={
+                                                            onRepeatabilityRestrictedChange
+                                                        }
+                                                    />
                                                 </WizardPage>
 
                                                 <WizardPage
@@ -990,27 +948,20 @@ const EditSuggestionModal = ({
                                                         }
                                                     }}
                                                 >
-                                                    <div className="flex flex-col gap-5 w-full">
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader question={SUGGESTION_QUESTIONS.rewards} />
-                                                            <SearchTagPicker
-                                                                options={rewardSelectableOptions}
-                                                                value={suggestion.questions?.rewards ?? EMPTY_STRINGS}
-                                                                onChange={onRewardsChange}
-                                                                placeholder="Search reward types by name or tag…"
-                                                            />
-                                                        </div>
-
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader question={SUGGESTION_QUESTIONS.downsides} />
-                                                            <SearchTagPicker
-                                                                options={downsideSelectableOptions}
-                                                                value={suggestion.questions?.downsides ?? EMPTY_STRINGS}
-                                                                onChange={onDownsidesChange}
-                                                                placeholder="Search downside types by name or tag…"
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <RewardsPage
+                                                        rewards={
+                                                            (suggestion.questions?.rewards ?? EMPTY_STRINGS) as string[]
+                                                        }
+                                                        downsides={
+                                                            (suggestion.questions?.downsides ??
+                                                                EMPTY_STRINGS) as string[]
+                                                        }
+                                                        rewardOptions={rewardSelectableOptions}
+                                                        downsideOptions={downsideSelectableOptions}
+                                                        marks={keywordMarks}
+                                                        onRewardsChange={onRewardsChange}
+                                                        onDownsidesChange={onDownsidesChange}
+                                                    />
                                                 </WizardPage>
 
                                                 <WizardPage
@@ -1020,50 +971,14 @@ const EditSuggestionModal = ({
                                                         combosWith: suggestion.combosWith ?? []
                                                     }}
                                                 >
-                                                    <div className="flex flex-col gap-5 w-full">
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.pivotPoints}
-                                                            />
-                                                            <PivotPointsInput
-                                                                className="w-full"
-                                                                value={pivotPointsValue}
-                                                                onChange={onPivotPointsChange}
-                                                            />
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.comparableCards}
-                                                            />
-                                                            <SelectedCardImages
-                                                                value={comparableCardsValue}
-                                                                onChange={onComparableCardsChange}
-                                                                emptyLabel="No comparable cards selected."
-                                                            />
-                                                            <CardPickerDropdown
-                                                                ariaLabel="Search comparable cards"
-                                                                placeholder="Search by name or trait…"
-                                                                value={comparableCardsValue}
-                                                                onChange={onComparableCardsChange}
-                                                            />
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.combosWith}
-                                                            />
-                                                            <SelectedCardImages
-                                                                value={combosWithValue}
-                                                                onChange={onCombosWithChange}
-                                                                emptyLabel="No combos selected."
-                                                            />
-                                                            <CardPickerDropdown
-                                                                ariaLabel="Search combo cards"
-                                                                placeholder="Search by name or trait…"
-                                                                value={combosWithValue}
-                                                                onChange={onCombosWithChange}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <ContextPage
+                                                        pivotPoints={pivotPointsValue}
+                                                        comparableCards={comparableCardsValue}
+                                                        combosWith={combosWithValue}
+                                                        onPivotPointsChange={onPivotPointsChange}
+                                                        onComparableCardsChange={onComparableCardsChange}
+                                                        onCombosWithChange={onCombosWithChange}
+                                                    />
                                                 </WizardPage>
 
                                                 <WizardPage
@@ -1075,33 +990,15 @@ const EditSuggestionModal = ({
                                                         draft: false
                                                     }}
                                                 >
-                                                    <div className="flex flex-col gap-5 w-full">
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.checklistReview}
-                                                            />
-                                                            <FullChecklist
-                                                                results={checklistResults}
-                                                                justifications={
-                                                                    suggestion.checklistJustifications ??
-                                                                    EMPTY_JUSTIFICATIONS
-                                                                }
-                                                                onJustificationChange={onJustificationChange}
-                                                            />
-                                                        </div>
-                                                        <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.editorNotes}
-                                                            />
-                                                            <RichTextArea
-                                                                value={suggestion.notes}
-                                                                onValueChange={(notes) =>
-                                                                    setSuggestion((prev) => ({ ...prev, notes }))
-                                                                }
-                                                                placeholder="E.g. Intended as a soft counter to control decks..."
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <ReviewPage
+                                                        results={checklistResults}
+                                                        justifications={
+                                                            suggestion.checklistJustifications ?? EMPTY_JUSTIFICATIONS
+                                                        }
+                                                        notes={suggestion.notes}
+                                                        onJustificationChange={onJustificationChange}
+                                                        onNotesChange={onNotesChange}
+                                                    />
                                                 </WizardPage>
                                                 {isCompletingLegacy && (
                                                     <WizardPage controlledData={{}}>
@@ -1131,15 +1028,19 @@ const EditSuggestionModal = ({
                                                     isClamped={false}
                                                     className="mx-auto"
                                                 />
-                                                <ChecklistRail results={checklistResults} suggestion={suggestion} />
+                                                <ChecklistRail
+                                                    results={checklistResults}
+                                                    hasEngagement={hasEngagement}
+                                                />
                                             </div>
                                             {isSavedDraft ? (
                                                 <div className="shrink-0 grid grid-cols-2 gap-2 border-t border-content3 pt-3">
                                                     <SavedDraftActions
-                                                        suggestion={suggestion}
+                                                        suggestionId={suggestion.id}
+                                                        getSuggestion={getSuggestion}
                                                         hasCardBasics={canMoveOn}
                                                         isLoading={isCreating || isSubmitting}
-                                                        onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
+                                                        onDeleteRequested={requestDelete}
                                                         onSaved={setSuggestion}
                                                         onSaveClose={closeEditor}
                                                         onCancel={onClose}
@@ -1148,12 +1049,13 @@ const EditSuggestionModal = ({
                                             ) : (
                                                 <div className="shrink-0 flex items-center justify-end gap-2 border-t border-content3 pt-3">
                                                     <StandardActions
-                                                        suggestion={suggestion}
+                                                        suggestionId={suggestion.id}
+                                                        isDraft={suggestion.draft !== false}
+                                                        getSuggestion={getSuggestion}
                                                         hasCardBasics={canMoveOn}
                                                         isLoading={isCreating || isSubmitting}
-                                                        engagementIcon={
-                                                            <DesktopEngagementClearIcon suggestion={suggestion} />
-                                                        }
+                                                        engagement="desktop"
+                                                        hasEngagement={hasEngagement}
                                                         isSubmitBlocked={isLegacySubmitBlocked}
                                                         onSaved={setSuggestion}
                                                         onSaveClose={closeEditor}
@@ -1199,17 +1101,16 @@ const EditSuggestionModal = ({
                                 </AnimatePresence>
                             </div>
 
-                            {!railExpanded && (
-                                <MobileChecklistBar results={checklistResults} onExpand={() => setRailExpanded(true)} />
-                            )}
+                            {!railExpanded && <MobileChecklistBar results={checklistResults} onExpand={expandRail} />}
 
                             {isSavedDraft ? (
                                 <ModalFooter className="md:hidden grid grid-cols-2 gap-2">
                                     <SavedDraftActions
-                                        suggestion={suggestion}
+                                        suggestionId={suggestion.id}
+                                        getSuggestion={getSuggestion}
                                         hasCardBasics={canMoveOn}
                                         isLoading={isCreating || isSubmitting}
-                                        onDeleteRequested={() => setIsConfirmingDeleteDraft(true)}
+                                        onDeleteRequested={requestDelete}
                                         onSaved={setSuggestion}
                                         onSaveClose={closeEditor}
                                         onCancel={onClose}
@@ -1218,10 +1119,13 @@ const EditSuggestionModal = ({
                             ) : (
                                 <ModalFooter className="md:hidden">
                                     <StandardActions
-                                        suggestion={suggestion}
+                                        suggestionId={suggestion.id}
+                                        isDraft={suggestion.draft !== false}
+                                        getSuggestion={getSuggestion}
                                         hasCardBasics={canMoveOn}
                                         isLoading={isCreating || isSubmitting}
-                                        engagementIcon={<EngagementClearIcon suggestion={suggestion} />}
+                                        engagement="mobile"
+                                        hasEngagement={hasEngagement}
                                         isSubmitBlocked={isLegacySubmitBlocked}
                                         onSaved={setSuggestion}
                                         onSaveClose={closeEditor}

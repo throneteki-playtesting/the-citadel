@@ -404,8 +404,7 @@ const SuggestionDetail = () => {
     const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
         skip: suggestion?.card.type !== "plot"
     });
-    // Reward/downside options and loyalty tags now live in settings - a safe empty default keeps the
-    // checklist and answer tiles rendering while the query is still loading.
+    // An empty default keeps the checklist and answer tiles rendering while the query loads
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
     const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
     const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
@@ -444,8 +443,7 @@ const SuggestionDetail = () => {
               pivotPoints: suggestion.pivotPoints,
               plotMedian: plotPoolMedian?.median,
               rewardOptions,
-              downsideOptions,
-              loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
+              downsideOptions
           });
 
     const onExportPNG = async () => {
@@ -540,6 +538,10 @@ const SuggestionDetail = () => {
     const canIgnore = !reactionBlockReason;
 
     // Optional-chained throughout - a legacy suggestion has no `questions` at all
+    const gameModeTiles = (suggestion.questions?.intendedGameModes ?? []).flatMap((mode) => {
+        const meta = SUGGESTION_QUESTIONS.intendedGameModes.gameModes?.find((entry) => entry.value === mode);
+        return meta ? [<AnswerTile key={mode} label={meta.label} description={meta.description} />] : [];
+    });
     const rewardTiles = (suggestion.questions?.rewards ?? EMPTY_STRINGS).flatMap((id) => {
         const reward = rewardOptions.find((r) => r.id === id);
         return reward ? [<AnswerTile key={id} label={reward.label} description={reward.description} />] : [];
@@ -964,6 +966,14 @@ const SuggestionDetail = () => {
                             onDelete={() => setIsConfirmingDelete(true)}
                             canLink={canManageArchive && !isArchived}
                         />
+                    )}
+
+                    {gameModeTiles.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">{SUGGESTION_QUESTIONS.intendedGameModes.title}</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.intendedGameModes.blurb}</SectionBlurb>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{gameModeTiles}</div>
+                        </div>
                     )}
 
                     {rewardTiles.length > 0 && (

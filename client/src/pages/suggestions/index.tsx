@@ -74,6 +74,7 @@ const URL_OWNED_KEYS = [
     "naturalTrigger",
     "repeatabilityRestricted",
     "iconic",
+    "modes",
     "legacy",
     "archived",
     "developed",
