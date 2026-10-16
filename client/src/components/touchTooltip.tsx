@@ -11,12 +11,23 @@ import {
     type MouseEvent as ReactMouseEvent
 } from "react";
 import { Tooltip, type TooltipProps } from "@heroui/react";
+import classNames from "classnames";
 
 type TouchTooltipProps = TooltipProps & {
     keepOpen?: boolean;
+    // Whether hovering the tooltip itself holds it open. Touch is unaffected, as there is no hover.
+    isInteractive?: boolean;
 };
 
-export function TouchTooltip({ onOpenChange, children, content, keepOpen = false, ...props }: TouchTooltipProps) {
+export function TouchTooltip({
+    onOpenChange,
+    children,
+    content,
+    keepOpen = false,
+    isInteractive = false,
+    classNames: tooltipClassNames,
+    ...props
+}: TouchTooltipProps) {
     const [isOpen, setIsOpenState] = useState(false);
     const isOpenRef = useRef(false);
     const isTouchRef = useRef(false);
@@ -44,13 +55,17 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
         [setOpen]
     );
 
+    // A portalled popover or menu opened from the trigger still bubbles its events through it in React's tree, and
+    // those are not taps on the trigger
     const handlePointerDownCapture = useCallback((event: ReactPointerEvent) => {
-        isTouchRef.current = event.pointerType === "touch";
+        if (triggerRef.current?.contains(event.target as Node)) {
+            isTouchRef.current = event.pointerType === "touch";
+        }
     }, []);
 
     const handleClickCapture = useCallback(
         (event: ReactMouseEvent) => {
-            if (!isTouchRef.current) {
+            if (!isTouchRef.current || !triggerRef.current?.contains(event.target as Node)) {
                 return;
             }
             if (isOpenRef.current) {
@@ -105,7 +120,16 @@ export function TouchTooltip({ onOpenChange, children, content, keepOpen = false
     );
 
     return (
-        <Tooltip {...props} content={tooltipContent} isOpen={keepOpen || isOpen} onOpenChange={handleTooltipOpenChange}>
+        <Tooltip
+            {...props}
+            classNames={{
+                ...tooltipClassNames,
+                base: classNames(tooltipClassNames?.base, !isInteractive && "[@media(hover:hover)]:pointer-events-none")
+            }}
+            content={tooltipContent}
+            isOpen={keepOpen || isOpen}
+            onOpenChange={handleTooltipOpenChange}
+        >
             {child}
         </Tooltip>
     );

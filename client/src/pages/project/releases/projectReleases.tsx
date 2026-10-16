@@ -8,6 +8,7 @@ import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
 import CycleReleases from "./cycleReleases";
 import ExpansionRelease from "./expansionRelease";
 import ReleasesGuideModal from "./releasesGuideModal";
+import GuideBubble from "../../../components/guideBubble";
 
 const RELEASES_GUIDE_SEEN_KEY = "releases-guide-seen";
 
@@ -29,33 +30,20 @@ export default function ProjectReleases({ project, isActive }: ProjectReleasesPr
             Release Guide
         </Button>
     );
-    const guideIconButton = canEditReleases && (
-        <Button
-            isIconOnly
-            color="primary"
-            variant="flat"
-            size="sm"
-            aria-label="Release Guide"
-            onPress={guide.open}
-            className="sm:hidden shrink-0"
-        >
-            <FontAwesomeIcon icon={faCircleQuestion} />
-        </Button>
-    );
 
     return (
         <>
             {project.type === "expansion" ? (
-                <ExpansionRelease project={project} guideButton={guideButton} guideIconButton={guideIconButton} />
+                <ExpansionRelease project={project} guideButton={guideButton} />
             ) : (
-                <CycleReleases
-                    project={project}
-                    isActive={isActive}
-                    guideButton={guideButton}
-                    guideIconButton={guideIconButton}
-                />
+                <CycleReleases project={project} isActive={isActive} guideButton={guideButton} />
             )}
-            {canEditReleases && <ReleasesGuideModal isOpen={guide.isOpen} onClose={guide.close} />}
+            {canEditReleases && (
+                <>
+                    <GuideBubble label="Release Guide" onOpen={guide.open} isActive={isActive} />
+                    <ReleasesGuideModal isOpen={guide.isOpen} onClose={guide.close} />
+                </>
+            )}
         </>
     );
 }

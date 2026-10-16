@@ -48,6 +48,7 @@ import { useCapsuleFlip } from "./releaseFlip";
 import { useCommitMove } from "./useCommitMove";
 import { DeepPartial } from "common/types";
 import { finalCardsByNumber, getPositionFaction } from "common/utils";
+import FloatingSlot from "../../../components/floatingSlot";
 import SectionTitle from "../../../components/sectionTitle";
 import ReleaseHeaderSkeleton from "../../../components/releaseHeaderSkeleton";
 import { highlightTarget } from "../../../constants";
@@ -55,7 +56,7 @@ import useHistoryState from "../../../hooks/useHistoryState";
 
 const isSameCodes = (a: string[], b: string[]) => a.length === b.length && a.every((code) => b.includes(code));
 
-export default function CycleReleases({ project, isActive, guideButton, guideIconButton }: CycleReleasesProps) {
+export default function CycleReleases({ project, isActive, guideButton }: CycleReleasesProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
     // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
@@ -451,7 +452,6 @@ export default function CycleReleases({ project, isActive, guideButton, guideIco
                     <SectionTitle size="lg" className="flex-1">
                         Releases
                     </SectionTitle>
-                    {guideIconButton}
                 </div>
                 <div className="space-y-2">
                     {releases.map((release) => (
@@ -497,7 +497,6 @@ export default function CycleReleases({ project, isActive, guideButton, guideIco
                         <SectionTitle size="lg" className="flex-1">
                             Releases
                         </SectionTitle>
-                        {guideIconButton}
                         {canMoveCapsules && (
                             <DevelopmentPoolButton count={poolCount} isOpen={isPoolOpen} onOpen={openPool} />
                         )}
@@ -534,6 +533,7 @@ export default function CycleReleases({ project, isActive, guideButton, guideIco
                                     tabIndex={isAtSlotCapacity ? 0 : undefined}
                                     className="sm:hidden fixed bottom-6 right-20 z-20"
                                 >
+                                    <FloatingSlot index={1} />
                                     <Button
                                         isIconOnly
                                         radius="full"
@@ -680,5 +680,4 @@ type CycleReleasesProps = {
     project: IProject;
     isActive: boolean;
     guideButton?: ReactNode;
-    guideIconButton?: ReactNode;
 };

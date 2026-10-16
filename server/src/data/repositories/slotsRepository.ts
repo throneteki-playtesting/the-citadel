@@ -3,6 +3,7 @@ import { IRefinementInquiry, nextInquiryNumber } from "common/models/refinement"
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { Document, Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
 import { BasicAuditableRepository } from "./shared";
+import { renumberDocuments } from "./renumber";
 import { Filter, SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
 import { deleteReleaseChecks, syncReleaseChecks } from "@/discord/forums/releaseChecks";
@@ -46,7 +47,11 @@ const ARTWORK_META_STAGES: Document[] = [
                                         in: {
                                             $ifNull: [
                                                 "$$selected.artist",
-                                                { $first: { $ifNull: ["$statuses.artwork.sourced.options.artist", []] } }
+                                                {
+                                                    $first: {
+                                                        $ifNull: ["$statuses.artwork.sourced.options.artist", []]
+                                                    }
+                                                }
                                             ]
                                         }
                                     }
@@ -96,7 +101,10 @@ const ARTWORK_META_STAGES: Document[] = [
                                                             $first: {
                                                                 $filter: {
                                                                     input: {
-                                                                        $ifNull: ["$statuses.artwork.sourced.options", []]
+                                                                        $ifNull: [
+                                                                            "$statuses.artwork.sourced.options",
+                                                                            []
+                                                                        ]
                                                                     },
                                                                     cond: {
                                                                         $eq: [
@@ -137,7 +145,9 @@ const ARTWORK_META_STAGES: Document[] = [
                                                 $or: [
                                                     {
                                                         $eq: [
-                                                            { $ifNull: ["$statuses.artwork.commissioned.artist", null] },
+                                                            {
+                                                                $ifNull: ["$statuses.artwork.commissioned.artist", null]
+                                                            },
                                                             null
                                                         ]
                                                     },
@@ -188,6 +198,33 @@ export default class SlotsRepository extends BasicAuditableRepository<"slot", IS
         artworkMeta: ARTWORK_META_STAGES,
         refinementMeta: REFINEMENT_META_STAGES
     };
+
+    // Sets one part of a slot's metadata and nothing else, so a slot read before slow Discord calls isn't written back
+    public async setMetadata<K extends keyof NonNullable<ISlot["_metadata"]>>(
+        ref: { project: number; number: number },
+        key: K,
+        value: NonNullable<ISlot["_metadata"]>[K] | undefined
+    ) {
+        const field = `_metadata.${key}`;
+        const updated = await this.database.collection.findOneAndUpdate(
+            { project: ref.project, number: ref.number } as MongoFilter<ISlot>,
+            (value === undefined ? { $unset: { [field]: "" } } : { $set: { [field]: value } }) as UpdateFilter<ISlot>,
+            { returnDocument: "after", projection: { _id: 0 } }
+        );
+        if (!updated) {
+            throw new Error(`Slot ${ref.project}|${ref.number} no longer exists`);
+        }
+        const result = updated as ISlot;
+        this.broadcastUpdates([result]);
+        return result;
+    }
+
+    // Moves a project's slots to new numbers - touched, so whatever follows a slot's changes follows this
+    public async renumber(project: number, numbers: Map<number, number>) {
+        const updated = new Date();
+        await renumberDocuments(this.database.collection as never, project, numbers, () => ({ updated }));
+        this.broadcastUpdates(await this.read({ project }));
+    }
 
     constructor(mongoClient: MongoClient) {
         super(new MongoDataSource<ISlot>(mongoClient, "slots", { project: 1, number: 1 }), "slot");

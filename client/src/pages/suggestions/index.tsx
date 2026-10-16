@@ -8,7 +8,8 @@ import { SuggestionMigration, useGetSuggestionMigrationQuery, useGetSuggestionsF
 import { showApiErrorToast } from "../../api/errors";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import { addToast, Badge, Button, Modal, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import { addToast, Badge, Button, Chip, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import Modal from "../../components/modal";
 import SectionTitle from "../../components/sectionTitle";
 import CardGrid from "../../components/cardGrid";
 import StatsGrid from "../../components/statsGrid";
@@ -34,6 +35,8 @@ import {
     faGear,
     faPlus
 } from "@fortawesome/free-solid-svg-icons";
+import FloatingSlot from "../../components/floatingSlot";
+import GuideBubble from "../../components/guideBubble";
 import SuggestionsGuideModal from "./suggestionsGuideModal";
 import SuggestionSettingsModal from "./suggestionSettingsModal";
 import LoadingCard from "../../components/loadingCard";
@@ -235,20 +238,15 @@ function SuggestionsContent() {
         <div className="flex flex-col gap-5">
             <div className="px-4 md:px-0 space-y-2 md:space-y-4">
                 <div className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
-                        Suggestions
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                        <span className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
+                            Suggestions
+                        </span>
+                        <Chip size="sm" color="warning" variant="flat" className="font-cinzel font-semibold uppercase">
+                            Beta
+                        </Chip>
                     </div>
-                    <Button
-                        isIconOnly
-                        color="primary"
-                        variant="flat"
-                        size="sm"
-                        aria-label="Suggestions Guide"
-                        onPress={() => setIsGuideOpen(true)}
-                        className="sm:hidden shrink-0"
-                    >
-                        <FontAwesomeIcon icon={faCircleQuestion} />
-                    </Button>
+                    <GuideBubble label="Suggestions Guide" onOpen={() => setIsGuideOpen(true)} />
                 </div>
                 <div className="flex items-center justify-between gap-2 py-1">
                     <div className="text-sm lg:text-medium text-foreground/70 italic">
@@ -337,11 +335,7 @@ function SuggestionsContent() {
                             <StatCard
                                 label="Active Suggestions"
                                 value={feed?.stats.total}
-                                footer={
-                                    feed &&
-                                    `across ${feed.stats.totalSubmitters} users` +
-                                        (feed.stats.legacy > 0 ? `, including ${feed.stats.legacy} legacy` : "")
-                                }
+                                footer={feed && `not ignored by you, across ${feed.stats.totalSubmitters} users`}
                                 isLoading={isLoading}
                                 onPress={() => openAll()}
                             />
@@ -458,7 +452,7 @@ function SuggestionsContent() {
                 onReturnToDrafts={() => setIsDraftsOpen(true)}
             />
 
-            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} placement="center" size="sm">
+            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} size="sm">
                 <ModalContent>
                     <ModalBody className="flex flex-row items-center gap-3 py-6">
                         <Spinner size="sm" />
@@ -484,6 +478,7 @@ function SuggestionsContent() {
 
             {canEditSettings && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("settings"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("settings")} />
                     <Button
                         isIconOnly
                         radius="full"
@@ -499,6 +494,7 @@ function SuggestionsContent() {
             )}
             {hasStash && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
                     <Badge content={stashCount} color="primary" showOutline={false}>
                         <MyStashDropdown {...stashDropdownProps}>
                             <Button
@@ -517,6 +513,7 @@ function SuggestionsContent() {
             )}
             {canCreate && !hasStash && !!myDraftsCount && (
                 <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
                     <Badge content={myDraftsCount} color="primary" showOutline={false}>
                         <Button
                             isIconOnly
@@ -534,6 +531,7 @@ function SuggestionsContent() {
             )}
             {canCreate && (
                 <div className="sm:hidden fixed bottom-6 right-4 z-20">
+                    <FloatingSlot index={0} />
                     <Button
                         isIconOnly
                         radius="full"

@@ -2,6 +2,8 @@ import BaseJoi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
 import * as Slots from "./slots";
+import * as SlotConditions from "./slotConditions";
+import { keywordNames } from "../designGuidelines/deriveFields";
 import * as Artwork from "./artwork";
 import * as Refinement from "./refinement";
 import { statementAnswers } from "./reviews";
@@ -28,6 +30,8 @@ const DiscordMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
+const CardDiscordMetadata = DiscordMetadata.keys({ previewUrl: Joi.string().uri() });
+
 const GithubIssueMetadata = Joi.object({
     status: Joi.string().valid(...Cards.githubStatuses),
     issueUrl: Joi.string().uri(),
@@ -42,8 +46,12 @@ const GithubPRMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
-const JoiXNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X"));
-const JoiXDashNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X", "-"));
+const JoiXNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X"))
+    .messages({ "alternatives.match": '{{#label}} must be a number or "X"' });
+const JoiXDashNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X", "-"))
+    .messages({ "alternatives.match": '{{#label}} must be a number, "X" or "-"' });
 
 const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
@@ -162,7 +170,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -189,7 +197,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -220,7 +228,7 @@ export const PlaytestingCard = {
         released: Joi.forbidden(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -756,17 +764,109 @@ const inquiry = (isFull: boolean) =>
         ...auditKeys(isFull)
     });
 
+const conditionStat = (stats: SlotConditions.ConditionStat | SlotConditions.ConditionStat[]) =>
+    Joi.string()
+        .valid(...[stats].flat())
+        .required();
+
+// Either bound may be left open, but never both - a range with neither says nothing
+const rangeCondition = Joi.object({
+    stat: conditionStat([...SlotConditions.rangeStats]),
+    min: Joi.number().integer().min(0),
+    max: Joi.number()
+        .integer()
+        .min(0)
+        .when("min", {
+            is: Joi.exist(),
+            then: Joi.number().min(Joi.ref("min")).messages({ "number.min": "Can't be below the minimum" })
+        })
+})
+    .or("min", "max")
+    .messages({ "object.missing": "Give a minimum, a maximum, or both" });
+
+const slotCondition = Joi.alternatives().conditional(".stat", {
+    switch: [
+        {
+            is: "type",
+            then: Joi.object({
+                stat: conditionStat("type"),
+                types: Joi.array()
+                    .items(Joi.string().valid(...Cards.types))
+                    .min(1)
+                    .unique()
+                    .required()
+            })
+        },
+        {
+            is: Joi.valid("unique", "loyal"),
+            then: Joi.object({ stat: conditionStat(["unique", "loyal"]), value: Joi.boolean().required() })
+        },
+        { is: Joi.valid(...SlotConditions.rangeStats), then: rangeCondition },
+        {
+            is: "icons",
+            then: Joi.object({
+                stat: conditionStat("icons"),
+                icons: Joi.object(Object.fromEntries(Cards.challengeIcons.map((icon) => [icon, Joi.boolean()])))
+                    .min(1)
+                    .required()
+                    .messages({ "object.min": "Choose at least one icon to require or forbid" })
+            })
+        },
+        {
+            is: "traits",
+            then: Joi.object({
+                stat: conditionStat("traits"),
+                traits: Joi.array().items(Joi.string()).min(1).unique().required()
+            })
+        },
+        {
+            is: "keywords",
+            then: Joi.object({
+                stat: conditionStat("keywords"),
+                keywords: Joi.array()
+                    .items(Joi.string().valid(...keywordNames))
+                    .min(1)
+                    .unique()
+                    .required()
+            })
+        }
+    ],
+    otherwise: Joi.object({ stat: conditionStat([...SlotConditions.conditionStats]) })
+});
+
+// One per stat, and only what the slot's types can carry - the same rule the editor offers conditions by
+const slotConditions = Joi.array()
+    .items(slotCondition)
+    .unique("stat")
+    .messages({ "array.unique": "Each stat can only have one condition" })
+    .custom((conditions: SlotConditions.SlotCondition[], helpers) => {
+        const blocker = SlotConditions.conditionsBlocker(conditions);
+        return blocker ? helpers.message({ custom: blocker }) : conditions;
+    });
+
+const slotPreferences = Joi.array().items(Joi.string().regex(Regex.SemanticVersion)).unique();
+
+const slotOptionFields = {
+    conditions: slotConditions,
+    important: Joi.boolean(),
+    notes: RichText
+};
+
 export const Slot = {
     // Shared with the client's artwork form, so the tab and PATCH refuse the same things
     ArtworkProgress,
+    // Body for PUT /:slot/options - the whole set, since an option left out is one being cleared
+    Options: Joi.object(slotOptionFields),
+    // Body for PUT /:slot/preferences - every option in the slot, most preferred first
+    Preferences: Joi.object({ preferences: slotPreferences.required() }),
     Full: Joi.object({
         project: Joi.number().required(),
         number: Joi.number().required(),
         faction: Joi.string()
             .required()
             .valid(...Cards.factions),
-        type: Joi.string().valid(...Cards.types),
-        notes: Joi.string().allow(""),
+        ...slotOptionFields,
+        preferences: slotPreferences,
         faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
@@ -818,8 +918,6 @@ export const Slot = {
         project: Joi.number(),
         number: Joi.number(),
         faction: Joi.string().valid(...Cards.factions),
-        type: Joi.string().valid(...Cards.types),
-        notes: Joi.string().allow(""),
         faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
@@ -907,6 +1005,8 @@ export const Slot = {
     Faq: Joi.object({ faq: RichText.required() })
 };
 
+const slotCount = Joi.number().integer().min(0);
+
 export const Project = {
     Full: Joi.object({
         number: Joi.number().integer().max(99).required(),
@@ -933,8 +1033,11 @@ export const Project = {
         version: Joi.number().required(),
         milestone: Joi.number(),
         mandateUrl: Joi.string(),
+        _metadata: Joi.object({ discord: Joi.object({ forumUrl: Joi.string().uri(), lastSynced: Joi.date() }) }),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Full).required(),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -966,6 +1069,8 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Partial),
         created: Joi.date(),
         createdBy: Joi.string(),
@@ -1000,6 +1105,12 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
+        // Not stored - how many slots each faction should have, which the server opens, creates or closes slots to meet
+        slotCounts: Joi.object(Object.fromEntries(Cards.factions.map((faction) => [faction, slotCount]))),
+        // Not stored - the order factions' slots are numbered in, which the server renumbers the slots to match
+        slotOrder: Joi.array().items(Joi.string().valid(...Cards.factions)),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

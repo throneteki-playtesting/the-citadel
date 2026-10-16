@@ -1,16 +1,19 @@
 ﻿import { BulkWriteOptions, DeleteOptions, Document, Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
-import { asArray, SemanticVersion } from "common/utils";
+import { asArray, parseCardCode, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
 import { Filter, SingleOrArray } from "common/types";
 import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { BasicAuditableRepository } from "./shared";
+import { renumberDocuments } from "./renumber";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
 import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
+import { withoutDraftProjectCards } from "@/utils";
+import { resourceIdFuncs } from "common/resources";
 
 // Filter/sort-only fields, computed by the virtualFields stages below - never part of the stored document
 export type IPlaytestCardFilterable = IPlaytestCard & {
@@ -109,6 +112,16 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
         return Array.isArray(updating) ? data : data[0];
     }
 
+    // Moves a project's cards to new numbers, and so new codes - touched, so whatever shows them as they were sees a change
+    public async renumber(project: number, numbers: Map<number, number>) {
+        const updated = new Date();
+        await renumberDocuments(this.database.collection as never, project, numbers, (to) => ({
+            code: parseCardCode(false, project, to),
+            updated
+        }));
+        this.broadcastUpdates(await this.read({ project }));
+    }
+
     // Records which suggestion a card came from, on every version or just `version` (a draft project's slot) -
     // not an edit, so it neither bumps `updated` nor syncs. Initialising the project archives that suggestion.
     public async setSuggestionId(
@@ -138,7 +151,11 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
     public async sync(syncing: IPlaytestCard): Promise<IPlaytestCard>;
     public async sync(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
-        let data = asArray(syncing);
+        const all = asArray(syncing);
+        let data = await withoutDraftProjectCards(all);
+        if (data.length === 0) {
+            return syncing;
+        }
         const syncs = [
             {
                 priority: 0,
@@ -167,7 +184,10 @@ export default class CardsRepository extends BasicAuditableRepository<"card", IP
 
         await this.internalSync(syncs);
 
-        return Array.isArray(syncing) ? data : data[0];
+        const synced = all.map(
+            (card) => data.find((item) => resourceIdFuncs.card(item) === resourceIdFuncs.card(card)) ?? card
+        );
+        return Array.isArray(syncing) ? synced : synced[0];
     }
 
     public async desync(desyncing: IPlaytestCard): Promise<IPlaytestCard>;

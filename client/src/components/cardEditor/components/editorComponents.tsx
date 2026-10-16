@@ -1,4 +1,4 @@
-import { Button, ButtonGroup, Input, Select, SelectItem, Textarea } from "@heroui/react";
+import { Button, ButtonGroup, Input, Select, SelectItem, SelectProps, Textarea } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMinus, faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import ThronesIcon from "../../thronesIcon";
@@ -15,7 +15,7 @@ import {
     PlotValue as PlotValueType,
     DefaultDeckLimit
 } from "common/models/cards";
-import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { Dispatch, ReactNode, SetStateAction, useEffect, useRef, useState } from "react";
 import classNames from "classnames";
 import { BaseElementProps } from "../../../types";
 import ComboBox from "../../combobox";
@@ -285,10 +285,13 @@ export const StrengthInput = ({
 export const TraitsInput = ({
     className,
     style,
+    label = "Traits",
+    placeholder = "Type and press enter",
+    size,
     value: traits,
     setValue: setTraits,
     isDisabled
-}: CustomSetterProps<string[]>) => {
+}: CustomSetterProps<string[]> & { label?: ReactNode; placeholder?: string; size?: SelectProps["size"] }) => {
     const name = useFieldName("traits");
     const setValue = (items: string[]) => {
         // Removes any trailing dots, then keeps the chips reading as a sorted list regardless of add order
@@ -300,9 +303,10 @@ export const TraitsInput = ({
             name={name}
             className={className}
             style={style}
-            label="Traits"
+            label={label}
+            size={size}
             values={traits}
-            placeholder="Type and press enter"
+            placeholder={placeholder}
             onChange={setValue}
             isDisabled={isDisabled}
             chip={{ color: "default", variant: "flat", className: "rounded-sm p-0 pr-0.5 border-1 border-content2" }}

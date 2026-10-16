@@ -14,6 +14,7 @@ import { faEllipsisVertical } from "@fortawesome/free-solid-svg-icons";
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import classNames from "classnames";
+import FloatingSlot from "../floatingSlot";
 import { BaseElementProps } from "../../types";
 import { asInlineIcon } from "../status/asInlineIcon";
 import { ActionItem } from "./types";
@@ -126,6 +127,7 @@ export default function HeaderActions({ items, className }: HeaderActionsProps) 
                 })}
             </ButtonGroup>
             <div className="sm:hidden fixed bottom-6 right-4 z-20">
+                <FloatingSlot index={0} />
                 <Dropdown placement="top-end">
                     <DropdownTrigger>
                         <Button isIconOnly radius="full" size="lg" color="primary" className="shadow-lg">

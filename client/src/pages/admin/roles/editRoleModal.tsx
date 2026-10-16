@@ -1,4 +1,5 @@
-import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { BaseElementProps } from "../../../types";
 import Permission, { permissionMeta } from "common/models/permissions";
 import { useGetUsersQuery, useUpdateRoleMutation } from "../../../api";
@@ -90,7 +91,7 @@ export default function EditRoleModal({ role, onOpenChange, onSave: onRoleSave }
     }, [role]);
 
     return (
-        <Modal isOpen={!!role} size="2xl" scrollBehavior="inside" placement="top-center" onOpenChange={onOpenChange}>
+        <Modal isOpen={!!role} size="2xl" onOpenChange={onOpenChange}>
             <ModalContent>
                 {(onClose) => (
                     <>

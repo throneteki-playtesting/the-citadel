@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { TouchPopover } from "../../components/touchPopover";
 import CardCornerBadges, { CornerBadgeTooltip } from "../../components/cardCornerBadges";
-import ReactionCount from "../../components/reactionCount";
+import SuggestionLikesBadge from "../../components/suggestionLikesBadge";
 import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { useAuth } from "../../hooks/useAuth";
 import { useCanHover } from "../../hooks/useCanHover";
@@ -35,8 +35,8 @@ import {
 // Shared between every rail and the full grid - one card component, not two. The card is the whole
 // link target, so a badge row needs both stopPropagation AND preventDefault to stop its own clicks.
 
-// Badges stay rare - draft/approved are infrequent states worth a corner badge; Likes only earns one
-// when the grid is actually sorted by Likes, mirroring ProjectContentCard's showReviewBadge.
+// Badges stay rare - draft/approved are infrequent states worth a corner badge; Likes only earns one, in the opposite
+// corner, when the grid is actually sorted by Likes, mirroring ProjectContentCard's showReviewBadge.
 const QUICK_REACT_OPTIONS: { type: ReactionType; label: string; hint: string; icon: IconDefinition }[] = [
     { type: "like", label: "Like", hint: "Support this suggestion", icon: faThumbsUp },
     { type: "dislike", label: "Dislike", hint: "Flag a problem with this suggestion", icon: faThumbsDown },
@@ -235,7 +235,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                 key="reactions"
                                 {...touchBadgeFade}
                                 className={classNames(
-                                    "flex items-center p-0.5 rounded-full ring-1 ring-primary/70",
+                                    "flex items-center p-[0.125em] rounded-full ring-1 ring-primary/70",
                                     cornerBadgeDiscFillClasses,
                                     isBadge
                                         ? cornerBadgeFadeClasses
@@ -282,7 +282,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                                     disabled={!!pending}
                                                     onClick={() => onOptionPress(type)}
                                                     className={classNames(
-                                                        "flex items-center justify-center size-7 rounded-full transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
+                                                        "flex items-center justify-center size-[1.75em] rounded-full transition-[background-color,opacity] duration-200 cursor-pointer disabled:cursor-default",
                                                         {
                                                             "opacity-30": isOtherPending(pending, type),
                                                             "hover:bg-primary/25 disabled:hover:bg-transparent":
@@ -293,7 +293,7 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                                                     <FontAwesomeIcon
                                                         icon={isBadge ? MY_REACTION_BADGES[type].icon : icon}
                                                         className={classNames(
-                                                            "text-lg transition-colors duration-200",
+                                                            "text-[1.125em] transition-colors duration-200",
                                                             isBadge
                                                                 ? MY_REACTION_BADGES[type].colorClass
                                                                 : "text-primary"
@@ -321,15 +321,10 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                         iconClassName: "text-success",
                         title: "Approved",
                         description: `by ${approver?.displayname ?? "…"}`
-                    },
-                    showLikesBadge && {
-                        key: "likes",
-                        icon: faThumbsUp,
-                        title: `${likeCount} like${likeCount !== 1 ? "s" : ""}`,
-                        count: <ReactionCount count={likeCount} />
                     }
                 ]}
             />
+            <SuggestionLikesBadge suggestion={suggestion} isShown={!!showLikesBadge} />
             <SuggestionCardPreview
                 suggestion={suggestion}
                 orientation={isPlot ? "horizontal" : "vertical"}

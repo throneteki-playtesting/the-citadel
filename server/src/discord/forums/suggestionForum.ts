@@ -21,7 +21,7 @@ import {
     TextDisplayBuilder,
     ThreadChannel
 } from "discord.js";
-import { Mutex } from "async-mutex";
+import { orderedStep, syncBatch, syncInOrder } from "@/concurrency";
 import { isEqual, merge } from "lodash-es";
 import { colors, extractFromURL } from "../utils";
 import { Code, countReactionsByType, ICardSuggestion } from "common/models/cards";
@@ -43,7 +43,10 @@ export function isSuggestionForumThread(channel: Channel | null | undefined): ch
     return !!channel?.isThread() && !!channel.parent?.name.endsWith(FORUM_NAME);
 }
 
-const syncSuggestionForumMutex = new Mutex();
+// Suggestions have no number, so they take their places in the order they were made
+const bySuggestion = (a: ICardSuggestion, b: ICardSuggestion) =>
+    new Date(a.created).getTime() - new Date(b.created).getTime() || (a.id ?? "").localeCompare(b.id ?? "");
+const suggestionLock = (suggestion: ICardSuggestion) => `suggestion|${suggestion.id}`;
 
 /** Shallow snapshot of the fields the "what changed" edit notice watches - deliberately not the whole
  *  suggestion, so an edit to eg. pivotPoints or comparableCards never triggers a changed-fields message. */
@@ -90,26 +93,13 @@ export async function syncSuggestionForum(
     suggestions: ICardSuggestion[],
     forced?: boolean
 ): Promise<ICardSuggestion[]> {
-    const release = await syncSuggestionForumMutex.acquire();
-    // Created and started before the context resolves, so a context failure still fails them properly.
-    const emitters = new Map(suggestions.map((s) => [s, createSyncEmitter("suggestion", "discord", s)]));
-    emitters.forEach((emitter) => emitter.start());
-    try {
-        const context = await getSuggestionForumContext();
-
-        const results: ICardSuggestion[] = [];
-        for (const suggestion of suggestions) {
-            results.push(await syncSuggestionThread(suggestion, context, emitters.get(suggestion)!, forced));
-            emitters.delete(suggestion);
-        }
-        return results;
-    } catch (err) {
-        // Only reached by the context resolution above - per-suggestion failures are already handled.
-        emitters.forEach((emitter) => emitter.error("Failure"));
-        throw err;
-    } finally {
-        release();
-    }
+    return await syncBatch(suggestions, {
+        emitterFor: (suggestion) => createSyncEmitter("suggestion", "discord", suggestion),
+        context: getSuggestionForumContext,
+        key: suggestionLock,
+        order: bySuggestion,
+        work: (suggestion, context, emitter) => syncSuggestionThread(suggestion, context, emitter, forced)
+    });
 }
 
 async function syncSuggestionThread(
@@ -159,13 +149,15 @@ async function createSuggestionThread(
     const { options, snapshot } = await buildStarterMessage(suggestion, submitter);
     const tag = context.factionTags[suggestion.card.faction];
 
-    const thread = await context.channel.threads.create({
-        name: threadNameFor(suggestion),
-        reason: `Suggestion discussion for ${suggestion.card.name} (submitted by ${submitter ?? suggestion.createdBy})`,
-        message: options,
-        appliedTags: tag ? [tag.id] : [],
-        autoArchiveDuration: context.channel.defaultAutoArchiveDuration
-    });
+    const thread = await orderedStep(() =>
+        context.channel.threads.create({
+            name: threadNameFor(suggestion),
+            reason: `Suggestion discussion for ${suggestion.card.name} (submitted by ${submitter ?? suggestion.createdBy})`,
+            message: options,
+            appliedTags: tag ? [tag.id] : [],
+            autoArchiveDuration: context.channel.defaultAutoArchiveDuration
+        })
+    );
 
     const starter = await thread.fetchStarterMessage();
     await starter.pin();
@@ -263,33 +255,30 @@ export async function onSuggestionDeleted(suggestion: ICardSuggestion) {
 /** Silently archives the threads of suggestions that have just been archived - no notice, unlike every
  *  other transition here. */
 export async function closeSuggestionThreads(suggestions: ICardSuggestion[]) {
-    const release = await syncSuggestionForumMutex.acquire();
-    try {
-        for (const suggestion of suggestions) {
-            const messageUrl = suggestion._metadata?.discord?.messageUrl;
-            if (!messageUrl) {
-                continue;
-            }
-            try {
-                const thread = await fetchThread(messageUrl);
-                if (thread && !thread.archived) {
-                    await thread.setArchived(true);
-                    logger.info(
-                        `[Discord] Archived suggestion thread for "${suggestion.card.name}" (${suggestion.id})`
+    await syncInOrder(
+        suggestions.filter((suggestion) => suggestion._metadata?.discord?.messageUrl),
+        {
+            key: suggestionLock,
+            work: async (suggestion) => {
+                try {
+                    const thread = await fetchThread(suggestion._metadata!.discord!.messageUrl!);
+                    if (thread && !thread.archived) {
+                        await thread.setArchived(true);
+                        logger.info(
+                            `[Discord] Archived suggestion thread for "${suggestion.card.name}" (${suggestion.id})`
+                        );
+                    }
+                } catch (err) {
+                    logger.warn(
+                        new Error(
+                            `[Discord] Failed to archive suggestion thread for "${suggestion.card.name}" (${suggestion.id})`,
+                            { cause: err }
+                        )
                     );
                 }
-            } catch (err) {
-                logger.warn(
-                    new Error(
-                        `[Discord] Failed to archive suggestion thread for "${suggestion.card.name}" (${suggestion.id})`,
-                        { cause: err }
-                    )
-                );
             }
         }
-    } finally {
-        release();
-    }
+    );
 }
 
 /** Clears the stored thread of a suggestion whose thread was deleted from Discord, so it can sync again */

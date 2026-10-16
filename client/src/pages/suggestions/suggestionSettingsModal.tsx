@@ -6,7 +6,6 @@ import {
     Divider,
     Form,
     Input,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -18,6 +17,7 @@ import {
     Tab,
     Tabs
 } from "@heroui/react";
+import Modal from "../../components/modal";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faMagnifyingGlass, faPencil, faPlus, faTrash, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
@@ -219,7 +219,7 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
     };
 
     return (
-        <Modal isOpen={isOpen} size="5xl" scrollBehavior="inside" onOpenChange={(open) => !open && onClose()}>
+        <Modal isOpen={isOpen} size="5xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader>Suggestion Settings</ModalHeader>
                 <ModalBody className="gap-6 pb-6">

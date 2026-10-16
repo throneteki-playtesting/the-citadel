@@ -1,5 +1,5 @@
 import { ICardSuggestion, IPlaytestCard, ISuggestionForumThread } from "./models/cards";
-import { IPlaytestingUpdate, IProject } from "./models/projects";
+import { IPlaytestingUpdate, IPoolEntry, IProject } from "./models/projects";
 import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
 import { ISlot } from "./models/slots";
@@ -22,7 +22,8 @@ export type ResourceType =
     | "log"
     | "deck"
     | "setting"
-    | "suggestionThread";
+    | "suggestionThread"
+    | "pool";
 
 export interface ResourceDataMap {
     user: User;
@@ -39,6 +40,7 @@ export interface ResourceDataMap {
     deck: IDeck;
     setting: ISettingsDocument;
     suggestionThread: ISuggestionForumThread;
+    pool: IPoolEntry;
 }
 
 type ResourceIdKeys = {
@@ -56,6 +58,7 @@ type ResourceIdKeys = {
     deck: "identifier";
     setting: "id";
     suggestionThread: "id";
+    pool: "project" | "suggestion";
 };
 
 export const resourceIdFuncs: {
@@ -76,5 +79,6 @@ export const resourceIdFuncs: {
     log: (l) => l.id,
     deck: (d) => String(d.identifier),
     setting: (s) => s.id,
-    suggestionThread: (t) => t.id
+    suggestionThread: (t) => t.id,
+    pool: (e) => `${e.project}|${e.suggestion}`
 };

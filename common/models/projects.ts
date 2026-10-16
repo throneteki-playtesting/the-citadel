@@ -1,5 +1,6 @@
 import { SemanticVersion } from "common/utils";
-import type { Faction } from "./cards";
+import { factions, type Faction, type Type as CardType } from "./cards";
+import type { ISlotOptions } from "./slots";
 import { IAuditable, ReleaseDate } from "./shared";
 
 export const types = ["cycle", "expansion"] as const;
@@ -31,7 +32,18 @@ export interface IProject extends IAuditable {
     mandateUrl?: string;
     formUrl?: string;
     emoji?: string;
+    /** Discord ids of the people running this project - see projectOwnerPermissions */
+    owners?: string[];
+    /** Key into projectTemplates for this project's type - absent means custom, its slots set by hand */
+    template?: string;
     releases: IProjectRelease[];
+    _metadata?: {
+        /** A draft project's planning forum - server-maintained */
+        discord?: {
+            forumUrl?: string;
+            lastSynced?: Date;
+        };
+    };
 }
 
 export interface IProjectRelease extends IAuditable {
@@ -98,6 +110,94 @@ export type FactionCardCount = {
     tyrell: number;
     neutral: number;
 };
+
+export type SlotCounts = Partial<FactionCardCount>;
+
+// A project as it is saved - the counts are not stored, but opened, created or closed towards by the server
+export type IProjectSave = IProject & { slotCounts?: SlotCounts; slotOrder?: Faction[] };
+
+/** A suggestion set aside in a draft project, to be drawn on for its slots - it stays pooled once placed */
+export interface IPoolEntry {
+    project: number;
+    suggestion: string;
+    /** Discord id of whoever pooled it */
+    addedBy: string;
+    added: Date;
+}
+
+export const CUSTOM_TEMPLATE = "custom";
+
+/** Each faction's slots in order, one entry per slot - what it asks for, or {} where it asks nothing */
+export type TemplateSlots = Record<Faction, ISlotOptions[]>;
+
+export type ProjectTemplate = {
+    name: string;
+    description: string;
+    /** The slots a project starts with - absent for custom, where they are set by hand */
+    slots?: TemplateSlots;
+};
+
+const customTemplate: ProjectTemplate = { name: "Custom", description: "Set each faction's slots yourself" };
+
+const character = (unique: boolean, min?: number, max?: number): ISlotOptions => ({
+    conditions: [
+        { stat: "type", types: ["character"] },
+        { stat: "unique", value: unique },
+        { stat: "cost", min, max }
+    ]
+});
+const typed = (type: CardType, stat?: "cost" | "income", min?: number, max?: number): ISlotOptions => ({
+    conditions: [{ stat: "type", types: [type] }, ...(stat ? [{ stat, min, max } as const] : [])]
+});
+const repeat = (count: number, slot: ISlotOptions) => Array.from({ length: count }, () => slot);
+
+const standardFactionSlots: ISlotOptions[] = [
+    character(true, 5),
+    character(true, 3, 5),
+    character(true, 0, 3),
+    character(false, 5),
+    character(false, 3, 5),
+    character(false, 0, 3),
+    typed("attachment", "cost", 1),
+    typed("attachment"),
+    typed("location", "cost", 1),
+    typed("location"),
+    ...repeat(2, typed("event"))
+];
+
+const standardNeutralSlots: ISlotOptions[] = [
+    ...standardFactionSlots,
+    ...repeat(2, typed("plot", "income", 5)),
+    ...repeat(4, typed("plot", "income", 3, 4)),
+    ...repeat(3, typed("plot", "income", 0, 3)),
+    ...repeat(3, typed("agenda"))
+];
+
+const standardTemplate: ProjectTemplate = {
+    name: "Standard",
+    description: "120 slots with standard options",
+    slots: Object.fromEntries(
+        factions.map((faction) => [faction, faction === "neutral" ? standardNeutralSlots : standardFactionSlots])
+    ) as TemplateSlots
+};
+
+// Per project type, as a cycle and an expansion are shaped differently - custom alone until the real ones are defined
+export const projectTemplates: Record<Type, Record<string, ProjectTemplate>> = {
+    cycle: { [CUSTOM_TEMPLATE]: customTemplate, standard: standardTemplate },
+    expansion: { [CUSTOM_TEMPLATE]: customTemplate }
+};
+
+export function templateCounts(template: ProjectTemplate): FactionCardCount | undefined {
+    const { slots } = template;
+    return (
+        slots &&
+        (Object.fromEntries(Object.keys(slots).map((key) => [key, slots[key as Faction].length])) as FactionCardCount)
+    );
+}
+
+export function projectTemplateOf(project: Pick<IProject, "type" | "template">): ProjectTemplate | undefined {
+    return projectTemplates[project.type]?.[project.template ?? CUSTOM_TEMPLATE];
+}
 
 export interface GithubPRMeta {
     status?: (typeof githubStatuses)[number];

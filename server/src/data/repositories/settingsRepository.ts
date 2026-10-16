@@ -27,10 +27,10 @@ export default class SettingsRepository extends BasicAuditableRepository<"settin
 
         const countBy = async (field: string): Promise<Record<string, number>> => {
             const results = await collection
-                .aggregate<{ _id: string; count: number }>([
-                    { $unwind: `$${field}` },
-                    { $group: { _id: `$${field}`, count: { $sum: 1 } } }
-                ])
+                .aggregate<{
+                    _id: string;
+                    count: number;
+                }>([{ $unwind: `$${field}` }, { $group: { _id: `$${field}`, count: { $sum: 1 } } }])
                 .toArray();
             return Object.fromEntries(results.map(({ _id, count }) => [_id, count]));
         };

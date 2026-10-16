@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
-import { isEqual } from "lodash-es";
+import { intersection, isEqual } from "lodash-es";
 import {
     canViewSuggestion,
     cardMatchLabel,
@@ -16,7 +16,8 @@ import {
     suggestionReactionBlockReason
 } from "common/models/cards";
 import { dataService, thronesDbCardPoolService } from "@/services";
-import { hasPermission, SemanticVersion, validate } from "common/utils";
+import { hasPermission, SemanticVersion, validate, withProjectOwnership } from "common/utils";
+import { fitsSlot } from "common/models/slotConditions";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
 import { Principal } from "common/models/auth";
@@ -74,8 +75,13 @@ const getQuerySchema = (
     // ISuggestionsListQuery's comment for why these two can't go through the generic filter schema
     unseen: Joi.boolean(),
     myReactions: Joi.string(),
+    includeIgnored: Joi.boolean(),
     // Handled by applyPossiblyDevelopedFilter below - it depends on the cards collection, not the suggestion itself
-    developed: Joi.boolean()
+    developed: Joi.boolean(),
+    // Handled by applySlotFitFilter below - the conditions are the slot's, read where they are kept
+    fitsSlot: Joi.string().regex(/^\d+:\d+$/),
+    // Handled by applyPooledFilter below - the pool is a project's own, read where it is kept
+    pooledIn: Joi.number().integer()
 });
 
 // Resolves unseen/myReactions against the principal's discordId, merged into `req.query.filter` - NOT
@@ -93,7 +99,11 @@ const applyReactionVisibilityFilter = asyncHandler<
         return;
     }
 
-    const { unseen, myReactions } = req.query;
+    const { unseen, myReactions, includeIgnored } = req.query;
+    if (includeIgnored && !unseen && !myReactions) {
+        next();
+        return;
+    }
     const reactionCondition = unseen
         ? { $exists: false }
         : myReactions
@@ -393,6 +403,76 @@ const applyPossiblyDevelopedFilter = asyncHandler<
     next();
 });
 
+// Narrows to suggestions which fit a slot, by the rule that warns of a misfit once a card is in it. X and "-" pass
+// any range, which a query cannot say - so every suggestion of the slot's faction is asked, and the ids filtered on
+const applySlotFitFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, res, next) => {
+    if (!req.query.fitsSlot) {
+        next();
+        return;
+    }
+    const [projectNumber, number] = req.query.fitsSlot.split(":").map(Number);
+    const [[project], [slot]] = await Promise.all([
+        dataService.projects.read({ number: projectNumber }),
+        dataService.slots.read({ project: projectNumber, number })
+    ]);
+    if (!project || !slot) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_FOUND,
+            "Not Found",
+            `Slot #${number} does not exist for project #${projectNumber}`
+        );
+    }
+    if (!hasPermission(withProjectOwnership(getContext().principal, project), Permission.READ_SLOTS)) {
+        throw new PermissionErrorResponse();
+    }
+    const candidates = await dataService.suggestions.read({ card: { faction: slot.faction } });
+    const ids = candidates.filter((suggestion) => fitsSlot(slot, suggestion.card)).map((suggestion) => suggestion.id);
+    res.locals.idSets = [...(res.locals.idSets ?? []), ids];
+    next();
+});
+
+// Narrows to a draft project's pool, which only those who can draft in the project may see
+const applyPooledFilter = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, res, next) => {
+    if (req.query.pooledIn === undefined) {
+        next();
+        return;
+    }
+    const [project] = await dataService.projects.read({ number: req.query.pooledIn });
+    if (!project) {
+        throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Not Found", `Project #${req.query.pooledIn} does not exist`);
+    }
+    if (!hasPermission(withProjectOwnership(getContext().principal, project), Permission.CREATE_CARDS)) {
+        throw new PermissionErrorResponse();
+    }
+    const pooled = await dataService.pools.read({ project: project.number });
+    res.locals.idSets = [...(res.locals.idSets ?? []), pooled.map((entry) => entry.suggestion)];
+    next();
+});
+
+// What the filters above each allow, applied together as the suggestions which every one of them allows
+const applyIdSets = asyncHandler<
+    unknown,
+    unknown,
+    unknown,
+    IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery
+>(async (req, res, next) => {
+    const sets = (res.locals.idSets ?? []) as string[][];
+    if (sets.length > 0) {
+        req.query.filter = applyToFilter(req.query.filter, { id: { $in: intersection(...sets) } });
+    }
+    next();
+});
+
 // Read suggestions
 router.get(
     "/",
@@ -404,6 +484,9 @@ router.get(
     restrictListDraftVisibility,
     applyReactionVisibilityFilter,
     applyPossiblyDevelopedFilter,
+    applySlotFitFilter,
+    applyPooledFilter,
+    applyIdSets,
     asyncHandler<unknown, unknown, unknown, IGetRequest<ICardSuggestionFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getSuggestions(filter, orderBy, page, perPage);
@@ -425,12 +508,11 @@ router.get(
         const discordId = "discordId" in principal ? principal.discordId : undefined;
         const canManageArchive = hasPermission(principal, Permission.MANAGE_SUGGESTIONS_ARCHIVE);
 
-        const baseFilter = canManageArchive ? {} : { archived: { $exists: false } as const };
         // Legacy suggestions sit in the rail by the date they reached the design team's spreadsheet, so they only
         // show here when that was recent
         const [newest, stats, possiblyDeveloped] = await Promise.all([
             dataService.suggestions.read(
-                { ...baseFilter, draft: false },
+                { archived: { $exists: false }, draft: false },
                 { updated: "desc" },
                 1,
                 FEED_WORKING_SET_SIZE
@@ -442,8 +524,7 @@ router.get(
             canManageArchive ? getPossiblyDevelopedSuggestionIds().then((ids) => ids.length) : 0
         ]);
 
-        // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail.
-        // Stats are unaffected: they're aggregate counts, not a personalised "look at this" list.
+        // Ignore is "seen, nothing to say" - already-ignored suggestions don't resurface in the rail
         const recentCandidates = discordId
             ? newest.filter((s) => s._metadata?.engagement?.reactions?.[discordId]?.type !== "ignore")
             : newest;
@@ -556,6 +637,7 @@ router.post(
         suggestion = (await dataService.suggestions.setCreated(suggestion.id!, legacy.createdAt)) ?? suggestion;
         if (merging) {
             await dataService.suggestions.destroy({ id: merging.id }, false);
+            await dataService.pools.destroy({ suggestion: merging.id });
         }
         suggestion = await dataService.suggestions.sync(suggestion);
 
@@ -1029,6 +1111,8 @@ router.delete(
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
         const [deleted] = await dataService.suggestions.destroy({ id });
+        // Whatever pool had set it aside has nothing left to hold
+        await dataService.pools.destroy({ suggestion: id });
 
         await logActivity(LogCategory.SUGGESTION, "suggestion.deleted", "<principal> deleted suggestion <suggestion>", {
             context: { suggestion: cardSnapshot(id, deleted.card) },

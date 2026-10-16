@@ -1,9 +1,10 @@
-import { Button, Chip, ChipProps, Select, SelectItem } from "@heroui/react";
+import { Button, Chip, ChipProps, Select, SelectItem, SelectProps } from "@heroui/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BaseElementProps } from "../types";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
+import { useFieldValidation } from "../hooks/useFieldValidation";
 
 const ComboBox = ({
     name,
@@ -12,6 +13,7 @@ const ComboBox = ({
     classNames: classGroups,
     label,
     placeholder,
+    size,
     chip,
     values: initialValues,
     onChange = () => true,
@@ -22,6 +24,7 @@ const ComboBox = ({
     const [values, setValues] = useState<string[]>(initialValues ?? []);
     const [inputValue, setInputValue] = useState("");
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const { isInvalid, errorMessage, commit } = useFieldValidation(name, values);
 
     useEffect(() => setValues(initialValues ?? []), [initialValues]);
 
@@ -45,11 +48,12 @@ const ComboBox = ({
         (index: number) => {
             const newValues = values.filter((_, i) => i !== index);
             setValues(newValues);
+            commit();
             if (onChange) {
                 onChange(newValues);
             }
         },
-        [onChange, values]
+        [commit, onChange, values]
     );
 
     const onKeyDown = useCallback(
@@ -91,7 +95,10 @@ const ComboBox = ({
                     aria-label="Combobox Input"
                     ref={inputRef}
                     value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
+                    onChange={(e) => {
+                        setInputValue(e.target.value);
+                        commit();
+                    }}
                     onKeyDown={onKeyDown}
                     placeholder={values.length === 0 ? placeholder : undefined}
                     className={classNames(
@@ -101,7 +108,7 @@ const ComboBox = ({
                 />
             </div>
         );
-    }, [chip, classGroups?.chip, classGroups?.input, inputValue, onKeyDown, placeholder, removeItem, values]);
+    }, [chip, classGroups?.chip, classGroups?.input, commit, inputValue, onKeyDown, placeholder, removeItem, values]);
 
     // Since select will not renderValue when there are 0 items,
     // one must be faked to ensure the inner input renders (and ignore it)
@@ -117,6 +124,9 @@ const ComboBox = ({
             <Select
                 name={name}
                 label={label}
+                size={size}
+                isInvalid={isInvalid}
+                errorMessage={errorMessage}
                 aria-label="Combobox"
                 selectionMode="multiple"
                 isMultiline
@@ -163,6 +173,7 @@ type ComboBoxProps = Omit<BaseElementProps, "children"> & {
     name?: string;
     label?: React.ReactNode;
     placeholder?: string;
+    size?: SelectProps["size"];
     chip?: ChipProps;
     values?: string[];
     onChange?: (items: string[]) => void;

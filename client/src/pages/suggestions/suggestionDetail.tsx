@@ -54,6 +54,8 @@ import { showApiErrorToast } from "../../api/errors";
 import { cardThumbnailWidthRem, downloadBlob } from "../../utils";
 import usePageTitle from "../../hooks/usePageTitle";
 import EditSuggestionModal from "./editSuggestionModal";
+import PoolMenu from "./poolMenu";
+import { usePoolableProjects } from "./usePoolableProjects";
 import ConfirmModal from "../../components/confirmModal";
 import {
     Code,
@@ -370,6 +372,7 @@ const SuggestionDetail = () => {
     const [approveSuggestion, { isLoading: isApproving }] = useApproveSuggestionMutation();
     const [unapproveSuggestion, { isLoading: isUnapproving }] = useUnapproveSuggestionMutation();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
+    const poolableProjects = usePoolableProjects();
     const [isConfirmingApprove, setIsConfirmingApprove] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const { user } = useAuth();
@@ -675,6 +678,13 @@ const SuggestionDetail = () => {
                         <div className="hidden sm:flex items-center gap-1.5">
                             <DiscordSuggestionStatus id={suggestion.id!} isIconOnly />
                         </div>
+                        {suggestion.id && !suggestion.draft && poolableProjects.length > 0 && (
+                            <PoolMenu
+                                suggestion={suggestion.id}
+                                isApproved={!!approvedBy}
+                                projects={poolableProjects}
+                            />
+                        )}
                         <HeaderActions
                             items={[
                                 approveActionItem,

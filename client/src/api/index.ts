@@ -9,7 +9,9 @@ import {
 } from "@reduxjs/toolkit/query/react";
 import {
     IPlaytestingUpdate,
+    IPoolEntry,
     IProject,
+    IProjectSave,
     IProjectProgress,
     IProjectRelease,
     IReleaseProgress
@@ -20,7 +22,6 @@ import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
 import {
-    Faction,
     ICardSuggestion,
     ICardSuggestionFilterable,
     IPlaytestCard,
@@ -35,6 +36,7 @@ import {
     ISlot,
     ISlotArtwork,
     ISlotArtworkDetail,
+    ISlotOptions,
     ISlotRef,
     ISlotRefinement,
     ISlotRefinementDetail,
@@ -86,8 +88,6 @@ export type SuggestionsFeed = {
         unreacted: number;
         mine: number;
         myDrafts: number;
-        /** Unarchived legacy suggestions, awaiting completion - counted apart from everything above */
-        legacy: number;
         myLegacy: number;
         /** Legacy suggestions a project card may already have been developed from - only counted for those who
          *  can archive them as that card (MANAGE_SUGGESTIONS_ARCHIVE), otherwise always 0 */
@@ -146,6 +146,14 @@ const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof ba
         // Identity unchanged, so the cache is still valid
     }
 };
+
+// Saving a draft project may lay out its slots - choosing a template, opening or closing them - so every slot list
+// is refetched along with the project itself, and its cards too, since closing a slot deletes the cards in it
+const projectSaveTags = (result: IProject | undefined, project: Pick<IProjectSave, "slotCounts">) => [
+    ...generateFor(result, "project"),
+    ...(result?.draft || project.slotCounts ? [{ type: "slot" as const, id: undefined }] : []),
+    ...(result?.draft && project.slotCounts ? [{ type: "card" as const, id: `LIST|${result.number}` }] : [])
+];
 
 const api = createApi({
     reducerPath: "api",
@@ -369,6 +377,17 @@ const api = createApi({
                 { type: "slot" as const, id: `${project}|${number}` }
             ]
         }),
+        addSlotOptions: builder.mutation<IPlaytestCard[], { project: number; number: number; cards: IPlaytestCard[] }>({
+            query: ({ project, number, cards }) => {
+                const url = buildUrl(`cards/${project}/${number}/options`);
+                return { url, method: "POST", body: { cards } };
+            },
+            // The slot too, as its preference order takes the new options in
+            invalidatesTags: (result, _error, { project, number }) => [
+                ...generateFor(result, "card"),
+                { type: "slot" as const, id: `${project}|${number}` }
+            ]
+        }),
         deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft/${card.version}`);
@@ -400,7 +419,10 @@ const api = createApi({
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => generateFor(response?.items, "suggestion")
+            providesTags: (response, _error, options) => [
+                ...generateFor(response?.items, "suggestion"),
+                ...(options?.pooledIn === undefined ? [] : [{ type: "pool" as const, id: `LIST|${options.pooledIn}` }])
+            ]
         }),
         getSuggestion: builder.query<ICardSuggestion, string>({
             query: (id) => {
@@ -659,13 +681,13 @@ const api = createApi({
             },
             providesTags: (result, _error, args) => generateFor(result, "project", { includeList: false, args })
         }),
-        createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
+        createProject: builder.mutation<IProject, Omit<IProjectSave, "created" | "updated">>({
             query: (project) => {
                 const url = buildUrl("projects");
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
         }),
         initialiseProject: builder.mutation<{ project: IProject; cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
@@ -678,13 +700,44 @@ const api = createApi({
                 ...generateFor(undefined, "slot", { includeList: true })
             ]
         }),
-        updateProject: builder.mutation<IProject, IProject>({
+        updateProject: builder.mutation<IProject, IProjectSave>({
             query: (project) => {
                 const url = buildUrl(`projects/${project.number}`);
                 const body = project;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
+        }),
+        getPool: builder.query<IPoolEntry[], { project: number }>({
+            query: ({ project }) => ({ url: buildUrl(`projects/${project}/pool`), method: "GET" }),
+            providesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        addToPool: builder.mutation<
+            IPoolEntry,
+            { project: number; suggestion: string; isUnapprovedConfirmed?: boolean }
+        >({
+            query: ({ project, suggestion, ...body }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "PUT",
+                body
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        removeFromPool: builder.mutation<IPoolEntry, { project: number; suggestion: string }>({
+            query: ({ project, suggestion }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
         }),
         deleteProject: builder.mutation<IProject, { number: number }>({
             query: (options) => {
@@ -774,31 +827,59 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
         }),
-        createSlot: builder.mutation<ISlot, { project: number; faction: Faction }>({
-            query: ({ project, faction }) => {
-                const url = buildUrl(`projects/${project}/slots`);
-                return { url, method: "POST", body: { faction } };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
-        }),
-        deleteSlot: builder.mutation<ISlot, { project: number; number: number }>({
-            query: ({ project, number }) => {
-                const url = buildUrl(`projects/${project}/slots/${number}`);
-                return { url, method: "DELETE" };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
-        }),
-        updateSlot: builder.mutation<
-            ISlot,
-            { project: number; number: number; statuses?: DeepPartial<SlotStatuses> } & Partial<
-                Pick<ISlot, "type" | "notes">
-            >
-        >({
+        updateSlot: builder.mutation<ISlot, { project: number; number: number; statuses?: DeepPartial<SlotStatuses> }>({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "PATCH", body };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        startSlotDiscussion: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/discussion`),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        revealSlot: builder.mutation<ISlot, ISlotRef & { action?: "update" | "replace" }>({
+            query: ({ project, number, action }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`, { action }),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        withdrawSlotReveal: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        // Drawn in its new order straight away - a drag shouldn't wait on the round trip to settle
+        updateSlotPreferences: builder.mutation<ISlot, ISlotRef & { preferences: SemanticVersion[] }>({
+            query: ({ project, number, preferences }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/preferences`);
+                return { url, method: "PUT", body: { preferences } };
+            },
+            async onQueryStarted({ project, number, preferences }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("slot", `${project}|${number}`, (slot) => {
+                    slot.preferences = preferences;
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        updateSlotOptions: builder.mutation<ISlot, ISlotRef & ISlotOptions>({
+            query: ({ project, number, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/options`);
+                return { url, method: "PUT", body: options };
+            },
+            // A slot which no longer matches its project's template turns the project custom
+            invalidatesTags: (result) => [...generateFor(result, "slot"), { type: "project" as const, id: undefined }]
         }),
         // The artwork lane alone - gated by READ_ARTWORKS/EDIT_ARTWORKS rather than READ_SLOTS/EDIT_SLOTS
         getSlotArtwork: builder.query<ISlotArtworkDetail, { project: number; number: number }>({
@@ -1109,7 +1190,11 @@ const api = createApi({
                 const url = buildUrl(`projects/${project}/sync/discord`, { number, forced });
                 return { url, method: "POST" };
             },
-            invalidatesTags: (result) => generateFor(result, "card")
+            // A draft project syncs no cards, but its planning forum is recorded on the project
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "card"),
+                { type: "project" as const, id: project }
+            ]
         }),
         syncProjectGithub: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
             query: ({ project, number, forced }) => {
@@ -1317,6 +1402,13 @@ export const {
     useGetPreviousCardQuery,
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
+    useAddSlotOptionsMutation,
+    useGetPoolQuery,
+    useStartSlotDiscussionMutation,
+    useRevealSlotMutation,
+    useWithdrawSlotRevealMutation,
+    useAddToPoolMutation,
+    useRemoveFromPoolMutation,
     useDeleteDraftMutation,
     useMoveCardMutation,
 
@@ -1364,9 +1456,9 @@ export const {
     useGetSlotQuery,
     useGetSlotsQuery,
     useLazyGetSlotsQuery,
-    useCreateSlotMutation,
-    useDeleteSlotMutation,
     useUpdateSlotMutation,
+    useUpdateSlotOptionsMutation,
+    useUpdateSlotPreferencesMutation,
     useGetSlotArtworkQuery,
     useGetSlotArtworksQuery,
     useUpdateSlotArtworkMutation,

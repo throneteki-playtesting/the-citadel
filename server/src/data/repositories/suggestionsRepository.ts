@@ -258,8 +258,8 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
         return { traits: (traits as string[]).sort(), submitters };
     }
 
-    // The overview's headline numbers across every submitted, unarchived suggestion, legacy included and also counted
-    // apart - except awaiting approval, which a legacy suggestion can never be until it's completed
+    // The overview's headline numbers across every submitted, unarchived suggestion, legacy included - except awaiting
+    // approval, which a legacy suggestion can never be until it's completed
     public async feedStats(discordId: string | undefined) {
         const collection = this.database.collection;
         const active = { draft: false, archived: { $exists: false } };
@@ -268,21 +268,20 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
             created: { $gte: new Date(Date.now() - NEW_SUGGESTION_DAYS * 24 * 60 * 60 * 1000) }
         };
         const reactionOf = (id: string) => `_metadata.engagement.reactions.${id}`;
+        // What this viewer browses - a suggestion they've ignored is out of it, as it is out of the list
+        const visible = { ...active, ...(discordId && { [`${reactionOf(discordId)}.type`]: { $ne: "ignore" } }) };
         const count = (filter: object) => collection.countDocuments(filter as MongoFilter<ICardSuggestion>);
 
-        const [total, legacy, submitters, awaiting, unreacted, mine, myLegacy, myDrafts] = await Promise.all([
-            count(active),
-            count({ ...active, legacy: true }),
-            collection.distinct("createdBy", active as MongoFilter<ICardSuggestion>),
+        const [total, submitters, awaiting, unreacted, mine, myLegacy, myDrafts] = await Promise.all([
+            count(visible),
+            collection.distinct("createdBy", visible as MongoFilter<ICardSuggestion>),
             collection
                 .aggregate<{ count: number }>([
                     {
                         $match: {
-                            ...active,
+                            ...visible,
                             legacy: { $exists: false },
-                            "_metadata.engagement.approvedBy": { $exists: false },
-                            // An already-ignored suggestion isn't awaiting anything from this viewer
-                            ...(discordId && { [`${reactionOf(discordId)}.type`]: { $ne: "ignore" } })
+                            "_metadata.engagement.approvedBy": { $exists: false }
                         }
                     },
                     ...LIKES_STAGES,
@@ -302,7 +301,6 @@ export default class SuggestionsRepository extends BasicAuditableRepository<
 
         return {
             total,
-            legacy,
             totalSubmitters: submitters.length,
             awaitingApproval: awaiting,
             unreacted,

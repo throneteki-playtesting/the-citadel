@@ -1,14 +1,5 @@
-import {
-    addToast,
-    Alert,
-    Button,
-    Modal,
-    ModalBody,
-    ModalContent,
-    ModalFooter,
-    ModalHeader,
-    Snippet
-} from "@heroui/react";
+import { addToast, Alert, Button, ModalBody, ModalContent, ModalFooter, ModalHeader, Snippet } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { BaseElementProps } from "../../../types";
 import Permission from "common/models/permissions";
 import { useRecycleIntegrationTokenMutation } from "../../../api";
@@ -47,7 +38,6 @@ export default function TokenModal({ integration, initialToken, onClose }: Token
         <Modal
             isOpen={!!integration}
             size="xl"
-            placement="top-center"
             isDismissable={!token}
             isKeyboardDismissDisabled={!!token}
             hideCloseButton={!!token}

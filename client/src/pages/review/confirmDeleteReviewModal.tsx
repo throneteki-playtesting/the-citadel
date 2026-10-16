@@ -1,4 +1,5 @@
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTrash } from "@fortawesome/free-solid-svg-icons";
 
@@ -10,7 +11,7 @@ export default function ConfirmDeleteReviewModal({
     onCancel
 }: ConfirmDeleteReviewModalProps) {
     return (
-        <Modal isOpen={isOpen} placement="center" size="md" onOpenChange={(open) => !open && onCancel()}>
+        <Modal isOpen={isOpen} size="md" onOpenChange={(open) => !open && onCancel()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Delete this review?</span>

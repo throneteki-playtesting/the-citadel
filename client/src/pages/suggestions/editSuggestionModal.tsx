@@ -2,8 +2,10 @@ import { ICard, ICardSuggestion, ChecklistRuleId, ChecklistJustifications, IDeri
 import { IRewardPunishmentOption } from "common/models/settings";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
-import SuggestionEditorGuide, { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuide";
-import { addToast, Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import SuggestionEditorGuide from "./suggestionEditorGuide";
+import { isSuggestionEditorGuideDismissed } from "./suggestionEditorGuideState";
+import { addToast, Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import RichTextArea from "../../components/richTextArea";
 import {
     useCreateSuggestionMutation,
@@ -20,6 +22,7 @@ import ConfirmModal from "../../components/confirmModal";
 import { ReactNode, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
+import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
 import { getBaseCardValues, renderCardSuggestion } from "common/utils";
 import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
@@ -47,7 +50,7 @@ import SectionTitle from "../../components/sectionTitle";
 import SectionBlurb from "../../components/sectionBlurb";
 import StatusNotice from "../../components/statusNotice";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { EASE_STANDARD } from "../../constants";
+import { EASE_STANDARD, EDITOR_CARD_WIDTH } from "../../constants";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@fortawesome/free-solid-svg-icons";
@@ -784,11 +787,9 @@ const EditSuggestionModal = ({
         <>
             <Modal
                 isOpen={isOpen && !isConfirmingDeleteDraft && !showGuide}
-                placement="top-center"
                 onOpenChange={(isOpen) => !isOpen && closeEditor()}
                 isDismissable={false}
                 size="5xl"
-                scrollBehavior="inside"
             >
                 <ModalContent>
                     {(onClose) => (
@@ -1128,24 +1129,17 @@ const EditSuggestionModal = ({
                                         <div
                                             className={classNames(
                                                 "hidden md:flex md:shrink-0 md:min-h-0 md:flex-col md:pr-6",
-                                                isPlot ? "md:w-[calc(18rem*333/240)]" : "md:w-72"
+                                                isPlot ? "md:w-[calc(18rem*333/240+2rem)]" : "md:w-80"
                                             )}
                                         >
                                             <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-2 pb-3">
-                                                <div
-                                                    className={classNames(
-                                                        "w-full mx-auto",
-                                                        isPlot
-                                                            ? "max-w-[calc(18rem*333/240)] aspect-[333/240]"
-                                                            : "max-w-72 aspect-[240/333]"
-                                                    )}
-                                                >
-                                                    <CardPreview
-                                                        card={renderedCard}
-                                                        orientation={isPlot ? "horizontal" : "vertical"}
-                                                        rounded
-                                                    />
-                                                </div>
+                                                <EditorCardPreview
+                                                    card={renderedCard}
+                                                    isPlot={isPlot}
+                                                    verticalWidth={EDITOR_CARD_WIDTH.suggestion}
+                                                    isClamped={false}
+                                                    className="mx-auto"
+                                                />
                                                 <ChecklistRail results={checklistResults} suggestion={suggestion} />
                                             </div>
                                             {isSavedDraft ? (

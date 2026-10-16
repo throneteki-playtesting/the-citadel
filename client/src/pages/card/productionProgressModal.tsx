@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton } from "@heroui/react";
+import Modal from "../../components/modal";
 import { ProductionStatus } from "common/models/slots";
 import Permission from "common/models/permissions";
 import { useGetSlotQuery, useUpdateSlotMutation } from "../../api";
@@ -44,7 +45,7 @@ export default function ProductionProgressModal({ isOpen, onClose, project, numb
     };
 
     return (
-        <Modal isOpen={isOpen} placement="center" onOpenChange={(open) => !open && onClose()}>
+        <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Production</span>

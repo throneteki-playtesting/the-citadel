@@ -1,8 +1,8 @@
 import { User } from "common/models/auth";
 import { ValidationStep, validate } from "common/utils";
-import { useAuth } from "./useAuth";
+import { useScopedUser } from "./useScopedUser";
 
 export function usePermission(...requires: ValidationStep<User>[]) {
-    const { user } = useAuth();
+    const { user } = useScopedUser();
     return validate(user, ...requires);
 }

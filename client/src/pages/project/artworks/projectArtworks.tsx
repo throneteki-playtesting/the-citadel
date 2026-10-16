@@ -282,7 +282,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
     return (
         <>
             {isLoading ? (
-                <ArtworksSkeleton project={project} onOpenGuide={guide.open} />
+                <ArtworksSkeleton project={project} onOpenGuide={guide.open} isActive={isActive} />
             ) : (
                 <div ref={containerRef} className="scroll-mt-20">
                     <SlidingPages currentPage={isEditing ? 2 : 1} history="artworks" onPageChange={onPageChange}>
@@ -313,6 +313,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
                     title="Artworks"
                     guideLabel="Artwork Guide"
                     onOpenGuide={guide.open}
+                    isActive={isActive}
                 />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
@@ -442,7 +443,15 @@ type ProjectArtworksProps = { project: IProject; isActive: boolean };
 
 // The page's own shape while the slots load, sized from the project's cached slot tally so the list
 // settles into the space it was already holding rather than shoving the page down as it arrives
-function ArtworksSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
+function ArtworksSkeleton({
+    project,
+    onOpenGuide,
+    isActive
+}: {
+    project: IProject;
+    onOpenGuide: () => void;
+    isActive: boolean;
+}) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
@@ -452,6 +461,7 @@ function ArtworksSkeleton({ project, onOpenGuide }: { project: IProject; onOpenG
                 title="Artworks"
                 guideLabel="Artwork Guide"
                 onOpenGuide={onOpenGuide}
+                isActive={isActive}
             />
             <div className="flex flex-col gap-1.5">
                 {[artworkStatuses.length, artworkTypes.length, project.releases.length].map((chips, row) =>

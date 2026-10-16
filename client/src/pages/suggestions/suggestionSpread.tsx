@@ -11,15 +11,14 @@ import SpreadSunburst, { SpreadMarker } from "./spreadSunburst";
 import { emptyCounts } from "./spreadCounts";
 import { EMPTY_SELECTION, SpreadSelection } from "./spreadSelection";
 import { FOCUS_AREAS } from "./focusAreas";
+import { ACTIVE_SUGGESTIONS_QUERY } from "./activeSuggestionsQuery";
 
 const CLEAR_TRANSITION = { duration: 0.15 } as const;
 
 // How the active suggestion pool splits by faction and card type - a small marker flags any segment
 // below what's expected for its type. A reading aid, not an auto-flagged "gap" - see focusAreas.ts.
 export default function SuggestionSpread({ selection, onSelectionChange, onSelect }: SuggestionSpreadProps) {
-    // Same query args SuggestionsGrid uses, so this shares its RTK cache entry. No `archived` filter
-    // here - restrictArchivedVisibility already forces unarchived-only server-side.
-    const { data: suggestionsData, isLoading } = useGetSuggestionsQuery();
+    const { data: suggestionsData, isLoading } = useGetSuggestionsQuery(ACTIVE_SUGGESTIONS_QUERY);
     const { data: settings, isLoading: isSettingsLoading } = useGetSettingsQuery("suggestions");
     const neutralWeight = settings?.neutralWeight ?? DEFAULT_NEUTRAL_WEIGHT;
 

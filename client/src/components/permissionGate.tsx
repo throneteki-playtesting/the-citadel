@@ -2,10 +2,10 @@ import { ReactNode } from "react";
 import { SingleOrArray } from "common/types";
 import { asArray, validate, ValidationStep } from "common/utils";
 import { User } from "common/models/auth";
-import { useAuth } from "../hooks/useAuth";
+import { useScopedUser } from "../hooks/useScopedUser";
 
 export default function PermissionGate({ children, requires }: PermissionGateProps) {
-    const { user } = useAuth();
+    const { user } = useScopedUser();
     if (!requires) {
         return children;
     }

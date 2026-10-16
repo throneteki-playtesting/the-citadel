@@ -21,6 +21,7 @@ export const plotStats = ["income", "initiative", "claim", "reserve"] as const;
 export type Faction = (typeof factions)[number];
 export type Type = (typeof types)[number];
 export const uniqueTypes: readonly Type[] = ["character", "attachment", "location"];
+export const costTypes: readonly Type[] = ["character", "attachment", "location", "event"];
 export type NoteType = (typeof noteTypes)[number];
 export type ChallengeIcon = (typeof challengeIcons)[number];
 export type PlotStat = (typeof plotStats)[number];
@@ -102,6 +103,8 @@ export interface IPlaytestCard extends ICard, IAuditable {
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;
+            /** A draft project's preview thread once closed - reopened if revealed again, or handed on to the initial card's */
+            previewUrl?: string;
         };
         imageUrl?: string;
     };
@@ -295,8 +298,14 @@ export type ISuggestionsListQuery = {
     unseen?: boolean;
     /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */
     myReactions?: string;
+    /** Keeps suggestions ignored-by-me in, where neither of the above narrows by reaction - for counting the whole pool */
+    includeIgnored?: boolean;
     /** Only legacy suggestions a project card may already have been developed from - MANAGE_SUGGESTIONS_ARCHIVE only */
     developed?: boolean;
+    /** Only suggestions which fit a draft project's slot, named as "{project}:{slot}" - see fitsSlot */
+    fitsSlot?: string;
+    /** Only the suggestions in a draft project's pool, named by its number - for those who can draft in it */
+    pooledIn?: number;
 };
 
 /** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who

@@ -6,7 +6,6 @@ import {
     Button,
     Card,
     Link,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -18,6 +17,7 @@ import {
     Skeleton,
     Tooltip
 } from "@heroui/react";
+import Modal from "../../components/modal";
 import RichText from "../../components/richText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
@@ -324,7 +324,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                     </div>
                 </ScrollShadow>
             </div>
-            <Modal isOpen={isOutdatedModalOpen} onOpenChange={setIsOutdatedModalOpen} placement="center">
+            <Modal isOpen={isOutdatedModalOpen} onOpenChange={setIsOutdatedModalOpen}>
                 <ModalContent>
                     {(onClose) => (
                         <>
@@ -346,7 +346,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                                 <Button
                                     as={RouterLink}
                                     to={`/review/submit?project=${project}&number=${number}`}
-                                    onClick={onClose}
+                                    onPress={onClose}
                                     color="primary"
                                 >
                                     Submit a new review

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Button, Form, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, Form, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { IRefinementInquiry, isInquiryAddressed } from "common/models/refinement";
 import { Slot } from "common/models/schemas";
 import { useResolveInquiryMutation } from "../../../api";

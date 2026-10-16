@@ -2,12 +2,13 @@
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { Filter, SingleOrArray, Sort } from "common/types";
 import { asArray } from "common/utils";
+import { hasSameContent } from "common/models/shared";
 import { flatten } from "flat";
 import { Document, Sort as MongoSort } from "mongodb";
 import { getContext, requestContext } from "@/middleware/context";
 import { IRepository } from "@/types";
 import { logger } from "@/services";
-import { groupBy, isEqual } from "lodash-es";
+import { groupBy } from "lodash-es";
 import { ResourceDataMap, ResourceType } from "common/resources";
 import { broadcastResourceChange } from "@/services/sseService";
 
@@ -30,13 +31,7 @@ export class Database<T> {
         if (context.source === "client") {
             void requestContext.run({ ...context, detached: true }, () => runSyncsByPriority(syncs));
         } else {
-            for (const { func } of syncs.sort((a, b) => a.priority - b.priority)) {
-                try {
-                    await func();
-                } catch (err) {
-                    logger.warn(err);
-                }
-            }
+            await runSyncsByPriority(syncs);
         }
     }
 }
@@ -74,6 +69,19 @@ function virtualStagesFor<T>(
 }
 
 // Shared by both repository base classes' read/count, same pattern as doApplyAudit below
+// Pages are only the same pages from one request to the next if every record has its place, so ties - or no order at
+// all - fall back to the record's own key
+function pagedSort(keys: string[], sort: MongoSort | undefined, perPage?: number) {
+    if (!perPage) {
+        return sort;
+    }
+    const ordered = (sort ?? {}) as Record<string, unknown>;
+    return {
+        ...ordered,
+        ...Object.fromEntries(keys.filter((key) => !(key in ordered)).map((key) => [key, 1]))
+    } as MongoSort;
+}
+
 async function doRead<T, TFilterable extends T>(
     database: MongoDataSource<T>,
     virtualFields: VirtualFieldMap,
@@ -82,7 +90,7 @@ async function doRead<T, TFilterable extends T>(
     page?: number,
     perPage?: number
 ): Promise<TFilterable[]> {
-    const sort = orderBy ? (flatten(orderBy) as MongoSort) : undefined;
+    const sort = pagedSort(database.primaryKeys, orderBy ? (flatten(orderBy) as MongoSort) : undefined, perPage);
     const limit = perPage;
     const skip = (page - 1) * perPage;
     const stages = virtualStagesFor(virtualFields, reading, orderBy);
@@ -101,29 +109,28 @@ async function doCount<T, TFilterable extends T>(
     return stages.length === 0 ? database.count(counting) : database.aggregateCount<TFilterable>(stages, counting);
 }
 
-const AUDIT_FIELDS = new Set(["_metadata", "updated", "updatedBy", "created", "createdBy"]);
-const stripAudit = (obj: object) => Object.fromEntries(Object.entries(obj).filter(([k]) => !AUDIT_FIELDS.has(k)));
-
 async function doApplyAudit<T extends IAuditable>(
     database: MongoDataSource<T>,
     auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>,
-    isNew: boolean
+    isNew: boolean,
+    keepCreation = false
 ): Promise<T[]> {
     const { principal } = getContext();
     const now = new Date();
     const items = asArray(auditing);
 
     if (isNew) {
-        return items.map(
-            (data) =>
-                ({
-                    ...data,
-                    updated: now,
-                    updatedBy: principal.id,
-                    created: now,
-                    createdBy: principal.id
-                }) as T
-        );
+        // A record re-created under a new key is the same one, so it can keep when and by whom it was made
+        return items.map((data) => {
+            const made = keepCreation && "created" in data ? data : undefined;
+            return {
+                ...data,
+                updated: now,
+                updatedBy: principal.id,
+                created: made?.created ?? now,
+                createdBy: made?.createdBy ?? principal.id
+            } as T;
+        });
     }
 
     const pks = database.primaryKeys;
@@ -138,7 +145,7 @@ async function doApplyAudit<T extends IAuditable>(
         const creation = current
             ? { created: current.created, createdBy: current.createdBy }
             : { created: now, createdBy: principal.id };
-        if (current && isEqual(stripAudit(data as object), stripAudit(current as object))) {
+        if (current && hasSameContent(data, current)) {
             // Only _metadata (or nothing) changed — preserve existing audit timestamps
             return { ...data, ...creation, updated: current.updated, updatedBy: current.updatedBy } as T;
         }
@@ -199,17 +206,20 @@ export abstract class BroadcastIAuditableDatabase<
 > extends BroadcastDatabase<K, T> {
     protected applyAudit(
         auditing: T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">,
-        isNew: boolean
+        isNew: boolean,
+        keepCreation?: boolean
     ): Promise<T>;
     protected applyAudit(
         auditing: (T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">)[],
-        isNew: boolean
+        isNew: boolean,
+        keepCreation?: boolean
     ): Promise<T[]>;
     protected async applyAudit(
         auditing: SingleOrArray<T | Omit<T, "updated" | "updatedBy" | "created" | "createdBy">>,
-        isNew: boolean
+        isNew: boolean,
+        keepCreation = false
     ) {
-        const result = await doApplyAudit(this.database, auditing, isNew);
+        const result = await doApplyAudit(this.database, auditing, isNew, keepCreation);
         return Array.isArray(auditing) ? result : result[0];
     }
 }
@@ -228,10 +238,10 @@ export class BasicAuditableRepository<
     // Override to add aggregation-computed fields read/count can filter/sort by - see cardsRepository's `reviews`
     protected virtualFields: VirtualFieldMap = {};
 
-    public async create(creating: T, broadcast?: boolean): Promise<T>;
-    public async create(creating: T[], broadcast?: boolean): Promise<T[]>;
-    public async create(creating: SingleOrArray<T>, broadcast = true) {
-        const audited = await this.applyAudit(asArray(creating), true);
+    public async create(creating: T, broadcast?: boolean, keepCreation?: boolean): Promise<T>;
+    public async create(creating: T[], broadcast?: boolean, keepCreation?: boolean): Promise<T[]>;
+    public async create(creating: SingleOrArray<T>, broadcast = true, keepCreation = false) {
+        const audited = await this.applyAudit(asArray(creating), true, keepCreation);
         const result = await this.database.create(audited);
         if (broadcast) {
             this.broadcastCreates(result);
@@ -273,10 +283,13 @@ export class BasicAuditableRepository<
 }
 
 export class BasicRepository<
-    K extends ResourceType,
-    T extends ResourceDataMap[K] = ResourceDataMap[K],
-    TFilterable extends T = T
-> extends BroadcastDatabase<K, T> implements IRepository<T> {
+        K extends ResourceType,
+        T extends ResourceDataMap[K] = ResourceDataMap[K],
+        TFilterable extends T = T
+    >
+    extends BroadcastDatabase<K, T>
+    implements IRepository<T>
+{
     protected virtualFields: VirtualFieldMap = {};
 
     public async create(creating: T, broadcast?: boolean): Promise<T>;

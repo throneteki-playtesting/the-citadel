@@ -21,6 +21,7 @@ import {
     faCheck,
     faCircleDot,
     faCircleExclamation,
+    faEnvelope,
     faEnvelopeCircleCheck,
     faEnvelopeOpenText,
     faEye,
@@ -45,8 +46,51 @@ export const EASE_STANDARD = [0.65, 0, 0.35, 1] as const;
 // How every reordering list in the app settles, so a row moving reads the same wherever it is watched
 export const reorderTransition = { duration: 0.4, ease: EASE_STANDARD } as const;
 
+// The most a project's pool is read at once - more than it will ever hold
+export const POOL_READ_LIMIT = 1000;
+export const POOL_CARD_GRID_CLASS =
+    "grid grid-cols-2 items-start gap-3 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]";
+export const POOL_STATUS_FADE = { duration: 0.18 } as const;
+
+// How a card let go over the pool ends: how long it waits on the server, then fades away or shrinks into the pool
+export const POOL_DROP_HOLD_LIMIT_MS = 8000;
+export const POOL_DROP_FADE_MS = 150;
+export const POOL_DROP_TAKE_IN_MS = 250;
+export const POOL_DROP_START_PATIENCE_MS = 500;
+
+// A scroll to a slot is over once the slot has held still this many frames - or this long has passed
+export const SCROLL_STILL_FRAMES = 6;
+export const SCROLL_PATIENCE_MS = 2000;
+
+// How much of a slot a carousel must leave showing for it to be dropped on
+export const MIN_VISIBLE_SLOT = 0.5;
+
+// Undoes HeroUI's transform-gpu - a compositor layer per button, which a page of hundreds pays for on every frame
+export const FLAT_BUTTON_CLASS = "transform-none";
+// A notice or its action arriving once something becomes true - quick, so it reads as a response rather than an event
+export const NOTICE_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
+// A block opening and closing by its height, taking the room it needs rather than appearing in it
+export const EXPAND_MOTION = {
+    initial: { height: 0, opacity: 0 },
+    animate: { height: "auto", opacity: 1 },
+    exit: { height: 0, opacity: 0 },
+    transition: NOTICE_TRANSITION
+} as const;
+// How long a card takes to be drawn to the draft pool as it comes over it, and to be let go of as it leaves
+export const POOL_PULL_MS = 150;
+
+// How long a dropped faction chip takes to reach its group
+export const CHIP_DROP_MS = 250;
+// How long a filter drawer's dismissal is held, so the click which ends it isn't read as one outside what holds it
+export const FILTER_CLOSE_HOLD_MS = 300;
+// How long a live toast waits on its work before giving up on it
+export const LIVE_TOAST_STALLED_MS = 60_000;
+
 // Shared by every user picker, so the anonymous placeholder user never shows up as a pickable option
 export const EXCLUDE_ANONYMOUS_USER_FILTER = { discordId: { $ne: "anonymous" } };
+
+// A modal scrolling inside its body may fill a phone's height, less the base's own margin
+export const modalInsideBaseClasses = "max-h-[calc(100%_-_0.5rem)] sm:max-h-[calc(100%_-_8rem)]";
 
 // A ring marking an avatar's selection or verdict, offset clear of whatever it sits on
 export const avatarRingClasses = "ring-2 ring-offset-2 ring-offset-background";
@@ -63,12 +107,65 @@ export const avatarBubbleClasses =
 export const cornerBadgeFadeClasses =
     "transition-[opacity,background-color] duration-200 group-hover:opacity-50 hover:!opacity-100";
 
+// Said wherever a card strays from its slot's conditions
+export const SLOT_STRAY_TITLE = "Doesn't Fit Its Slot";
+
+// Where a sort-specific badge sits over a card, within its CardBadgeLayer
+export const cornerBadgeBottomRightClasses = "absolute bottom-0 right-0 m-[0.5em]";
+
+// A control among a card's badges is the badge's size, whatever size the row is
+export const CORNER_CONTROL_CLASS = "size-[2em]! min-w-[2em]! text-[0.875em]";
+
+// Floating buttons along the bottom right: the first is this far in, and each further left is a step beyond
+export const FLOATING_SLOT_INSET_REM = 1;
+export const FLOATING_SLOT_STEP_REM = 4;
+
+// Tailwind's own sizes, as the widths at which each begins
+export const BREAKPOINT_WIDTHS = { sm: "40rem", md: "48rem", lg: "64rem", xl: "80rem", "2xl": "96rem" } as const;
+export type Breakpoint = keyof typeof BREAKPOINT_WIDTHS;
+
 // A badge's disc lets the art show through until the badge itself is hovered, when it goes solid for reading
 export const cornerBadgeDiscFillClasses =
     "bg-content3/80 hover:bg-content3 transition-[opacity,background-color] duration-200";
 
 // How long a touch is held before it counts as a long-press rather than a tap
 export const LONG_PRESS_MS = 500;
+
+// A touch rests this long before it picks something up, so the page still scrolls under a passing finger
+export const TOUCH_DRAG_DELAY_MS = 250;
+
+// A touch pick-up let go of within this distance arranges a draft pile instead of moving its card
+export const HOLD_TOLERANCE_PX = 8;
+
+// How long a moved draft card counts as carried - long enough for both piles to see it go and arrive
+export const CARRIED_FOR_MS = 1000;
+
+export const DRAFT_STACK_TILT = { amount: 2, alternate: true, variance: 0.5, animateNew: false };
+// A slot's sizes: --card is the widest card letting --cols vertical or --plot-cols plot slots fit across --draft-w, a
+// plot being that card on its side, and --row and --plot follow. A pixel is held back so a full row never wraps
+export const DRAFT_SLOT_VARIABLES_CLASS = classNames(
+    "[--cols:2] sm:[--cols:3] lg:[--cols:4] [--plot-cols:1] sm:[--plot-cols:2] lg:[--plot-cols:3]",
+    "[--card:min((var(--draft-w)_-_1px_-_(var(--cols)_-_1)_*_0.5rem)_/_var(--cols)_-_0.5rem_-_2px,((var(--draft-w)_-_1px_-_(var(--plot-cols)_-_1)_*_0.5rem)_/_var(--plot-cols)_-_0.5rem_-_2px)_*_240_/_333)]",
+    "[--row:calc(var(--card)_*_333_/_240_+_3.25rem_+_2px)]",
+    "[--plot:calc(var(--card)_*_333_/_240_+_0.5rem_+_2px)]"
+);
+// Sized against the faction's slot list holding it - anything outside one is given --draft-w in pixels
+export const DRAFT_SLOT_SIZE_CLASS = classNames("[--draft-w:100cqw]", DRAFT_SLOT_VARIABLES_CLASS);
+export const DRAFT_SLOT_LIST_SELECTOR = "[data-draft-slots]";
+// The url param naming the draft's expanded factions, and its value for every one of them
+export const DRAFT_EXPANDED_PARAM = "expanded";
+export const DRAFT_EXPANDED_ALL = "all";
+export const DRAFT_PLOT_WIDTH_CLASS = "w-64 sm:w-72 md:w-80";
+export const RADIAL_ITEM_CLASS = "shadow-sm text-tiny size-8 md:text-small md:size-10 lg:text-medium lg:size-12";
+
+// The card face as card-preview draws it, before scaling to fit
+export const CARD_BASE = { width: 240, height: 333, cornerRadius: 12 } as const;
+// The width a vertical card is drawn at beside the inputs of each card editor
+export const EDITOR_CARD_WIDTH = { modal: 256, suggestion: 288 } as const;
+// How much wider a plot lies than a vertical card - the same card on its side
+export const PLOT_RATIO = CARD_BASE.height / CARD_BASE.width;
+export const PORTRAIT_ASPECT_CLASS = "aspect-[240/333]";
+export const LANDSCAPE_ASPECT_CLASS = "aspect-[333/240]";
 
 // Reads as disabled without isDisabled, whose pointer-events-none would stop a tooltip explaining why
 export const inertButtonClasses = "opacity-disabled cursor-default data-[hover=true]:!opacity-disabled";
@@ -77,7 +174,7 @@ export const LEGACY_SUGGESTION_DESCRIPTION =
     "Imported from the old suggestion spreadsheet, still waiting to be completed";
 
 // A suggestion is a letter to the Citadel - open while it awaits a decision, checked once approved
-export const suggestionIcons = { awaiting: faEnvelopeOpenText, approved: faEnvelopeCircleCheck };
+export const suggestionIcons = { base: faEnvelope, awaiting: faEnvelopeOpenText, approved: faEnvelopeCircleCheck };
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -551,6 +648,7 @@ export const highlightTarget = {
         `review-${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     factionCarousel: (project: number, faction: Faction) => `faction-${project}|${faction}`,
     release: (project: number, code: string) => `release-${project}|${code}`,
+    slot: (project: number, number: number) => `slot-${project}|${number}`,
     playtestingUpdateCard: (project: number, number: number) => `update-card-${project}|${number}`,
     inquiry: (project: number, number: number, inquiry: number) => `inquiry-${project}|${number}|${inquiry}`
 } as const;

@@ -485,11 +485,13 @@ export function WizardBack({
 }: WizardBackButtonProps) {
     const { onPageBack, isFirstPage, currentPage, fieldErrors, fieldMeta } = useWizard();
 
+    // There is no page behind the first to go back to, so cancelling leaves the pages where they are
     const onPress = useCallback(() => {
-        onPageBack();
-        if (isFirstPage && onCancel) {
-            onCancel();
+        if (isFirstPage) {
+            onCancel?.();
+            return;
         }
+        onPageBack();
     }, [onPageBack, isFirstPage, onCancel]);
 
     const errorCount = useMemo(

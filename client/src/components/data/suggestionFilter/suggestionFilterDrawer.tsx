@@ -299,10 +299,18 @@ type SuggestionFilterDrawerProps = {
     onChange: (value: SuggestionFilterValue) => void;
     traits: string[];
     users: { discordId: string; displayname: string }[];
+    isFactionFixed?: boolean;
     onClose: () => void;
 };
 
-const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: SuggestionFilterDrawerProps) => {
+const SuggestionFilterDrawer = ({
+    value,
+    onChange,
+    traits,
+    users,
+    isFactionFixed,
+    onClose
+}: SuggestionFilterDrawerProps) => {
     const [internal, setInternal] = useState<InternalState>(() => decode(value));
     const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
     const { data: feed } = useGetSuggestionsFeedQuery(undefined, { skip: !canManageArchive });
@@ -483,15 +491,17 @@ const SuggestionFilterDrawer = ({ value, onChange, traits, users, onClose }: Sug
                         value={internal.traits}
                         onChange={(traits) => update({ traits })}
                     />
-                    <ToggleButtonGroup
-                        options={factions.map((faction) => ({
-                            key: faction,
-                            label: factionNames[faction],
-                            icon: <ThronesIcon name={faction} />
-                        }))}
-                        value={internal.factions}
-                        onChange={(factions) => update({ factions, segments: [] })}
-                    />
+                    {!isFactionFixed && (
+                        <ToggleButtonGroup
+                            options={factions.map((faction) => ({
+                                key: faction,
+                                label: factionNames[faction],
+                                icon: <ThronesIcon name={faction} />
+                            }))}
+                            value={internal.factions}
+                            onChange={(factions) => update({ factions, segments: [] })}
+                        />
+                    )}
                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                         <ToggleButtonGroup
                             options={types.map((type) => ({

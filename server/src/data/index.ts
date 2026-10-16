@@ -9,6 +9,7 @@ import DecksRepository from "./repositories/decksRepository";
 import IntegrationRepository from "./repositories/integrationRepository";
 import LogsRepository from "./repositories/logsRepository";
 import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
+import PoolRepository from "./repositories/poolRepository";
 import ProjectsRepository from "./repositories/projectsRepository";
 import ReviewsRepository from "./repositories/reviewRepository";
 import RolesRepository from "./repositories/rolesRepository";
@@ -38,6 +39,7 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "playtestingUpdates", ctor: PlaytestingUpdateRepository },
     { key: "cards", ctor: CardsRepository },
     { key: "slots", ctor: SlotsRepository },
+    { key: "pools", ctor: PoolRepository },
     { key: "artists", ctor: ArtistsRepository },
     { key: "settings", ctor: SettingsRepository },
     { key: "reviews", ctor: ReviewsRepository },
@@ -139,6 +141,9 @@ class DataService {
     }
     get slots() {
         return this.getRepository<SlotsRepository>("slots");
+    }
+    get pools() {
+        return this.getRepository<PoolRepository>("pools");
     }
     get artists() {
         return this.getRepository<ArtistsRepository>("artists");

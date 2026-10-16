@@ -11,7 +11,6 @@ import {
     Chip,
     Divider,
     Form,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -22,6 +21,7 @@ import {
     Skeleton,
     Textarea
 } from "@heroui/react";
+import Modal from "./modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faClockRotateLeft, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Link } from "react-router-dom";
@@ -141,13 +141,7 @@ export default function ReleaseChecksModal({
     const toggleSelect = (discordId: string) => setSelectedId((prev) => (prev === discordId ? null : discordId));
 
     return (
-        <Modal
-            isOpen={isOpen}
-            size="lg"
-            placement="center"
-            scrollBehavior="inside"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="lg" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Release Checks</span>
@@ -283,7 +277,7 @@ export default function ReleaseChecksModal({
                             as={Link}
                             to={viewTargetPath}
                             state={viewTargetState}
-                            onClick={onClose}
+                            onPress={onClose}
                             color="primary"
                             variant="ghost"
                         >

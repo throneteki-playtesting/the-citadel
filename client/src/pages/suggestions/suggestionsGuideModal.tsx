@@ -1,6 +1,7 @@
 import { faArrowRight, faComments, faPenToSquare, faPlus } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import { BaseElementProps } from "../../types";
@@ -34,14 +35,7 @@ export default function SuggestionsGuideModal({
     onViewAll
 }: SuggestionsGuideModalProps) {
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="2xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="2xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 {(close) => (
                     <>
@@ -75,13 +69,14 @@ export default function SuggestionsGuideModal({
                                     className="text-primary text-3xl sm:text-4xl shrink-0"
                                 />
                                 <div className="text-sm text-foreground/70">
-                                    <span className="font-cinzel font-semibold text-foreground">Approval. </span>
-                                    From there, managers may approve suggestions, which highlights them for
-                                    consideration in future projects - those with{" "}
-                                    <span className="font-semibold text-foreground">
-                                        {SUGGESTION_APPROVAL_VOTE_THRESHOLD} or more likes
-                                    </span>{" "}
-                                    get priority approval attention.
+                                    <span>
+                                        Managers may approve suggestions, which highlights them for consideration in
+                                        future projects - those with{" "}
+                                        <span className="font-semibold text-foreground">
+                                            {SUGGESTION_APPROVAL_VOTE_THRESHOLD} or more likes
+                                        </span>{" "}
+                                        get priority approval attention.
+                                    </span>
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 border border-content3 bg-content2 rounded-lg p-3">

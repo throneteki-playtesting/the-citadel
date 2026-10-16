@@ -1,4 +1,5 @@
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader, type ModalProps } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader, type ModalProps } from "@heroui/react";
+import Modal from "./modal";
 import { ReactNode } from "react";
 import { BaseElementProps, UIColor } from "../types";
 
@@ -17,11 +18,8 @@ export default function ConfirmModal({
     return (
         <Modal
             isOpen={isOpen}
-            placement="top-center"
             onOpenChange={(isOpen) => !isOpen && onModalClose()}
             size={size}
-            // Locked while the confirmed action is in flight - a stray Escape/backdrop click (or the
-            // Cancel button below) must not dismiss this out from under a request that's still running.
             isDismissable={!isLoading}
             isKeyboardDismissDisabled={isLoading}
         >

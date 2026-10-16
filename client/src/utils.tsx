@@ -83,6 +83,13 @@ export function daysFromNow(days: number): Date {
     return date;
 }
 
+const listFormat = new Intl.ListFormat("en-GB", { type: "conjunction" });
+
+// "A, B and C" as its pieces, so each item can be drawn as more than plain text
+export function formatListParts(items: string[]) {
+    return listFormat.formatToParts(items);
+}
+
 export function formatCurrency(amount: number, currency: string, options?: Intl.NumberFormatOptions) {
     return Intl.NumberFormat(navigator.language, {
         style: "currency",

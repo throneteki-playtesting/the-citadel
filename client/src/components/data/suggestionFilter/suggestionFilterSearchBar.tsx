@@ -14,10 +14,13 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     onFilterChange: (value: SuggestionFilterValue) => void;
     traits: string[];
     users: { discordId: string; displayname: string }[];
+    // Takes the faction choice out of the drawer, where whoever shows the bar has already settled it
+    isFactionFixed?: boolean;
     // Applies to the Advanced button only - disabling the search input itself would blur it mid-type.
     isDisabled?: boolean;
     // While debouncing or the resulting server search is in flight - shown in place of the clear button
     isSearching?: boolean;
+    onDrawerOpenChange?: (isOpen: boolean) => void;
 };
 
 // Search and Advanced read as one connected control that shrinks to just Advanced while filtering.
@@ -31,20 +34,26 @@ const SuggestionFilterSearchBar = ({
     onFilterChange,
     traits,
     users,
+    isFactionFixed,
     isDisabled,
-    isSearching
+    isSearching,
+    onDrawerOpenChange
 }: SuggestionFilterSearchBarProps) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpenState] = useState(false);
+    const setIsOpen = (open: boolean) => {
+        setIsOpenState(open);
+        onDrawerOpenChange?.(open);
+    };
     const isFiltering = isSuggestionFilterActive(filter);
     const activeCount = countActiveSuggestionFilters(filter);
 
     return (
         <div
             className={classNames(
-                "grid items-stretch justify-end transition-[grid-template-columns] duration-200 ease-in-out flex-1 sm:flex-none sm:w-auto",
+                "grid items-stretch justify-end transition-[grid-template-columns] duration-200 ease-in-out sm:flex-none sm:w-auto",
                 isFiltering
-                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto] !min-w-0"
-                    : "grid-cols-[1fr_auto] sm:grid-cols-[14rem_auto]",
+                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto] !min-w-0 flex-none"
+                    : "grid-cols-[1fr_auto] sm:grid-cols-[14rem_auto] min-w-0 flex-1",
                 className
             )}
             style={style}
@@ -101,6 +110,7 @@ const SuggestionFilterSearchBar = ({
                         onChange={onFilterChange}
                         traits={traits}
                         users={users}
+                        isFactionFixed={isFactionFixed}
                         onClose={() => setIsOpen(false)}
                     />
                 </DrawerContent>

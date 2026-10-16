@@ -10,20 +10,10 @@ import {
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Checkbox, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, Checkbox, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { BaseElementProps } from "../../types";
-
-// Flips the guide from "unseen" to "dismissed" once someone says so, never resurfacing on this browser again.
-export const SUGGESTION_EDITOR_GUIDE_DISMISSED_KEY = "suggestion-editor-guide-dismissed";
-
-export function isSuggestionEditorGuideDismissed(): boolean {
-    try {
-        return localStorage.getItem(SUGGESTION_EDITOR_GUIDE_DISMISSED_KEY) === "true";
-    } catch {
-        // Private browsing / storage disabled - fail open (show the guide) rather than throw.
-        return false;
-    }
-}
+import { isSuggestionEditorGuideDismissed, SUGGESTION_EDITOR_GUIDE_DISMISSED_KEY } from "./suggestionEditorGuideState";
 
 const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     {
@@ -88,14 +78,7 @@ export default function SuggestionEditorGuide({
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="3xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onDismiss()}
-        >
+        <Modal isOpen={isOpen} size="3xl" onOpenChange={(open) => !open && onDismiss()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-1 font-cinzel text-lg sm:text-2xl">
                     Creating a Suggestion

@@ -135,7 +135,6 @@ export default function ArtworkFocus({
                                 anchorIcon={<FontAwesomeIcon icon={faUpRightFromSquare} className="ml-1.5" />}
                                 color="foreground"
                                 className="shrink-0 pointer-events-auto text-white/70 text-sm data-[hover=true]:text-white"
-                                onClick={(event) => event.stopPropagation()}
                             >
                                 {linkLabel}
                             </Link>
