@@ -6,7 +6,7 @@ import { valid } from "semver";
 import { VERTICAL_CARD_WIDTH_REM } from "./constants";
 
 /** Simple ordered-subsequence match - lets "bounce" find an option whose label never says "bounce".
- *  Shared by SearchTagPicker and the suggestion settings reward/punishment search. */
+ *  Shared by SearchTagPicker and the suggestion settings reward/downside search. */
 export function fuzzyMatch(text: string, query: string) {
     const t = text.toLowerCase();
     const q = query.toLowerCase().trim();

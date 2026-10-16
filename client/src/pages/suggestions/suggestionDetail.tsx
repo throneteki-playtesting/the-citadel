@@ -85,14 +85,14 @@ import StatusNotice from "../../components/statusNotice";
 import { EASE_STANDARD, inertButtonClasses, LEGACY_SUGGESTION_DESCRIPTION } from "../../constants";
 import { useSearchTDBCardsQuery } from "../../api/thronesdb";
 import CardFocusThumbnail from "../../components/cardFocusThumbnail";
-import { IRewardPunishmentOption } from "common/models/settings";
+import { IRewardDownsideOption } from "common/models/settings";
 import LegacySuggestionPanel from "./legacySuggestionPanel";
 import ArchivedSuggestionNotice from "./archivedSuggestionNotice";
 import LegacyCardMatches from "./legacyCardMatches";
 
 // Shared reference rather than a fresh `?? []` every render, matching editSuggestionModal.tsx's own use
 const EMPTY_STRINGS: string[] = [];
-const EMPTY_REWARD_PUNISHMENT_TYPES: IRewardPunishmentOption[] = [];
+const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
 
 const REACTION_OPTIONS: { type: ReactionType; label: string; icon: typeof faThumbsUp }[] = [
     { type: "like", label: "Like", icon: faThumbsUp },
@@ -404,11 +404,11 @@ const SuggestionDetail = () => {
     const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
         skip: suggestion?.card.type !== "plot"
     });
-    // Reward/punishment types and loyalty tags now live in settings - a safe empty default keeps the
+    // Reward/downside options and loyalty tags now live in settings - a safe empty default keeps the
     // checklist and answer tiles rendering while the query is still loading.
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
-    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
-    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
+    const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
+    const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
 
     if (!id) {
         return <Navigate to="/suggestions" />;
@@ -443,8 +443,8 @@ const SuggestionDetail = () => {
               derived: suggestion.derived,
               pivotPoints: suggestion.pivotPoints,
               plotMedian: plotPoolMedian?.median,
-              rewardTypes: rewardTypeOptions,
-              punishmentTypes: punishmentTypeOptions,
+              rewardOptions,
+              downsideOptions,
               loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
           });
 
@@ -540,13 +540,13 @@ const SuggestionDetail = () => {
     const canIgnore = !reactionBlockReason;
 
     // Optional-chained throughout - a legacy suggestion has no `questions` at all
-    const rewardTiles = (suggestion.questions?.rewardTypes ?? EMPTY_STRINGS).map((id) => {
-        const reward = rewardTypeOptions.find((r) => r.id === id);
-        return <AnswerTile key={id} label={reward?.label ?? id} description={reward?.description ?? ""} />;
+    const rewardTiles = (suggestion.questions?.rewards ?? EMPTY_STRINGS).flatMap((id) => {
+        const reward = rewardOptions.find((r) => r.id === id);
+        return reward ? [<AnswerTile key={id} label={reward.label} description={reward.description} />] : [];
     });
-    const punishmentTiles = (suggestion.questions?.punishment ?? EMPTY_STRINGS).map((id) => {
-        const punishment = punishmentTypeOptions.find((p) => p.id === id);
-        return <AnswerTile key={id} label={punishment?.label ?? id} description={punishment?.description ?? ""} />;
+    const downsideTiles = (suggestion.questions?.downsides ?? EMPTY_STRINGS).flatMap((id) => {
+        const downside = downsideOptions.find((p) => p.id === id);
+        return downside ? [<AnswerTile key={id} label={downside.label} description={downside.description} />] : [];
     });
     const naturalTriggerTile = answerTileForBoolean(
         SUGGESTION_QUESTIONS.naturalTrigger,
@@ -969,16 +969,16 @@ const SuggestionDetail = () => {
                     {rewardTiles.length > 0 && (
                         <div className="flex flex-col gap-2">
                             <SectionTitle size="sm">Reward Types</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_QUESTIONS.rewardTypes.blurb}</SectionBlurb>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.rewards.blurb}</SectionBlurb>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{rewardTiles}</div>
                         </div>
                     )}
 
-                    {punishmentTiles.length > 0 && (
+                    {downsideTiles.length > 0 && (
                         <div className="flex flex-col gap-2">
-                            <SectionTitle size="sm">Punishment</SectionTitle>
-                            <SectionBlurb>{SUGGESTION_QUESTIONS.punishment.blurb}</SectionBlurb>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{punishmentTiles}</div>
+                            <SectionTitle size="sm">Downsides</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.downsides.blurb}</SectionBlurb>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{downsideTiles}</div>
                         </div>
                     )}
 

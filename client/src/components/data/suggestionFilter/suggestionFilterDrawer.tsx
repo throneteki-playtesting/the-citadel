@@ -26,7 +26,7 @@ import { EASE_STANDARD, factionBgClasses, factionBorderClasses } from "../../../
 import { useGetSettingsQuery, useGetSuggestionsFeedQuery } from "../../../api";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../../hooks/usePermission";
-import { IRewardPunishmentOption } from "common/models/settings";
+import { IRewardDownsideOption } from "common/models/settings";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faEyeSlash, faThumbsDown, faThumbsUp, faXmark, IconDefinition } from "@fortawesome/free-solid-svg-icons";
 import ThronesIcon from "../../thronesIcon";
@@ -36,7 +36,7 @@ import { ToggleButtonGroup, BooleanToggle, NumericFilterInput } from "../filters
 import { NumericFilterValue, decodeNumericOperators, numericOperators } from "../filters/numeric";
 import { EMPTY_SUGGESTION_FILTER, isSuggestionFilterActive, SuggestionFilterValue, SuggestionSegment } from "./types";
 
-const EMPTY_OPTIONS: IRewardPunishmentOption[] = [];
+const EMPTY_OPTIONS: IRewardDownsideOption[] = [];
 
 const SEGMENT_SECTION_FOLD = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -316,12 +316,12 @@ const SuggestionFilterDrawer = ({
     const { data: feed } = useGetSuggestionsFeedQuery(undefined, { skip: !canManageArchive });
     const hasPossiblyDeveloped = (feed?.stats.possiblyDeveloped ?? 0) > 0;
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
-    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_OPTIONS;
-    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_OPTIONS;
-    // Every tag defined across either registry - the only way left to reach reward/punishment ids.
+    const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_OPTIONS;
+    const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_OPTIONS;
+    // Every tag defined across either registry - the only way left to reach reward/downside ids.
     const tagOptions = useMemo(
-        () => [...new Set([...rewardTypeOptions, ...punishmentTypeOptions].flatMap((option) => option.tags))],
-        [rewardTypeOptions, punishmentTypeOptions]
+        () => [...new Set([...rewardOptions, ...downsideOptions].flatMap((option) => option.tags))],
+        [rewardOptions, downsideOptions]
     );
 
     const update = (patch: Partial<InternalState>) => {

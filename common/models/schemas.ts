@@ -286,8 +286,8 @@ const ArchivedInfo = Joi.object({
 const questionsFields = {
     // Most cards have neither - absent is "none", so these default rather than require an explicit
     // empty array. Ids are dynamic/DB-driven (see settings), so only shape is validated here.
-    rewardTypes: Joi.array().items(Joi.string()).default([]),
-    punishment: Joi.array().items(Joi.string()).default([]),
+    rewards: Joi.array().items(Joi.string()).default([]),
+    downsides: Joi.array().items(Joi.string()).default([]),
     // Most cards have none - 0 is a real, complete answer, so this defaults rather than forcing a confirmation.
     triggeredAbilityCount: Joi.number().integer().min(0).default(0),
     naturalTrigger: Joi.boolean(),
@@ -302,8 +302,8 @@ const QuestionsPartial = Joi.object({
 // naturalTrigger/repeatabilityRestricted are required only once triggeredAbilityCount > 0 - the
 // `.required()` on `is` is load-bearing, or a missing count would itself satisfy `is`.
 const Questions = Joi.object({
-    rewardTypes: questionsFields.rewardTypes,
-    punishment: questionsFields.punishment,
+    rewards: questionsFields.rewards,
+    downsides: questionsFields.downsides,
     triggeredAbilityCount: questionsFields.triggeredAbilityCount,
     naturalTrigger: Joi.when("triggeredAbilityCount", {
         is: Joi.number().greater(0).required(),
@@ -560,11 +560,11 @@ const artistPayment = Joi.object({
 
 // Generic - not suggestions-specific, just currently only used there. No Full variant: exactly one
 // document per type, so nothing ever reads it through a filterable GET query.
-export const RewardPunishmentOption = {
+export const RewardDownsideOption = {
     // Body for create/edit within a settings PATCH - id is still supplied here (unlike Artist.Draft),
     // since the option lives inside an array the caller sends whole rather than one row at a time
     Draft: Joi.object({
-        id: Joi.string().required(),
+        id: Joi.string().guid().required(),
         label: Joi.string().trim().required().messages({
             "any.required": "Provide a label",
             "string.empty": "Provide a label"
@@ -579,13 +579,13 @@ export const RewardPunishmentOption = {
     })
 };
 
-// No Full variant here either, for the same reason as RewardPunishmentOption above.
+// No Full variant here either, for the same reason as RewardDownsideOption above.
 export const Settings = {
     Suggestions: {
         Draft: Joi.object({
             minimumLikesThreshold: Joi.number().integer().min(1).default(3),
-            rewardTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
-            punishmentTypes: Joi.array().items(RewardPunishmentOption.Draft).default([]),
+            rewardOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
+            downsideOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
             loyaltyTags: Joi.array().items(Joi.string().trim()).default([]),
             neutralWeight: Joi.number().min(1).max(10).precision(1).default(DEFAULT_NEUTRAL_WEIGHT),
             defaultTrendRange: Joi.string()

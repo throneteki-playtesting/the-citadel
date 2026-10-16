@@ -28,8 +28,8 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     },
     {
         icon: faScaleBalanced,
-        title: "Rewards & Punishments",
-        description: "Mark the rewards it grants overall, and any punishment it imposes on its own controller."
+        title: "Rewards & Downsides",
+        description: "Mark the rewards it grants overall, and any downsides it imposes on its own controller."
     },
     {
         icon: faCompass,

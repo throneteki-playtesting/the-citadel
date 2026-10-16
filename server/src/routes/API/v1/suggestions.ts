@@ -196,13 +196,13 @@ function forceDerived(req: Request, _res: Response, next: NextFunction) {
 }
 
 // Same server-computed convention as forceDerived - a settings save bulk-resyncs `tags` separately
-// (resyncSuggestionTags), but the suggestion's own reward/punishment picks changing is only caught here.
+// (resyncSuggestionTags), but the suggestion's own reward/downside picks changing is only caught here.
 const forceTags = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
     const settings = await dataService.settings.getByType("suggestions");
     req.body.tags = computeSuggestionTags(
         req.body?.questions ?? {},
-        settings?.rewardTypes ?? [],
-        settings?.punishmentTypes ?? []
+        settings?.rewardOptions ?? [],
+        settings?.downsideOptions ?? []
     );
     next();
 });
@@ -315,8 +315,8 @@ async function assertChecklistJustified(suggestion: ICardSuggestion) {
         derived: suggestion.derived,
         pivotPoints: suggestion.pivotPoints ?? [],
         plotMedian,
-        rewardTypes: settings?.rewardTypes ?? [],
-        punishmentTypes: settings?.punishmentTypes ?? [],
+        rewardOptions: settings?.rewardOptions ?? [],
+        downsideOptions: settings?.downsideOptions ?? [],
         loyaltyTags: settings?.loyaltyTags ?? []
     });
 

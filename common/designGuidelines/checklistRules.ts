@@ -24,8 +24,8 @@ export interface RuleResult {
     tooltip?: string;
 }
 
-function labelFor(options: { id: string; label: string }[], id: string) {
-    return options.find((o) => o.id === id)?.label ?? id;
+function labelsFor(options: { id: string; label: string }[], ids: string[]) {
+    return ids.flatMap((id) => options.find((o) => o.id === id)?.label ?? []);
 }
 
 function joinWithAnd(labels: string[]) {
@@ -36,7 +36,7 @@ function joinWithAnd(labels: string[]) {
 }
 
 function listLabels(options: { id: string; label: string }[], ids: string[]) {
-    return joinWithAnd(ids.map((id) => labelFor(options, id)));
+    return joinWithAnd(labelsFor(options, ids));
 }
 
 /** Returns only the rules applicable right now - a rule with nothing to say yet is omitted entirely,
@@ -49,12 +49,12 @@ export function checklistRules(input: {
     pivotPoints: string[];
     /** only needed for plot-type suggestions */
     plotMedian?: number;
-    rewardTypes: { id: string; label: string; tags: string[] }[];
-    punishmentTypes: { id: string; label: string }[];
+    rewardOptions: { id: string; label: string; tags: string[] }[];
+    downsideOptions: { id: string; label: string }[];
     /** Tags which, when present on a selected reward, trigger the loyaltyConsistency rule below */
     loyaltyTags: string[];
 }): RuleResult[] {
-    const { card, questions, pivotPoints, plotMedian, rewardTypes, punishmentTypes, loyaltyTags } = input;
+    const { card, questions, pivotPoints, plotMedian, rewardOptions, downsideOptions, loyaltyTags } = input;
     const results: RuleResult[] = [];
 
     if (card.type === "character") {
@@ -89,35 +89,35 @@ export function checklistRules(input: {
         }
     }
 
-    if ((questions.rewardTypes?.length ?? 0) > 0) {
-        const count = questions.rewardTypes.length;
+    if ((questions.rewards?.length ?? 0) > 0) {
+        const count = questions.rewards.length;
         const warn = count >= 3;
         results.push({
             rule: "rewardFocus",
             status: warn ? "warn" : "pass",
             label: "Reward types are clear and narrow",
             description: warn
-                ? `You've selected ${count} reward types (${listLabels(rewardTypes, questions.rewardTypes)}) - three or more spreads this ability's focus thin.`
-                : `You've selected ${count} ${pluralize(count, "reward type")} (${listLabels(rewardTypes, questions.rewardTypes)}), a clear and narrow focus.`
+                ? `You've selected ${count} reward types (${listLabels(rewardOptions, questions.rewards)}) - three or more spreads this ability's focus thin.`
+                : `You've selected ${count} ${pluralize(count, "reward type")} (${listLabels(rewardOptions, questions.rewards)}), a clear and narrow focus.`
         });
     }
 
-    if ((questions.punishment?.length ?? 0) > 0) {
-        const count = questions.punishment.length;
+    if ((questions.downsides?.length ?? 0) > 0) {
+        const count = questions.downsides.length;
         const warn = count > 1;
         results.push({
-            rule: "punishmentFocus",
+            rule: "downsideFocus",
             status: warn ? "warn" : "pass",
-            label: "Punishments are clear and narrow",
+            label: "Downsides are clear and narrow",
             description: warn
-                ? `You've selected ${count} punishment types (${listLabels(punishmentTypes, questions.punishment)}) - stacking multiple punishments can overly penalize this card.`
-                : `You've selected ${count} ${pluralize(count, "punishment type")} (${listLabels(punishmentTypes, questions.punishment)}), a clear and narrow focus.`
+                ? `You've selected ${count} downside types (${listLabels(downsideOptions, questions.downsides)}) - stacking multiple downsides can overly penalize this card.`
+                : `You've selected ${count} ${pluralize(count, "downside type")} (${listLabels(downsideOptions, questions.downsides)}), a clear and narrow focus.`
         });
     }
 
     const loyaltyTaggedRewards =
-        questions.rewardTypes?.filter((id) =>
-            rewardTypes.find((r) => r.id === id)?.tags.some((t) => loyaltyTags.includes(t))
+        questions.rewards?.filter((id) =>
+            rewardOptions.find((r) => r.id === id)?.tags.some((t) => loyaltyTags.includes(t))
         ) ?? [];
     if (card.faction !== "neutral" && loyaltyTaggedRewards.length > 0) {
         results.push({
@@ -125,9 +125,9 @@ export function checklistRules(input: {
             status: card.loyal ? "pass" : "warn",
             label: "Chosen rewards suggest loyalty",
             description: card.loyal
-                ? `This card grants ${listLabels(rewardTypes, loyaltyTaggedRewards)} and is correctly marked Loyal.`
-                : `This card grants ${listLabels(rewardTypes, loyaltyTaggedRewards)} but isn't marked Loyal.`,
-            tooltip: `Triggered by: ${listLabels(rewardTypes, loyaltyTaggedRewards)}.`
+                ? `This card grants ${listLabels(rewardOptions, loyaltyTaggedRewards)} and is correctly marked Loyal.`
+                : `This card grants ${listLabels(rewardOptions, loyaltyTaggedRewards)} but isn't marked Loyal.`,
+            tooltip: `Triggered by: ${listLabels(rewardOptions, loyaltyTaggedRewards)}.`
         });
     }
 

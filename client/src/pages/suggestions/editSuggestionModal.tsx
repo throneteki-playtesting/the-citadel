@@ -1,5 +1,5 @@
 import { ICard, ICardSuggestion, ChecklistRuleId, ChecklistJustifications, IDerivedFields } from "common/models/cards";
-import { IRewardPunishmentOption } from "common/models/settings";
+import { IRewardDownsideOption } from "common/models/settings";
 import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import SuggestionEditorGuide from "./suggestionEditorGuide";
@@ -67,8 +67,8 @@ const RAIL_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 // surely as an unstable callback would - one shared empty reference instead.
 const EMPTY_STRINGS: string[] = [];
 
-// Same reasoning, for the settings query's reward/punishment lists while they're still loading
-const EMPTY_REWARD_PUNISHMENT_TYPES: IRewardPunishmentOption[] = [];
+// Same reasoning, for the settings query's reward/downside lists while they're still loading
+const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
 
 // Same "shared reference, not a fresh `?? {}` every render" reasoning as EMPTY_STRINGS above.
 const EMPTY_JUSTIFICATIONS: DeepPartial<ChecklistJustifications> = {};
@@ -567,27 +567,27 @@ const EditSuggestionModal = ({
         skip: deferredCard?.type !== "plot"
     });
 
-    // Reward/punishment types and loyalty tags now live in settings rather than a static import - a
+    // Reward/downside options and loyalty tags now live in settings rather than a static import - a
     // safe empty default keeps the checklist rendering while the query is still loading.
     const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
-    const rewardTypeOptions = suggestionSettings?.rewardTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
-    const punishmentTypeOptions = suggestionSettings?.punishmentTypes ?? EMPTY_REWARD_PUNISHMENT_TYPES;
+    const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
+    const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
 
     // Disabled options stay picked wherever they already were, but drop out of what's offered for a
-    // new selection - matches IRewardPunishmentOption.enabled's contract in common/models/settings.ts.
-    const rewardTypeSelectableOptions = useMemo(
+    // new selection - matches IRewardDownsideOption.enabled's contract in common/models/settings.ts.
+    const rewardSelectableOptions = useMemo(
         () =>
-            rewardTypeOptions.filter(
-                (option) => option.enabled || (suggestion.questions?.rewardTypes ?? EMPTY_STRINGS).includes(option.id)
+            rewardOptions.filter(
+                (option) => option.enabled || (suggestion.questions?.rewards ?? EMPTY_STRINGS).includes(option.id)
             ),
-        [rewardTypeOptions, suggestion.questions?.rewardTypes]
+        [rewardOptions, suggestion.questions?.rewards]
     );
-    const punishmentTypeSelectableOptions = useMemo(
+    const downsideSelectableOptions = useMemo(
         () =>
-            punishmentTypeOptions.filter(
-                (option) => option.enabled || (suggestion.questions?.punishment ?? EMPTY_STRINGS).includes(option.id)
+            downsideOptions.filter(
+                (option) => option.enabled || (suggestion.questions?.downsides ?? EMPTY_STRINGS).includes(option.id)
             ),
-        [punishmentTypeOptions, suggestion.questions?.punishment]
+        [downsideOptions, suggestion.questions?.downsides]
     );
 
     // Narrowed to only what checklistRules() actually reads - a whole-object dependency was
@@ -599,8 +599,8 @@ const EditSuggestionModal = ({
         return checklistRules({
             card: deferredCard as ICard,
             questions: {
-                rewardTypes: deferredQuestions?.rewardTypes ?? [],
-                punishment: deferredQuestions?.punishment ?? [],
+                rewards: deferredQuestions?.rewards ?? [],
+                downsides: deferredQuestions?.downsides ?? [],
                 triggeredAbilityCount: deferredQuestions?.triggeredAbilityCount,
                 naturalTrigger: deferredQuestions?.naturalTrigger,
                 repeatabilityRestricted: deferredQuestions?.repeatabilityRestricted,
@@ -609,8 +609,8 @@ const EditSuggestionModal = ({
             derived: (deferredDerived as IDerivedFields) ?? { triggerTypes: [], keywords: [] },
             pivotPoints: (deferredPivotPoints ?? []).filter((p): p is string => !!p),
             plotMedian: plotPoolMedian?.median,
-            rewardTypes: rewardTypeOptions,
-            punishmentTypes: punishmentTypeOptions,
+            rewardOptions,
+            downsideOptions,
             loyaltyTags: suggestionSettings?.loyaltyTags ?? EMPTY_STRINGS
         });
     }, [
@@ -619,8 +619,8 @@ const EditSuggestionModal = ({
         deferredDerived,
         deferredPivotPoints,
         plotPoolMedian,
-        rewardTypeOptions,
-        punishmentTypeOptions,
+        rewardOptions,
+        downsideOptions,
         suggestionSettings?.loyaltyTags
     ]);
 
@@ -648,13 +648,12 @@ const EditSuggestionModal = ({
 
     const onCardUpdate = useCallback((card: DeepPartial<ICard>) => setSuggestion((prev) => ({ ...prev, card })), []);
 
-    const onRewardTypesChange = useCallback(
-        (rewardTypes: string[]) =>
-            setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, rewardTypes } })),
+    const onRewardsChange = useCallback(
+        (rewards: string[]) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, rewards } })),
         []
     );
-    const onPunishmentChange = useCallback(
-        (punishment: string[]) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, punishment } })),
+    const onDownsidesChange = useCallback(
+        (downsides: string[]) => setSuggestion((prev) => ({ ...prev, questions: { ...prev.questions, downsides } })),
         []
     );
     const onIconicChange = useCallback(
@@ -986,37 +985,29 @@ const EditSuggestionModal = ({
                                                 <WizardPage
                                                     controlledData={{
                                                         questions: {
-                                                            rewardTypes: suggestion.questions?.rewardTypes ?? [],
-                                                            punishment: suggestion.questions?.punishment ?? []
+                                                            rewards: suggestion.questions?.rewards ?? [],
+                                                            downsides: suggestion.questions?.downsides ?? []
                                                         }
                                                     }}
                                                 >
                                                     <div className="flex flex-col gap-5 w-full">
                                                         <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.rewardTypes}
-                                                            />
+                                                            <QuestionHeader question={SUGGESTION_QUESTIONS.rewards} />
                                                             <SearchTagPicker
-                                                                options={rewardTypeSelectableOptions}
-                                                                value={
-                                                                    suggestion.questions?.rewardTypes ?? EMPTY_STRINGS
-                                                                }
-                                                                onChange={onRewardTypesChange}
+                                                                options={rewardSelectableOptions}
+                                                                value={suggestion.questions?.rewards ?? EMPTY_STRINGS}
+                                                                onChange={onRewardsChange}
                                                                 placeholder="Search reward types by name or tag…"
                                                             />
                                                         </div>
 
                                                         <div className="flex flex-col gap-2 w-full">
-                                                            <QuestionHeader
-                                                                question={SUGGESTION_QUESTIONS.punishment}
-                                                            />
+                                                            <QuestionHeader question={SUGGESTION_QUESTIONS.downsides} />
                                                             <SearchTagPicker
-                                                                options={punishmentTypeSelectableOptions}
-                                                                value={
-                                                                    suggestion.questions?.punishment ?? EMPTY_STRINGS
-                                                                }
-                                                                onChange={onPunishmentChange}
-                                                                placeholder="Search punishment types by name or tag…"
+                                                                options={downsideSelectableOptions}
+                                                                value={suggestion.questions?.downsides ?? EMPTY_STRINGS}
+                                                                onChange={onDownsidesChange}
+                                                                placeholder="Search downside types by name or tag…"
                                                             />
                                                         </div>
                                                     </div>

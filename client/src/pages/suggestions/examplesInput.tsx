@@ -9,7 +9,7 @@ import { EASE_STANDARD } from "../../constants";
 
 const ROW_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
-/** 0-many illustrative example strings for a reward/punishment type - the same simple row-per-entry
+/** 0-many illustrative example strings for a reward/downside type - the same simple row-per-entry
  *  add/edit/delete shape as PivotPointsInput, rather than the free-typed chips this used to be. */
 const ExamplesInput = memo(function ExamplesInput({
     className,

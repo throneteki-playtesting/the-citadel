@@ -162,8 +162,8 @@ export interface ILabeledCard extends ICard {
  *  automatically from `card.text` and never asked of anyone. */
 export interface ISuggestionQuestions {
     // Ids are dynamic/DB-driven (see common/models/settings.ts), not a compile-time-known union
-    rewardTypes: string[];
-    punishment: string[];
+    rewards: string[];
+    downsides: string[];
     /** Manual count of triggered abilities - gates naturalTrigger/repeatabilityRestricted and the
      *  triggeredAbilityFocus checklist rule. */
     triggeredAbilityCount?: number;
@@ -205,7 +205,7 @@ export interface IDerivedFields {
 export const checklistRuleIds = [
     "strGuideline",
     "rewardFocus",
-    "punishmentFocus",
+    "downsideFocus",
     "loyaltyConsistency",
     "triggeredAbilityFocus",
     "repeatabilityControl",
@@ -274,7 +274,7 @@ export interface ICardSuggestion extends IAuditable {
     questions: ISuggestionQuestions;
     /** always server-computed from card.text, never client-supplied */
     derived: IDerivedFields;
-    /** Union of tags carried by every currently-selected reward/punishment type - denormalized here so
+    /** Union of tags carried by every currently-selected reward/downside option - denormalized here so
      *  filtering by tag is a plain string-array field. Always server-computed, never client-supplied. */
     tags: string[];
     /** justification text per rule the submitter has explained - see ChecklistJustifications */

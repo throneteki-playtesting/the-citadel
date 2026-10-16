@@ -20,8 +20,8 @@ export type SuggestionFilterValue = Omit<Explodable<ICard>, "traits"> & {
     // Which of the viewer's own reactions to filter to, not mutually exclusive - unset/empty still
     // excludes ignored-by-me by default, so this is the one field whose ABSENCE isn't a no-op.
     myReactions?: ReactionType[];
-    // A plain, denormalized server-side field (union of selected reward/punishment tags) - filters
-    // exactly like `traits`, rather than needing reward/punishment ids resolved client-side.
+    // A plain, denormalized server-side field (union of selected reward/downside tags) - filters
+    // exactly like `traits`, rather than needing reward/downside ids resolved client-side.
     tags?: string[];
     iconic?: boolean;
     // true narrows to legacy suggestions (imported, awaiting completion), false hides them

@@ -3,9 +3,9 @@ import { IAuditable } from "./shared";
 // Grows as more settings-backed areas are added - each is its own document, keyed by this type
 export type SettingsType = "suggestions";
 
-/** One selectable reward/punishment/etc option. Generic (not suggestions-specific) even though it's
+/** One selectable reward/downside/etc option. Generic (not suggestions-specific) even though it's
  *  currently only used there, so a future settings type can reuse the same shape. */
-export interface IRewardPunishmentOption {
+export interface IRewardDownsideOption {
     id: string;
     label: string;
     description: string;
@@ -19,8 +19,8 @@ export interface IRewardPunishmentOption {
 
 export interface ISuggestionsSettings {
     minimumLikesThreshold: number;
-    rewardTypes: IRewardPunishmentOption[];
-    punishmentTypes: IRewardPunishmentOption[];
+    rewardOptions: IRewardDownsideOption[];
+    downsideOptions: IRewardDownsideOption[];
     /** Tags which, when present on a selected reward, trigger the loyalty-consistency checklist rule */
     loyaltyTags: string[];
     /** How many times a single faction's share the neutral pool is expected to hold, per card type */

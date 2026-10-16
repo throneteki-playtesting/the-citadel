@@ -26,12 +26,12 @@ import { isDirty } from "common/utils";
 import {
     DEFAULT_NEUTRAL_WEIGHT,
     DEFAULT_TREND_RANGE,
-    IRewardPunishmentOption,
+    IRewardDownsideOption,
     ISuggestionsSettings,
     TrendRange
 } from "common/models/settings";
 import { isTrendRange, TREND_RANGES } from "./trendRange";
-import { RewardPunishmentOption } from "common/models/schemas";
+import { RewardDownsideOption } from "common/models/schemas";
 import { useGetSettingsQuery, useUpdateSettingsMutation } from "../../api";
 import Permission from "common/models/permissions";
 import { usePermission } from "../../hooks/usePermission";
@@ -54,13 +54,13 @@ const SEARCH_DEBOUNCE_MS = 150;
 
 // The GET response annotates each option with how many suggestions currently use it, purely for this
 // modal's own delete-guard - stripped again in stripUsage before every PATCH, never persisted back.
-type OptionWithUsage = IRewardPunishmentOption & { usageCount: number };
-type SettingsResponse = Omit<ISuggestionsSettings, "rewardTypes" | "punishmentTypes"> & {
-    rewardTypes: OptionWithUsage[];
-    punishmentTypes: OptionWithUsage[];
+type OptionWithUsage = IRewardDownsideOption & { usageCount: number };
+type SettingsResponse = Omit<ISuggestionsSettings, "rewardOptions" | "downsideOptions"> & {
+    rewardOptions: OptionWithUsage[];
+    downsideOptions: OptionWithUsage[];
 };
-type Kind = "rewardTypes" | "punishmentTypes";
-type Draft = IRewardPunishmentOption;
+type Kind = "rewardOptions" | "downsideOptions";
+type Draft = IRewardDownsideOption;
 
 // The modal's single local edit session - everything a footer Save writes in one PATCH.
 type SettingsDraft = {
@@ -68,11 +68,11 @@ type SettingsDraft = {
     loyaltyTags: string[];
     neutralWeight: number;
     defaultTrendRange: TrendRange;
-    rewardTypes: OptionWithUsage[];
-    punishmentTypes: OptionWithUsage[];
+    rewardOptions: OptionWithUsage[];
+    downsideOptions: OptionWithUsage[];
 };
 
-function stripUsage(options: OptionWithUsage[]): IRewardPunishmentOption[] {
+function stripUsage(options: OptionWithUsage[]): IRewardDownsideOption[] {
     return options.map((option) => omit(option, "usageCount"));
 }
 
@@ -96,7 +96,7 @@ function hasChangedTags(original: OptionWithUsage[], current: OptionWithUsage[])
     });
 }
 
-/** Reward/punishment type settings, as a modal rather than its own page. One edit session: every row
+/** Reward/downside option settings, as a modal rather than its own page. One edit session: every row
  *  action and scalar field mutates a single local draft until the footer Save. */
 export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
     // Subscribed from the moment the page mounts this (closed) modal rather than from when it opens, so the settings
@@ -113,13 +113,13 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
     const data = rawData as SettingsResponse | undefined;
     const [updateSettings, { isLoading: isSaving }] = useUpdateSettingsMutation();
 
-    const [tab, setTab] = useState<Kind>("rewardTypes");
-    // Punishments is the tab most sessions never open - deferring its list's mount until it's actually
+    const [tab, setTab] = useState<Kind>("rewardOptions");
+    // Downsides is the tab most sessions never open - deferring its list's mount until it's actually
     // been viewed once means a reward-only session never pays for building it.
-    const [hasViewedPunishments, setHasViewedPunishments] = useState(false);
+    const [hasViewedDownsides, setHasViewedDownsides] = useState(false);
     useEffect(() => {
-        if (tab === "punishmentTypes") {
-            setHasViewedPunishments(true);
+        if (tab === "downsideOptions") {
+            setHasViewedDownsides(true);
         }
     }, [tab]);
 
@@ -137,8 +137,8 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                 loyaltyTags: data.loyaltyTags,
                 neutralWeight: data.neutralWeight ?? DEFAULT_NEUTRAL_WEIGHT,
                 defaultTrendRange: isTrendRange(data.defaultTrendRange) ? data.defaultTrendRange : DEFAULT_TREND_RANGE,
-                rewardTypes: data.rewardTypes,
-                punishmentTypes: data.punishmentTypes
+                rewardOptions: data.rewardOptions,
+                downsideOptions: data.downsideOptions
             };
             setDraft(snapshot);
             originalRef.current = snapshot;
@@ -148,15 +148,15 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
         if (!isOpen) {
             setDraft(undefined);
             originalRef.current = undefined;
-            setTab("rewardTypes");
-            setHasViewedPunishments(false);
+            setTab("rewardOptions");
+            setHasViewedDownsides(false);
         }
     }, [isOpen]);
 
     // Every tag currently defined on a reward type - loyalty tags are drawn from that same vocabulary.
     const rewardTagOptions = useMemo(
-        () => [...new Set((draft?.rewardTypes ?? []).flatMap((option) => option.tags))],
-        [draft?.rewardTypes]
+        () => [...new Set((draft?.rewardOptions ?? []).flatMap((option) => option.tags))],
+        [draft?.rewardOptions]
     );
 
     const updateOptions = (kind: Kind, updater: (options: OptionWithUsage[]) => OptionWithUsage[]) => {
@@ -173,7 +173,7 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
         updateOptions(kind, (options) => options.filter((entry) => entry.id !== id));
     }, []);
 
-    const onUpsertOption = useCallback((kind: Kind, option: IRewardPunishmentOption) => {
+    const onUpsertOption = useCallback((kind: Kind, option: IRewardDownsideOption) => {
         updateOptions(kind, (options) =>
             options.some((entry) => entry.id === option.id)
                 ? options.map((entry) => (entry.id === option.id ? { ...option, usageCount: entry.usageCount } : entry))
@@ -183,16 +183,16 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
 
     // Whole-array comparisons (add/edit/delete/reorder all show up as a difference) - same helper the
     // per-row dot and the footer Save button already use, just scoped to one kind's array at a time.
-    const rewardTypesDirty = isDirty(originalRef.current?.rewardTypes, draft?.rewardTypes);
-    const punishmentTypesDirty = isDirty(originalRef.current?.punishmentTypes, draft?.punishmentTypes);
+    const rewardOptionsDirty = isDirty(originalRef.current?.rewardOptions, draft?.rewardOptions);
+    const downsideOptionsDirty = isDirty(originalRef.current?.downsideOptions, draft?.downsideOptions);
 
     // Mirrors the server's own trigger for the bulk suggestion-tags resync - shown so a slower save
     // isn't a surprise, not to gate anything (the server decides for real, this is just a heads-up).
     const willResyncTags =
         !!originalRef.current &&
         !!draft &&
-        (hasChangedTags(originalRef.current.rewardTypes, draft.rewardTypes) ||
-            hasChangedTags(originalRef.current.punishmentTypes, draft.punishmentTypes));
+        (hasChangedTags(originalRef.current.rewardOptions, draft.rewardOptions) ||
+            hasChangedTags(originalRef.current.downsideOptions, draft.downsideOptions));
 
     const onSave = async () => {
         if (!draft) {
@@ -206,8 +206,8 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                     loyaltyTags: draft.loyaltyTags,
                     neutralWeight: draft.neutralWeight,
                     defaultTrendRange: draft.defaultTrendRange,
-                    rewardTypes: stripUsage(draft.rewardTypes),
-                    punishmentTypes: stripUsage(draft.punishmentTypes)
+                    rewardOptions: stripUsage(draft.rewardOptions),
+                    downsideOptions: stripUsage(draft.downsideOptions)
                 }
             }).unwrap();
             originalRef.current = draft;
@@ -321,41 +321,41 @@ export default function SuggestionSettingsModal({ isOpen, onClose }: { isOpen: b
                                     classNames={{ ...scrollableTabs, panel: "p-0" }}
                                     selectedKey={tab}
                                     onSelectionChange={(key) => setTab(key as Kind)}
-                                    aria-label="Reward and punishment types"
+                                    aria-label="Reward and downside options"
                                     variant="underlined"
                                     color="primary"
                                     size="lg"
                                     destroyInactiveTabPanel={false}
                                 >
                                     <Tab
-                                        key="rewardTypes"
-                                        title={<TabTitle label="Rewards" isDirty={rewardTypesDirty} />}
+                                        key="rewardOptions"
+                                        title={<TabTitle label="Rewards" isDirty={rewardOptionsDirty} />}
                                     >
-                                        <RewardPunishmentList
+                                        <RewardDownsideList
                                             kindLabel="Reward Type"
-                                            options={draft.rewardTypes}
-                                            originalOptions={originalRef.current?.rewardTypes ?? []}
+                                            options={draft.rewardOptions}
+                                            originalOptions={originalRef.current?.rewardOptions ?? []}
                                             isOpen={isOpen}
-                                            isActivePage={tab === "rewardTypes"}
-                                            onUpsertOption={(option) => onUpsertOption("rewardTypes", option)}
-                                            onToggleEnabled={(id) => onToggleEnabled("rewardTypes", id)}
-                                            onDelete={(id) => onDeleteOption("rewardTypes", id)}
+                                            isActivePage={tab === "rewardOptions"}
+                                            onUpsertOption={(option) => onUpsertOption("rewardOptions", option)}
+                                            onToggleEnabled={(id) => onToggleEnabled("rewardOptions", id)}
+                                            onDelete={(id) => onDeleteOption("rewardOptions", id)}
                                         />
                                     </Tab>
                                     <Tab
-                                        key="punishmentTypes"
-                                        title={<TabTitle label="Punishments" isDirty={punishmentTypesDirty} />}
+                                        key="downsideOptions"
+                                        title={<TabTitle label="Downsides" isDirty={downsideOptionsDirty} />}
                                     >
-                                        {hasViewedPunishments && (
-                                            <RewardPunishmentList
-                                                kindLabel="Punishment Type"
-                                                options={draft.punishmentTypes}
-                                                originalOptions={originalRef.current?.punishmentTypes ?? []}
+                                        {hasViewedDownsides && (
+                                            <RewardDownsideList
+                                                kindLabel="Downside Type"
+                                                options={draft.downsideOptions}
+                                                originalOptions={originalRef.current?.downsideOptions ?? []}
                                                 isOpen={isOpen}
-                                                isActivePage={tab === "punishmentTypes"}
-                                                onUpsertOption={(option) => onUpsertOption("punishmentTypes", option)}
-                                                onToggleEnabled={(id) => onToggleEnabled("punishmentTypes", id)}
-                                                onDelete={(id) => onDeleteOption("punishmentTypes", id)}
+                                                isActivePage={tab === "downsideOptions"}
+                                                onUpsertOption={(option) => onUpsertOption("downsideOptions", option)}
+                                                onToggleEnabled={(id) => onToggleEnabled("downsideOptions", id)}
+                                                onDelete={(id) => onDeleteOption("downsideOptions", id)}
                                             />
                                         )}
                                     </Tab>
@@ -434,7 +434,7 @@ function SettingsSkeleton() {
     );
 }
 
-function RewardPunishmentList({
+function RewardDownsideList({
     kindLabel,
     options,
     originalOptions,
@@ -449,7 +449,7 @@ function RewardPunishmentList({
     originalOptions: OptionWithUsage[];
     isOpen: boolean;
     isActivePage: boolean;
-    onUpsertOption: (option: IRewardPunishmentOption) => void;
+    onUpsertOption: (option: IRewardDownsideOption) => void;
     onToggleEnabled: (id: string) => void;
     onDelete: (id: string) => void;
 }) {
@@ -519,7 +519,7 @@ function RewardPunishmentList({
     }, []);
 
     const submitRow = useCallback(
-        (option: IRewardPunishmentOption) => {
+        (option: IRewardDownsideOption) => {
             onUpsertOption(option);
             setEditingId(undefined);
             setPendingNew(undefined);
@@ -635,12 +635,12 @@ const OptionRow = memo(function OptionRow({
     isNew: boolean;
     onEdit: (id: string) => void;
     onCollapse: (id: string) => void;
-    onSubmit: (option: IRewardPunishmentOption) => void;
+    onSubmit: (option: IRewardDownsideOption) => void;
     onToggleEnabled: (id: string) => void;
     onDelete: (id: string) => void;
 }) {
     const [draft, setDraft] = useState<Draft>(() => omit(option, "usageCount"));
-    const { errors, validate, clearErrors } = useFormValidation(RewardPunishmentOption.Draft);
+    const { errors, validate, clearErrors } = useFormValidation(RewardDownsideOption.Draft);
 
     // Latches true the first time this row opens and never resets, so idle rows never pay for the editor -
     // once opened, it stays mounted so the shrink/grow fold below has something to animate.
@@ -670,7 +670,7 @@ const OptionRow = memo(function OptionRow({
         setDraft((previous) => ({ ...previous, [key]: value }));
 
     const doSubmit = () => {
-        const body: IRewardPunishmentOption = {
+        const body: IRewardDownsideOption = {
             id: draft.id,
             label: draft.label.trim(),
             description: draft.description.trim(),
@@ -684,7 +684,7 @@ const OptionRow = memo(function OptionRow({
         onSubmit(body);
     };
 
-    const FORM_ID = `reward-punishment-form-${option.id}`;
+    const FORM_ID = `reward-downside-form-${option.id}`;
 
     return (
         <motion.div

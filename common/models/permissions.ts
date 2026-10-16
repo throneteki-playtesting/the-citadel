@@ -85,7 +85,7 @@ enum Permission {
     MANAGE_SUGGESTIONS_ARCHIVE = "MANAGE_SUGGESTIONS_ARCHIVE",
     /** Can sync suggestion discord forum threads */
     SYNC_SUGGESTIONS_DISCORD = "SYNC_SUGGESTIONS_DISCORD",
-    /** Can open and edit suggestion settings (minimum likes threshold, reward/punishment types, loyalty tags and
+    /** Can open and edit suggestion settings (minimum likes threshold, reward/downside options, loyalty tags and
      *  the rest) - reading them needs only READ_SUGGESTIONS, since the suggestions pages draw with them */
     EDIT_SETTINGS_SUGGESTIONS = "EDIT_SETTINGS_SUGGESTIONS",
     /** Can view a single user by ID */

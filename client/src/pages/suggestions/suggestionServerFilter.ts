@@ -119,7 +119,7 @@ export default function useSuggestionServerFilter(
             base._metadata = { engagement };
         }
 
-        // `tags` is a plain top-level string-array field (denormalized from rewards/punishments), so it
+        // `tags` is a plain top-level string-array field (denormalized from rewards/downsides), so it
         // filters exactly like `card.traits`'s own elementwise match.
         setNonEmpty(base, "tags", tags);
 

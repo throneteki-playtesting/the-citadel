@@ -422,7 +422,7 @@ function updatedNotice(suggestion: ICardSuggestion, changed: string[]) {
 }
 
 function labelsFor(options: { id: string; label: string }[], ids: string[]): string[] {
-    return ids.map((id) => options.find((option) => option.id === id)?.label ?? id);
+    return ids.flatMap((id) => options.find((option) => option.id === id)?.label ?? []);
 }
 
 /** Resolves ThronesDB codes to a masked link to the card's page, falling back to the bare code where
@@ -456,8 +456,8 @@ async function checklistSummary(suggestion: ICardSuggestion): Promise<string | u
         derived: suggestion.derived,
         pivotPoints: suggestion.pivotPoints,
         plotMedian,
-        rewardTypes: settings?.rewardTypes ?? [],
-        punishmentTypes: settings?.punishmentTypes ?? [],
+        rewardOptions: settings?.rewardOptions ?? [],
+        downsideOptions: settings?.downsideOptions ?? [],
         loyaltyTags: settings?.loyaltyTags ?? []
     });
     if (results.length === 0) {
@@ -474,13 +474,13 @@ async function checklistSummary(suggestion: ICardSuggestion): Promise<string | u
 async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICardSuggestion): Promise<void> {
     const answers: string[] = [];
     const settings = await dataService.settings.getByType("suggestions");
-    const rewardLabels = labelsFor(settings?.rewardTypes ?? [], suggestion.questions.rewardTypes);
+    const rewardLabels = labelsFor(settings?.rewardOptions ?? [], suggestion.questions.rewards);
     if (rewardLabels.length > 0) {
         answers.push(`🎁 **Reward Types:** ${rewardLabels.join(", ")}`);
     }
-    const punishmentLabels = labelsFor(settings?.punishmentTypes ?? [], suggestion.questions.punishment);
-    if (punishmentLabels.length > 0) {
-        answers.push(`⚠️ **Punishment:** ${punishmentLabels.join(", ")}`);
+    const downsideLabels = labelsFor(settings?.downsideOptions ?? [], suggestion.questions.downsides);
+    if (downsideLabels.length > 0) {
+        answers.push(`⚠️ **Downsides:** ${downsideLabels.join(", ")}`);
     }
     if (suggestion.questions.naturalTrigger !== undefined) {
         answers.push(`🎯 **Natural Trigger:** ${suggestion.questions.naturalTrigger ? "Yes" : "No"}`);

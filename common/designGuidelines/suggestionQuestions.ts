@@ -99,18 +99,18 @@ export const SUGGESTION_QUESTIONS: Record<string, SuggestionQuestionMeta> = {
             { value: false, label: "No", description: "This card's abilities have no clear limits tied to them." }
         ]
     },
-    rewardTypes: {
+    rewards: {
         title: "Rewards",
         blurb: "The tangible benefit(s) this card grants its controller when its ability resolves - gold, cards, board state, or otherwise. Most designs lean on just one or two.",
         question: "What benefits does this design grant?",
         intent: "Names the tangible upsides this design hands its controller, including keywords - useful for spotting when a single ability is quietly doing the work of two or three cards at once.",
         note: "Can't find one that fits? Mention it in #citadel-feedback on Discord."
     },
-    punishment: {
-        title: "Punishment",
+    downsides: {
+        title: "Downsides",
         blurb: "Built-in drawbacks this card imposes on its own controller as the cost of its effect - a symmetrical hit, a restriction, or a stat penalty. Most designs carry at most one.",
         question: "What drawbacks does this design impose on its controller, if any?",
-        intent: "Names the optional drawbacks this design imposes on its own controller as the cost of its effect - most agendas need this, and other cards use punishments to allow for more stronger rewards.",
+        intent: "Names the optional drawbacks this design imposes on its own controller as the cost of its effect - most agendas need this, and other cards use downsides to allow for more stronger rewards.",
         note: "Can't find one that fits? Mention it in #citadel-feedback on Discord."
     },
     pivotPoints: {

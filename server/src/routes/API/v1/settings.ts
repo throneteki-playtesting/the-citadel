@@ -4,7 +4,7 @@ import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express from "express";
 import { celebrate, Joi, Segments } from "@/celebrate";
-import { IRewardPunishmentOption, ISettingsMap, ISuggestionsSettings, SettingsType } from "common/models/settings";
+import { IRewardDownsideOption, ISettingsMap, ISuggestionsSettings, SettingsType } from "common/models/settings";
 import { dataService } from "@/services";
 import { getContext } from "@/middleware/context";
 import { PermissionErrorResponse, validateRequest } from "@/middleware/permissions";
@@ -56,18 +56,18 @@ function validateBody<T>(schema: SchemaType, body: unknown): T {
     return value as T;
 }
 
-// Blocks removing a reward/punishment option id still credited on a live suggestion - the whole PATCH
+// Blocks removing a reward/downside option id still credited on a live suggestion - the whole PATCH
 // is refused (not a partial save), naming every blocked id/label so the caller knows what to undo.
 async function assertNoBlockedRemovals(current: ISuggestionsSettings | undefined, next: ISuggestionsSettings) {
     if (!current) {
         return;
     }
-    const usage = await dataService.settings.suggestionRewardPunishmentUsage();
+    const usage = await dataService.settings.suggestionRewardDownsideUsage();
 
     const blocked: string[] = [];
     for (const [field, counts] of [
-        ["rewardTypes", usage.rewardTypes],
-        ["punishmentTypes", usage.punishmentTypes]
+        ["rewardOptions", usage.rewardOptions],
+        ["downsideOptions", usage.downsideOptions]
     ] as const) {
         const nextIds = new Set(next[field].map((option) => option.id));
         for (const option of current[field]) {
@@ -82,7 +82,7 @@ async function assertNoBlockedRemovals(current: ISuggestionsSettings | undefined
     }
 }
 
-// Order-independent - reordering a reward/punishment's own tag list isn't a change worth resyncing over.
+// Order-independent - reordering a reward/downside's own tag list isn't a change worth resyncing over.
 function sameTagSet(a: string[], b: string[]): boolean {
     if (a.length !== b.length) {
         return false;
@@ -93,7 +93,7 @@ function sameTagSet(a: string[], b: string[]): boolean {
 
 // Ids present in both old and new arrays whose OWN tags actually changed - a brand-new or removed id
 // never needs a resync (nothing could reference it, or assertNoBlockedRemovals already blocked it).
-function changedTagIds(current: IRewardPunishmentOption[] | undefined, next: IRewardPunishmentOption[]): string[] {
+function changedTagIds(current: IRewardDownsideOption[] | undefined, next: IRewardDownsideOption[]): string[] {
     if (!current) {
         return [];
     }
@@ -127,16 +127,16 @@ router.get(
         // caller actually needs them (the settings modal's delete-guard).
         if (type === "suggestions" && req.query.includeUsage) {
             const suggestionsData = data as ISuggestionsSettings;
-            const usage = await dataService.settings.suggestionRewardPunishmentUsage();
+            const usage = await dataService.settings.suggestionRewardDownsideUsage();
             res.status(StatusCodes.OK).json({
                 ...suggestionsData,
-                rewardTypes: suggestionsData.rewardTypes.map((option) => ({
+                rewardOptions: suggestionsData.rewardOptions.map((option) => ({
                     ...option,
-                    usageCount: usage.rewardTypes[option.id] ?? 0
+                    usageCount: usage.rewardOptions[option.id] ?? 0
                 })),
-                punishmentTypes: suggestionsData.punishmentTypes.map((option) => ({
+                downsideOptions: suggestionsData.downsideOptions.map((option) => ({
                     ...option,
-                    usageCount: usage.punishmentTypes[option.id] ?? 0
+                    usageCount: usage.downsideOptions[option.id] ?? 0
                 }))
             });
             return;
@@ -181,17 +181,17 @@ router.patch(
 
         await logActivity(LogCategory.SYSTEM, "settings.updated", `<principal> updated the ${type} settings`);
 
-        // Bulk-recompute `tags` on every suggestion referencing a changed reward/punishment - skipped
+        // Bulk-recompute `tags` on every suggestion referencing a changed reward/downside - skipped
         // entirely when nothing here touched tags, so an unrelated settings save stays fast.
         if (type === "suggestions") {
             const previous = existingDoc?.data as ISuggestionsSettings | undefined;
             const next = body as ISuggestionsSettings;
             const changedIds = [
-                ...changedTagIds(previous?.rewardTypes, next.rewardTypes),
-                ...changedTagIds(previous?.punishmentTypes, next.punishmentTypes)
+                ...changedTagIds(previous?.rewardOptions, next.rewardOptions),
+                ...changedTagIds(previous?.downsideOptions, next.downsideOptions)
             ];
             if (changedIds.length > 0) {
-                await dataService.settings.resyncSuggestionTags(changedIds, next.rewardTypes, next.punishmentTypes);
+                await dataService.settings.resyncSuggestionTags(changedIds, next.rewardOptions, next.downsideOptions);
             }
         }
 

@@ -1,6 +1,6 @@
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { MongoClient, AnyBulkWriteOperation, Document } from "mongodb";
-import { ISettingsDocument, SettingsType, ISettingsMap, IRewardPunishmentOption } from "common/models/settings";
+import { ISettingsDocument, SettingsType, ISettingsMap, IRewardDownsideOption } from "common/models/settings";
 import { computeSuggestionTags } from "common/designGuidelines/suggestionTags";
 import { BasicAuditableRepository } from "./shared";
 
@@ -17,11 +17,11 @@ export default class SettingsRepository extends BasicAuditableRepository<"settin
         return doc?.data as ISettingsMap[T] | undefined;
     }
 
-    /** How many suggestions currently use each reward/punishment id - queried directly against the
+    /** How many suggestions currently use each reward/downside id - queried directly against the
      *  suggestions collection (mirrors slotsRepository's byArtist). */
-    public async suggestionRewardPunishmentUsage(): Promise<{
-        rewardTypes: Record<string, number>;
-        punishmentTypes: Record<string, number>;
+    public async suggestionRewardDownsideUsage(): Promise<{
+        rewardOptions: Record<string, number>;
+        downsideOptions: Record<string, number>;
     }> {
         const collection = this.mongoClient.db().collection("suggestions");
 
@@ -35,20 +35,20 @@ export default class SettingsRepository extends BasicAuditableRepository<"settin
             return Object.fromEntries(results.map(({ _id, count }) => [_id, count]));
         };
 
-        const [rewardTypes, punishmentTypes] = await Promise.all([
-            countBy("questions.rewardTypes"),
-            countBy("questions.punishment")
+        const [rewardOptions, downsideOptions] = await Promise.all([
+            countBy("questions.rewards"),
+            countBy("questions.downsides")
         ]);
 
-        return { rewardTypes, punishmentTypes };
+        return { rewardOptions, downsideOptions };
     }
 
     /** Recomputes `tags` for every suggestion referencing any of `changedIds` - scoped to just the
      *  affected suggestions, since this is the expensive path the caller warns about up front. */
     public async resyncSuggestionTags(
         changedIds: string[],
-        rewardTypes: IRewardPunishmentOption[],
-        punishmentTypes: IRewardPunishmentOption[]
+        rewardOptions: IRewardDownsideOption[],
+        downsideOptions: IRewardDownsideOption[]
     ): Promise<number> {
         if (changedIds.length === 0) {
             return 0;
@@ -58,12 +58,9 @@ export default class SettingsRepository extends BasicAuditableRepository<"settin
         const affected = await collection
             .find(
                 {
-                    $or: [
-                        { "questions.rewardTypes": { $in: changedIds } },
-                        { "questions.punishment": { $in: changedIds } }
-                    ]
+                    $or: [{ "questions.rewards": { $in: changedIds } }, { "questions.downsides": { $in: changedIds } }]
                 },
-                { projection: { _id: 1, "questions.rewardTypes": 1, "questions.punishment": 1 } }
+                { projection: { _id: 1, "questions.rewards": 1, "questions.downsides": 1 } }
             )
             .toArray();
 
@@ -74,7 +71,7 @@ export default class SettingsRepository extends BasicAuditableRepository<"settin
         const ops: AnyBulkWriteOperation<Document>[] = affected.map((doc) => ({
             updateOne: {
                 filter: { _id: doc._id },
-                update: { $set: { tags: computeSuggestionTags(doc.questions ?? {}, rewardTypes, punishmentTypes) } }
+                update: { $set: { tags: computeSuggestionTags(doc.questions ?? {}, rewardOptions, downsideOptions) } }
             }
         }));
         await collection.bulkWrite(ops, { ordered: false });
