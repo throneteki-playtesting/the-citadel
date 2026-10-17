@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import classNames from "classnames";
-import { useAuth } from "../hooks/useAuth";
+import { useScopedUser } from "../hooks/useScopedUser";
 import { validate, asArray, ValidationStep } from "common/utils";
 import { SingleOrArray } from "common/types";
 import { User } from "common/models/auth";
@@ -20,7 +20,7 @@ type StatsGridProps = {
 };
 
 export default function StatsGrid({ children, className }: StatsGridProps) {
-    const { user } = useAuth();
+    const { user } = useScopedUser();
 
     const visibleCount = React.Children.toArray(children).filter((child) => {
         if (!React.isValidElement(child) || child.type !== PermissionGate) return true;

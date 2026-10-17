@@ -10,42 +10,50 @@ import { toGithub } from "common/richText/toGithub";
 import { pascalCase } from "@/utils";
 import { merge } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
-import { Mutex } from "async-mutex";
+import { byCard, cardLock, orderedStep, syncBatch } from "@/concurrency";
 import { RequestError } from "octokit";
 
-const syncIssuesMutex = new Mutex();
+type ProjectIssues = Awaited<ReturnType<typeof listProjectIssues>>;
+
+// A project's issues are listed once for a whole sync, however many of its cards are looking for theirs
+const listProjectIssues = (context: GithubContext, milestone: number) =>
+    context.client.paginate(context.client.rest.issues.listForRepo, {
+        owner: context.owner,
+        repo: context.repo,
+        milestone: milestone.toString(),
+        labels: "automated",
+        state: "all",
+        per_page: 100
+    });
 
 export async function syncIssues(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
-    const release = await syncIssuesMutex.acquire();
-    try {
-        const results: IPlaytestCard[] = [];
-        for (const card of cards) {
-            results.push(await syncIssue(card, forced));
-        }
-        return results;
-    } finally {
-        release();
-    }
+    const listings = new Map<number, Promise<ProjectIssues>>();
+    return await syncBatch(cards, {
+        emitterFor: (card) => createSyncEmitter("card", "github", card),
+        context: () => githubService.getContext(),
+        key: (card) => `issue|${cardLock(card)}`,
+        order: byCard,
+        work: (card, context, emitter) => syncIssue(card, context, emitter, listings, forced)
+    });
 }
 
-async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<IPlaytestCard> {
-    const [project] = await dataService.projects.read({ number: card.project });
-    const context = githubService.getContext();
-    const emitter = createSyncEmitter("card", "github", card);
+async function syncIssue(
+    card: IPlaytestCard,
+    context: GithubContext,
+    emitter: ReturnType<typeof createSyncEmitter<"card">>,
+    listings: Map<number, Promise<ProjectIssues>>,
+    forced: boolean = false
+): Promise<IPlaytestCard> {
     try {
-        emitter.start();
+        const [project] = await dataService.projects.read({ number: card.project });
         let isMissing = isIssueMissing(card);
         if (isMissing) {
             emitter.progress("Searching");
             const milestone = await getMilestone(project);
-            const projectIssues = await context.client.paginate(context.client.rest.issues.listForRepo, {
-                owner: context.owner,
-                repo: context.repo,
-                milestone: milestone.toString(),
-                labels: "automated",
-                state: "all",
-                per_page: 100
-            });
+            if (!listings.has(card.project)) {
+                listings.set(card.project, listProjectIssues(context, milestone));
+            }
+            const projectIssues = await listings.get(card.project)!;
             const existingIssue = projectIssues.find(
                 (i) =>
                     i.title.includes(parseCardCode(false, card.project, card.number)) && i.title.includes(card.version)
@@ -68,19 +76,19 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
         if (forced || isMissing || isIssueOutdated(card)) {
             emitter.progress("Syncing");
             if (isInitial(card)) {
-                card = await syncInitial(card, project, forced);
+                card = await syncInitial(card, project, forced, context);
             } else {
                 switch (card.note?.type) {
                     case "updated": {
-                        card = await syncUpdate(card, project, forced);
+                        card = await syncUpdate(card, project, forced, context);
                         break;
                     }
                     case "reworked": {
-                        card = await syncRework(card, project, forced);
+                        card = await syncRework(card, project, forced, context);
                         break;
                     }
                     case "replaced": {
-                        card = await syncReplace(card, project, forced);
+                        card = await syncReplace(card, project, forced, context);
                         break;
                     }
                     default: {
@@ -102,18 +110,21 @@ async function syncIssue(card: IPlaytestCard, forced: boolean = false): Promise<
 
 export async function clearIssues(cards: IPlaytestCard[]) {
     const context = githubService.getContext();
-    for (const card of cards) {
-        if (isIssueMissing(card)) {
-            continue;
-        }
-        const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
-        try {
-            await deleteIssue(issueNumber, context);
-            delete card._metadata.github;
-        } catch (err) {
-            logger.warn(new Error(`[Github] Failed to clear issue for ${card.name} (${card.version})`, { cause: err }));
-        }
-    }
+    await Promise.all(
+        cards
+            .filter((card) => !isIssueMissing(card))
+            .map(async (card) => {
+                const { issueNumber } = extractFromURL(card._metadata.github.issueUrl);
+                try {
+                    await deleteIssue(issueNumber, context);
+                    delete card._metadata.github;
+                } catch (err) {
+                    logger.warn(
+                        new Error(`[Github] Failed to clear issue for ${card.name} (${card.version})`, { cause: err })
+                    );
+                }
+            })
+    );
 
     return cards;
 }
@@ -264,7 +275,7 @@ async function internalSync(
         }
     }
 
-    const { data: issue } = await context.client.rest.issues.create(details);
+    const { data: issue } = await orderedStep(() => context.client.rest.issues.create(details));
     logger.info(`[Github] Created issue #${issue.number} for ${card.name} (${card.version})`);
     merge(card, {
         _metadata: {

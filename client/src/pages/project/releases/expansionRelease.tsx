@@ -58,7 +58,7 @@ import { TouchTooltip } from "../../../components/touchTooltip";
 
 // An expansion ships as one fixed release containing every card - no development pool, no
 // adding/deleting/reordering releases; only editing, rearranging within factions, and publishing
-export default function ExpansionRelease({ project, guideButton, guideIconButton }: ExpansionReleaseProps) {
+export default function ExpansionRelease({ project, guideButton }: ExpansionReleaseProps) {
     const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
     // A release-bound draft never goes through a playtesting update, so it never becomes latest on its
     // own - fetched alongside latest, in one request, so the publish preview can resolve which one a
@@ -117,7 +117,6 @@ export default function ExpansionRelease({ project, guideButton, guideIconButton
                             : "This page shows the current plans for releasing cards in this project. Planned dates are indicative and may change."}
                     </div>
                     {guideButton}
-                    {guideIconButton}
                 </div>
                 <div className="border border-content3 bg-content1">
                     <ReleaseHeaderSkeleton />
@@ -280,7 +279,6 @@ export default function ExpansionRelease({ project, guideButton, guideIconButton
                                 />
                             </div>
                         </div>
-                        {guideIconButton}
                         {(canReadArtworks || canReadRefinement) && (
                             <div className="flex gap-1">
                                 {canReadArtworks && (
@@ -426,4 +424,4 @@ export default function ExpansionRelease({ project, guideButton, guideIconButton
     );
 }
 
-type ExpansionReleaseProps = { project: IProject; guideButton?: ReactNode; guideIconButton?: ReactNode };
+type ExpansionReleaseProps = { project: IProject; guideButton?: ReactNode };

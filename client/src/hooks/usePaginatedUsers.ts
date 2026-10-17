@@ -7,7 +7,7 @@ import { escapeRegExp } from "common/utils";
 const SEARCH_DEBOUNCE_MS = 300;
 const PER_PAGE = 20;
 
-export default function usePaginatedUsers(baseFilter?: Filter<User> | Filter<User>[]) {
+export default function usePaginatedUsers(baseFilter?: Filter<User> | Filter<User>[], options?: { skip?: boolean }) {
     const [page, setPage] = useState(1);
     const [items, setItems] = useState<User[]>([]);
     const [search, setSearch] = useState("");
@@ -40,7 +40,7 @@ export default function usePaginatedUsers(baseFilter?: Filter<User> | Filter<Use
         ]);
     }, [baseFilter, debouncedSearch]);
 
-    const { data, isLoading, isFetching } = useGetUsersQuery({ filter, page, perPage: PER_PAGE });
+    const { data, isLoading, isFetching } = useGetUsersQuery({ filter, page, perPage: PER_PAGE }, options);
 
     useEffect(() => {
         if (data?.items) {

@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Avatar, Button, ButtonGroup } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faPencil, faTrash, faUserPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
-import { useGetUserQuery, useUpdateSlotArtworkMutation } from "../../../api";
+import { useUpdateSlotArtworkMutation } from "../../../api";
+import useUser from "../../../hooks/useUser";
 import { showApiErrorToast } from "../../../api/errors";
 import UserAutocomplete from "../../../components/data/userAutocomplete";
 
@@ -21,7 +22,7 @@ export default function AssigneeField({ project, number, assignee, isDisabled }:
     }, [assignee, justSaved]);
 
     const shown = justSaved !== undefined ? justSaved : assignee;
-    const { data: user } = useGetUserQuery({ discordId: shown ?? "" }, { skip: !shown });
+    const { user } = useUser(shown);
 
     const edit = () => {
         setPending(shown);

@@ -1,6 +1,7 @@
-import { Button, Modal, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader, type ModalProps } from "@heroui/react";
+import Modal from "./modal";
 import { ReactNode } from "react";
-import { BaseElementProps } from "../types";
+import { BaseElementProps, UIColor } from "../types";
 
 export default function ConfirmModal({
     isOpen,
@@ -9,21 +10,29 @@ export default function ConfirmModal({
     content,
     confirmContent = "Confirm",
     cancelContent = "Cancel",
+    confirmColor = "danger",
+    size = "sm",
     onClose: onModalClose = () => true,
     onConfirm = () => true
 }: ConfirmModalProps) {
     return (
-        <Modal isOpen={isOpen} placement="top-center" onOpenChange={(isOpen) => !isOpen && onModalClose()} size="sm">
+        <Modal
+            isOpen={isOpen}
+            onOpenChange={(isOpen) => !isOpen && onModalClose()}
+            size={size}
+            isDismissable={!isLoading}
+            isKeyboardDismissDisabled={isLoading}
+        >
             <ModalContent>
                 {(onClose) => (
                     <>
                         <ModalHeader>{title}</ModalHeader>
                         <ModalBody>{content}</ModalBody>
                         <ModalFooter>
-                            <Button color="default" onPress={onClose}>
+                            <Button color="default" isDisabled={isLoading} onPress={onClose}>
                                 {cancelContent}
                             </Button>
-                            <Button color="danger" isLoading={isLoading} onPress={onConfirm}>
+                            <Button color={confirmColor} isLoading={isLoading} onPress={onConfirm}>
                                 {confirmContent}
                             </Button>
                         </ModalFooter>
@@ -41,6 +50,11 @@ type ConfirmModalProps = Omit<BaseElementProps, "children"> & {
     content?: ReactNode;
     confirmContent?: ReactNode;
     cancelContent?: ReactNode;
+    /** Defaults to "danger" - every existing caller here is a destructive action; pass eg. "primary"
+     *  for a confirmation that isn't one (eg. approving early). */
+    confirmColor?: UIColor;
+    /** Defaults to "sm" - widen for a longer description that would otherwise wrap awkwardly. */
+    size?: ModalProps["size"];
     onClose?: () => void;
     onConfirm?: () => void;
 };

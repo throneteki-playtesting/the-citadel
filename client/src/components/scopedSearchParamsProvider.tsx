@@ -7,8 +7,10 @@ import { ScopedSearchParamsContext, ScopeEntry } from "../hooks/useSearchParamsS
 export default function ScopedSearchParamsProvider({ children }: { children: ReactNode }) {
     const [, setSearchParams] = useSearchParams();
     const { state } = useLocation();
-    const stateRef = useRef(state);
-    stateRef.current = state;
+    // Read through a ref so a location change alone never rewrites the url - on back/forward the scopes
+    // haven't caught up yet, and writing them would put the page just left back into the address bar
+    const latestRef = useRef({ setSearchParams, state });
+    latestRef.current = { setSearchParams, state };
 
     const [scopes, setScopes] = useState<Map<string, ScopeEntry>>(() => new Map());
 
@@ -26,7 +28,8 @@ export default function ScopedSearchParamsProvider({ children }: { children: Rea
 
     // Layout effect, so the url settles in the same pass as the scope registrations, before paint
     useLayoutEffect(() => {
-        const next = new URLSearchParams(window.location.search);
+        const current = new URLSearchParams(window.location.search);
+        const next = new URLSearchParams(current);
         // Cleared first so an inactive scope's key can't retain a stale value
         for (const { params } of scopes.values()) {
             for (const key of Object.keys(params)) {
@@ -43,9 +46,11 @@ export default function ScopedSearchParamsProvider({ children }: { children: Rea
                 }
             }
         }
-        setSearchParams(next, { replace: true, state: stateRef.current });
-        // One-way (scopes -> url) deliberately, so this doesn't fight browser back/forward navigation
-    }, [scopes, setSearchParams]);
+        if (next.toString() === current.toString()) {
+            return;
+        }
+        latestRef.current.setSearchParams(next, { replace: true, state: latestRef.current.state });
+    }, [scopes]);
 
     return <ScopedSearchParamsContext.Provider value={setScope}>{children}</ScopedSearchParamsContext.Provider>;
 }

@@ -28,6 +28,7 @@ import DataRowSkeleton from "../../../components/dataRowSkeleton";
 import { FilterChip, FilterRow } from "../../../components/filterChips";
 import SortSelect from "../../../components/sortSelect";
 import SlidingPages from "../../../components/slidingPages";
+import { useEditingCard } from "../useEditingCard";
 import { TouchTooltip } from "../../../components/touchTooltip";
 import UserAvatar from "../../../components/userAvatar";
 import ProgressRing from "../../../components/progressRing";
@@ -92,11 +93,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
     const [mineOnly, setMineOnly] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
-    const [editingNumber, setEditingNumber] = useState<number | undefined>(() => {
-        const raw = Number(searchParams.get("editing"));
-        return Number.isInteger(raw) && raw > 0 ? raw : undefined;
-    });
-    const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
+    const { editingNumber, setEditingNumber, isEditing, setIsEditing, onPageChange } = useEditingCard(searchParams);
     const [highlightInquiry, setHighlightInquiry] = useState<number>();
     const guide = useTabGuideModal(REFINEMENTS_GUIDE_SEEN_KEY, isActive);
 
@@ -281,10 +278,10 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
     return (
         <>
             {isLoading ? (
-                <RefinementsSkeleton project={project} onOpenGuide={guide.open} />
+                <RefinementsSkeleton project={project} onOpenGuide={guide.open} isActive={isActive} />
             ) : (
                 <div ref={containerRef} className="scroll-mt-20">
-                    <SlidingPages currentPage={isEditing ? 2 : 1}>
+                    <SlidingPages currentPage={isEditing ? 2 : 1} history="refinements" onPageChange={onPageChange}>
                         {renderList()}
                         <div>
                             {editingNumber !== undefined && (
@@ -313,6 +310,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
                     title="Refinements"
                     guideLabel="Refinement Guide"
                     onOpenGuide={guide.open}
+                    isActive={isActive}
                 />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
@@ -612,7 +610,15 @@ function RefinementRowSkeleton() {
     );
 }
 
-function RefinementsSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
+function RefinementsSkeleton({
+    project,
+    onOpenGuide,
+    isActive
+}: {
+    project: IProject;
+    onOpenGuide: () => void;
+    isActive: boolean;
+}) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
@@ -622,6 +628,7 @@ function RefinementsSkeleton({ project, onOpenGuide }: { project: IProject; onOp
                 title="Refinements"
                 guideLabel="Refinement Guide"
                 onOpenGuide={onOpenGuide}
+                isActive={isActive}
             />
             <div className="flex flex-col gap-1.5">
                 {[designStatuses.length, inquirySeverities.length, project.releases.length].map((chips, row) => (

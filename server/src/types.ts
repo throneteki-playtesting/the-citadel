@@ -1,8 +1,9 @@
 import { DeepPartial, Filter, SingleOrArray, Sort } from "common/types";
 import { StatusCodes } from "http-status-codes";
 import { UUID } from "common/models/shared";
-import { IPlaytestCard, IRenderCard } from "common/models/cards";
-import { IPlaytestingUpdate, IProjectRelease } from "common/models/projects";
+import { ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
+import { IPlaytestingUpdate, IProject, IProjectRelease } from "common/models/projects";
+import { ISlot } from "common/models/slots";
 import { IPlaytestReview } from "common/models/reviews";
 import { ResourceDataMap, ResourceType } from "common/resources";
 
@@ -92,18 +93,24 @@ export interface IDeleteResponse<T> {
     deleted: T[];
 }
 
-export type SyncType = "card" | "review" | "playtestingUpdate" | "release";
+export type SyncType = "card" | "review" | "playtestingUpdate" | "release" | "suggestion" | "project" | "slot";
 export interface SyncDataMap {
     card: IPlaytestCard;
     review: IPlaytestReview;
     playtestingUpdate: IPlaytestingUpdate;
     release: IProjectRelease & { project: number };
+    suggestion: ICardSuggestion;
+    project: IProject;
+    slot: ISlot;
 }
 interface SyncOperationMap {
     card: "image" | "discord" | "github";
     review: "discord";
     playtestingUpdate: "github.code" | "github.data" | "discord";
     release: "github.data";
+    suggestion: "discord";
+    project: "discord";
+    slot: "discord" | "preview";
 }
 export type SyncOperation<K extends SyncType = SyncType> = SyncOperationMap[K];
 export type SyncStatus = "start" | "progress" | "complete" | "error";
@@ -132,6 +139,8 @@ export interface SyncCompleteEvent<K extends SyncType> extends BaseSyncEvent<K> 
 export interface SyncErrorEvent<K extends SyncType> extends BaseSyncEvent<K> {
     status: "error";
     error: string;
+    /** When whatever stopped it can be tried again - eg. a rate limit's end */
+    retryAt?: string;
 }
 
 export type SyncEvent<K extends SyncType = SyncType> =
@@ -147,6 +156,9 @@ export interface ResourceUpdateEvent<K extends ResourceType = ResourceType> {
     originId?: string;
     // True if broadcast from execution detached from its triggering request.
     deferred?: boolean;
+    // True for a passive field change (a reaction, an approval) - applied immediately, not queued
+    // behind the "new data" confirmation toast, since no in-progress edit can lose anything to it.
+    silent?: boolean;
 }
 
 export interface ConnectedEvent {

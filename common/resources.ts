@@ -1,11 +1,12 @@
-import { ICardSuggestion, IPlaytestCard } from "./models/cards";
-import { IPlaytestingUpdate, IProject } from "./models/projects";
+import { ICardSuggestion, IPlaytestCard, ISuggestionForumThread } from "./models/cards";
+import { IPlaytestingUpdate, IPoolEntry, IProject } from "./models/projects";
 import { IPlaytestReview } from "./models/reviews";
 import { Role, SafeIntegration, User } from "./models/auth";
 import { ISlot } from "./models/slots";
 import { IArtist } from "./models/artwork";
 import { ILogEntry } from "./models/logs";
 import { IDeck } from "./models/decks";
+import { ISettingsDocument } from "./models/settings";
 
 export type ResourceType =
     | "user"
@@ -19,7 +20,10 @@ export type ResourceType =
     | "slot"
     | "artist"
     | "log"
-    | "deck";
+    | "deck"
+    | "setting"
+    | "suggestionThread"
+    | "pool";
 
 export interface ResourceDataMap {
     user: User;
@@ -34,6 +38,9 @@ export interface ResourceDataMap {
     artist: IArtist;
     log: ILogEntry;
     deck: IDeck;
+    setting: ISettingsDocument;
+    suggestionThread: ISuggestionForumThread;
+    pool: IPoolEntry;
 }
 
 type ResourceIdKeys = {
@@ -49,6 +56,9 @@ type ResourceIdKeys = {
     artist: "id";
     log: "id";
     deck: "identifier";
+    setting: "id";
+    suggestionThread: "id";
+    pool: "project" | "suggestion";
 };
 
 export const resourceIdFuncs: {
@@ -67,5 +77,8 @@ export const resourceIdFuncs: {
     slot: (s) => `${s.project}|${s.number}`,
     artist: (a) => a.id,
     log: (l) => l.id,
-    deck: (d) => String(d.identifier)
+    deck: (d) => String(d.identifier),
+    setting: (s) => s.id,
+    suggestionThread: (t) => t.id,
+    pool: (e) => `${e.project}|${e.suggestion}`
 };

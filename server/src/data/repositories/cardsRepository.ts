@@ -1,19 +1,77 @@
-﻿import { BulkWriteOptions, DeleteOptions, MongoClient } from "mongodb";
-import { asArray, SemanticVersion } from "common/utils";
+﻿import { BulkWriteOptions, DeleteOptions, Document, Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
+import { asArray, parseCardCode, SemanticVersion } from "common/utils";
 import MongoDataSource from "./dataSources/mongoDataSource";
 import { IPlaytestCard } from "common/models/cards";
 import { Filter, SingleOrArray } from "common/types";
 import { gt, lt, rcompare } from "semver";
 import { deleteImage, syncImage } from "@/rendering/hosting";
 import { BasicAuditableRepository } from "./shared";
+import { renumberDocuments } from "./renumber";
 import { deleteDraft, syncCardForum } from "@/discord/forums/cardForum";
 import { clearIssues, syncIssues } from "@/github/issues";
 import { IPlaytestingUpdate } from "common/models/projects";
 import { syncCodePullRequests } from "@/github/pullRequests";
 import { syncPlaytestingUpdateAnnouncements } from "@/discord/announcements/playtestingUpdates";
+import { withoutDraftProjectCards } from "@/utils";
+import { resourceIdFuncs } from "common/resources";
 
-export default class CardsRepository extends BasicAuditableRepository<"card"> {
+// Filter/sort-only fields, computed by the virtualFields stages below - never part of the stored document
+export type IPlaytestCardFilterable = IPlaytestCard & {
+    reviews?: { current: number; total: number };
+    release?: { position: number };
+};
+
+// current counts reviews of this row's own version - "latest" only if the request itself is scoped to latest:true
+const REVIEW_STAGES: Document[] = [
+    {
+        $lookup: {
+            from: "reviews",
+            let: { project: "$project", number: "$number" },
+            pipeline: [
+                {
+                    $match: {
+                        $expr: { $and: [{ $eq: ["$project", "$$project"] }, { $eq: ["$number", "$$number"] }] }
+                    }
+                }
+            ],
+            as: "_reviews"
+        }
+    },
+    {
+        $addFields: {
+            "reviews.total": { $size: "$_reviews" },
+            "reviews.current": {
+                $size: { $filter: { input: "$_reviews", cond: { $eq: ["$$this.version", "$version"] } } }
+            }
+        }
+    },
+    { $project: { _reviews: 0 } }
+];
+
+const RELEASE_STAGES: Document[] = [
+    {
+        $lookup: {
+            from: "slots",
+            let: { project: "$project", number: "$number" },
+            pipeline: [
+                {
+                    $match: {
+                        $expr: { $and: [{ $eq: ["$project", "$$project"] }, { $eq: ["$number", "$$number"] }] }
+                    }
+                },
+                { $project: { _id: 0, position: "$release.position" } }
+            ],
+            as: "_slot"
+        }
+    },
+    { $addFields: { "release.position": { $arrayElemAt: ["$_slot.position", 0] } } },
+    { $project: { _slot: 0 } }
+];
+
+export default class CardsRepository extends BasicAuditableRepository<"card", IPlaytestCard, IPlaytestCardFilterable> {
     declare protected database: CardMongoDataSource;
+    protected override virtualFields = { reviews: REVIEW_STAGES, release: RELEASE_STAGES };
+
     constructor(mongoClient: MongoClient) {
         super(new CardMongoDataSource(mongoClient), "card");
     }
@@ -54,6 +112,34 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
         return Array.isArray(updating) ? data : data[0];
     }
 
+    // Moves a project's cards to new numbers, and so new codes - touched, so whatever shows them as they were sees a change
+    public async renumber(project: number, numbers: Map<number, number>) {
+        const updated = new Date();
+        await renumberDocuments(this.database.collection as never, project, numbers, (to) => ({
+            code: parseCardCode(false, project, to),
+            updated
+        }));
+        this.broadcastUpdates(await this.read({ project }));
+    }
+
+    // Records which suggestion a card came from, on every version or just `version` (a draft project's slot) -
+    // not an edit, so it neither bumps `updated` nor syncs. Initialising the project archives that suggestion.
+    public async setSuggestionId(
+        project: number,
+        number: number,
+        suggestionId: string,
+        version?: SemanticVersion
+    ): Promise<IPlaytestCard[]> {
+        const filter = { project, number, ...(version && { version }) };
+        await this.database.collection.updateMany(
+            filter as MongoFilter<IPlaytestCard>,
+            { $set: { suggestionId } } as UpdateFilter<IPlaytestCard>
+        );
+        const cards = await this.read(filter);
+        this.broadcastUpdates(cards, { silent: true });
+        return cards;
+    }
+
     public override async destroy(destroying: SingleOrArray<Filter<IPlaytestCard>>, sync: boolean = true) {
         let data = await super.destroy(destroying);
         if (sync) {
@@ -65,7 +151,11 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
     public async sync(syncing: IPlaytestCard): Promise<IPlaytestCard>;
     public async sync(syncing: IPlaytestCard[]): Promise<IPlaytestCard[]>;
     public async sync(syncing: SingleOrArray<IPlaytestCard>) {
-        let data = asArray(syncing);
+        const all = asArray(syncing);
+        let data = await withoutDraftProjectCards(all);
+        if (data.length === 0) {
+            return syncing;
+        }
         const syncs = [
             {
                 priority: 0,
@@ -94,7 +184,10 @@ export default class CardsRepository extends BasicAuditableRepository<"card"> {
 
         await this.internalSync(syncs);
 
-        return Array.isArray(syncing) ? data : data[0];
+        const synced = all.map(
+            (card) => data.find((item) => resourceIdFuncs.card(item) === resourceIdFuncs.card(card)) ?? card
+        );
+        return Array.isArray(syncing) ? synced : synced[0];
     }
 
     public async desync(desyncing: IPlaytestCard): Promise<IPlaytestCard>;

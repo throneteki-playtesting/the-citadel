@@ -8,7 +8,7 @@ export default function Project({ isCreating = false }: ProjectProps) {
     const params = useParams();
     const navigate = useNavigate();
 
-    const project = parseParamNumber(params.number);
+    const project = parseParamNumber(params.project);
 
     if (isCreating) {
         return (

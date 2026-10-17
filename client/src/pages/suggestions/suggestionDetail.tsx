@@ -1,0 +1,1079 @@
+import { Navigate, useParams } from "react-router-dom";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+    useApproveSuggestionMutation,
+    useClearSuggestionReactionMutation,
+    useDeleteSuggestionMutation,
+    useGetSettingsQuery,
+    useGetSuggestionPlotMedianQuery,
+    useGetSuggestionQuery,
+    useReactToSuggestionMutation,
+    useRenderImageMutation,
+    useUnapproveSuggestionMutation
+} from "../../api";
+import Permission from "common/models/permissions";
+import { hasPermission, renderCardSuggestion } from "common/utils";
+import {
+    addToast,
+    Button,
+    ButtonGroup,
+    Chip,
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
+    DropdownTrigger,
+    Spinner
+} from "@heroui/react";
+import classNames from "classnames";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+    faAngleLeft,
+    faCheckCircle,
+    faCircleQuestion,
+    faClockRotateLeft,
+    faClone,
+    faEyeSlash,
+    faFileImage,
+    faPencil,
+    faPlus,
+    faThumbsDown,
+    faThumbsUp,
+    faTrash,
+    faXmarkCircle,
+    IconDefinition
+} from "@fortawesome/free-solid-svg-icons";
+import { AnimatePresence, motion } from "framer-motion";
+import HeaderActions from "../../components/actions/headerActions";
+import { statusActionItem } from "../../components/actions/statusActionItem";
+import DiscordSuggestionStatus from "../../components/status/discordSuggestionStatus";
+import { useDiscordSuggestionStatus } from "../../components/status/useDiscordSuggestionStatus";
+import { usePermission } from "../../hooks/usePermission";
+import { useAuth } from "../../hooks/useAuth";
+import { User } from "common/models/auth";
+import { showApiErrorToast } from "../../api/errors";
+import { cardThumbnailWidthRem, downloadBlob } from "../../utils";
+import usePageTitle from "../../hooks/usePageTitle";
+import EditSuggestionModal from "./editSuggestionModal";
+import PoolMenu from "./poolMenu";
+import { usePoolableProjects } from "./usePoolableProjects";
+import ConfirmModal from "../../components/confirmModal";
+import {
+    Code,
+    ICardSuggestion,
+    ILabeledCard,
+    ReactionType,
+    suggestionApprovalBlockReason,
+    suggestionReactionBlockReason
+} from "common/models/cards";
+import { DeepPartial } from "common/types";
+import { checklistRules } from "common/designGuidelines/checklistRules";
+import { SlimChecklistNotice } from "../../components/designGuidelines/suggestionChecklist";
+import { SUGGESTION_QUESTIONS, SuggestionQuestionMeta } from "common/designGuidelines/suggestionQuestions";
+import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
+import PermissionedLink from "../../components/permissionedLink";
+import SectionTitle from "../../components/sectionTitle";
+import SectionBlurb from "../../components/sectionBlurb";
+import RichText from "../../components/richText";
+import { UserRow } from "../../components/userAvatar";
+import SuggestionCardPreview from "../../components/suggestionCardPreview";
+import useUser from "../../hooks/useUser";
+import Reveal from "../../components/reveal";
+import Timestamp from "../../components/timestamp";
+import ReactionCount from "../../components/reactionCount";
+import { TouchTooltip } from "../../components/touchTooltip";
+import StatusNotice from "../../components/statusNotice";
+import { EASE_STANDARD, inertButtonClasses, LEGACY_SUGGESTION_DESCRIPTION } from "../../constants";
+import { useSearchTDBCardsQuery } from "../../api/thronesdb";
+import CardFocusThumbnail from "../../components/cardFocusThumbnail";
+import { IRewardDownsideOption } from "common/models/settings";
+import LegacySuggestionPanel from "./legacySuggestionPanel";
+import ArchivedSuggestionNotice from "./archivedSuggestionNotice";
+import LegacyCardMatches from "./legacyCardMatches";
+
+// Shared reference rather than a fresh `?? []` every render, matching editSuggestionModal.tsx's own use
+const EMPTY_STRINGS: string[] = [];
+const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
+
+const REACTION_OPTIONS: { type: ReactionType; label: string; icon: typeof faThumbsUp }[] = [
+    { type: "like", label: "Like", icon: faThumbsUp },
+    { type: "dislike", label: "Dislike", icon: faThumbsDown },
+    { type: "ignore", label: "Ignore", icon: faEyeSlash }
+];
+
+// Pops once whenever this specific button becomes the active reaction - `initial={false}` skips
+// the pop on first paint (already-active on load isn't an action), same feel as ReactionCount.
+function ReactionIcon({ icon, isActive }: { icon: typeof faThumbsUp; isActive: boolean }) {
+    return (
+        <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+                key={isActive ? "active" : "inactive"}
+                initial={{ scale: 0.6 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.25 }}
+                className="inline-flex"
+            >
+                <FontAwesomeIcon icon={icon} />
+            </motion.span>
+        </AnimatePresence>
+    );
+}
+
+// Motion-enhanced so `layout` can smoothly resize the button - a plain HeroUI Button can't animate
+// an "auto" width change via CSS alone.
+const MotionButton = motion.create(Button);
+
+/** Like/Dislike's own content - just the icon plus a count (never a text label, unlike Ignore, which
+ *  stays as it was). No number at all while the count is 0, rather than a "0" nobody needs to read. */
+function ReactionButtonContent({
+    icon,
+    isActive,
+    count
+}: {
+    icon: typeof faThumbsUp;
+    isActive: boolean;
+    count: number;
+}) {
+    return (
+        <span className="inline-flex items-center gap-1.5">
+            <ReactionIcon icon={icon} isActive={isActive} />
+            {count > 0 && <ReactionCount count={count} />}
+        </span>
+    );
+}
+
+/** Who reacted a given way, for the Like/Dislike buttons' own tooltip - the hint line names exactly
+ *  what pressing the button again would do, omitted entirely on your own suggestion. */
+function ReactionTooltipContent({
+    type,
+    isActive,
+    showHint,
+    entries
+}: {
+    type: "like" | "dislike";
+    isActive: boolean;
+    showHint: boolean;
+    entries: { discordId: string; reactedAt: Date }[];
+}) {
+    const newestFirst = [...entries].sort((a, b) => new Date(b.reactedAt).getTime() - new Date(a.reactedAt).getTime());
+    const hint = isActive ? "Tap again to remove reaction" : `Tap again to ${type}`;
+    return (
+        <div className="flex flex-col gap-1.5 py-1 w-56 max-w-full">
+            {showHint && <span className="text-xs text-foreground/50 italic">{hint}</span>}
+            {newestFirst.map((entry) => (
+                <UserRow key={entry.discordId} discordId={entry.discordId} />
+            ))}
+        </div>
+    );
+}
+
+// The button's own width used to jump between "Approve" and "Unapprove" - an invisible copy of the
+// longer label reserves the width permanently, and the real label crossfades over the top of it.
+function ApproveButtonContent({ approved }: { approved: boolean }) {
+    return (
+        <span className="relative inline-flex items-center justify-center">
+            <span className="invisible inline-flex items-center gap-2" aria-hidden="true">
+                <FontAwesomeIcon icon={faXmarkCircle} />
+                Unapprove
+            </span>
+            <AnimatePresence initial={false}>
+                <motion.span
+                    key={approved ? "unapprove" : "approve"}
+                    className="absolute inset-0 inline-flex items-center justify-center gap-2"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                >
+                    <FontAwesomeIcon icon={approved ? faXmarkCircle : faCheckCircle} />
+                    {approved ? "Unapprove" : "Approve"}
+                </motion.span>
+            </AnimatePresence>
+        </span>
+    );
+}
+
+/** One answer, read-only, styled like the editor's own answer tiles at rest - reused for every
+ *  question type as one family. */
+function AnswerTile({ icon, label, description }: { icon?: IconDefinition; label: string; description: string }) {
+    return (
+        <div className="flex items-start gap-2 rounded-md border border-content3 bg-content1 p-2">
+            {icon && <FontAwesomeIcon icon={icon} className="mt-0.5 shrink-0 text-foreground/50" />}
+            <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-sm font-semibold text-foreground/90">{label}</span>
+                <span className="text-xs text-foreground/60">{description}</span>
+            </span>
+        </div>
+    );
+}
+
+// Shared by naturalTrigger/repeatabilityRestricted - both are plain yes/no questions rendered as a
+// single read-only AnswerTile for whichever answer was actually given.
+function answerTileForBoolean(question: SuggestionQuestionMeta, value: boolean | undefined) {
+    const option = question.options?.find((entry) => entry.value === value);
+    return option ? <AnswerTile label={option.label} description={option.description} /> : null;
+}
+
+/** A titled group of printed ThronesDB cards, resolved by code - shared by Comparable Cards and
+ *  Combos With. Resolved by the parent (ComparableCombosSection), not fetched here - see that component. */
+function CardCodesGroup({
+    title,
+    description,
+    codes,
+    cardsByCode,
+    isLoading,
+    fullWidth
+}: {
+    title: string;
+    description: string;
+    codes: string[];
+    cardsByCode: Map<string, ILabeledCard>;
+    /** While the ThronesDB lookup is in flight, nothing is drawn - not even the bare-code Chip
+     *  fallback, reserved for a code that's genuinely unresolvable once the fetch has finished. */
+    isLoading: boolean;
+    /** Full-width stacked layout instead of sharing the row 50/50 with a sibling group - see
+     *  ComparableCombosSection's own wrap-avoidance calculation. */
+    fullWidth: boolean;
+}) {
+    return (
+        <div className={classNames("flex flex-col gap-2 w-full", { "sm:w-auto sm:flex-1 min-w-0": !fullWidth })}>
+            <SectionTitle size="sm">{title}</SectionTitle>
+            <SectionBlurb className={fullWidth ? undefined : "sm:max-w-80"}>{description}</SectionBlurb>
+            {!isLoading && (
+                <div className="flex flex-wrap gap-2">
+                    {codes.map((code, index) => {
+                        const card = cardsByCode.get(code);
+                        return (
+                            <motion.div
+                                key={code}
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.2, delay: index * 0.03 }}
+                            >
+                                {card ? (
+                                    <CardFocusThumbnail
+                                        imageUrl={card.imageUrl}
+                                        alt={card.label}
+                                        isPlot={card.type === "plot"}
+                                        url={`https://thronesdb.com/card/${card.code}`}
+                                        linkLabel="View on ThronesDB"
+                                    />
+                                ) : (
+                                    <Chip size="sm" variant="flat">
+                                        {code}
+                                    </Chip>
+                                )}
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// Mirrors CardFocusThumbnail's own fixed pixel widths so a group's one-row width can be computed directly
+// from its cards' types, without measuring rendered cards - see ComparableCombosSection for why.
+const CARD_GAP_PX = 0.5 * 16; // gap-2 between cards within a group
+const GROUP_GAP_PX = 1 * 16; // gap-4 between the two groups when side by side
+
+function groupRowWidthPx(codes: string[], cardsByCode: Map<string, ILabeledCard>): number {
+    if (codes.length === 0) {
+        return 0;
+    }
+    const total = codes.reduce((sum, code) => {
+        const isPlot = cardsByCode.get(code)?.type === "plot";
+        return sum + cardThumbnailWidthRem(isPlot) * 16;
+    }, 0);
+    return total + (codes.length - 1) * CARD_GAP_PX;
+}
+
+/** Comparable Cards and Combos With sit side by side 50/50 only as long as BOTH fit - computed from
+ *  fixed card widths, not by rendering and checking wrap (which would feed back on itself). */
+function ComparableCombosSection({ comparableCards, combosWith }: { comparableCards: string[]; combosWith: string[] }) {
+    const allCodes = useMemo(() => [...new Set([...comparableCards, ...combosWith])], [comparableCards, combosWith]);
+    const { data, isLoading } = useSearchTDBCardsQuery(
+        { filter: { code: { $in: allCodes as Code[] } }, page: 1, perPage: allCodes.length || 1 },
+        { skip: allCodes.length === 0 }
+    );
+    const cardsByCode = useMemo(
+        () =>
+            new Map<string, ILabeledCard>(
+                (data?.items ?? [])
+                    .filter((card): card is ILabeledCard & { code: string } => !!card.code)
+                    .map((card) => [card.code, card])
+            ),
+        [data]
+    );
+
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    useLayoutEffect(() => {
+        const el = containerRef.current;
+        if (!el) {
+            return;
+        }
+        const measure = () => setContainerWidth(el.clientWidth);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    if (comparableCards.length === 0 && combosWith.length === 0) {
+        return null;
+    }
+
+    const bothPresent = comparableCards.length > 0 && combosWith.length > 0;
+    const halfWidth = (containerWidth - GROUP_GAP_PX) / 2;
+    // "Side by side" only decides the flex direction; a lone group always gets the full row, same as
+    // two groups that don't fit and end up stacked instead.
+    const sideBySide =
+        !bothPresent ||
+        (groupRowWidthPx(comparableCards, cardsByCode) <= halfWidth &&
+            groupRowWidthPx(combosWith, cardsByCode) <= halfWidth);
+    const fullWidth = !bothPresent || !sideBySide;
+
+    return (
+        <div ref={containerRef} className="border border-content3 bg-content1 p-3">
+            <div className={classNames("flex flex-col gap-4", { "sm:flex-row": sideBySide })}>
+                {comparableCards.length > 0 && (
+                    <CardCodesGroup
+                        title="Comparable Cards"
+                        description={SUGGESTION_QUESTIONS.comparableCards.blurb}
+                        codes={comparableCards}
+                        cardsByCode={cardsByCode}
+                        isLoading={isLoading}
+                        fullWidth={fullWidth}
+                    />
+                )}
+                {combosWith.length > 0 && (
+                    <CardCodesGroup
+                        title="Combos With"
+                        description={SUGGESTION_QUESTIONS.combosWith.blurb}
+                        codes={combosWith}
+                        cardsByCode={cardsByCode}
+                        isLoading={isLoading}
+                        fullWidth={fullWidth}
+                    />
+                )}
+            </div>
+        </div>
+    );
+}
+
+const SuggestionDetail = () => {
+    const params = useParams();
+    const id = params.id;
+    const { data: suggestion, isLoading } = useGetSuggestionQuery(id ?? "", { skip: !id });
+    const [deleteSuggestion, { isLoading: isDeleting }] = useDeleteSuggestionMutation();
+    const [renderImage, { isLoading: isRenderingImage }] = useRenderImageMutation();
+    const [reactToSuggestion] = useReactToSuggestionMutation();
+    const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
+    const [approveSuggestion, { isLoading: isApproving }] = useApproveSuggestionMutation();
+    const [unapproveSuggestion, { isLoading: isUnapproving }] = useUnapproveSuggestionMutation();
+    const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
+    const poolableProjects = usePoolableProjects();
+    const [isConfirmingApprove, setIsConfirmingApprove] = useState(false);
+    const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    const { user } = useAuth();
+
+    usePageTitle(suggestion ? `Suggestion - ${suggestion.card.name}` : "Suggestion");
+
+    const canEdit = usePermission(
+        (u: User) =>
+            !!suggestion &&
+            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.createdBy) ||
+                hasPermission(u, Permission.EDIT_SUGGESTIONS))
+    );
+    const canDelete = usePermission(
+        (u: User) =>
+            !!suggestion &&
+            ((hasPermission(u, Permission.MAKE_SUGGESTIONS) && u.discordId === suggestion.createdBy) ||
+                hasPermission(u, Permission.DELETE_SUGGESTIONS))
+    );
+    const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
+    const canRenderCard = usePermission(Permission.RENDER_CARDS);
+    const canApprove = usePermission(Permission.APPROVE_SUGGESTIONS);
+    const canManageArchive = usePermission(Permission.MANAGE_SUGGESTIONS_ARCHIVE);
+
+    const approvedBy = suggestion?._metadata?.engagement?.approvedBy;
+    const { user: approver } = useUser(approvedBy);
+    const submitterName = useUser(suggestion?.createdBy).user?.displayname;
+    const { data: discordStatus } = useDiscordSuggestionStatus(id ?? "");
+    // Only fetched for a plot - checklistRules() ignores it entirely for every other type.
+    const { data: plotPoolMedian } = useGetSuggestionPlotMedianQuery(undefined, {
+        skip: suggestion?.card.type !== "plot"
+    });
+    // An empty default keeps the checklist and answer tiles rendering while the query loads
+    const { data: suggestionSettings } = useGetSettingsQuery("suggestions");
+    const rewardOptions = suggestionSettings?.rewardOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
+    const downsideOptions = suggestionSettings?.downsideOptions ?? EMPTY_REWARD_DOWNSIDE_OPTIONS;
+
+    if (!id) {
+        return <Navigate to="/suggestions" />;
+    }
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center p-8">
+                <Spinner size="lg" />
+            </div>
+        );
+    }
+
+    if (!suggestion) {
+        return <Navigate to="/suggestions" />;
+    }
+
+    if (suggestion.draft) {
+        // The server only ever returns a draft here if it belongs to you (restrictDraftVisibility) -
+        // a draft has no page of its own, so redirect back and open the editor instead.
+        return <Navigate to="/suggestions" state={{ editDraft: suggestion }} replace />;
+    }
+
+    let sectionIndex = 0;
+
+    // A legacy suggestion has never answered its questions, so there is nothing yet to check them against
+    const checklistResults = suggestion.legacy
+        ? []
+        : checklistRules({
+              card: suggestion.card,
+              questions: suggestion.questions,
+              derived: suggestion.derived,
+              pivotPoints: suggestion.pivotPoints,
+              plotMedian: plotPoolMedian?.median,
+              rewardOptions,
+              downsideOptions
+          });
+
+    const onExportPNG = async () => {
+        try {
+            const blob = await renderImage(renderCardSuggestion(suggestion, submitterName)).unwrap();
+            downloadBlob(blob, `${suggestion.id}.png`);
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to Download" });
+        }
+    };
+    const doDelete = async () => {
+        try {
+            await deleteSuggestion({ id: suggestion.id! }).unwrap();
+            setIsConfirmingDelete(false);
+            addToast({
+                title: "Successfully deleted",
+                color: "success",
+                description: "Successfully deleted suggestion"
+            });
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to Delete" });
+        }
+    };
+    const reactions = suggestion._metadata?.engagement?.reactions ?? {};
+    const myReaction = user ? reactions[user.discordId]?.type : undefined;
+    const currentReactionOption = REACTION_OPTIONS.find((option) => option.type === myReaction);
+    const reactionBlockReason = user ? suggestionReactionBlockReason(suggestion, user.discordId) : undefined;
+    const onSetReaction = async (reactType: ReactionType) => {
+        if (!user) {
+            return;
+        }
+        try {
+            if (myReaction === reactType) {
+                await clearSuggestionReaction({ id: suggestion.id!, discordId: user.discordId }).unwrap();
+            } else {
+                await reactToSuggestion({ id: suggestion.id!, reactType, discordId: user.discordId }).unwrap();
+            }
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to React" });
+        }
+    };
+    const likedBy = Object.entries(reactions)
+        .filter(([, entry]) => entry.type === "like")
+        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
+    const dislikedBy = Object.entries(reactions)
+        .filter(([, entry]) => entry.type === "dislike")
+        .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
+
+    // Approving and unapproving are deliberately not one toggle - unapproving is a real removal, not
+    // something a second press on the same badge should do by accident.
+    const doApprove = async () => {
+        if (!user) {
+            return;
+        }
+        try {
+            await approveSuggestion({ id: suggestion.id!, discordId: user.discordId }).unwrap();
+            setIsConfirmingApprove(false);
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to Approve" });
+        }
+    };
+    // Below the recommended vote threshold, approving is an override rather than confirming what the
+    // votes already decided - worth a deliberate "are you sure" rather than a single accidental press.
+    const onApprove = () => {
+        if (likedBy.length < SUGGESTION_APPROVAL_VOTE_THRESHOLD) {
+            setIsConfirmingApprove(true);
+            return;
+        }
+        doApprove();
+    };
+    const onUnapprove = async () => {
+        try {
+            await unapproveSuggestion({ id: suggestion.id! }).unwrap();
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to Unapprove" });
+        }
+    };
+
+    // Mirrors the "awaiting" approval filter in suggestionServerFilter.ts (minus the draft check, since a
+    // draft never reaches this page - see the redirect above).
+    const approvalBlockReason = suggestionApprovalBlockReason(suggestion);
+    // An archived suggestion is a record - it can still be deleted, but no longer edited (the server refuses too)
+    const isArchived = !!suggestion.archived;
+    const isPendingDecision =
+        canApprove &&
+        !approvedBy &&
+        !approvalBlockReason &&
+        likedBy.length >= SUGGESTION_APPROVAL_VOTE_THRESHOLD &&
+        myReaction !== "ignore";
+    // Ignore is a reaction, and a user can't react to their own suggestion (see
+    // suggestionReactionBlockReason) - an approver reviewing their own suggestion only gets Approve.
+    const canIgnore = !reactionBlockReason;
+
+    // Optional-chained throughout - a legacy suggestion has no `questions` at all
+    const gameModeTiles = (suggestion.questions?.intendedGameModes ?? []).flatMap((mode) => {
+        const meta = SUGGESTION_QUESTIONS.intendedGameModes.gameModes?.find((entry) => entry.value === mode);
+        return meta ? [<AnswerTile key={mode} label={meta.label} description={meta.description} />] : [];
+    });
+    const rewardTiles = (suggestion.questions?.rewards ?? EMPTY_STRINGS).flatMap((id) => {
+        const reward = rewardOptions.find((r) => r.id === id);
+        return reward ? [<AnswerTile key={id} label={reward.label} description={reward.description} />] : [];
+    });
+    const downsideTiles = (suggestion.questions?.downsides ?? EMPTY_STRINGS).flatMap((id) => {
+        const downside = downsideOptions.find((p) => p.id === id);
+        return downside ? [<AnswerTile key={id} label={downside.label} description={downside.description} />] : [];
+    });
+    const naturalTriggerTile = answerTileForBoolean(
+        SUGGESTION_QUESTIONS.naturalTrigger,
+        suggestion.questions?.naturalTrigger
+    );
+    const repeatabilityTile = answerTileForBoolean(
+        SUGGESTION_QUESTIONS.repeatabilityRestricted,
+        suggestion.questions?.repeatabilityRestricted
+    );
+
+    // Bundled into HeaderActions' items - isDropdownOnly keeps it out of the desktop row entirely,
+    // since desktop gets its own always-labelled standalone button instead (see below).
+    const approveActionItem = canApprove && {
+        key: approvedBy ? "unapprove" : "approve",
+        title: approvedBy ? "Unapprove" : "Approve",
+        icon: <FontAwesomeIcon icon={approvedBy ? faXmarkCircle : faCheckCircle} />,
+        color: approvedBy ? ("danger" as const) : undefined,
+        onPress: approvedBy ? onUnapprove : onApprove,
+        isLoading: approvedBy ? isUnapproving : isApproving,
+        isDisabled: !approvedBy && !!approvalBlockReason,
+        description: approvedBy ? undefined : approvalBlockReason,
+        isStatus: true,
+        isDropdownOnly: true
+    };
+
+    return (
+        <div className="flex flex-col gap-4">
+            <Reveal index={sectionIndex++} className="px-2 md:px-0 flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2">
+                    <PermissionedLink
+                        to="/suggestions"
+                        requires={Permission.READ_SUGGESTIONS}
+                        className="order-1 text-base sm:text-xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
+                    >
+                        <FontAwesomeIcon icon={faAngleLeft} /> All Suggestions
+                    </PermissionedLink>
+                    <div className="order-2 sm:basis-full text-xl sm:text-4xl tracking-wider font-cinzel font-semibold text-primary">
+                        {suggestion.card.name}
+                        {(approvedBy || suggestion.legacy) && (
+                            <>
+                                {" "}
+                                <span className="inline-flex flex-wrap items-center gap-2 align-middle font-sans font-normal tracking-normal">
+                                    {approvedBy && (
+                                        <TouchTooltip
+                                            content={
+                                                <div className="px-1 py-0.5 text-sm font-cinzel">
+                                                    Approved by {approver?.displayname ?? "…"}
+                                                </div>
+                                            }
+                                        >
+                                            <Chip
+                                                size="sm"
+                                                color="success"
+                                                variant="flat"
+                                                className="shrink-0 cursor-help"
+                                                startContent={
+                                                    <FontAwesomeIcon icon={faCheckCircle} className="text-xs" />
+                                                }
+                                            >
+                                                Approved
+                                            </Chip>
+                                        </TouchTooltip>
+                                    )}
+                                    {suggestion.legacy && (
+                                        <TouchTooltip
+                                            content={
+                                                <div className="px-1 py-0.5 text-sm max-w-64">
+                                                    {LEGACY_SUGGESTION_DESCRIPTION}
+                                                </div>
+                                            }
+                                        >
+                                            <Chip
+                                                size="sm"
+                                                color="primary"
+                                                variant="flat"
+                                                className="shrink-0 cursor-help"
+                                                startContent={
+                                                    <FontAwesomeIcon icon={faClockRotateLeft} className="text-xs" />
+                                                }
+                                            >
+                                                Legacy
+                                            </Chip>
+                                        </TouchTooltip>
+                                    )}
+                                </span>
+                            </>
+                        )}
+                    </div>
+                    <div className="order-3 basis-full flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-foreground/50 shrink-0">Suggested by</span>
+                            <UserRow discordId={suggestion.createdBy} className="shrink-0 max-w-full" />
+                        </div>
+                        {suggestion.updatedBy && suggestion.updatedBy !== suggestion.createdBy && (
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="text-foreground/50 shrink-0">Edited by</span>
+                                <UserRow discordId={suggestion.updatedBy} className="shrink-0 max-w-full" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-2 self-end sm:self-start">
+                    <div className="flex items-center gap-2">
+                        {canApprove &&
+                            (!approvedBy && approvalBlockReason ? (
+                                <TouchTooltip
+                                    content={<div className="px-1 py-0.5 text-sm max-w-64">{approvalBlockReason}</div>}
+                                >
+                                    <Button
+                                        className={classNames("hidden sm:inline-flex", inertButtonClasses)}
+                                        variant="flat"
+                                        disableRipple
+                                    >
+                                        <ApproveButtonContent approved={false} />
+                                    </Button>
+                                </TouchTooltip>
+                            ) : (
+                                <Button
+                                    className="hidden sm:inline-flex"
+                                    color={approvedBy ? "danger" : "default"}
+                                    variant="flat"
+                                    isLoading={approvedBy ? isUnapproving : isApproving}
+                                    onPress={approvedBy ? onUnapprove : onApprove}
+                                >
+                                    <ApproveButtonContent approved={!!approvedBy} />
+                                </Button>
+                            ))}
+                        <div className="hidden sm:flex items-center gap-1.5">
+                            <DiscordSuggestionStatus id={suggestion.id!} isIconOnly />
+                        </div>
+                        {suggestion.id && !suggestion.draft && poolableProjects.length > 0 && (
+                            <PoolMenu
+                                suggestion={suggestion.id}
+                                isApproved={!!approvedBy}
+                                projects={poolableProjects}
+                            />
+                        )}
+                        <HeaderActions
+                            items={[
+                                approveActionItem,
+                                statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
+                                canRenderCard && {
+                                    key: "export-png",
+                                    title: "Download Image",
+                                    icon: <FontAwesomeIcon icon={faFileImage} />,
+                                    onPress: onExportPNG,
+                                    isLoading: isRenderingImage
+                                },
+                                canCreate && {
+                                    key: "copy",
+                                    title: "Clone",
+                                    icon: <FontAwesomeIcon icon={faClone} />,
+                                    onPress: () => setEditing({ card: suggestion.card })
+                                },
+                                canEdit &&
+                                    !isArchived && {
+                                        key: "edit",
+                                        title: "Edit",
+                                        icon: <FontAwesomeIcon icon={faPencil} />,
+                                        onPress: () => setEditing(suggestion)
+                                    },
+                                canDelete && {
+                                    key: "delete",
+                                    title: "Delete",
+                                    icon: <FontAwesomeIcon icon={faTrash} />,
+                                    color: "danger",
+                                    onPress: () => setIsConfirmingDelete(true),
+                                    isLoading: isDeleting
+                                }
+                            ]}
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <Timestamp
+                            date={suggestion.updated}
+                            className="shrink-0 text-xs font-sans italic text-foreground/40"
+                        />
+                        {user && (
+                            <ButtonGroup size="sm" className="hidden sm:flex">
+                                {REACTION_OPTIONS.filter(({ type }) => type !== "ignore" || !reactionBlockReason).map(
+                                    ({ type, label, icon }) => {
+                                        const isActive = myReaction === type;
+                                        const count =
+                                            type === "like"
+                                                ? likedBy.length
+                                                : type === "dislike"
+                                                  ? dislikedBy.length
+                                                  : 0;
+                                        // isDisabled is deliberately never used here - it adds
+                                        // pointer-events-none, which would block the TouchTooltip too.
+                                        const isBlocked = type !== "ignore" && !!reactionBlockReason;
+                                        const button = (
+                                            <MotionButton
+                                                key={type}
+                                                layout
+                                                transition={{ duration: 0.2, ease: EASE_STANDARD }}
+                                                variant={isActive ? "solid" : "flat"}
+                                                color={isActive ? "primary" : "default"}
+                                                disableRipple={isBlocked}
+                                                className={classNames(
+                                                    type !== "ignore" && "px-2",
+                                                    // HeroUI's flat variant dims on hover regardless -
+                                                    // pinned back to the resting opacity, `!` to win.
+                                                    isBlocked &&
+                                                        "opacity-disabled cursor-default data-[hover=true]:!opacity-disabled"
+                                                )}
+                                                onPress={() => !isBlocked && onSetReaction(type)}
+                                            >
+                                                {type === "ignore" ? (
+                                                    <>
+                                                        <ReactionIcon icon={icon} isActive={isActive} />
+                                                        {label}
+                                                    </>
+                                                ) : (
+                                                    <ReactionButtonContent
+                                                        icon={icon}
+                                                        isActive={isActive}
+                                                        count={count}
+                                                    />
+                                                )}
+                                            </MotionButton>
+                                        );
+                                        if (type === "ignore" || count === 0) {
+                                            return button;
+                                        }
+                                        return (
+                                            <TouchTooltip
+                                                key={type}
+                                                content={
+                                                    <ReactionTooltipContent
+                                                        type={type}
+                                                        isActive={isActive}
+                                                        showHint={!reactionBlockReason}
+                                                        entries={type === "like" ? likedBy : dislikedBy}
+                                                    />
+                                                }
+                                            >
+                                                {button}
+                                            </TouchTooltip>
+                                        );
+                                    }
+                                )}
+                            </ButtonGroup>
+                        )}
+                    </div>
+                </div>
+            </Reveal>
+
+            {suggestion.draft && (
+                <div className="px-2 md:px-0">
+                    <Chip size="sm" color="default" variant="flat">
+                        Draft
+                    </Chip>
+                </div>
+            )}
+
+            {user && !reactionBlockReason && (
+                <div className="sm:hidden fixed bottom-6 right-20 z-20">
+                    <Dropdown placement="top-end">
+                        <DropdownTrigger>
+                            <Button
+                                isIconOnly
+                                radius="full"
+                                size="lg"
+                                color="primary"
+                                className="shadow-lg"
+                                aria-label="React to this suggestion"
+                            >
+                                {currentReactionOption ? (
+                                    <FontAwesomeIcon icon={currentReactionOption.icon} />
+                                ) : (
+                                    <span className="relative inline-flex">
+                                        <FontAwesomeIcon icon={faThumbsUp} />
+                                        <span className="absolute -bottom-1.5 -right-1.5 flex items-center justify-center w-3.5 h-3.5 rounded-full bg-primary-foreground text-primary text-[0.5rem]">
+                                            <FontAwesomeIcon icon={faPlus} />
+                                        </span>
+                                    </span>
+                                )}
+                            </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                            aria-label="React to this suggestion"
+                            onAction={(key) => onSetReaction(key as ReactionType)}
+                        >
+                            {REACTION_OPTIONS.map(({ type, label, icon }) => (
+                                <DropdownItem
+                                    key={type}
+                                    startContent={<FontAwesomeIcon icon={icon} />}
+                                    className={myReaction === type ? "text-primary" : undefined}
+                                >
+                                    {label}
+                                </DropdownItem>
+                            ))}
+                        </DropdownMenu>
+                    </Dropdown>
+                </div>
+            )}
+
+            <div className="flex flex-col lg:flex-row gap-6 px-2 lg:px-0">
+                <Reveal
+                    index={sectionIndex++}
+                    className={classNames(
+                        "w-full shrink-0 flex flex-col lg:sticky lg:top-[calc(var(--nav-height)+1rem)] lg:self-start",
+                        // A plot's box is a portrait's box rotated - its width is a portrait's height.
+                        suggestion.card.type === "plot" ? "lg:w-[calc(18rem*333/240)]" : "lg:w-72"
+                    )}
+                >
+                    <div
+                        className={classNames(
+                            "w-full mx-auto lg:mx-0 self-center lg:self-stretch",
+                            suggestion.card.type === "plot"
+                                ? "max-w-[calc(18rem*333/240)] aspect-[333/240]"
+                                : "max-w-72 aspect-[240/333]"
+                        )}
+                    >
+                        <SuggestionCardPreview
+                            suggestion={suggestion}
+                            orientation={suggestion.card.type === "plot" ? "horizontal" : "vertical"}
+                            rounded
+                        />
+                    </div>
+                    {suggestion.card.flavor && (
+                        <div className="mt-2 px-2 text-center font-crimson text-sm italic text-foreground/60">
+                            {suggestion.card.flavor}
+                        </div>
+                    )}
+                    <AnimatePresence initial={false}>
+                        {isPendingDecision && (
+                            <motion.div
+                                key="pending-decision"
+                                className="overflow-hidden"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.25, ease: EASE_STANDARD }}
+                            >
+                                <StatusNotice
+                                    icon={faCircleQuestion}
+                                    iconPosition="title"
+                                    color="info"
+                                    label="Ready for a Decision"
+                                    detail={
+                                        // Not StatusNotice's own `children` slot - that sits beside detail
+                                        // text at `sm:` width, squeezing this fixed w-72 column to one word/line.
+                                        <div className="flex flex-col gap-2">
+                                            <span>
+                                                This suggestion has earned enough likes to be worth a decision - approve
+                                                to sign off
+                                                {canIgnore &&
+                                                    ", or ignore to quietly clear it until it earns more support"}
+                                                .
+                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    color="success"
+                                                    variant="flat"
+                                                    isLoading={isApproving}
+                                                    startContent={<FontAwesomeIcon icon={faCheckCircle} />}
+                                                    onPress={onApprove}
+                                                >
+                                                    Approve
+                                                </Button>
+                                                {canIgnore && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="flat"
+                                                        startContent={<FontAwesomeIcon icon={faEyeSlash} />}
+                                                        onPress={() => onSetReaction("ignore")}
+                                                    >
+                                                        Ignore
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    }
+                                    className="mt-3"
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    {checklistResults.length > 0 && (
+                        <SlimChecklistNotice
+                            results={checklistResults}
+                            justifications={suggestion.checklistJustifications}
+                            className="mt-3"
+                        />
+                    )}
+                </Reveal>
+
+                <Reveal index={sectionIndex++} className="flex-1 min-w-0 flex flex-col gap-6">
+                    {suggestion.notes && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">Editor Notes</SectionTitle>
+                            <div className="text-sm text-foreground/70">
+                                <RichText html={suggestion.notes} />
+                            </div>
+                        </div>
+                    )}
+
+                    {suggestion.archived && <ArchivedSuggestionNotice archived={suggestion.archived} />}
+
+                    {canManageArchive && suggestion.legacy && !isArchived && (
+                        <LegacyCardMatches suggestion={suggestion} />
+                    )}
+
+                    {suggestion.legacy && (
+                        <LegacySuggestionPanel
+                            suggestion={suggestion}
+                            canComplete={canEdit && !isArchived}
+                            onComplete={() => setEditing(suggestion)}
+                            canDelete={canDelete}
+                            onDelete={() => setIsConfirmingDelete(true)}
+                            canLink={canManageArchive && !isArchived}
+                        />
+                    )}
+
+                    {gameModeTiles.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">{SUGGESTION_QUESTIONS.intendedGameModes.title}</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.intendedGameModes.blurb}</SectionBlurb>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{gameModeTiles}</div>
+                        </div>
+                    )}
+
+                    {rewardTiles.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">Reward Types</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.rewards.blurb}</SectionBlurb>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{rewardTiles}</div>
+                        </div>
+                    )}
+
+                    {downsideTiles.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">Downsides</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.downsides.blurb}</SectionBlurb>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">{downsideTiles}</div>
+                        </div>
+                    )}
+
+                    {(naturalTriggerTile || repeatabilityTile) && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {naturalTriggerTile && (
+                                <div className="flex flex-col gap-2">
+                                    <SectionTitle size="sm">Natural Trigger</SectionTitle>
+                                    <SectionBlurb>{SUGGESTION_QUESTIONS.naturalTrigger.blurb}</SectionBlurb>
+                                    <div className="flex flex-col gap-2">{naturalTriggerTile}</div>
+                                </div>
+                            )}
+                            {repeatabilityTile && (
+                                <div className="flex flex-col gap-2">
+                                    <SectionTitle size="sm">Safely Limited</SectionTitle>
+                                    <SectionBlurb>{SUGGESTION_QUESTIONS.repeatabilityRestricted.blurb}</SectionBlurb>
+                                    <div className="flex flex-col gap-2">{repeatabilityTile}</div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {(suggestion.pivotPoints?.length ?? 0) > 0 && (
+                        <div className="flex flex-col gap-2">
+                            <SectionTitle size="sm">Pivot Points</SectionTitle>
+                            <SectionBlurb>{SUGGESTION_QUESTIONS.pivotPoints.blurb}</SectionBlurb>
+                            <div className="flex flex-col gap-2">
+                                {suggestion.pivotPoints.map((point, index) => (
+                                    <div
+                                        key={index}
+                                        className="rounded-md border border-content3 bg-content1 p-2.5 text-sm"
+                                    >
+                                        {point}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <ComparableCombosSection
+                        comparableCards={suggestion.comparableCards}
+                        combosWith={suggestion.combosWith}
+                    />
+                </Reveal>
+            </div>
+
+            <EditSuggestionModal
+                isOpen={!!editing}
+                suggestion={editing}
+                onClose={() => setEditing(undefined)}
+                onSave={() =>
+                    addToast({
+                        title: "Successfully saved",
+                        color: "success",
+                        description: "Suggestion has been saved"
+                    })
+                }
+            />
+
+            <ConfirmModal
+                isOpen={isConfirmingApprove}
+                isLoading={isApproving}
+                confirmColor="primary"
+                size="md"
+                title="Approve this suggestion?"
+                content={`It only has ${likedBy.length} like${likedBy.length === 1 ? "" : "s"} so far, below the recommended minimum of ${SUGGESTION_APPROVAL_VOTE_THRESHOLD}. Approve it anyway?`}
+                confirmContent="Approve"
+                onConfirm={doApprove}
+                onClose={() => setIsConfirmingApprove(false)}
+            />
+            <ConfirmModal
+                isOpen={isConfirmingDelete}
+                isLoading={isDeleting}
+                title="Delete this suggestion?"
+                content={
+                    isArchived
+                        ? "This suggestion is archived - it's kept as a record, so it doesn't need deleting. If you still want it gone, this is permanent and cannot be undone."
+                        : "This is permanent and cannot be undone."
+                }
+                confirmContent="Delete"
+                onConfirm={doDelete}
+                onClose={() => setIsConfirmingDelete(false)}
+            />
+        </div>
+    );
+};
+
+export default SuggestionDetail;

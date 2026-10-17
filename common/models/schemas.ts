@@ -2,6 +2,8 @@ import BaseJoi from "joi";
 import * as Cards from "./cards";
 import * as Projects from "./projects";
 import * as Slots from "./slots";
+import * as SlotConditions from "./slotConditions";
+import { keywordNames } from "../designGuidelines/deriveFields";
 import * as Artwork from "./artwork";
 import * as Refinement from "./refinement";
 import { statementAnswers } from "./reviews";
@@ -9,6 +11,9 @@ import { Regex } from "../utils";
 import PermissionEnum from "./permissions";
 import { logCategories, logSeverities } from "./logs";
 import { sanitiseHtml } from "../richText/sanitise";
+import { PIVOT_POINT_MAX_LENGTH } from "../designGuidelines/pivotPoints";
+import { DEFAULT_NEUTRAL_WEIGHT, DEFAULT_TREND_RANGE, trendRanges } from "./settings";
+import { findTagKindClash, tagKindLabels } from "../designGuidelines/suggestionTags";
 
 // Collect all validation errors instead of stopping at the first - callers rely on seeing the full set.
 // `errors.label: false` deliberately isn't baked in here too; see server/src/celebrate.ts for why.
@@ -26,6 +31,8 @@ const DiscordMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
+const CardDiscordMetadata = DiscordMetadata.keys({ previewUrl: Joi.string().uri() });
+
 const GithubIssueMetadata = Joi.object({
     status: Joi.string().valid(...Cards.githubStatuses),
     issueUrl: Joi.string().uri(),
@@ -40,8 +47,12 @@ const GithubPRMetadata = Joi.object({
     lastSynced: Joi.date()
 });
 
-const JoiXNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X"));
-const JoiXDashNumber = Joi.alternatives().try(Joi.number(), Joi.string().valid("X", "-"));
+const JoiXNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X"))
+    .messages({ "alternatives.match": '{{#label}} must be a number or "X"' });
+const JoiXDashNumber = Joi.alternatives()
+    .try(Joi.number(), Joi.string().valid("X", "-"))
+    .messages({ "alternatives.match": '{{#label}} must be a number, "X" or "-"' });
 
 const Permission = Joi.string().valid(...Object.values(PermissionEnum));
 
@@ -60,9 +71,13 @@ export const Card = {
         type: Joi.string()
             .required()
             .valid(...Cards.types),
-        loyal: Joi.when("faction", {
-            is: Joi.not("neutral"),
-            then: Joi.boolean().required()
+        loyal: Joi.when("type", {
+            is: "agenda",
+            then: Joi.forbidden(),
+            otherwise: Joi.when("faction", {
+                is: Joi.not("neutral"),
+                then: Joi.boolean().required()
+            })
         }),
         traits: Joi.array().items(Joi.string()),
         text: Joi.string(),
@@ -156,7 +171,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -183,7 +198,7 @@ export const PlaytestingCard = {
         }),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -214,7 +229,7 @@ export const PlaytestingCard = {
         released: Joi.forbidden(),
         _metadata: Joi.object({
             github: GithubIssueMetadata,
-            discord: DiscordMetadata,
+            discord: CardDiscordMetadata,
             imageUrl: Joi.string().uri()
         }),
         updated: Joi.date(),
@@ -245,63 +260,164 @@ export const RenderedCard = {
     })
 };
 
+// Snapshot of watched fields at last Discord sync, for the suggestion forum's "what changed" edit message
+const DiscordMetadataWithSnapshot = DiscordMetadata.keys({
+    lastSyncedSnapshot: Joi.object().unknown(true),
+    legacyUrl: Joi.string().uri()
+});
+
+const ArchivedInfo = Joi.object({
+    reason: Joi.string()
+        .valid(...Cards.archiveReasons)
+        .required(),
+    details: Joi.when("reason", {
+        is: Joi.valid("other", "rejected"),
+        then: Joi.string().required(),
+        otherwise: Joi.string()
+    }),
+    project: Joi.object({
+        code: Joi.string().required(),
+        number: Joi.number().required()
+    }),
+    archivedAt: Joi.date().required(),
+    archivedBy: Joi.string()
+});
+
+// Shared field definitions between the strict (submit-time) and partial (draft-time) Questions schemas
+const questionsFields = {
+    // Most cards have neither - absent is "none", so these default rather than require an explicit
+    // empty array. Ids are dynamic/DB-driven (see settings), so only shape is validated here.
+    rewards: Joi.array().items(Joi.string()).default([]),
+    downsides: Joi.array().items(Joi.string()).default([]),
+    // Most cards have none - 0 is a real, complete answer, so this defaults rather than forcing a confirmation.
+    triggeredAbilityCount: Joi.number().integer().min(0).default(0),
+    naturalTrigger: Joi.boolean(),
+    repeatabilityRestricted: Joi.boolean(),
+    iconic: Joi.boolean(),
+    // Which game modes the design is meant for - a draft may leave it empty, a submission may not
+    intendedGameModes: Joi.array()
+        .items(Joi.string().valid(...Cards.gameModeTypes))
+        .unique()
+        .default([])
+};
+
+const QuestionsPartial = Joi.object({
+    ...questionsFields
+});
+
+// naturalTrigger/repeatabilityRestricted are required only once triggeredAbilityCount > 0 - the
+// `.required()` on `is` is load-bearing, or a missing count would itself satisfy `is`.
+const Questions = Joi.object({
+    rewards: questionsFields.rewards,
+    downsides: questionsFields.downsides,
+    triggeredAbilityCount: questionsFields.triggeredAbilityCount,
+    naturalTrigger: Joi.when("triggeredAbilityCount", {
+        is: Joi.number().greater(0).required(),
+        then: Joi.boolean().required()
+    }),
+    repeatabilityRestricted: Joi.when("triggeredAbilityCount", {
+        is: Joi.number().greater(0).required(),
+        then: Joi.boolean().required()
+    }),
+    iconic: Joi.boolean().required(),
+    intendedGameModes: questionsFields.intendedGameModes.min(1).required().messages({
+        "array.min": "Choose at least one game mode",
+        "any.required": "Choose at least one game mode"
+    })
+});
+
+// Always server-computed via deriveFields() before validation runs - a client-sent value is
+// discarded. Defaulted, not required: the client's own local mirror isn't ready until after mount.
+const Derived = Joi.object({
+    triggerTypes: Joi.array().items(Joi.string()).default([]),
+    keywords: Joi.array()
+        .items(
+            Joi.object({
+                keyword: Joi.string().required(),
+                value: Joi.alternatives().try(Joi.number(), Joi.string())
+            })
+        )
+        .default([])
+}).default({ triggerTypes: [], keywords: [] });
+
+// Denormalized onto the document and kept in sync server-side (see forceTags in suggestions.ts and
+// settingsRepository.ts's resyncSuggestionTags) - same server-computed convention as `derived`.
+const SuggestionTags = Joi.array().items(Joi.string()).default([]);
+
+// Whether a rule currently NEEDS a justification isn't checked here (beyond Joi's `.when()`) -
+// POST /:id/submit recomputes checklistRules() itself and reports any gap as a field error.
+const ChecklistJustifications = Joi.object()
+    .pattern(Joi.string().valid(...Cards.checklistRuleIds), Joi.string())
+    .default({});
+
+// Never client-writable in practice - PUT /:id(/draft) force this server-side (same convention as
+// `derived`); only /:id/reaction and /:id/approve may actually change it.
+const SuggestionEngagement = Joi.object({
+    reactions: Joi.object()
+        .pattern(
+            Joi.string(),
+            Joi.object({
+                type: Joi.string()
+                    .valid(...Cards.reactionTypes)
+                    .required(),
+                reactedAt: Joi.date().required()
+            })
+        )
+        .default({}),
+    approvedBy: Joi.string(),
+    approvedAt: Joi.date()
+});
+
+const suggestionSharedFields = {
+    id: Joi.string(),
+    created: Joi.date(),
+    createdBy: Joi.string(),
+    updated: Joi.date(),
+    updatedBy: Joi.string(),
+    archived: ArchivedInfo,
+    // Server-owned, like engagement - every route carries the stored value over whatever a body claims
+    legacy: Joi.boolean(),
+    _metadata: Joi.object({
+        discord: DiscordMetadataWithSnapshot,
+        engagement: SuggestionEngagement
+    }),
+    card: Card.Full.required(),
+    // Deliberately NOT `.required()` here too - `.default()` doesn't make the key optional, and
+    // chaining `.required()` after it re-imposes the exact check the default exists to avoid.
+    derived: Derived,
+    tags: SuggestionTags,
+    checklistJustifications: ChecklistJustifications,
+    pivotPoints: Joi.array().items(Joi.string().max(PIVOT_POINT_MAX_LENGTH)),
+    comparableCards: Joi.array().items(Joi.string()),
+    combosWith: Joi.array().items(Joi.string()),
+    // Now edited as rich text (RichTextArea), same sanitise-at-the-boundary rule every other rich
+    // text field uses - was a plain string when it was a plain Textarea.
+    notes: RichText
+};
+
 export const CardSuggestion = {
+    /** The general stored-object shape, and the submit-time schema - whether checklistJustifications
+     *  actually covers every failing rule is checked server-side at submit time, not here. */
     Full: Joi.object({
-        id: Joi.string(),
-        user: Joi.object({
-            discordId: Joi.string().required(),
-            displayname: Joi.string().required()
-        }).required(),
-        created: Joi.date().required(),
-        createdBy: Joi.string().required(),
-        updated: Joi.date().required(),
-        updatedBy: Joi.string().required(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()).default([]),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()).default([]),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Full.required()
+        ...suggestionSharedFields,
+        draft: Joi.boolean().required(),
+        questions: Questions.required(),
+        pivotPoints: suggestionSharedFields.pivotPoints.default([]),
+        comparableCards: suggestionSharedFields.comparableCards.default([]),
+        combosWith: suggestionSharedFields.combosWith.default([])
     }),
     Partial: Joi.object({
-        id: Joi.string(),
-        user: Joi.object({
-            discordId: Joi.string(),
-            displayname: Joi.string()
-        }),
-        created: Joi.date(),
-        createdBy: Joi.string(),
-        updated: Joi.date(),
-        updatedBy: Joi.string(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Partial
+        ...suggestionSharedFields,
+        card: Card.Partial,
+        derived: Derived,
+        draft: Joi.boolean(),
+        questions: QuestionsPartial
     }),
-    Draft: Joi.object({
-        id: Joi.string(),
-        user: Joi.object({
-            discordId: Joi.string(),
-            displayname: Joi.string()
-        }).required(),
-        created: Joi.date(),
-        createdBy: Joi.string(),
-        updated: Joi.date(),
-        updatedBy: Joi.string(),
-        threadId: Joi.string(),
-        likedBy: Joi.array().items(Joi.string()).default([]),
-        approvedBy: Joi.string(),
-        tags: Joi.array().items(Joi.string()).default([]),
-        _metadata: Joi.object({
-            discord: DiscordMetadata
-        }),
-        card: Card.Full.required()
+    /** the permissive, in-progress-save schema - only a fully valid `card` is required */
+    DraftSave: Joi.object({
+        ...suggestionSharedFields,
+        draft: Joi.boolean(),
+        questions: QuestionsPartial
     })
 };
 
@@ -452,6 +568,61 @@ const artistPayment = Joi.object({
     )
 });
 
+// Generic - not suggestions-specific, just currently only used there. No Full variant: exactly one
+// document per type, so nothing ever reads it through a filterable GET query.
+export const RewardDownsideOption = {
+    // Body for create/edit within a settings PATCH - id is still supplied here (unlike Artist.Draft),
+    // since the option lives inside an array the caller sends whole rather than one row at a time
+    Draft: Joi.object({
+        id: Joi.string().guid().required(),
+        label: Joi.string().trim().required().messages({
+            "any.required": "Provide a label",
+            "string.empty": "Provide a label"
+        }),
+        description: Joi.string().trim().required().messages({
+            "any.required": "Provide a description",
+            "string.empty": "Provide a description"
+        }),
+        aspects: Joi.array().items(Joi.string().trim().lowercase()).unique().default([]),
+        archetypes: Joi.array().items(Joi.string().trim().lowercase()).unique().default([]),
+        keywords: Joi.array()
+            .items(Joi.string().valid(...keywordNames))
+            .unique()
+            .default([]),
+        requiresLoyalty: Joi.boolean(),
+        enabled: Joi.boolean().default(true)
+    })
+};
+
+// No Full variant here either, for the same reason as RewardDownsideOption above.
+export const Settings = {
+    Suggestions: {
+        Draft: Joi.object({
+            minimumLikesThreshold: Joi.number().integer().min(1).default(3),
+            rewardOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
+            downsideOptions: Joi.array().items(RewardDownsideOption.Draft).unique("id").default([]),
+            neutralWeight: Joi.number().min(1).max(10).precision(1).default(DEFAULT_NEUTRAL_WEIGHT),
+            defaultTrendRange: Joi.string()
+                .valid(...trendRanges)
+                .default(DEFAULT_TREND_RANGE)
+        }).custom((value, helpers) => {
+            if (value.downsideOptions.some((option: { requiresLoyalty?: boolean }) => option.requiresLoyalty)) {
+                return helpers.message({ custom: "Only rewards can require loyalty" });
+            }
+            // A tag's colour is looked up from its kind, so it can only be one - an archetype can't also be an
+            // aspect, and an aspect given to a reward can't also be a drawback on a downside.
+            const clash = findTagKindClash(value.rewardOptions, value.downsideOptions);
+            if (clash) {
+                const [first, second] = clash.kinds;
+                return helpers.message({
+                    custom: `"${clash.tag}" is used as both ${tagKindLabels[first].toLowerCase()} and ${tagKindLabels[second].toLowerCase()}`
+                });
+            }
+            return value;
+        })
+    }
+};
+
 export const Artist = {
     Full: Joi.object({
         id: Joi.string().required(),
@@ -575,10 +746,8 @@ const refinementCheck = (isFull: boolean) =>
         ...auditKeys(isFull)
     });
 
-/**
- * Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
- * already answered for the inquiry, where the change's own note already stands as the record.
- */
+/** Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
+ *  already answered for the inquiry, where the change's own note already stands as the record. */
 export const inquiryResolution = (isAddressed: boolean) =>
     Joi.object({
         // Closing is one route. `rejected` remains readable in stored data but is no longer produced -
@@ -623,17 +792,109 @@ const inquiry = (isFull: boolean) =>
         ...auditKeys(isFull)
     });
 
+const conditionStat = (stats: SlotConditions.ConditionStat | SlotConditions.ConditionStat[]) =>
+    Joi.string()
+        .valid(...[stats].flat())
+        .required();
+
+// Either bound may be left open, but never both - a range with neither says nothing
+const rangeCondition = Joi.object({
+    stat: conditionStat([...SlotConditions.rangeStats]),
+    min: Joi.number().integer().min(0),
+    max: Joi.number()
+        .integer()
+        .min(0)
+        .when("min", {
+            is: Joi.exist(),
+            then: Joi.number().min(Joi.ref("min")).messages({ "number.min": "Can't be below the minimum" })
+        })
+})
+    .or("min", "max")
+    .messages({ "object.missing": "Give a minimum, a maximum, or both" });
+
+const slotCondition = Joi.alternatives().conditional(".stat", {
+    switch: [
+        {
+            is: "type",
+            then: Joi.object({
+                stat: conditionStat("type"),
+                types: Joi.array()
+                    .items(Joi.string().valid(...Cards.types))
+                    .min(1)
+                    .unique()
+                    .required()
+            })
+        },
+        {
+            is: Joi.valid("unique", "loyal"),
+            then: Joi.object({ stat: conditionStat(["unique", "loyal"]), value: Joi.boolean().required() })
+        },
+        { is: Joi.valid(...SlotConditions.rangeStats), then: rangeCondition },
+        {
+            is: "icons",
+            then: Joi.object({
+                stat: conditionStat("icons"),
+                icons: Joi.object(Object.fromEntries(Cards.challengeIcons.map((icon) => [icon, Joi.boolean()])))
+                    .min(1)
+                    .required()
+                    .messages({ "object.min": "Choose at least one icon to require or forbid" })
+            })
+        },
+        {
+            is: "traits",
+            then: Joi.object({
+                stat: conditionStat("traits"),
+                traits: Joi.array().items(Joi.string()).min(1).unique().required()
+            })
+        },
+        {
+            is: "keywords",
+            then: Joi.object({
+                stat: conditionStat("keywords"),
+                keywords: Joi.array()
+                    .items(Joi.string().valid(...keywordNames))
+                    .min(1)
+                    .unique()
+                    .required()
+            })
+        }
+    ],
+    otherwise: Joi.object({ stat: conditionStat([...SlotConditions.conditionStats]) })
+});
+
+// One per stat, and only what the slot's types can carry - the same rule the editor offers conditions by
+const slotConditions = Joi.array()
+    .items(slotCondition)
+    .unique("stat")
+    .messages({ "array.unique": "Each stat can only have one condition" })
+    .custom((conditions: SlotConditions.SlotCondition[], helpers) => {
+        const blocker = SlotConditions.conditionsBlocker(conditions);
+        return blocker ? helpers.message({ custom: blocker }) : conditions;
+    });
+
+const slotPreferences = Joi.array().items(Joi.string().regex(Regex.SemanticVersion)).unique();
+
+const slotOptionFields = {
+    conditions: slotConditions,
+    important: Joi.boolean(),
+    notes: RichText
+};
+
 export const Slot = {
     // Shared with the client's artwork form, so the tab and PATCH refuse the same things
     ArtworkProgress,
+    // Body for PUT /:slot/options - the whole set, since an option left out is one being cleared
+    Options: Joi.object(slotOptionFields),
+    // Body for PUT /:slot/preferences - every option in the slot, most preferred first
+    Preferences: Joi.object({ preferences: slotPreferences.required() }),
     Full: Joi.object({
         project: Joi.number().required(),
         number: Joi.number().required(),
         faction: Joi.string()
             .required()
             .valid(...Cards.factions),
-        type: Joi.string().valid(...Cards.types),
-        notes: Joi.string().allow(""),
+        ...slotOptionFields,
+        preferences: slotPreferences,
         faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
@@ -685,8 +946,6 @@ export const Slot = {
         project: Joi.number(),
         number: Joi.number(),
         faction: Joi.string().valid(...Cards.factions),
-        type: Joi.string().valid(...Cards.types),
-        notes: Joi.string().allow(""),
         faq: RichText,
         statuses: Joi.object({
             design: Joi.object({
@@ -774,6 +1033,8 @@ export const Slot = {
     Faq: Joi.object({ faq: RichText.required() })
 };
 
+const slotCount = Joi.number().integer().min(0);
+
 export const Project = {
     Full: Joi.object({
         number: Joi.number().integer().max(99).required(),
@@ -800,8 +1061,11 @@ export const Project = {
         version: Joi.number().required(),
         milestone: Joi.number(),
         mandateUrl: Joi.string(),
+        _metadata: Joi.object({ discord: Joi.object({ forumUrl: Joi.string().uri(), lastSynced: Joi.date() }) }),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Full).required(),
         created: Joi.date().required(),
         createdBy: Joi.string().required(),
@@ -833,6 +1097,8 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
         releases: Joi.array().items(Release.Partial),
         created: Joi.date(),
         createdBy: Joi.string(),
@@ -867,6 +1133,12 @@ export const Project = {
         mandateUrl: Joi.string(),
         formUrl: Joi.string(),
         emoji: Joi.string(),
+        owners: Joi.array().items(Joi.string()),
+        template: Joi.string(),
+        // Not stored - how many slots each faction should have, which the server opens, creates or closes slots to meet
+        slotCounts: Joi.object(Object.fromEntries(Cards.factions.map((faction) => [faction, slotCount]))),
+        // Not stored - the order factions' slots are numbered in, which the server renumbers the slots to match
+        slotOrder: Joi.array().items(Joi.string().valid(...Cards.factions)),
         created: Joi.date(),
         createdBy: Joi.string(),
         updated: Joi.date(),

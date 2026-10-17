@@ -1,10 +1,12 @@
-import { Faction, Type } from "./cards";
-import { areReleaseChecksClosed, ReleaseStatus } from "./projects";
+import { isEqual, pick } from "lodash-es";
+import { Faction, factions, IPlaytestCard } from "./cards";
+import type { SlotCondition } from "./slotConditions";
+import { areReleaseChecksClosed, ProjectTemplate, ReleaseStatus } from "./projects";
 import { StatementAnswer } from "./reviews";
-import { IAuditable } from "./shared";
+import { hasSameContent, IAuditable } from "./shared";
 import { IArtworkProgress } from "./artwork";
 import { isCheckStale, IRefinementCheck, IRefinementInquiry } from "./refinement";
-import { SemanticVersion } from "../utils";
+import { pruneEmpty, SemanticVersion } from "../utils";
 
 // The artwork lane lives in ./artwork, but is re-exported here so a slot's three lanes stay importable together
 export { artworkStatuses, artworkTypes } from "./artwork";
@@ -201,13 +203,143 @@ export interface ISlot extends IAuditable {
     number: number;
     /** Fixed at creation - determines which faction carousel this slot belongs to */
     faction: Faction;
-    /** Recommended card type for this slot; advisory only, never enforced */
-    type?: Type;
+    /** A draft project's options, by card version, in order of preference - the first is the slot's Favoured */
+    preferences?: SemanticVersion[];
+    /** What the slot asks of its card - see slotConditions */
+    conditions?: SlotCondition[];
+    /** Something the project must deliver - its name and references hold through development, barring approval */
+    important?: boolean;
+    /** Rich text */
     notes?: string;
     /** Rich text. The refinement team's own record of decisions on this card - never exported anywhere */
     faq?: string;
     statuses: SlotStatuses;
     release?: SlotRelease;
+    _metadata?: {
+        /** The slot's thread in its draft project's planning forum - server-maintained */
+        discord?: {
+            messageUrl?: string;
+            /** Discord id of who opened it by hand - absent when it opened itself as a card arrived */
+            startedBy?: string;
+            lastSynced?: Date;
+        };
+        /** What has been revealed to the design team from this slot - changed only by revealing, updating or withdrawing */
+        preview?: IPlaytestCard;
+    };
+}
+
+/** The slot's preview - its card as posted to the card forum, with that post in its Discord metadata. A cache can still
+ *  hold an empty object where one was withdrawn */
+export const previewOf = (slot: Pick<ISlot, "_metadata">): IPlaytestCard | undefined =>
+    slot._metadata?.preview?.name ? slot._metadata.preview : undefined;
+
+export const previewUrlOf = (preview: IPlaytestCard) => preview._metadata?.discord?.messageUrl ?? "";
+export const previewSyncedAt = (preview: IPlaytestCard) => preview._metadata?.discord?.lastSynced ?? preview.updated;
+
+/** Whether a card is the one a preview was made from - by its suggestion, else by when it was made, never by version */
+export function isPreviewedCard(card: { created: Date | string; suggestionId?: string }, preview: IPlaytestCard) {
+    const { suggestionId, created } = preview;
+    return suggestionId
+        ? card.suggestionId === suggestionId
+        : !card.suggestionId && new Date(card.created).getTime() === new Date(created).getTime();
+}
+
+/** The slot's card which its preview was made from, if it is still there */
+export function previewedCard<C extends { created: Date | string; suggestionId?: string }>(
+    options: C[],
+    preview?: IPlaytestCard
+) {
+    return preview ? options.find((card) => isPreviewedCard(card, preview)) : undefined;
+}
+
+/** Changed since it was posted - what is shown to the design team is no longer the card as it stands */
+export const isPreviewOutdated = (card: IPlaytestCard, preview: IPlaytestCard) =>
+    !hasSameContent(card, preview, ["version"]);
+
+export type RevealStanding = "unchanged" | "changed" | "swapped";
+
+/** How the slot stands against what was posted of it: still the card posted as it was, the same card since edited, or a
+ *  different card - the Favoured now is not the one revealed, or that one has gone */
+export function revealStanding(options: IPlaytestCard[], preview: IPlaytestCard): RevealStanding {
+    const previewed = previewedCard(options, preview);
+    if (!previewed || previewed !== options[0]) {
+        return "swapped";
+    }
+    return isPreviewOutdated(previewed, preview) ? "changed" : "unchanged";
+}
+
+/** What a slot shows of its reveal: the card of it which is still there, or - once that has gone - the preview as posted,
+ *  to stand in the pile as a ghost. Never both, and never counted among the slot's options */
+export function slotReveal<C extends { created: Date | string; suggestionId?: string }>(
+    options: C[],
+    preview?: IPlaytestCard
+) {
+    const previewed = previewedCard(options, preview);
+    return { previewed, ghost: preview && !previewed ? preview : undefined };
+}
+
+// A slot's own settings - its conditions, plus the options every slot always has
+const ordinal = new Intl.PluralRules("en-GB", { type: "ordinal" });
+const ordinalSuffixes: Record<Intl.LDMLPluralRule, string> = {
+    zero: "th",
+    one: "st",
+    two: "nd",
+    few: "rd",
+    many: "th",
+    other: "th"
+};
+
+// How a draft option's place reads on the card - "Favoured" for the first, "2nd Preference" onwards
+export function preferenceLabel(rank: number) {
+    const place = rank + 1;
+    return rank === 0 ? "Favoured" : `${place}${ordinalSuffixes[ordinal.select(place)]} Preference`;
+}
+
+// The version a draft option is sent with to be created, which the server swaps for the next free 0.0.x
+export const NEW_OPTION_VERSION: SemanticVersion = "0.0.0";
+
+// The first 0.0.x version not already in use, for a slot which can hold multiple option drafts at once
+export function nextAvailableOptionVersion(usedVersions: Set<SemanticVersion>): SemanticVersion | undefined {
+    return Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
+}
+
+// A moved card keeps its version if it is free in the target slot; otherwise it takes the next available 0.0.x
+export function movedOptionVersion(version: SemanticVersion, targetVersions: SemanticVersion[]) {
+    const used = new Set(targetVersions);
+    return used.has(version) ? nextAvailableOptionVersion(used) : version;
+}
+
+// A slot's options in order of preference - anything the order hasn't caught up with yet comes first, newest first
+export function orderByPreference<C extends { version: SemanticVersion; updated: Date | string }>(
+    cards: C[],
+    preferences: SemanticVersion[] = []
+) {
+    const rankOf = (card: C) => preferences.indexOf(card.version);
+    const unranked = cards
+        .filter((card) => rankOf(card) === -1)
+        .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
+    const ranked = cards.filter((card) => rankOf(card) !== -1).sort((a, b) => rankOf(a) - rankOf(b));
+    return [...unranked, ...ranked];
+}
+
+export const slotOptionKeys = ["conditions", "important", "notes"] as const;
+export type ISlotOptions = Pick<ISlot, (typeof slotOptionKeys)[number]>;
+
+// Whether a project's open slots are exactly what its template lays out: how many each faction has, and what each asks for
+export function matchesTemplate(template: ProjectTemplate, slots: ISlot[]) {
+    const laidOut = template.slots;
+    return (
+        !laidOut ||
+        factions.every((faction) => {
+            const own = slots.filter((slot) => slot.faction === faction).sort((a, b) => a.number - b.number);
+            return (
+                own.length === laidOut[faction].length &&
+                own.every((slot, position) =>
+                    isEqual(pruneEmpty(pick(slot, slotOptionKeys)) ?? {}, pruneEmpty(laidOut[faction][position]) ?? {})
+                )
+            );
+        })
+    );
 }
 
 export const DefaultSlotStatuses: SlotStatuses = {

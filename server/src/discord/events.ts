@@ -1,9 +1,11 @@
 import {
+    AnyThreadChannel,
     APIGuildMember,
     Client,
     ClientEvents,
     Events,
     ForumChannel,
+    GatewayDispatchEvents,
     GuildMember,
     APIUser,
     User,
@@ -15,7 +17,10 @@ import { discordEventMiddleware } from "@/middleware/auth";
 import { onCardForumMessageDeleted } from "./forums/cardForum";
 import { onReviewForumMessageDeleted } from "./forums/playtestingReviews";
 import { onReleaseCheckMessageDeleted } from "./forums/releaseChecks";
+import { isPlanningForum, onPlanningForumDeleted, onPlanningForumMessageDeleted } from "./forums/planningForum";
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
+import { isSuggestionForumThread, onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
+import { broadcastResourceChange } from "@/services/sseService";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
 type SyncRoleFn = (role: Role) => Promise<unknown>;
@@ -30,7 +35,11 @@ export function registerEvents(
 ) {
     function on<E extends keyof ClientEvents>(event: E, handler: (...args: ClientEvents[E]) => Promise<void>) {
         client.on(event, async (...args) => {
-            await discordEventMiddleware(undefined, () => handler(...args));
+            try {
+                await discordEventMiddleware(undefined, () => handler(...args));
+            } catch (err) {
+                logger.error(`[Discord] Failed to handle ${event}`, err);
+            }
         });
     }
 
@@ -110,14 +119,55 @@ export function registerEvents(
     on(Events.GuildEmojiUpdate, (_oldEmoji, newEmoji) => onEmojiChanged(newEmoji.guild));
     on(Events.GuildEmojiDelete, (emoji) => onEmojiChanged(emoji.guild));
 
+    // Announces any change to the suggestion forum's threads, so an open search of them (a legacy suggestion
+    // being completed) picks up a thread started meanwhile. Silent, as it can't disrupt anybody's edit.
+    const announceSuggestionThread = (thread: AnyThreadChannel) => {
+        if (thread.guildId === guildId && isSuggestionForumThread(thread)) {
+            broadcastResourceChange("suggestionThread", { id: thread.id }, "update", { silent: true });
+        }
+    };
+    on(Events.ThreadCreate, async (thread) => announceSuggestionThread(thread));
+    on(Events.ThreadUpdate, async (_oldThread, newThread) => announceSuggestionThread(newThread));
+
     // Clears discord metadata from any card or review whose forum thread or message was deleted.
     on(Events.ThreadDelete, async (thread) => {
+        announceSuggestionThread(thread);
         if (thread.guildId !== guildId) return;
         if (!(thread.parent instanceof ForumChannel)) return;
 
         // Starter message URL uses the thread ID for both the channel and message segments
         const starterUrl = `https://discord.com/channels/${thread.guildId}/${thread.id}/${thread.id}`;
         await onForumMessageDeleted(thread.parent.name, starterUrl);
+    });
+
+    on(Events.ChannelDelete, async (channel) => {
+        if (channel instanceof ForumChannel && channel.guildId === guildId && isPlanningForum(channel.name)) {
+            await onPlanningForumDeleted(channel);
+        }
+    });
+
+    // An archived thread, or one made before the bot started, isn't cached - deleting it never raises threadDelete
+    client.on(Events.Raw, async (packet) => {
+        if (packet.t !== GatewayDispatchEvents.ThreadDelete) {
+            return;
+        }
+        const { id, guild_id: threadGuildId, parent_id: parentId } = packet.d;
+        if (threadGuildId !== guildId || !parentId || client.channels.cache.has(id)) {
+            return;
+        }
+
+        const parent = client.channels.cache.get(parentId);
+        if (!(parent instanceof ForumChannel)) {
+            return;
+        }
+
+        try {
+            await discordEventMiddleware(undefined, () =>
+                onForumMessageDeleted(parent.name, `https://discord.com/channels/${threadGuildId}/${id}/${id}`)
+            );
+        } catch (err) {
+            logger.error("[Discord] Failed to handle a deleted thread", err);
+        }
     });
 
     on(Events.MessageDelete, async (message) => {
@@ -132,6 +182,10 @@ export function registerEvents(
 }
 
 async function onForumMessageDeleted(forumName: string, messageUrl: string) {
+    if (isPlanningForum(forumName)) {
+        await onPlanningForumMessageDeleted(messageUrl);
+        return;
+    }
     switch (forumName) {
         case "card-forum":
             await onCardForumMessageDeleted(messageUrl);
@@ -142,6 +196,9 @@ async function onForumMessageDeleted(forumName: string, messageUrl: string) {
             break;
         case "refinement-forum":
             await onRefinementForumMessageDeleted(messageUrl);
+            break;
+        case "suggestion-forum":
+            await onSuggestionForumMessageDeleted(messageUrl);
             break;
     }
 }

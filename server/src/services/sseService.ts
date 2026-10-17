@@ -55,14 +55,17 @@ export interface SyncEmitter<K extends SyncType> {
     start: () => void;
     progress: (step: string) => void;
     complete: (data: SyncDataMap[K]) => void;
-    error: (error: string) => void;
+    error: (error: string, retryAt?: Date) => void;
 }
 
 const resourceIdFunc: { [K in SyncType]: (result: SyncDataMap[K]) => string } = {
     card: (card) => `${card.project}|${card.number}|${card.version}`,
     review: (review) => `${review.project}|${review.number}|${review.version}|${review.reviewer}`,
     playtestingUpdate: (playtestingUpdate) => `${playtestingUpdate.project}|${playtestingUpdate.version}`,
-    release: (release) => `${release.project}|${release.code}`
+    release: (release) => `${release.project}|${release.code}`,
+    suggestion: (suggestion) => suggestion.id,
+    project: (project) => String(project.number),
+    slot: (slot) => `${slot.project}|${slot.number}`
 };
 
 export function createSyncEmitter<K extends SyncType>(
@@ -84,14 +87,16 @@ export function createSyncEmitter<K extends SyncType>(
         progress: (step: string) => emit({ type, id: resourceId, operation, status: "progress", step }),
         complete: (data: SyncDataMap[K]) =>
             emit({ type, id: resourceId, operation, status: "complete", data: getDiff(initialResource, data) }),
-        error: (error: string) => emit({ type, id: resourceId, operation, status: "error", error })
+        error: (error: string, retryAt?: Date) =>
+            emit({ type, id: resourceId, operation, status: "error", error, retryAt: retryAt?.toISOString() })
     };
 }
 
 export function broadcastResourceChange<K extends ResourceType>(
     type: K,
     resources: SingleOrArray<ResourceDataMap[K]>,
-    status: "create" | "update" | "delete" = "update"
+    status: "create" | "update" | "delete" = "update",
+    options?: { silent?: boolean }
 ): void {
     const items = asArray(resources).map((resource) => ({
         id: resourceIdFuncs[type](resource),
@@ -100,5 +105,5 @@ export function broadcastResourceChange<K extends ResourceType>(
     const context = requestContext.getStore();
     const originId = context?.source === "client" ? context.clientId : undefined;
     const deferred = context?.source === "client" && context.detached === true;
-    sseService.broadcast({ type, status, items, originId, deferred });
+    sseService.broadcast({ type, status, items, originId, deferred, silent: options?.silent });
 }

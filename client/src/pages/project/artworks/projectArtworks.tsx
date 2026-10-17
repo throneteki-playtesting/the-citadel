@@ -35,6 +35,7 @@ import ArtworkTab from "../../card/artwork/artworkTab";
 import { ArtworkChecklistItems } from "../../card/artwork/artworkChecklist";
 import { ChecklistDots } from "../../../components/checklist";
 import SlidingPages from "../../../components/slidingPages";
+import { useEditingCard } from "../useEditingCard";
 import { buildArtworkRows, IArtworkRow, needsAttention, searchHaystack } from "./artworkSummary";
 import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParamsScope";
 import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
@@ -92,13 +93,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
     const [assignedToMe, setAssignedToMe] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
-    // Kept apart from whether the editor is on show, so leaving doesn't empty the page mid-slide.
-    // Shareable via the url, so a link with ?editing=<number> opens straight to that card.
-    const [editingNumber, setEditingNumber] = useState<number | undefined>(() => {
-        const raw = Number(searchParams.get("editing"));
-        return Number.isInteger(raw) && raw > 0 ? raw : undefined;
-    });
-    const [isEditing, setIsEditing] = useState(() => editingNumber !== undefined);
+    const { editingNumber, setEditingNumber, isEditing, setIsEditing, onPageChange } = useEditingCard(searchParams);
     const guide = useTabGuideModal(ARTWORKS_GUIDE_SEEN_KEY, isActive);
 
     const containerRef = useRef<HTMLDivElement>(null);
@@ -287,10 +282,10 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
     return (
         <>
             {isLoading ? (
-                <ArtworksSkeleton project={project} onOpenGuide={guide.open} />
+                <ArtworksSkeleton project={project} onOpenGuide={guide.open} isActive={isActive} />
             ) : (
                 <div ref={containerRef} className="scroll-mt-20">
-                    <SlidingPages currentPage={isEditing ? 2 : 1}>
+                    <SlidingPages currentPage={isEditing ? 2 : 1} history="artworks" onPageChange={onPageChange}>
                         {renderList()}
                         <div>
                             {editingNumber !== undefined && (
@@ -318,6 +313,7 @@ export default function ProjectArtworks({ project, isActive }: ProjectArtworksPr
                     title="Artworks"
                     guideLabel="Artwork Guide"
                     onOpenGuide={guide.open}
+                    isActive={isActive}
                 />
                 <div className="flex flex-col gap-1.5">
                     <FilterRow label="Status">
@@ -447,7 +443,15 @@ type ProjectArtworksProps = { project: IProject; isActive: boolean };
 
 // The page's own shape while the slots load, sized from the project's cached slot tally so the list
 // settles into the space it was already holding rather than shoving the page down as it arrives
-function ArtworksSkeleton({ project, onOpenGuide }: { project: IProject; onOpenGuide: () => void }) {
+function ArtworksSkeleton({
+    project,
+    onOpenGuide,
+    isActive
+}: {
+    project: IProject;
+    onOpenGuide: () => void;
+    isActive: boolean;
+}) {
     const rowCount = Object.values(project.cardCount).reduce((total, count) => total + count, 0);
 
     return (
@@ -457,6 +461,7 @@ function ArtworksSkeleton({ project, onOpenGuide }: { project: IProject; onOpenG
                 title="Artworks"
                 guideLabel="Artwork Guide"
                 onOpenGuide={onOpenGuide}
+                isActive={isActive}
             />
             <div className="flex flex-col gap-1.5">
                 {[artworkStatuses.length, artworkTypes.length, project.releases.length].map((chips, row) =>

@@ -1,38 +1,53 @@
 import express from "express";
+import { Filter } from "common/types";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import asyncHandler from "express-async-handler";
-import { dataService } from "@/services";
+import { dataService, logger } from "@/services";
 import * as Schemas from "common/models/schemas";
-import { FactionCardCount, IProject } from "common/models/projects";
-import { validateRequest, validateProjectAccess, PermissionErrorResponse } from "@/middleware/permissions";
+import { FactionCardCount, IProject, IProjectSave } from "common/models/projects";
+import { initialisationRequirements, unmetRequirement } from "common/models/initialisation";
+import { previewUrlOf } from "common/models/slots";
+import {
+    canChangeProjectOwners,
+    scopeToProject,
+    validateRequest,
+    validateProjectAccess,
+    PermissionErrorResponse
+} from "@/middleware/permissions";
 import { getContext } from "@/middleware/context";
 import { hasPermission } from "common/utils";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { cloneDeep } from "lodash-es";
+import { cloneDeep, omit, xor } from "lodash-es";
 import { factions, IPlaytestCard, pickVisibleCards } from "common/models/cards";
 import { IGetRequest, IGetResponse } from "@/types";
-import { generateGetResponse, applyToFilter, loadProjectByNumber, buildExpansionRelease } from "@/utils";
+import { generateGetResponse, applyToFilter, loadProject, buildExpansionRelease, assertSyncableProject } from "@/utils";
+import { applySlots, requestedSlots, withSlotOrder } from "@/services/draftSlotService";
 import { ProjectStats } from "common/models/stats";
 import { computeProjectProgress } from "@/services/progressService";
 import { syncImage } from "@/rendering/hosting";
 import { getRequestSchema } from "@/schemas";
+import pool from "./pool";
 import slots from "./slots";
 import releases from "./releases";
 import { logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { clearDiscordMetadata, closeThreads, syncCardForum } from "@/discord/forums/cardForum";
+import { clearDiscordMetadata, PREVIEW_NOTICES, syncCardForum, withdrawReveal } from "@/discord/forums/cardForum";
+import { closeSuggestionThreads } from "@/discord/forums/suggestionForum";
+import { deletePlanningForum, syncProjectPlanning } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { syncDataPullRequests } from "@/github/pullRequests";
 
 const router = express.Router();
 
-router.use("/:number/slots", slots);
-router.use("/:number/releases", releases);
+router.use("/:project", scopeToProject);
+router.use("/:project/slots", slots);
+router.use("/:project/pool", pool);
+router.use("/:project/releases", releases);
 
-const numberParams = {
-    number: Joi.number().required()
+const projectParams = {
+    project: Joi.number().required()
 };
 
 const validateProjectQueryPermission = asyncHandler<unknown, unknown, unknown, IGetRequest<IProject>>(
@@ -44,6 +59,18 @@ const validateProjectQueryPermission = asyncHandler<unknown, unknown, unknown, I
         }
 
         const filters = Array.isArray(req.query.filter) ? req.query.filter : [req.query.filter];
+        const context = getContext();
+        const ownerId =
+            context.source === "client" && context.impersonating !== "role" ? context.principal.discordId : undefined;
+
+        // Without archive access, only active projects show - plus any draft or archived project the caller owns
+        if (ownerId) {
+            req.query.filter = filters.flatMap((f) => {
+                const owned: Filter<IProject> = { ...f, owners: { $in: [ownerId] } };
+                return f?.active === false ? [owned] : [{ ...f, active: true }, owned];
+            });
+            return next();
+        }
         if (filters.some((f) => f?.active === false)) {
             throw new PermissionErrorResponse();
         }
@@ -84,12 +111,12 @@ router.get(
 
 // Read project by number
 router.get(
-    "/:number",
+    "/:project",
     celebrate({
-        [Segments.PARAMS]: numberParams,
+        [Segments.PARAMS]: projectParams,
         [Segments.QUERY]: getQuerySchema
     }),
-    loadProjectByNumber,
+    loadProject,
     validateProjectAccess,
     asyncHandler(async (_req, res) => {
         res.status(StatusCodes.OK).json(res.locals.project);
@@ -98,13 +125,13 @@ router.get(
 
 // Read project stats
 router.get(
-    "/:number/stats",
+    "/:project/stats",
     validateRequest(Permission.READ_STATS_PROJECT),
-    celebrate({ [Segments.PARAMS]: numberParams }),
-    loadProjectByNumber,
+    celebrate({ [Segments.PARAMS]: projectParams }),
+    loadProject,
     validateProjectAccess,
-    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number } = req.params;
+    asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project: number } = req.params;
 
         const [changedCards, reviews, decks] = await Promise.all([
             dataService.cards.read({ project: number, version: { $ne: "1.0.0" } }),
@@ -127,10 +154,10 @@ router.get(
 
 // Computed completeness progress for a project
 router.get(
-    "/:number/progress",
+    "/:project/progress",
     validateRequest(Permission.READ_STATS_PROJECT),
-    celebrate({ [Segments.PARAMS]: numberParams }),
-    loadProjectByNumber,
+    celebrate({ [Segments.PARAMS]: projectParams }),
+    loadProject,
     validateProjectAccess,
     asyncHandler(async (_req, res) => {
         const progress = await computeProjectProgress(res.locals.project as IProject);
@@ -157,11 +184,18 @@ router.post(
         }
         next();
     }),
-    asyncHandler<unknown, unknown, IProject, unknown>(async (req, res) => {
-        const body = req.body;
+    asyncHandler<unknown, unknown, IProjectSave, unknown>(async (req, res) => {
+        const { slotCounts, slotOrder, ...body } = req.body;
+        if (body.owners?.length && !canChangeProjectOwners(res)) {
+            throw new PermissionErrorResponse();
+        }
+        const slots = withSlotOrder(requestedSlots(body, slotCounts), slotOrder);
         body.cardCount = factions.reduce((acc, faction) => ({ ...acc, [faction]: 0 }), {} as FactionCardCount);
         body.releases = [];
-        const project = await dataService.projects.create(body);
+        let project = await dataService.projects.create(body);
+        if (slots) {
+            project = await applySlots(project, slots);
+        }
 
         await logActivity(LogCategory.PROJECT, "project.created", "<principal> created project <project>", {
             context: { project: projectSnapshot(project) }
@@ -173,10 +207,10 @@ router.post(
 
 // Initialise drafted project
 router.post(
-    "/:number/initialise",
+    "/:project/initialise",
     validateRequest(Permission.INITIALISE_PROJECTS),
-    celebrate({ [Segments.PARAMS]: numberParams }),
-    loadProjectByNumber,
+    celebrate({ [Segments.PARAMS]: projectParams }),
+    loadProject,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (!project.draft) {
@@ -186,19 +220,22 @@ router.post(
                 "Only draft projects can be initialised"
             );
         }
-        const cards = await dataService.cards.read({ project: project.number });
-        const totalSlots = await dataService.slots.count({ project: project.number });
-        if (cards.length < totalSlots) {
+        const [cards, slots] = await Promise.all([
+            dataService.cards.read({ project: project.number }),
+            dataService.slots.read({ project: project.number })
+        ]);
+        const unmet = unmetRequirement(initialisationRequirements(project, slots, cards));
+        if (unmet) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Card Slots",
-                "Project is missing cards for allocated slots; either provide cards, or adjust card slots"
+                "Not Ready to Initialise",
+                unmet.detail ? `${unmet.label} - ${unmet.detail}` : unmet.label
             );
         }
         res.locals.cards = cards;
         next();
     }),
-    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
+    asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
         let project = res.locals.project as IProject;
         const cards = res.locals.cards as IPlaytestCard[];
         let newCards: IPlaytestCard[] = [];
@@ -207,6 +244,19 @@ router.post(
 
         project.draft = false;
         project.active = true;
+
+        // Each slot's preview thread is handed over to its initial card's, and the slots stop previewing
+        const previewed = await dataService.slots.read({ project: project.number });
+        const previewUrls = new Map(
+            previewed.map((slot) => [slot.number, slot._metadata?.preview && previewUrlOf(slot._metadata.preview)])
+        );
+        await dataService.slots.update(
+            previewed
+                .filter((slot) => slot._metadata?.preview)
+                .map((slot) => ({ ...slot, _metadata: omit(slot._metadata, "preview") })),
+            true,
+            false
+        );
 
         // Expansions ship as one release containing every card - seed it now, as slots are fixed once initialised
         if (project.type === "expansion") {
@@ -222,12 +272,14 @@ router.post(
         // Must be persisted as active before closing threads, as the forum context requires its tag
         project = await dataService.projects.update(project);
 
-        // Preview threads are closed rather than deleted, retaining their discussion for the initial cards
-        await closeThreads(cards);
         clearDiscordMetadata(cards);
 
         for (const card of cards) {
             const newCard: IPlaytestCard = { ...cloneDeep(card), version: "1.0.0", draft: false };
+            const previewUrl = previewUrls.get(card.number);
+            if (previewUrl) {
+                newCard._metadata = { ...newCard._metadata, discord: { previewUrl } };
+            }
             if (newCard.suggestionId) {
                 suggestionNumbers[newCard.suggestionId] = newCard.number;
             }
@@ -243,10 +295,18 @@ router.post(
         const suggestionIds = Object.keys(suggestionNumbers);
         if (suggestionIds.length > 0) {
             const suggestions = await dataService.suggestions.read(suggestionIds.map((id) => ({ id })));
+            const archivedAt = new Date();
             for (const suggestion of suggestions) {
-                suggestion.archivedReason = `Used for ${project.code} card #${suggestionNumbers[suggestion.id]}`;
+                suggestion.archived = {
+                    reason: "usedInProject",
+                    project: { code: project.code, number: suggestionNumbers[suggestion.id] },
+                    archivedAt
+                };
             }
-            await dataService.suggestions.update(suggestions);
+            // Archiving is silent on Discord - closes the thread directly rather than through the normal
+            // edit-diff sync path, which would otherwise treat this as a plain edit and post a notice
+            await closeSuggestionThreads(suggestions);
+            await dataService.suggestions.update(suggestions, true, false);
         }
 
         await logActivity(LogCategory.PROJECT, "project.initialised", "<principal> initialised project <project>", {
@@ -260,20 +320,24 @@ router.post(
 
 // Update project
 router.put(
-    "/:number",
+    "/:project",
     validateRequest(Permission.EDIT_PROJECTS),
     celebrate({
-        [Segments.PARAMS]: numberParams,
+        [Segments.PARAMS]: projectParams,
         [Segments.BODY]: Schemas.Project.Draft
     }),
-    asyncHandler<{ number: number }, unknown, IProject, unknown>(async (req, res) => {
-        const { number } = req.params;
-        let project = req.body;
+    asyncHandler<{ project: number }, unknown, IProjectSave, unknown>(async (req, res) => {
+        const { project: number } = req.params;
+        const { slotCounts, slotOrder, ...body } = req.body;
+        let project: IProject = body;
 
         const newNumber = project.number !== number;
         project.number = number;
 
         const [previous] = await dataService.projects.read({ number: project.number });
+        if (!previous) {
+            throw new ApiErrorResponse(StatusCodes.NOT_FOUND, "Invalid Data", `Project #${number} does not exist`);
+        }
         if (!previous.draft && !previous.active) {
             throw new ApiErrorResponse(
                 StatusCodes.NOT_ACCEPTABLE,
@@ -281,10 +345,26 @@ router.put(
                 "Archived projects cannot be edited"
             );
         }
+        if (xor(previous.owners ?? [], project.owners ?? []).length > 0 && !canChangeProjectOwners(res)) {
+            throw new PermissionErrorResponse();
+        }
         // cardCount & releases are server-maintained caches (kept in sync via the slots/releases endpoints) -
         // never trust or overwrite them from a general project edit body
         project.cardCount = previous.cardCount;
         project.releases = previous.releases;
+        // Likewise the Discord links, which a replacing save would drop
+        project._metadata = previous._metadata;
+
+        if (slotCounts && !previous.draft) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Project",
+                "Slots can only be added or removed while a project is in draft"
+            );
+        }
+        const slots = previous.draft
+            ? withSlotOrder(requestedSlots(project, slotCounts, previous), slotOrder)
+            : undefined;
 
         // If the project number changes, we need to destroy + create, as its a primary key
         if (newNumber) {
@@ -292,6 +372,9 @@ router.put(
             project = await dataService.projects.create(project);
         } else {
             project = await dataService.projects.update(project);
+        }
+        if (slots) {
+            project = await applySlots(project, slots);
         }
 
         await logActivity(LogCategory.PROJECT, "project.updated", "<principal> updated project <project>", {
@@ -304,10 +387,10 @@ router.put(
 
 // Delete draft project
 router.delete(
-    "/:number",
+    "/:project",
     validateRequest(Permission.DELETE_PROJECTS),
-    celebrate({ [Segments.PARAMS]: numberParams }),
-    loadProjectByNumber,
+    celebrate({ [Segments.PARAMS]: projectParams }),
+    loadProject,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (!project.draft) {
@@ -319,14 +402,30 @@ router.delete(
         }
         next();
     }),
-    asyncHandler<{ number: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number } = req.params;
+    asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project: number } = req.params;
+        // A slot still being previewed has an open thread in the card forum, closed while its project can still be read
+        const slots = await dataService.slots.read({ project: number });
+        await Promise.all(
+            slots.map(async (slot) => {
+                const preview = slot._metadata?.preview;
+                if (preview) {
+                    await withdrawReveal(preview, PREVIEW_NOTICES.projectDeleted).catch((err) =>
+                        logger.warn(
+                            new Error(`[Discord] Failed to close the preview of slot #${slot.number}`, { cause: err })
+                        )
+                    );
+                }
+            })
+        );
         const [deleted] = await dataService.projects.destroy({ number });
         if (!deleted) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", `Project #${number} does not exist`);
         }
         await dataService.cards.destroy({ project: number });
         await dataService.slots.destroy({ project: number });
+        await dataService.pools.destroy({ project: number });
+        await deletePlanningForum(deleted);
 
         await logActivity(LogCategory.PROJECT, "project.deleted", "<principal> deleted project <project>", {
             context: { project: projectSnapshot(deleted) },
@@ -339,10 +438,10 @@ router.delete(
 
 // Archive active project
 router.post(
-    "/:number/archive",
+    "/:project/archive",
     validateRequest(Permission.ARCHIVE_PROJECTS),
-    celebrate({ [Segments.PARAMS]: numberParams }),
-    loadProjectByNumber,
+    celebrate({ [Segments.PARAMS]: projectParams }),
+    loadProject,
     asyncHandler(async (req, res, next) => {
         const project = res.locals.project as IProject;
         if (project.draft) {
@@ -386,14 +485,14 @@ async function visibleTargets(project: number, number?: number): Promise<IPlayte
 // the pack file itself isn't; a release publish also triggers this (see /projects/:number/releases/:code/publish).
 // Registered before the wildcard /:number/sync/:type route below, which would otherwise swallow "data" as a type
 router.post(
-    "/:number/sync/data",
+    "/:project/sync/data",
     validateRequest(Permission.SYNC_PROJECT_GITHUB_DATA),
     celebrate({
-        [Segments.PARAMS]: numberParams,
+        [Segments.PARAMS]: projectParams,
         [Segments.QUERY]: { forced: Joi.boolean() }
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, { forced?: boolean }>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { forced } = req.query;
 
@@ -415,13 +514,13 @@ router.post(
     })
 );
 
-type SyncParams = { number: number; type: "image" | "discord" | "github" };
+type SyncParams = { project: number; type: "image" | "discord" | "github" };
 
 // Sync project cards (images, discord threads, or github issues) in bulk
 router.post(
-    "/:number/sync/:type",
+    "/:project/sync/:type",
     celebrate({
-        [Segments.PARAMS]: { ...numberParams, type: Joi.string().valid("image", "discord", "github").required() },
+        [Segments.PARAMS]: { ...projectParams, type: Joi.string().valid("image", "discord", "github").required() },
         [Segments.QUERY]: {
             number: Joi.number(),
             forced: Joi.boolean()
@@ -432,18 +531,46 @@ router.post(
             case "image":
                 return hasPermission(principal, Permission.SYNC_CARD_IMAGES);
             case "discord":
-                return hasPermission(principal, Permission.SYNC_CARD_DISCORD);
+                // A draft project's Discord is its planning forum, with a permission of its own - told apart below
+                return (
+                    hasPermission(principal, Permission.SYNC_CARD_DISCORD) ||
+                    hasPermission(principal, Permission.READ_DISCORD_PLANNING_FORUM)
+                );
             case "github":
                 return hasPermission(principal, Permission.SYNC_CARD_GITHUB);
             default:
                 return false;
         }
     }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<SyncParams, unknown, unknown, { number?: number; forced?: boolean }>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { type } = req.params;
         const { number, forced } = req.query;
+
+        if (type === "discord") {
+            const permission = project.draft ? Permission.READ_DISCORD_PLANNING_FORUM : Permission.SYNC_CARD_DISCORD;
+            if (!hasPermission(getContext().principal, permission)) {
+                throw new PermissionErrorResponse();
+            }
+        }
+
+        // A draft project has no cards to sync - its Discord is the planning forum and its slots' threads
+        if (type === "discord" && project.draft) {
+            await syncProjectPlanning(project, forced);
+            if (forced) {
+                await logActivity(
+                    LogCategory.PROJECT,
+                    "project.discord_synced",
+                    "<principal> forced a discord sync for <project>",
+                    { context: { project: projectSnapshot(project) } }
+                );
+            }
+            res.status(StatusCodes.OK).json([]);
+            return;
+        }
+
+        assertSyncableProject(project);
         let cards = await visibleTargets(project.number, number);
 
         switch (type) {

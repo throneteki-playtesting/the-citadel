@@ -9,9 +9,11 @@ import DecksRepository from "./repositories/decksRepository";
 import IntegrationRepository from "./repositories/integrationRepository";
 import LogsRepository from "./repositories/logsRepository";
 import PlaytestingUpdateRepository from "./repositories/playtestingUpdateRepository";
+import PoolRepository from "./repositories/poolRepository";
 import ProjectsRepository from "./repositories/projectsRepository";
 import ReviewsRepository from "./repositories/reviewRepository";
 import RolesRepository from "./repositories/rolesRepository";
+import SettingsRepository from "./repositories/settingsRepository";
 import SlotsRepository from "./repositories/slotsRepository";
 import SuggestionsRepository from "./repositories/suggestionsRepository";
 import UsersRepository from "./repositories/usersRepository";
@@ -37,7 +39,9 @@ const REPOSITORIES: RepositoryConfig[] = [
     { key: "playtestingUpdates", ctor: PlaytestingUpdateRepository },
     { key: "cards", ctor: CardsRepository },
     { key: "slots", ctor: SlotsRepository },
+    { key: "pools", ctor: PoolRepository },
     { key: "artists", ctor: ArtistsRepository },
+    { key: "settings", ctor: SettingsRepository },
     { key: "reviews", ctor: ReviewsRepository },
     { key: "decks", ctor: DecksRepository },
     { key: "users", ctor: UsersRepository },
@@ -90,10 +94,8 @@ class DataService {
         }
     }
 
-    /**
-     * Redis has a single flat keyspace per logical database and no per-application namespacing, so every
-     * environment sharing an instance is pinned to its own index rather than relying on REDIS_HOST to carry one.
-     */
+    /** Redis has no per-application namespacing, so every environment sharing an instance is pinned to
+     *  its own db index rather than relying on REDIS_HOST to carry one. */
     private redisUrl(): string {
         const url = new URL(process.env.REDIS_HOST || "redis://redis:6379");
         url.pathname = `/${REDIS_DATABASES[currentEnvironment()]}`;
@@ -140,8 +142,14 @@ class DataService {
     get slots() {
         return this.getRepository<SlotsRepository>("slots");
     }
+    get pools() {
+        return this.getRepository<PoolRepository>("pools");
+    }
     get artists() {
         return this.getRepository<ArtistsRepository>("artists");
+    }
+    get settings() {
+        return this.getRepository<SettingsRepository>("settings");
     }
     get reviews() {
         return this.getRepository<ReviewsRepository>("reviews");

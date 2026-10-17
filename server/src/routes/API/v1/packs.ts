@@ -4,7 +4,7 @@ import asyncHandler from "express-async-handler";
 import { dataService } from "@/services";
 import { IPack, IPlaytestPack } from "common/models/pack";
 import { IProject } from "common/models/projects";
-import { loadProjectByParam } from "@/utils";
+import { loadProject } from "@/utils";
 import { StatusCodes } from "http-status-codes";
 import { toJSONExportCard, getFinalCardNumber } from "common/utils";
 import { ApiErrorResponse } from "@/errors";
@@ -18,7 +18,7 @@ const ProjectParams = {
 router.get(
     "/:project/development",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const cards = await dataService.cards.read({ project: project.number, latest: true });
@@ -41,7 +41,7 @@ router.get(
     celebrate({
         [Segments.PARAMS]: { ...ProjectParams, code: Joi.string().required() }
     }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number; code: string }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { code } = req.params;

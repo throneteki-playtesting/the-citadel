@@ -11,7 +11,6 @@ import {
     Chip,
     Divider,
     Form,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -22,6 +21,7 @@ import {
     Skeleton,
     Textarea
 } from "@heroui/react";
+import Modal from "./modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faClockRotateLeft, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Link } from "react-router-dom";
@@ -38,14 +38,9 @@ import { ReleaseStatus } from "common/models/projects";
 import { Slot } from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { parseCardCode, SemanticVersion } from "common/utils";
-import {
-    useGetCardQuery,
-    useGetCardsQuery,
-    useGetSlotQuery,
-    useGetUserQuery,
-    useSubmitReleaseCheckMutation
-} from "../api";
+import { useGetCardQuery, useGetCardsQuery, useGetSlotQuery, useSubmitReleaseCheckMutation } from "../api";
 import { useAuth } from "../hooks/useAuth";
+import useUser from "../hooks/useUser";
 import { usePermission } from "../hooks/usePermission";
 import { useContainerWidth } from "../hooks/useContainerWidth";
 import { useStickToBottom } from "../hooks/useStickToBottom";
@@ -146,13 +141,7 @@ export default function ReleaseChecksModal({
     const toggleSelect = (discordId: string) => setSelectedId((prev) => (prev === discordId ? null : discordId));
 
     return (
-        <Modal
-            isOpen={isOpen}
-            size="lg"
-            placement="center"
-            scrollBehavior="inside"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="lg" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Release Checks</span>
@@ -288,7 +277,7 @@ export default function ReleaseChecksModal({
                             as={Link}
                             to={viewTargetPath}
                             state={viewTargetState}
-                            onClick={onClose}
+                            onPress={onClose}
                             color="primary"
                             variant="ghost"
                         >
@@ -361,7 +350,7 @@ function ReadyStack({ entries, latestVersion }: { entries: IReleaseCheck[]; late
 }
 
 function StackedUserAvatar({ entry, latestVersion }: { entry: IReleaseCheck; latestVersion?: SemanticVersion }) {
-    const { data: user } = useGetUserQuery({ discordId: entry.createdBy });
+    const { user } = useUser(entry.createdBy);
     const verdict = releaseCheckVerdict(entry, latestVersion);
     return (
         <UserAvatar
@@ -615,7 +604,7 @@ function YourReleaseCheckForm({ project, number, entry, latestVersion, onDone }:
 }
 
 function ReadOnlyReleaseCheck({ entry, latestVersion }: { entry?: IReleaseCheck; latestVersion?: SemanticVersion }) {
-    const { data: user } = useGetUserQuery({ discordId: entry?.createdBy ?? "" }, { skip: !entry });
+    const { user } = useUser(entry?.createdBy);
     if (!entry) {
         return null;
     }
@@ -641,10 +630,7 @@ function ReadOnlyReleaseCheck({ entry, latestVersion }: { entry?: IReleaseCheck;
             >
                 <FontAwesomeIcon icon={entry.ready ? faCheck : faXmark} />
                 {entry.ready ? "Ready to release" : "Not ready to release"}
-                <Timestamp
-                    className="ml-auto text-xs italic font-normal text-foreground/40"
-                    date={new Date(entry.updated)}
-                />
+                <Timestamp className="ml-auto text-xs italic font-normal text-foreground/40" date={entry.updated} />
             </div>
             {!entry.ready && (
                 <>

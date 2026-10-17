@@ -13,6 +13,8 @@ import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../../components/touchTooltip";
 import TooltipDetail from "../../components/tooltipDetail";
 import PermissionedLink from "../../components/permissionedLink";
+import PermissionGate from "../../components/permissionGate";
+import SlotChips from "./slotChips";
 import { highlightTarget, releaseStatusColors } from "../../constants";
 
 // One row of parts re-ordered by breakpoint rather than two layouts: on mobile the project and card
@@ -36,6 +38,9 @@ export default function CardHeader({ className, style, project: projectNumber, n
             </div>
             <div className="order-3 sm:order-2 basis-full sm:basis-auto flex flex-wrap items-center gap-1 empty:hidden">
                 <ReleaseChip project={project} number={number} />
+                <PermissionGate requires={Permission.READ_SLOTS}>
+                    <SlotChips project={projectNumber} number={number} />
+                </PermissionGate>
             </div>
         </div>
     );

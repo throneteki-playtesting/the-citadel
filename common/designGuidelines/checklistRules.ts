@@ -1,0 +1,226 @@
+import {
+    ChecklistRuleId,
+    ICard,
+    IDerivedFields,
+    ISuggestionQuestions,
+    plotStats as PLOT_STAT_KEYS
+} from "../models/cards";
+import { pluralize } from "../utils";
+import { computeStrength } from "./computeStrength";
+import { computePlotBudget } from "./computePlotBudget";
+import { computeTextBoxLines, TEXT_BOX_LINE_WEIGHTS } from "./computeTextBoxLines";
+import { PIVOT_POINT_HEALTHY_MIN } from "./pivotPoints";
+
+export interface RuleResult {
+    rule: ChecklistRuleId;
+    /** "indeterminate" is neither pass nor warn - the rule genuinely cannot be evaluated yet */
+    status: "pass" | "warn" | "indeterminate";
+    /** Fixed, short, worded as a statement of the property being checked, never as a recommendation */
+    label: string;
+    /** Personalized to the actual answers given, not a static restatement of the rule - a submitter
+     *  reads this back when justifying a warning, so it has to say what's actually going on. */
+    description: string;
+    /** Extra explanatory detail that doesn't belong inline - eg. what a calculated number means */
+    tooltip?: string;
+}
+
+function labelsFor(options: { id: string; label: string }[], ids: string[]) {
+    return ids.flatMap((id) => options.find((o) => o.id === id)?.label ?? []);
+}
+
+function joinWithAnd(labels: string[]) {
+    if (labels.length <= 1) {
+        return labels[0] ?? "";
+    }
+    return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+function listLabels(options: { id: string; label: string }[], ids: string[]) {
+    return joinWithAnd(labelsFor(options, ids));
+}
+
+/** Returns only the rules applicable right now - a rule with nothing to say yet is omitted entirely,
+ *  not shown as a forced pass. Must agree byte-for-byte across every client and server caller. */
+export function checklistRules(input: {
+    card: ICard;
+    questions: ISuggestionQuestions;
+    /** Server-computed from `card.text`, never asked of anyone - not currently read by any rule here. */
+    derived: IDerivedFields;
+    pivotPoints: string[];
+    /** only needed for plot-type suggestions */
+    plotMedian?: number;
+    rewardOptions: { id: string; label: string; requiresLoyalty?: boolean }[];
+    downsideOptions: { id: string; label: string }[];
+}): RuleResult[] {
+    const { card, questions, pivotPoints, plotMedian, rewardOptions, downsideOptions } = input;
+    const results: RuleResult[] = [];
+
+    if (card.type === "character") {
+        const guideline = computeStrength(card, questions);
+        if (guideline === undefined) {
+            // Same priority order computeStrength itself checks in, so the reason given always
+            // matches the actual first thing blocking the calculation.
+            const reason =
+                typeof card.cost !== "number"
+                    ? "this card has a numeric cost"
+                    : questions.iconic === undefined
+                      ? "you've answered whether this design is iconic"
+                      : "you've answered whether it triggers naturally";
+            results.push({
+                rule: "strGuideline",
+                status: "indeterminate",
+                label: "Printed STR aligns with card stats",
+                description: `Cannot be evaluated until ${reason}.`,
+                tooltip: "Calculated from the card's cost, icon count, and how reliably its ability triggers."
+            });
+        } else {
+            const pass = typeof card.strength === "number" && card.strength <= guideline;
+            results.push({
+                rule: "strGuideline",
+                status: pass ? "pass" : "warn",
+                label: "Printed STR aligns with card stats",
+                description: pass
+                    ? `Your printed STR (${card.strength}) is equal to or lower than the calculated recommended value (${guideline}).`
+                    : `Your printed STR (${card.strength}) is higher than the calculated recommended value (${guideline}).`,
+                tooltip: `STR ${guideline} or lower is recommended, calculated from cost, icon count, and trigger reliability.`
+            });
+        }
+    }
+
+    if ((questions.rewards?.length ?? 0) > 0) {
+        const count = questions.rewards.length;
+        const warn = count >= 3;
+        results.push({
+            rule: "rewardFocus",
+            status: warn ? "warn" : "pass",
+            label: "Reward types are clear and narrow",
+            description: warn
+                ? `You've selected ${count} reward types (${listLabels(rewardOptions, questions.rewards)}) - three or more spreads this ability's focus thin.`
+                : `You've selected ${count} ${pluralize(count, "reward type")} (${listLabels(rewardOptions, questions.rewards)}), a clear and narrow focus.`
+        });
+    }
+
+    if ((questions.downsides?.length ?? 0) > 0) {
+        const count = questions.downsides.length;
+        const warn = count > 1;
+        results.push({
+            rule: "downsideFocus",
+            status: warn ? "warn" : "pass",
+            label: "Downsides are clear and narrow",
+            description: warn
+                ? `You've selected ${count} downside types (${listLabels(downsideOptions, questions.downsides)}) - stacking multiple downsides can overly penalize this card.`
+                : `You've selected ${count} ${pluralize(count, "downside type")} (${listLabels(downsideOptions, questions.downsides)}), a clear and narrow focus.`
+        });
+    }
+
+    const loyaltyTaggedRewards =
+        questions.rewards?.filter((id) => rewardOptions.find((r) => r.id === id)?.requiresLoyalty) ?? [];
+    if (card.faction !== "neutral" && loyaltyTaggedRewards.length > 0) {
+        results.push({
+            rule: "loyaltyConsistency",
+            status: card.loyal ? "pass" : "warn",
+            label: "Chosen rewards suggest loyalty",
+            description: card.loyal
+                ? `This card grants ${listLabels(rewardOptions, loyaltyTaggedRewards)} and is correctly marked Loyal.`
+                : `This card grants ${listLabels(rewardOptions, loyaltyTaggedRewards)} but isn't marked Loyal.`,
+            tooltip: `Triggered by: ${listLabels(rewardOptions, loyaltyTaggedRewards)}.`
+        });
+    }
+
+    const triggeredAbilityCount = questions.triggeredAbilityCount ?? 0;
+    if (triggeredAbilityCount > 0) {
+        const focusPass = triggeredAbilityCount === 1;
+        results.push({
+            rule: "triggeredAbilityFocus",
+            status: focusPass ? "pass" : "warn",
+            label: "Triggered abilities are clear and narrow",
+            description: focusPass
+                ? "This card has 1 triggered ability, a clear and narrow focus."
+                : `This card has ${triggeredAbilityCount} triggered abilities - more than one spreads this design's focus thin.`
+        });
+
+        const isRestricted = questions.repeatabilityRestricted;
+        if (isRestricted === undefined) {
+            results.push({
+                rule: "repeatabilityControl",
+                status: "indeterminate",
+                label: "Abilities are safely limited",
+                description:
+                    "Cannot be evaluated until you've answered whether this card's abilities are safely limited."
+            });
+        } else {
+            results.push({
+                rule: "repeatabilityControl",
+                status: isRestricted ? "pass" : "warn",
+                label: "Abilities are safely limited",
+                description: isRestricted
+                    ? "This card's abilities are kept in check by occurring at most once per round or game, a hard limit, or a paid cost."
+                    : "This card's abilities can recur across a game with nothing restricting them."
+            });
+        }
+    }
+
+    if (card.type === "plot") {
+        const stats = card.plotStats;
+        const hasAllStats = !!stats && PLOT_STAT_KEYS.every((key) => stats[key] !== undefined);
+        const tooltip = "Weighted by each stat's usefulness, compared against other plots.";
+
+        if (!hasAllStats) {
+            results.push({
+                rule: "plotBudget",
+                status: "indeterminate",
+                label: "Plot stats are balanced",
+                description: "Cannot be evaluated until all four plot stats have been filled in.",
+                tooltip
+            });
+        } else if (plotMedian === undefined) {
+            results.push({
+                rule: "plotBudget",
+                status: "indeterminate",
+                label: "Plot stats are balanced",
+                description: "Cannot be evaluated until existing plots' stats are available to compare against.",
+                tooltip
+            });
+        } else {
+            const budget = computePlotBudget(stats);
+            const pass = budget <= plotMedian;
+            results.push({
+                rule: "plotBudget",
+                status: pass ? "pass" : "warn",
+                label: "Plot stats are balanced",
+                description: pass
+                    ? `This plot's weighted stat score (${budget}) is equal to or lower than the typical score for existing plots (${plotMedian}).`
+                    : `This plot's weighted stat score (${budget}) is higher than the typical score for existing plots (${plotMedian}).`,
+                tooltip
+            });
+        }
+    }
+
+    const linesWarn = computeTextBoxLines(card) > TEXT_BOX_LINE_WEIGHTS.acceptableLines[card.type];
+    results.push({
+        rule: "textBoxLines",
+        status: linesWarn ? "warn" : "pass",
+        label: "Text area fits comfortably",
+        description: linesWarn
+            ? "This card's ability text is estimated to not comfortably fit on a printed card of this type."
+            : "This card's ability text is estimated to comfortably fit on a printed card of this type.",
+        tooltip:
+            "A calculated estimation of whether the text area on this card would fit well on a printed card. This is not reflective of what you see in the card preview."
+    });
+
+    const pivotCount = pivotPoints.length;
+    const warnPivots = pivotCount < PIVOT_POINT_HEALTHY_MIN;
+    results.push({
+        rule: "pivotPointBalance",
+        status: warnPivots ? "warn" : "pass",
+        label: "Enough pivot points are provided",
+        description:
+            pivotCount === 0
+                ? `No pivot points have been provided - we recommend simpler designs with at least ${PIVOT_POINT_HEALTHY_MIN} clear pivot points.`
+                : warnPivots
+                  ? `Only ${pivotCount} pivot point has been provided - we recommend simpler designs with at least ${PIVOT_POINT_HEALTHY_MIN} clear pivot points.`
+                  : `${pivotCount} pivot points are provided, documenting this design's dependencies.`
+    });
+
+    return results;
+}

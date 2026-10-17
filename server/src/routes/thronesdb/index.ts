@@ -1,14 +1,45 @@
 import { convertTDBCard, fetchTDBDeck } from "@/utils";
 import { celebrate, Joi, Segments } from "@/celebrate";
 import { Code, ILabeledCard } from "common/models/cards";
+import { Card } from "common/models/schemas";
 import { IDecklist } from "common/models/decks";
+import { IGetRequest, IGetResponse } from "@/types";
+import { getRequestSchema } from "@/schemas";
+import { parseAPIRequest } from "@/middleware/filters";
 import { Regex, THRONESDB_URL } from "common/utils";
 import { UUID } from "common/models/shared";
+import { thronesDbCardPoolService } from "@/services";
 import express from "express";
 import asyncHandler from "express-async-handler";
 import { StatusCodes } from "http-status-codes";
 
 const router = express.Router();
+
+// Same filter/orderBy/page/perPage query shape every other list endpoint uses (see IGetRequest<T>) -
+// scoped to Card.Full plus the extra fields ILabeledCard adds on top of a plain ICard.
+const LabeledCard = Card.Full.keys({
+    label: Joi.string(),
+    imageUrl: Joi.string(),
+    workInProgress: Joi.boolean()
+});
+const getCardsQuerySchema = getRequestSchema(LabeledCard, { name: "asc", code: "asc" });
+
+router.use(parseAPIRequest);
+
+router.get(
+    "/cards",
+    celebrate({ [Segments.QUERY]: getCardsQuerySchema }),
+    asyncHandler<unknown, unknown, unknown, IGetRequest<ILabeledCard>>(async (req, res) => {
+        const { filter, orderBy, page, perPage } = req.query;
+        const response: IGetResponse<ILabeledCard> = await thronesDbCardPoolService.search(
+            filter,
+            orderBy,
+            page,
+            perPage
+        );
+        res.status(StatusCodes.OK).json(response);
+    })
+);
 
 router.get(
     "/deck/:identifier",

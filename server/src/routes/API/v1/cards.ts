@@ -5,18 +5,34 @@ import { inc } from "semver";
 import { dataService } from "@/services";
 import { hasPermission, isPreview, parseCardCode, Regex, SemanticVersion } from "common/utils";
 import { IPlaytestCard } from "common/models/cards";
-import { isReleaseBound } from "common/models/slots";
+import { IPlaytestCardFilterable } from "@/data/repositories/cardsRepository";
+import {
+    isReleaseBound,
+    movedOptionVersion,
+    NEW_OPTION_VERSION,
+    nextAvailableOptionVersion
+} from "common/models/slots";
 import { isInquiryOpen } from "common/models/refinement";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
 import { StatusCodes } from "http-status-codes";
-import { validateRequest, validateProjectAccess } from "@/middleware/permissions";
-import { applyToFilter, generateGetResponse, loadProjectByParam, NoteVersion } from "@/utils";
+import { scopeToProject, validateRequest, validateProjectAccess } from "@/middleware/permissions";
+import {
+    applyToFilter,
+    assertSyncableProject,
+    generateGetResponse,
+    loadProject,
+    NoteVersion,
+    preferFirst,
+    updateSlotPreferences,
+    withoutPreference
+} from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
+import { slotDiscussionChanged } from "@/discord/forums/planningForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
 import { IProject } from "common/models/projects";
@@ -24,6 +40,8 @@ import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityL
 import { LogCategory } from "common/models/logs";
 
 const router = express.Router();
+
+router.use("/:project", scopeToProject);
 
 // Shared param schemas
 const ProjectParams = {
@@ -49,11 +67,11 @@ const CardVersionOrLatestParams = {
 
 // Core data-fetching logic, shared across GET routes
 async function getCards(
-    filter: IGetRequest<IPlaytestCard>["filter"],
-    orderBy: IGetRequest<IPlaytestCard>["orderBy"],
-    page: IGetRequest<IPlaytestCard>["page"],
-    perPage: IGetRequest<IPlaytestCard>["perPage"]
-): Promise<IGetResponse<IPlaytestCard>> {
+    filter: IGetRequest<IPlaytestCardFilterable>["filter"],
+    orderBy: IGetRequest<IPlaytestCardFilterable>["orderBy"],
+    page: IGetRequest<IPlaytestCardFilterable>["page"],
+    perPage: IGetRequest<IPlaytestCardFilterable>["perPage"]
+): Promise<IGetResponse<IPlaytestCardFilterable>> {
     const [result, count] = await Promise.all([
         dataService.cards.read(filter, orderBy, page, perPage),
         dataService.cards.count(filter)
@@ -61,19 +79,24 @@ async function getCards(
     return generateGetResponse(result, count);
 }
 
-const getQuerySchema = getRequestSchema(Schemas.PlaytestingCard.Full, {
-    project: "asc",
-    number: "asc",
-    version: "asc"
-});
+// Filter/sort-only fields - computed server-side by CardsRepository's virtualFields, never stored on the card
+const CardFilterExtensions = {
+    reviews: Joi.object({ current: Joi.number(), total: Joi.number() }),
+    release: Joi.object({ position: Joi.number() })
+};
 
-function everyFilterHasLatest(filter: IGetRequest<IPlaytestCard>["filter"]): boolean {
+const getQuerySchema = getRequestSchema<IPlaytestCardFilterable>(
+    Schemas.PlaytestingCard.Full.keys(CardFilterExtensions),
+    { project: "asc", number: "asc", version: "asc" }
+);
+
+function everyFilterHasLatest(filter: IGetRequest<IPlaytestCardFilterable>["filter"]): boolean {
     const filters = Array.isArray(filter) ? filter : [filter];
     return filters.length > 0 && filters.every((f) => f?.latest === true);
 }
 
 // Checks all filters to decide between READ_LATEST_CARDS and READ_CARDS being required
-const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(
+const validateCardQueryPermission = validateRequest<unknown, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(
     (principal, req) => {
         if (hasPermission(principal, Permission.READ_CARDS)) {
             return true;
@@ -90,7 +113,7 @@ router.get(
     "/",
     celebrate({ [Segments.QUERY]: getQuerySchema }),
     validateCardQueryPermission,
-    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
+    asyncHandler<unknown, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(async (req, res) => {
         const { filter, orderBy, page, perPage } = req.query;
         const response = await getCards(filter, orderBy, page, perPage);
         res.status(StatusCodes.OK).json(response);
@@ -102,10 +125,10 @@ router.get(
     "/:project",
     celebrate({ [Segments.PARAMS]: ProjectParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateCardQueryPermission,
-    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(async (req, res) => {
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(async (req, res) => {
         const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
 
@@ -120,10 +143,10 @@ router.get(
     "/:project/:number",
     celebrate({ [Segments.PARAMS]: CardParams }),
     celebrate({ [Segments.QUERY]: getQuerySchema }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateCardQueryPermission,
-    asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCard>>(
+    asyncHandler<{ project: number; number: number }, unknown, unknown, IGetRequest<IPlaytestCardFilterable>>(
         async (req, res) => {
             const { project, number } = req.params;
             const { filter, orderBy, page, perPage } = req.query;
@@ -139,7 +162,7 @@ router.get(
 router.get(
     "/:project/:number/:version",
     celebrate({ [Segments.PARAMS]: CardVersionOrLatestParams }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateRequest<{ version: SemanticVersion | "latest" | "visible" }, unknown, unknown, unknown>(
         (principal, req) => {
@@ -194,7 +217,7 @@ router.get(
 router.get(
     "/:project/:number/:version/previous",
     celebrate({ [Segments.PARAMS]: CardVersionParams }),
-    loadProjectByParam,
+    loadProject,
     validateProjectAccess,
     validateRequest(Permission.READ_CARDS),
     asyncHandler<{ project: number; number: number; version: SemanticVersion }, unknown, unknown, IPlaytestCard>(
@@ -207,11 +230,6 @@ router.get(
         }
     )
 );
-
-// The first 0.0.x version not already in use, for a slot which can hold multiple option drafts at once
-function nextAvailableOptionVersion(usedVersions: Set<SemanticVersion>): SemanticVersion | undefined {
-    return Array.from({ length: 1000 }, (_, i) => `0.0.${i + 1}` as SemanticVersion).find((v) => !usedVersions.has(v));
-}
 
 type DraftCardBody = IPlaytestCard & { addressedInquiries?: number[] };
 
@@ -284,6 +302,40 @@ async function unmarkInquiriesAddressed(project: number, number: number, version
         ...slot,
         statuses: { ...slot.statuses, design: { ...slot.statuses.design, inquiries: updated } }
     });
+}
+
+// A card as it is held while a draft - unpublished, and carrying nothing from wherever it was copied
+// A draft project's image is kept, as it is what a revealed card's preview shows until it is updated
+function asDraft<T extends IPlaytestCard>(card: T, code: T["code"], isDraftProject: boolean) {
+    card.code = code;
+    card.draft = true;
+    card.latest = false;
+    card.implemented = false;
+    if (card._metadata) {
+        delete card._metadata.github;
+        if (!isDraftProject) {
+            delete card._metadata.imageUrl;
+        }
+    }
+    return card;
+}
+
+// A suggestion is put forward once per project - its card is moved between slots, not added to a second
+async function assertSuggestionsUnused(project: number, cards: Pick<IPlaytestCard, "suggestionId">[]) {
+    const ids = cards.flatMap((card) => (card.suggestionId ? [card.suggestionId] : []));
+    if (ids.length === 0) {
+        return;
+    }
+    const [taken] = await dataService.cards.read({ project, suggestionId: { $in: ids } });
+    if (taken || new Set(ids).size < ids.length) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Data",
+            taken
+                ? `"${taken.name}" is already an option in slot #${taken.number} from the same suggestion`
+                : "The same suggestion cannot be added twice"
+        );
+    }
 }
 
 // Upsert draft card
@@ -374,14 +426,7 @@ router.put(
                 : (inc(latest.version, NoteVersion[card.note.type]) as SemanticVersion);
         }
 
-        card.code = code;
-        card.draft = true;
-        card.latest = false;
-        card.implemented = false;
-        if (card._metadata) {
-            delete card._metadata.github;
-            delete card._metadata.imageUrl;
-        }
+        asDraft(card, code, project.draft);
 
         const process = async (action: "create" | "update") => {
             switch (action) {
@@ -404,12 +449,16 @@ router.put(
         if (project.draft) {
             // If version is 0.0.0, then it is being added as an option for that slot/number.
             // We distinct card options by incrementing the patch to the next available number
-            if (card.version === "0.0.0") {
+            if (card.version === NEW_OPTION_VERSION) {
+                await assertSuggestionsUnused(project.number, [card]);
                 const usedVersions = new Set(drafts.map((d) => d.version));
                 card.version = nextAvailableOptionVersion(usedVersions);
                 await process("create");
+                await updateSlotPreferences(project.number, number, preferFirst(card.version));
+                void slotDiscussionChanged(project.number, number, true);
             } else {
                 await process("update");
+                void slotDiscussionChanged(project.number, number, true);
             }
         } else {
             // When project is not in draft, can only be one (or none) existing drafts
@@ -436,6 +485,71 @@ router.put(
     })
 );
 
+// Add several options to a draft project's slot at once - the first given ends up on top
+router.post(
+    "/:project/:number/options",
+    validateRequest(Permission.CREATE_CARDS),
+    celebrate({
+        [Segments.PARAMS]: CardParams,
+        [Segments.BODY]: { cards: Joi.array().items(Schemas.PlaytestingCard.Draft).min(1).required() }
+    }),
+    loadProject,
+    asyncHandler<{ project: number; number: number }, IPlaytestCard[], { cards: IPlaytestCard[] }, unknown>(
+        async (req, res) => {
+            const { number } = req.params;
+            const project = res.locals.project as IProject;
+            if (!project.draft) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Project",
+                    "Options can only be added to a slot while its project is in draft"
+                );
+            }
+            const [[slot], drafts] = await Promise.all([
+                dataService.slots.read({ project: project.number, number }),
+                dataService.cards.read({ project: project.number, number, draft: true })
+            ]);
+            if (!slot) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    `Slot #${number} does not exist for project #${project.number}`
+                );
+            }
+            await assertSuggestionsUnused(project.number, req.body.cards);
+
+            const code = parseCardCode(false, project.number, number);
+            const usedVersions = new Set(drafts.map((draft) => draft.version));
+            const cards = req.body.cards.map((card) => {
+                const version = nextAvailableOptionVersion(usedVersions);
+                if (!version) {
+                    throw new ApiErrorResponse(
+                        StatusCodes.NOT_ACCEPTABLE,
+                        "Invalid Slot",
+                        `Slot #${number} cannot hold any more options`
+                    );
+                }
+                usedVersions.add(version);
+                return asDraft({ ...card, project: project.number, number, version }, code, project.draft);
+            });
+            await dataService.cards.create(cards, false);
+            const added = cards.map((card) => card.version);
+            await updateSlotPreferences(project.number, number, (preferences) => [
+                ...added,
+                ...preferences.filter((version) => !added.includes(version))
+            ]);
+            void slotDiscussionChanged(project.number, number, true);
+
+            for (const card of cards) {
+                await logActivity(LogCategory.CARD, "card.draft.created", "<principal> created draft <card>", {
+                    context: { card: cardSnapshot(`${project.number}|${number}|${card.version}`, card) }
+                });
+            }
+            res.status(StatusCodes.OK).json(cards);
+        }
+    )
+);
+
 // Delete draft card
 router.delete(
     "/:project/:number/draft/:version?",
@@ -446,7 +560,7 @@ router.delete(
             version: Joi.string().optional().regex(Regex.SemanticVersion)
         }
     }),
-    loadProjectByParam,
+    loadProject,
     asyncHandler<{ project: number; number: number; version?: SemanticVersion }, unknown, unknown, unknown>(
         async (req, res) => {
             const { number, version } = req.params;
@@ -464,6 +578,10 @@ router.delete(
             }
 
             await unmarkInquiriesAddressed(project.number, number, deleted.version);
+            if (project.draft) {
+                await updateSlotPreferences(project.number, number, withoutPreference(deleted.version));
+                void slotDiscussionChanged(project.number, number);
+            }
 
             await logActivity(LogCategory.CARD, "card.draft.deleted", "<principal> deleted draft <card>", {
                 context: { card: cardSnapshot(`${project.number}|${number}|${deleted.version}`, deleted) },
@@ -474,6 +592,13 @@ router.delete(
         }
     )
 );
+
+type CardSyncParams = {
+    project: number;
+    number: number;
+    version: SemanticVersion;
+    type: "image" | "discord" | "github";
+};
 
 router.post(
     "/:project/:number/:version/sync/:type",
@@ -486,7 +611,7 @@ router.post(
             forced: Joi.boolean()
         }
     }),
-    validateRequest((principal, req) => {
+    validateRequest<CardSyncParams, unknown, unknown, unknown>((principal, req) => {
         const { type } = req.params;
         switch (type) {
             case "image":
@@ -499,12 +624,9 @@ router.post(
                 return false;
         }
     }),
-    asyncHandler<
-        { project: number; number: number; version: SemanticVersion; type: "image" | "discord" | "github" },
-        unknown,
-        unknown,
-        { forced: boolean }
-    >(async (req, res) => {
+    loadProject,
+    asyncHandler<CardSyncParams, unknown, unknown, { forced: boolean }>(async (req, res) => {
+        assertSyncableProject(res.locals.project as IProject);
         const { project, number, version, type } = req.params;
         const { forced } = req.query;
         let [card] = await dataService.cards.read({ project, number, version });
@@ -584,9 +706,10 @@ router.post(
                 );
             }
 
-            // Keep the card's version if it is free in the target slot; otherwise take the next available 0.0.x
-            const usedVersions = new Set(targetDrafts.map((draft) => draft.version));
-            const newVersion = usedVersions.has(version) ? nextAvailableOptionVersion(usedVersions) : version;
+            const newVersion = movedOptionVersion(
+                version,
+                targetDrafts.map((draft) => draft.version)
+            );
 
             const movedCard: IPlaytestCard = {
                 ...card,
@@ -598,7 +721,12 @@ router.post(
 
             // number is part of the card's primary key, so a move requires destroy + create rather than an in-place update
             await dataService.cards.destroy({ project: projectNumber, number, version }, false);
-            const [created] = await dataService.cards.create([movedCard], false);
+            // Still the same card, so it keeps when and by whom it was made - what a slot's reveal knows it by
+            const [created] = await dataService.cards.create([movedCard], false, true);
+            await updateSlotPreferences(projectNumber, number, withoutPreference(version));
+            await updateSlotPreferences(projectNumber, to, preferFirst(newVersion));
+            void slotDiscussionChanged(projectNumber, to, true);
+            void slotDiscussionChanged(projectNumber, number);
 
             await logActivity(
                 LogCategory.CARD,

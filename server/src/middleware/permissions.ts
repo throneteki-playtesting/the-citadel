@@ -6,7 +6,7 @@ import { getContext } from "./context";
 import { Principal, Role } from "common/models/auth";
 import Permission from "common/models/permissions";
 import { permissionMeta } from "common/models/permissions";
-import { asArray, hasPermission } from "common/utils";
+import { asArray, hasPermission, withProjectOwnership } from "common/utils";
 import { IProject } from "common/models/projects";
 import { dataService } from "@/services";
 
@@ -36,6 +36,37 @@ export function validateRequest<A, B, C, D>(
         }
         next();
     });
+}
+
+// Loads the project a route sits under before anything checks permissions, so ownership counts in every check after it
+export const scopeToProject = asyncHandler<{ project: string }, unknown, unknown, unknown>(async (req, res, next) => {
+    const number = Number(req.params.project);
+    const [project] = Number.isInteger(number) ? await dataService.projects.read({ number }) : [];
+    if (project) {
+        res.locals.project = project;
+        res.locals.unscopedPrincipal = applyProjectOwnership(project);
+    }
+    next();
+});
+
+// Returns the principal as it was, for the few checks which must ignore ownership (eg. who may change owners)
+function applyProjectOwnership(project: IProject) {
+    const context = getContext();
+    const unscoped = context.principal;
+    if (context.source === "client" && context.impersonating !== "role") {
+        context.principal = withProjectOwnership(context.principal, project);
+    } else if (context.source !== "client" && context.source !== "anonymous") {
+        context.principal = withProjectOwnership(context.principal, project);
+    }
+    return unscoped;
+}
+
+// Owners run a project, but only those who can edit every project decide who its owners are
+export function canChangeProjectOwners(res: Response) {
+    return hasPermission(
+        (res.locals.unscopedPrincipal as Principal | undefined) ?? getContext().principal,
+        Permission.EDIT_PROJECTS
+    );
 }
 
 export const validateProjectAccess = asyncHandler<unknown, unknown, unknown, unknown>(async (_req, res, next) => {

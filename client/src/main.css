@@ -20,6 +20,7 @@
     :root {
         --scrollbar-thumb: #a8833a;
         --scrollbar-track: #1c1c24;
+        --nav-height: 4rem;
     }
 
     * {

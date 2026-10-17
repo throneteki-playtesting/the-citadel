@@ -12,15 +12,15 @@ const colorClasses = {
     success: "border-success/40 bg-success/5 text-success"
 } as const;
 
-/**
- * A single line stating where something stands. Deliberately not a HeroUI Alert - these are the steady
- * state of a record and sit above it all the time, so a thin left rule carries the meaning without shouting.
- */
+/** A single line stating where something stands - deliberately not a HeroUI Alert, since these are a
+ *  record's steady state and sit there permanently, not a one-off event worth shouting about. */
 export default function StatusNotice({
     icon,
+    iconPosition = "left",
     label,
     detail,
     color = "neutral",
+    media,
     className,
     children
 }: StatusNoticeProps) {
@@ -33,9 +33,13 @@ export default function StatusNotice({
             )}
         >
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                {icon && <FontAwesomeIcon icon={icon} className="shrink-0 text-lg" />}
+                {media}
+                {icon && iconPosition === "left" && <FontAwesomeIcon icon={icon} className="shrink-0 text-lg" />}
                 <div className="min-w-0 flex-1 flex flex-col sm:gap-2">
-                    <span className="font-cinzel uppercase tracking-wide whitespace-nowrap text-sm">{label}</span>
+                    <span className="flex items-center gap-1.5 font-cinzel uppercase tracking-wide whitespace-nowrap text-sm">
+                        {icon && iconPosition === "title" && <FontAwesomeIcon icon={icon} />}
+                        {label}
+                    </span>
                     {detail && <div className="min-w-0 text-foreground/60">{detail}</div>}
                 </div>
             </div>
@@ -48,7 +52,12 @@ export type StatusNoticeColor = keyof typeof colorClasses;
 
 type StatusNoticeProps = Omit<BaseElementProps, "style"> & {
     icon?: IconDefinition;
+    /** Where `icon` renders - alongside the whole block (default) or inline with the title text.
+     *  Only the suggestion checklist opts into "title"; every other caller leaves this unset. */
+    iconPosition?: "left" | "title";
     label: string;
     detail?: ReactNode;
     color?: StatusNoticeColor;
+    /** Leads the block the way a left icon does - eg. a thumbnail of what the notice is about */
+    media?: ReactNode;
 };

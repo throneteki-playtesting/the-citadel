@@ -1,21 +1,22 @@
-import { DefaultDeckLimit, ICard } from "common/models/cards";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { DefaultDeckLimit, ICard, uniqueTypes } from "common/models/cards";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { isEqual } from "lodash-es";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPlus } from "@fortawesome/free-solid-svg-icons";
 import {
-    ChallengeIconButtons,
-    CostInput,
-    DeckLimitStepper,
-    DesignerInput,
-    FactionSelect,
-    FlavorInput,
-    LoyalButton,
-    NameInput,
-    PlotStatInputs,
-    StrengthInput,
-    TraitsInput,
-    TypeSelect,
-    UniqueButton
+    ChallengeIconButtons as ChallengeIconButtonsBase,
+    CostInput as CostInputBase,
+    DeckLimitStepper as DeckLimitStepperBase,
+    DesignerInput as DesignerInputBase,
+    FactionSelect as FactionSelectBase,
+    FlavorInput as FlavorInputBase,
+    LoyalButton as LoyalButtonBase,
+    NameInput as NameInputBase,
+    PlotStatInputs as PlotStatInputsBase,
+    StrengthInput as StrengthInputBase,
+    TraitsInput as TraitsInputBase,
+    TypeSelect as TypeSelectBase,
+    UniqueButton as UniqueButtonBase
 } from "./components/editorComponents";
 import AbilityTextEditor from "./components/abilityEditor";
 import { Button } from "@heroui/react";
@@ -24,9 +25,86 @@ import { BaseElementProps } from "../../types";
 import classNames from "classnames";
 import { FieldPrefixContext } from "./fieldPrefixContext";
 
+// Memoised so an edit to one field leaves the others alone
+const ChallengeIconButtons = memo(ChallengeIconButtonsBase);
+const CostInput = memo(CostInputBase);
+const DeckLimitStepper = memo(DeckLimitStepperBase);
+const DesignerInput = memo(DesignerInputBase);
+const FactionSelect = memo(FactionSelectBase);
+const FlavorInput = memo(FlavorInputBase);
+const LoyalButton = memo(LoyalButtonBase);
+const NameInput = memo(NameInputBase);
+const PlotStatInputs = memo(PlotStatInputsBase);
+const StrengthInput = memo(StrengthInputBase);
+const TraitsInput = memo(TraitsInputBase);
+const TypeSelect = memo(TypeSelectBase);
+const UniqueButton = memo(UniqueButtonBase);
+
 type OptionalField = "flavor" | "designer";
 
 const defaultVisibility: VisibilityOptions = { type: true, faction: true };
+
+// Keeps the previous object when nothing in it changed, so the field drawing it doesn't re-render
+function reuse<T>(previous: T | undefined, next: T): T {
+    return isEqual(previous, next) ? (previous as T) : next;
+}
+
+function applyDefaults(card: DeepPartial<ICard>) {
+    const defaults: DeepPartial<ICard> = {
+        traits: card.traits ?? []
+    };
+    if (card.type === "character") {
+        defaults.icons = reuse(card.icons, {
+            military: card.icons?.military ?? false,
+            intrigue: card.icons?.intrigue ?? false,
+            power: card.icons?.power ?? false
+        });
+    } else {
+        delete card.icons;
+    }
+    if (card.type && uniqueTypes.includes(card.type)) {
+        defaults.unique = card.unique ?? false;
+    } else {
+        delete card.unique;
+    }
+
+    if (card.faction && card.faction !== "neutral" && card.type !== "agenda") {
+        defaults.loyal = card.loyal ?? false;
+    } else {
+        delete card.loyal;
+    }
+
+    if (card.type === "plot") {
+        defaults.plotStats = reuse(card.plotStats, {
+            income: card.plotStats?.income,
+            initiative: card.plotStats?.initiative,
+            claim: card.plotStats?.claim,
+            reserve: card.plotStats?.reserve
+        });
+    } else {
+        delete card.plotStats;
+    }
+
+    // An added-but-emptied field saves as absent, not as "" - the Add/Remove toggle is a display
+    // concern only, tracked separately in addedFields
+    if (!card.flavor?.trim()) {
+        delete card.flavor;
+    }
+    if (!card.designer?.trim()) {
+        delete card.designer;
+    }
+
+    // Always present once a type is chosen - clamped rather than reset, so a still-valid custom
+    // value survives a type change and only an out-of-range one gets pulled back down
+    if (card.type) {
+        const maxLimit = DefaultDeckLimit[card.type];
+        defaults.deckLimit = Math.min(card.deckLimit ?? maxLimit, maxLimit);
+    } else {
+        delete card.deckLimit;
+    }
+
+    return { ...card, ...defaults };
+}
 
 const CardEditor = ({
     className,
@@ -65,61 +143,31 @@ const CardEditor = ({
         );
     }, [initial]);
 
-    const applyDefaults = (card: DeepPartial<ICard>) => {
-        const defaults: DeepPartial<ICard> = {
-            traits: card.traits ?? []
-        };
-        if (card.type === "character") {
-            defaults.icons = {
-                military: card.icons?.military ?? false,
-                intrigue: card.icons?.intrigue ?? false,
-                power: card.icons?.power ?? false
-            };
-        } else {
-            delete card.icons;
-        }
-        if (["character", "attachment", "location"].includes(card.type ?? "")) {
-            defaults.unique = card.unique ?? false;
-        } else {
-            delete card.unique;
-        }
-
-        if (card.faction && card.faction !== "neutral") {
-            defaults.loyal = card.loyal ?? false;
-        } else {
-            delete card.loyal;
-        }
-
-        // An added-but-emptied field saves as absent, not as "" - the Add/Remove toggle is a display
-        // concern only, tracked separately in addedFields
-        if (!card.flavor?.trim()) {
-            delete card.flavor;
-        }
-        if (!card.designer?.trim()) {
-            delete card.designer;
-        }
-
-        // Always present once a type is chosen - clamped rather than reset, so a still-valid custom
-        // value survives a type change and only an out-of-range one gets pulled back down
-        if (card.type) {
-            const maxLimit = DefaultDeckLimit[card.type];
-            defaults.deckLimit = Math.min(card.deckLimit ?? maxLimit, maxLimit);
-        } else {
-            delete card.deckLimit;
-        }
-
-        return { ...card, ...defaults };
-    };
-
+    // Read through a ref so the handlers below don't change with the card
+    const cardRef = useRef(card);
+    cardRef.current = card;
     const handleChange = useCallback(
         (field: keyof ICard, value: unknown) => {
-            const updated = applyDefaults({ ...card, [field]: value });
+            const updated = applyDefaults({ ...cardRef.current, [field]: value });
             setCard(updated);
             lastEmitted.current = updated;
             onUpdate(updated);
         },
-        [card, onUpdate]
+        [onUpdate]
     );
+
+    // One stable setter per field, so each field's memo holds
+    const handleChangeRef = useRef(handleChange);
+    handleChangeRef.current = handleChange;
+    const setters = useRef(new Map<keyof ICard, (value: unknown) => void>());
+    const setterFor = useCallback((field: keyof ICard) => {
+        let setter = setters.current.get(field);
+        if (!setter) {
+            setter = (value) => handleChangeRef.current(field, value);
+            setters.current.set(field, setter);
+        }
+        return setter;
+    }, []);
 
     const addField = useCallback((field: OptionalField) => {
         setAddedFields((prev) => new Set(prev).add(field));
@@ -136,6 +184,9 @@ const CardEditor = ({
         },
         [handleChange]
     );
+
+    const removeFlavor = useCallback(() => removeField("flavor"), [removeField]);
+    const removeDesigner = useCallback(() => removeField("designer"), [removeField]);
 
     // Update visibility
     useEffect(() => {
@@ -162,7 +213,7 @@ const CardEditor = ({
                     updated.plotStats = true;
             }
 
-            if (card.faction && card.faction !== "neutral") {
+            if (card.faction && card.faction !== "neutral" && card.type !== "agenda") {
                 updated.loyal = true;
             }
         }
@@ -172,27 +223,28 @@ const CardEditor = ({
     return (
         <FieldPrefixContext.Provider value={fieldFor}>
             <div className={classNames("space-y-2 w-full", className)} style={style}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap md:flex-col lg:flex-row lg:flex-wrap">
-                    <div className="flex gap-2 w-full">
-                        {isVisible("faction") && (
-                            <FactionSelect
-                                value={card.faction}
-                                setValue={(value) => handleChange("faction", value)}
-                                isDisabled={isDisabled("faction")}
-                            />
-                        )}
-                        {isVisible("loyal") && (
-                            <LoyalButton
-                                value={card.loyal}
-                                setValue={(value) => handleChange("loyal", value)}
-                                isDisabled={isDisabled("loyal")}
-                            />
-                        )}
-                    </div>
+                <div className="flex flex-wrap gap-2">
+                    {isVisible("faction") && (
+                        <FactionSelect
+                            className="min-w-48 flex-1"
+                            value={card.faction}
+                            setValue={setterFor("faction")}
+                            isDisabled={isDisabled("faction")}
+                        />
+                    )}
+                    {isVisible("loyal") && (
+                        <LoyalButton
+                            className="shrink-0"
+                            value={card.loyal}
+                            setValue={setterFor("loyal")}
+                            isDisabled={isDisabled("loyal")}
+                        />
+                    )}
                     {isVisible("type") && (
                         <TypeSelect
+                            className="min-w-40 flex-1"
                             value={card.type}
-                            setValue={(value) => handleChange("type", value)}
+                            setValue={setterFor("type")}
                             isDisabled={isDisabled("type")}
                         />
                     )}
@@ -202,7 +254,7 @@ const CardEditor = ({
                         <CostInput
                             className="max-w-24"
                             value={card.cost}
-                            setValue={(value) => handleChange("cost", value)}
+                            setValue={setterFor("cost")}
                             isDisabled={isDisabled("cost")}
                         />
                     )}
@@ -211,7 +263,7 @@ const CardEditor = ({
                             <UniqueButton
                                 className="rounded-l-xl"
                                 value={card.unique}
-                                setValue={(value) => handleChange("unique", value)}
+                                setValue={setterFor("unique")}
                                 isDisabled={isDisabled("unique")}
                             />
                         )}
@@ -219,7 +271,7 @@ const CardEditor = ({
                             <NameInput
                                 className="grow"
                                 value={card.name}
-                                setValue={(value) => handleChange("name", value)}
+                                setValue={setterFor("name")}
                                 isDisabled={isDisabled("name")}
                                 hasUniqueButton={isVisible("unique")}
                             />
@@ -231,14 +283,14 @@ const CardEditor = ({
                         {isVisible("strength") && (
                             <StrengthInput
                                 value={card.strength}
-                                setValue={(value) => handleChange("strength", value)}
+                                setValue={setterFor("strength")}
                                 isDisabled={isDisabled("strength")}
                             />
                         )}
                         {isVisible("icons") && (
                             <ChallengeIconButtons
                                 value={card.icons}
-                                setValue={(value) => handleChange("icons", value)}
+                                setValue={setterFor("icons")}
                                 isDisabled={isDisabled("icons")}
                             />
                         )}
@@ -247,7 +299,7 @@ const CardEditor = ({
                 {isVisible("plotStats") && (
                     <PlotStatInputs
                         value={card.plotStats}
-                        setValue={(value) => handleChange("plotStats", value)}
+                        setValue={setterFor("plotStats")}
                         isDisabled={isDisabled("plotStats")}
                     />
                 )}
@@ -256,14 +308,14 @@ const CardEditor = ({
                         {isVisible("traits") && (
                             <TraitsInput
                                 value={card.traits}
-                                setValue={(value) => handleChange("traits", value)}
+                                setValue={setterFor("traits")}
                                 isDisabled={isDisabled("traits")}
                             />
                         )}
                         {isVisible("text") && (
                             <AbilityTextEditor
                                 value={card.text}
-                                setValue={(value) => handleChange("text", value)}
+                                setValue={setterFor("text")}
                                 isDisabled={isDisabled("text")}
                             />
                         )}
@@ -274,26 +326,26 @@ const CardEditor = ({
                         {isVisible("flavor") && addedFields.has("flavor") && (
                             <FlavorInput
                                 value={card.flavor}
-                                setValue={(value) => handleChange("flavor", value)}
+                                setValue={setterFor("flavor")}
                                 cardType={card.type}
                                 isUnique={card.unique}
                                 isDisabled={isDisabled("flavor")}
-                                onRemove={() => removeField("flavor")}
+                                onRemove={removeFlavor}
                             />
                         )}
                         {isVisible("designer") && addedFields.has("designer") && (
                             <DesignerInput
                                 value={card.designer}
-                                setValue={(value) => handleChange("designer", value)}
+                                setValue={setterFor("designer")}
                                 isDisabled={isDisabled("designer")}
-                                onRemove={() => removeField("designer")}
+                                onRemove={removeDesigner}
                             />
                         )}
                         <div className="flex flex-wrap gap-2 items-center">
                             {isVisible("deckLimit") && !isDisabled("deckLimit") && (
                                 <DeckLimitStepper
                                     value={card.deckLimit}
-                                    setValue={(value) => handleChange("deckLimit", value)}
+                                    setValue={setterFor("deckLimit")}
                                     cardType={card.type}
                                     isDisabled={isDisabled("deckLimit")}
                                 />
@@ -336,4 +388,6 @@ type InputOptions = { [K in keyof ICard]?: "disabled" | "hidden" };
 
 type VisibilityOptions = { [K in keyof ICard]?: boolean };
 
-export default CardEditor;
+// Memoized deliberately - this hosts the ability text's TipTap editor, the most expensive thing in
+// any caller. Only worth anything as long as callers pass stable `onUpdate`/`inputOptions` references.
+export default memo(CardEditor);

@@ -1,138 +1,446 @@
-import { useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import classNames from "classnames";
+import Reveal from "../../components/reveal";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { DeepPartial } from "common/types";
 import { ICardSuggestion } from "common/models/cards";
-import { useDeleteSuggestionMutation, useRenderImageMutation } from "../../api";
+import { SuggestionMigration, useGetSuggestionMigrationQuery, useGetSuggestionsFeedQuery } from "../../api";
+import { showApiErrorToast } from "../../api/errors";
 import Permission from "common/models/permissions";
 import EditSuggestionModal from "./editSuggestionModal";
-import {
-    addToast,
-    Button,
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownSection,
-    DropdownTrigger,
-    Spinner
-} from "@heroui/react";
-import HeaderActions from "../../components/actions/headerActions";
-import { DeepPartial } from "common/types";
-import { hasPermission, renderCardSuggestion } from "common/utils";
+import { addToast, Badge, Button, Chip, ModalBody, ModalContent, Skeleton, Spinner } from "@heroui/react";
+import Modal from "../../components/modal";
+import SectionTitle from "../../components/sectionTitle";
+import CardGrid from "../../components/cardGrid";
+import StatsGrid from "../../components/statsGrid";
+import SlidingPages from "../../components/slidingPages";
+import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
+import { ScopeParams, useSearchParamsScope } from "../../hooks/useSearchParamsScope";
+import SuggestionCardLink from "./suggestionCardLink";
+import SuggestionsGrid from "./suggestionsGrid";
+import MyDraftsModal from "./myDraftsModal";
+import MyStashDropdown from "./myStashDropdown";
+import { SortOption } from "./suggestionSortOptions";
+import SuggestionStatistics from "./suggestionStatistics";
+import { suggestionFilterFromParams, suggestionFilterToParams } from "./suggestionFilterUrl";
+import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components/data/suggestionFilter";
+import usePageTitle from "../../hooks/usePageTitle";
+import { usePermission } from "../../hooks/usePermission";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-    faCopy,
-    faEllipsis,
-    faFileExport,
-    faFileImage,
-    faFileImport,
-    faPencil,
-    faTrash,
-    IconDefinition
+    faArrowRight,
+    faBoxOpen,
+    faCircleQuestion,
+    faFileLines,
+    faGear,
+    faPlus
 } from "@fortawesome/free-solid-svg-icons";
-import classNames from "classnames";
-import { CardPreview } from "@agot/card-preview";
-import SuggestionsGrid from "./suggestionsGrid";
-import { User } from "common/models/auth";
-import { downloadBlob } from "../../utils";
-import usePageTitle from "../../hooks/usePageTitle";
-import { groupBy } from "lodash-es";
-import { usePermission } from "../../hooks/usePermission";
-import { showApiErrorToast } from "../../api/errors";
+import FloatingSlot from "../../components/floatingSlot";
+import GuideBubble from "../../components/guideBubble";
+import SuggestionsGuideModal from "./suggestionsGuideModal";
+import SuggestionSettingsModal from "./suggestionSettingsModal";
+import LoadingCard from "../../components/loadingCard";
+import PermissionGate from "../../components/permissionGate";
 
-type DropdownItemDef = {
-    key: string;
-    label: string;
-    group: string;
-    icon: IconDefinition;
-    onPress: () => void;
-    className?: string;
-    style?: React.CSSProperties;
-};
+const SUGGESTIONS_GUIDE_SEEN_KEY = "suggestions-guide-seen";
+// Every key the "all suggestions" scope might write - declared up front so a cleared field's key
+// is dropped rather than left stale, same convention projectContent.tsx/projectArtworks.tsx use.
+const URL_OWNED_KEYS = [
+    "all",
+    "sort",
+    "q",
+    "unseen",
+    "type",
+    "faction",
+    "loyal",
+    "unique",
+    "icons",
+    "cost",
+    "strength",
+    "income",
+    "initiative",
+    "claim",
+    "reserve",
+    "name",
+    "text",
+    "flavor",
+    "designer",
+    "traits",
+    "mine",
+    "byUsers",
+    "approvedFilter",
+    "myReactions",
+    "tags",
+    "naturalTrigger",
+    "repeatabilityRestricted",
+    "iconic",
+    "modes",
+    "legacy",
+    "archived",
+    "developed",
+    "segments"
+];
+
+// The phone floating column, filling leftwards from the page FAB (Create) - literal classes, so Tailwind finds them
+const FAB_SLOTS = ["right-20", "right-36", "right-52"];
+
+const RECENT_RAIL_MAX = 10;
+// Two rows per breakpoint (grid-cols-2/3/4/5), written out whole so Tailwind can find them
+const RECENT_RAIL_ROW_CAP_CLASSES =
+    "max-sm:[&>*:nth-child(n+5)]:hidden sm:max-md:[&>*:nth-child(n+7)]:hidden md:max-lg:[&>*:nth-child(n+9)]:hidden";
 
 export default function Suggestions() {
+    return (
+        <ScopedSearchParamsProvider>
+            <SuggestionsContent />
+        </ScopedSearchParamsProvider>
+    );
+}
+
+function SuggestionsContent() {
     usePageTitle("Suggestions");
-    const canImport = usePermission(Permission.IMPORT_SUGGESTIONS);
     const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
-    const canExport = usePermission(Permission.EXPORT_SUGGESTIONS);
+    const canEditSettings = usePermission(Permission.EDIT_SETTINGS_SUGGESTIONS);
+    const { data: feed, isLoading } = useGetSuggestionsFeedQuery();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
-    const [deleteSuggestion, { isLoading: isDeleting, originalArgs: deleting }] = useDeleteSuggestionMutation();
-    const [renderImage, { isLoading: isRenderingImage, originalArgs: renderingImage }] = useRenderImageMutation();
-
-    const isDeletingSuggestion = (suggestion: ICardSuggestion) => isDeleting && deleting?.id === suggestion.id;
-    const isRenderingSuggestion = (suggestion: ICardSuggestion) =>
-        isRenderingImage && renderingImage?.key === suggestion.id;
-
-    const onEdit = (suggestion: ICardSuggestion) => {
-        setEditing(suggestion);
-    };
-    const onCopy = (suggestion: ICardSuggestion) => {
-        setEditing({ card: suggestion.card });
-    };
-    const onExportPNG = async (suggestion: ICardSuggestion) => {
+    // Set while the editor is migrating an old forum thread, rather than creating or editing
+    const [migration, setMigration] = useState<SuggestionMigration & { threadId: string }>();
+    const [isDraftsOpen, setIsDraftsOpen] = useState(false);
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    // Auto-opens the first time this browser ever lands on this page - no role/eligibility condition
+    // beyond that (unlike the playtest onboarding guide), so a plain "seen it" flag is all this needs.
+    const [isGuideOpen, setIsGuideOpen] = useState(() => {
         try {
-            const cardRender = renderCardSuggestion(suggestion);
-            const blob = await renderImage(cardRender).unwrap();
-            downloadBlob(blob, `${suggestion.id ?? crypto.randomUUID()}.png`);
-        } catch (err) {
-            showApiErrorToast(err, { title: "Failed to Download" });
+            return localStorage.getItem(SUGGESTIONS_GUIDE_SEEN_KEY) !== "true";
+        } catch {
+            return false;
         }
-    };
-    const onDelete = async (suggestion: ICardSuggestion) => {
-        if (!suggestion.id) {
+    });
+    // Marked "seen" the moment it's shown (first-visit or the manual re-open button), not on close.
+    useEffect(() => {
+        if (!isGuideOpen) {
             return;
         }
         try {
-            await deleteSuggestion({ id: suggestion.id }).unwrap();
-            addToast({
-                title: "Successfully deleted",
-                color: "success",
-                description: "Successfully deleted suggestion"
-            });
-        } catch (err) {
-            showApiErrorToast(err, { title: "Failed to Delete" });
+            localStorage.setItem(SUGGESTIONS_GUIDE_SEEN_KEY, "true");
+        } catch {
+            // Nothing to do if storage is unavailable - it'll just show again next visit.
         }
+    }, [isGuideOpen]);
+    const myDraftsCount = feed?.stats.myDrafts;
+    const myLegacyCount = feed?.stats.myLegacy;
+
+    // A draft's own detail page has nowhere to render itself - it redirects here with the already-
+    // loaded suggestion via router state, consumed once and cleared so a refresh can't reopen it.
+    const location = useLocation();
+    const navigate = useNavigate();
+    useEffect(() => {
+        const editDraft = (location.state as { editDraft?: DeepPartial<ICardSuggestion> } | null)?.editDraft;
+        if (editDraft) {
+            setEditing(editDraft);
+            navigate(location.pathname + location.search, { replace: true, state: null });
+        }
+    }, [location.state, location.pathname, location.search, navigate]);
+
+    // Discord's /migrate links here with the thread's id - looked up once, then dropped from the url so a
+    // refresh can't start the same migration over
+    const [migrateThreadId, setMigrateThreadId] = useState(
+        () => new URLSearchParams(location.search).get("migrate") ?? undefined
+    );
+    const { data: migrationData, error: migrationError } = useGetSuggestionMigrationQuery(migrateThreadId ?? "", {
+        skip: !migrateThreadId
+    });
+    useEffect(() => {
+        if (!migrateThreadId || (!migrationData && !migrationError)) {
+            return;
+        }
+        if (migrationData) {
+            const { thread } = migrationData;
+            setMigration({ ...migrationData, threadId: migrateThreadId });
+            // Submitted straight away, never a draft - and the thread gives what it can of the card to start from
+            setEditing({ draft: false, card: { name: thread.name, faction: thread.faction, type: thread.type } });
+        } else {
+            showApiErrorToast(migrationError, { title: "Can't migrate this thread" });
+        }
+        setMigrateThreadId(undefined);
+        const params = new URLSearchParams(location.search);
+        params.delete("migrate");
+        navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }, [migrateThreadId, migrationData, migrationError, location.pathname, location.search, navigate]);
+
+    // All "browse everything" state is shareable via the url, seeded once on mount. `hasOpenedAll` is
+    // sticky (unlike `isBrowsingAll`) so SuggestionsGrid mounts once and keeps its own state thereafter.
+    const [searchParams] = useSearchParams();
+    const [isBrowsingAll, setIsBrowsingAll] = useState(() => searchParams.get("all") === "true");
+    const [hasOpenedAll, setHasOpenedAll] = useState(isBrowsingAll);
+    const [filter, setFilter] = useState<SuggestionFilterValue>(() => suggestionFilterFromParams(searchParams));
+    const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+    const [sortBy, setSortBy] = useState<SortOption>(
+        () => (searchParams.get("sort") as SortOption | null) ?? "updated"
+    );
+    // Bumped whenever a preset is applied from outside the grid - SuggestionsGrid keys its animated
+    // list on this so arriving with a filter already applied snaps straight in, no reorder animation.
+    const [browseSessionKey, setBrowseSessionKey] = useState(0);
+
+    // `search` only changes here once per settled search (see suggestionsGrid.tsx) or via openAll's reset.
+    const scopeParams = useMemo((): ScopeParams => {
+        const params: ScopeParams = Object.fromEntries(URL_OWNED_KEYS.map((key) => [key, undefined]));
+        if (!isBrowsingAll) {
+            return params;
+        }
+        params.all = "true";
+        if (sortBy !== "updated") {
+            params.sort = sortBy;
+        }
+        if (search.trim()) {
+            params.q = search.trim();
+        }
+        Object.assign(params, suggestionFilterToParams(filter));
+        return params;
+    }, [isBrowsingAll, sortBy, search, filter]);
+    useSearchParamsScope("all-suggestions", true, scopeParams);
+
+    // Opens the browse page with a fresh preset - a stat/coverage/focus-area entry point never
+    // wants to inherit whatever was left over from a previous visit to the browse page.
+    const openAll = (preset?: { filter?: SuggestionFilterValue; sort?: SortOption }) => {
+        setFilter(preset?.filter ?? EMPTY_SUGGESTION_FILTER);
+        setSearch("");
+        setSortBy(preset?.sort ?? "updated");
+        setIsBrowsingAll(true);
+        setHasOpenedAll(true);
+        setBrowseSessionKey((key) => key + 1);
     };
+
+    // Legacy suggestions are submitted rather than drafts, so they live in the browse page, not a modal
+    const openMyLegacy = () => openAll({ filter: { mine: true, legacy: true } });
+
+    // With any legacy suggestions to hand, drafts and legacy share one "My Stash" menu - otherwise My Drafts
+    // stays exactly as it was, for the many who never had a legacy suggestion at all
+    const hasStash = canCreate && !!myLegacyCount;
+    const stashCount = (myDraftsCount ?? 0) + (myLegacyCount ?? 0);
+    const stashDropdownProps = {
+        draftsCount: myDraftsCount ?? 0,
+        legacyCount: myLegacyCount ?? 0,
+        onOpenDrafts: () => setIsDraftsOpen(true),
+        onOpenLegacy: openMyLegacy
+    };
+
+    // Only the buttons actually shown take a slot, so the column never leaves a gap
+    const floatingButtons = [
+        (hasStash || (canCreate && !!myDraftsCount)) && "drafts",
+        canEditSettings && "settings"
+    ].filter((key): key is string => !!key);
+    const fabSlot = (key: string) => FAB_SLOTS[floatingButtons.indexOf(key)];
+
+    let sectionIndex = 0;
+
     return (
-        <div className="flex flex-col gap-2 lg:flex-row">
-            <div className="flex flex-col gap-2 flex-grow">
-                <div className="px-4 md:px-0 flex gap-1 items-center">
-                    <HeaderActions
-                        items={[
-                            canImport && {
-                                key: "import",
-                                title: "Import Suggestions",
-                                icon: <FontAwesomeIcon icon={faFileImport} />
-                            },
-                            canExport && {
-                                key: "export",
-                                title: "Export Suggestions",
-                                icon: <FontAwesomeIcon icon={faFileExport} />
-                            }
-                        ]}
-                    />
-                    {canCreate && (
-                        <Button className="grow" size="sm" onPress={() => setEditing({})}>
-                            Create Suggestion
-                        </Button>
-                    )}
+        <div className="flex flex-col gap-5">
+            <div className="px-4 md:px-0 space-y-2 md:space-y-4">
+                <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0 flex items-center gap-3">
+                        <span className="font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
+                            Suggestions
+                        </span>
+                        <Chip size="sm" color="warning" variant="flat" className="font-cinzel font-semibold uppercase">
+                            Beta
+                        </Chip>
+                    </div>
+                    <GuideBubble label="Suggestions Guide" onOpen={() => setIsGuideOpen(true)} />
                 </div>
-                <SuggestionsGrid>
-                    {(suggestion) => (
-                        <SuggestionCard
-                            key={suggestion.id}
-                            suggestion={suggestion}
-                            onEdit={onEdit}
-                            onCopy={onCopy}
-                            onExportPNG={onExportPNG}
-                            onDelete={onDelete}
-                            isDeleting={isDeletingSuggestion(suggestion)}
-                            isExporting={isRenderingSuggestion(suggestion)}
-                        />
-                    )}
-                </SuggestionsGrid>
+                <div className="flex items-center justify-between gap-2 py-1">
+                    <div className="text-sm lg:text-medium text-foreground/70 italic">
+                        Card designs proposed by the design team.
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <Button
+                            color="primary"
+                            variant="flat"
+                            size="sm"
+                            startContent={<FontAwesomeIcon icon={faCircleQuestion} />}
+                            onPress={() => setIsGuideOpen(true)}
+                            className="hidden sm:flex font-cinzel shrink-0 font-semibold"
+                        >
+                            Suggestions Guide
+                        </Button>
+                        {canCreate && (
+                            <Button
+                                className="hidden sm:inline-flex"
+                                size="sm"
+                                color="primary"
+                                startContent={<FontAwesomeIcon icon={faPlus} />}
+                                onPress={() => setEditing({})}
+                            >
+                                Create Suggestion
+                            </Button>
+                        )}
+                        {hasStash && (
+                            <Badge content={stashCount} color="primary" showOutline={false} className="hidden sm:flex">
+                                <MyStashDropdown {...stashDropdownProps}>
+                                    <Button
+                                        className="hidden sm:inline-flex"
+                                        size="sm"
+                                        variant="flat"
+                                        startContent={<FontAwesomeIcon icon={faBoxOpen} />}
+                                    >
+                                        My Stash
+                                    </Button>
+                                </MyStashDropdown>
+                            </Badge>
+                        )}
+                        {canCreate && !hasStash && (
+                            <Badge
+                                content={myDraftsCount}
+                                color="primary"
+                                isInvisible={!myDraftsCount}
+                                showOutline={false}
+                                className="hidden sm:flex"
+                            >
+                                <Button
+                                    className="hidden sm:inline-flex"
+                                    size="sm"
+                                    variant="flat"
+                                    startContent={<FontAwesomeIcon icon={faFileLines} />}
+                                    isDisabled={!myDraftsCount}
+                                    onPress={() => setIsDraftsOpen(true)}
+                                >
+                                    My Drafts
+                                </Button>
+                            </Badge>
+                        )}
+                        <PermissionGate requires={Permission.EDIT_SETTINGS_SUGGESTIONS}>
+                            <Button
+                                isIconOnly
+                                className="hidden sm:inline-flex"
+                                size="sm"
+                                variant="flat"
+                                aria-label="Settings"
+                                onPress={() => setIsSettingsOpen(true)}
+                            >
+                                <FontAwesomeIcon icon={faGear} />
+                            </Button>
+                        </PermissionGate>
+                    </div>
+                </div>
             </div>
+
+            <SlidingPages
+                currentPage={isBrowsingAll ? 2 : 1}
+                history="suggestions"
+                onPageChange={(page) => setIsBrowsingAll(page === 2)}
+            >
+                <div className="flex flex-col gap-5">
+                    <Reveal index={sectionIndex++}>
+                        <StatsGrid className="border border-content3 drop-shadow-lg">
+                            <StatCard
+                                label="Active Suggestions"
+                                value={feed?.stats.total}
+                                footer={feed && `not ignored by you, across ${feed.stats.totalSubmitters} users`}
+                                isLoading={isLoading}
+                                onPress={() => openAll()}
+                            />
+                            <StatCard
+                                label="Awaiting Approval"
+                                value={feed?.stats.awaitingApproval}
+                                footer="across all liked suggestions"
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { approvedFilter: "awaiting" }, sort: "updated" })}
+                            />
+                            <StatCard
+                                label="New Suggestions"
+                                value={feed?.stats.unreacted}
+                                footer="this week you haven't reacted to"
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { unseen: true }, sort: "created" })}
+                            />
+                            <StatCard
+                                label="My Suggestions"
+                                value={feed?.stats.mine}
+                                footer={feed && `with ${feed.stats.myDrafts} as drafts`}
+                                isLoading={isLoading}
+                                onPress={() => openAll({ filter: { mine: true }, sort: "updated" })}
+                            />
+                        </StatsGrid>
+                    </Reveal>
+
+                    {(isLoading || !!feed?.recent.length) && (
+                        <Reveal index={sectionIndex++}>
+                            <div className="flex flex-col gap-2">
+                                <div className="px-4 md:px-0 flex items-center justify-between gap-2">
+                                    <SectionTitle size="sm" indent="xs" className="flex-1 min-w-0">
+                                        Recent Suggestions
+                                    </SectionTitle>
+                                    {!isLoading && (
+                                        <button
+                                            type="button"
+                                            onClick={() => openAll({ sort: "updated" })}
+                                            className="text-xs sm:text-sm text-primary shrink-0 whitespace-nowrap cursor-pointer hover:brightness-125"
+                                        >
+                                            <span className="sm:hidden">See all</span>
+                                            <span className="hidden sm:inline">See all suggestions</span>{" "}
+                                            <FontAwesomeIcon icon={faArrowRight} />
+                                        </button>
+                                    )}
+                                </div>
+                                {isLoading ? (
+                                    <div
+                                        className={classNames(
+                                            "grid gap-1 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
+                                            RECENT_RAIL_ROW_CAP_CLASSES
+                                        )}
+                                    >
+                                        {Array.from({ length: RECENT_RAIL_MAX }).map((_, index) => (
+                                            <LoadingCard key={index} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <CardGrid
+                                        size="md"
+                                        cards={feed?.recent ?? []}
+                                        className={RECENT_RAIL_ROW_CAP_CLASSES}
+                                        animate
+                                        keyExtractor={(suggestion) => suggestion.id ?? ""}
+                                    >
+                                        {(suggestion) => (
+                                            <SuggestionCardLink key={suggestion.id} suggestion={suggestion} />
+                                        )}
+                                    </CardGrid>
+                                )}
+                            </div>
+                        </Reveal>
+                    )}
+
+                    <Reveal index={sectionIndex++}>
+                        <SuggestionStatistics
+                            isActive={!isBrowsingAll}
+                            onOpen={(preset) => openAll({ filter: { ...EMPTY_SUGGESTION_FILTER, ...preset } })}
+                        />
+                    </Reveal>
+                </div>
+                {hasOpenedAll ? (
+                    <SuggestionsGrid
+                        animationKey={browseSessionKey}
+                        filter={filter}
+                        onFilterChange={setFilter}
+                        search={search}
+                        onSearchChange={setSearch}
+                        sortBy={sortBy}
+                        onSortChange={setSortBy}
+                        onBack={() => setIsBrowsingAll(false)}
+                    />
+                ) : (
+                    <div />
+                )}
+            </SlidingPages>
+
             <EditSuggestionModal
                 isOpen={!!editing}
                 suggestion={editing}
-                onClose={() => setEditing(undefined)}
+                migration={migration}
+                onClose={() => {
+                    setEditing(undefined);
+                    setMigration(undefined);
+                }}
                 onSave={(suggestion) =>
                     addToast({
                         title: "Successfully saved",
@@ -140,115 +448,141 @@ export default function Suggestions() {
                         description: `"${suggestion.card.name}" suggestion has been saved`
                     })
                 }
+                // Reopens "My Drafts" behind the now-closed editor when it was an existing draft.
+                onReturnToDrafts={() => setIsDraftsOpen(true)}
             />
-        </div>
-    );
-}
 
-type SuggestionCardProps = {
-    suggestion: ICardSuggestion;
-    onEdit: (suggestion: ICardSuggestion) => void;
-    onCopy: (suggestion: ICardSuggestion) => void;
-    onExportPNG: (suggestion: ICardSuggestion) => void;
-    onDelete: (suggestion: ICardSuggestion) => void;
-    isDeleting: boolean;
-    isExporting: boolean;
-};
+            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} size="sm">
+                <ModalContent>
+                    <ModalBody className="flex flex-row items-center gap-3 py-6">
+                        <Spinner size="sm" />
+                        <span className="text-sm text-foreground/70">Looking up your Discord thread...</span>
+                    </ModalBody>
+                </ModalContent>
+            </Modal>
 
-function SuggestionCard({ suggestion, onEdit, onCopy, onExportPNG, onDelete, isDeleting }: SuggestionCardProps) {
-    const canCreate = usePermission(Permission.MAKE_SUGGESTIONS);
-    const canEdit = usePermission(
-        (user: User) =>
-            !!(
-                (suggestion.id &&
-                    hasPermission(user, Permission.MAKE_SUGGESTIONS) &&
-                    user.discordId === suggestion.user.discordId) ||
-                hasPermission(user, Permission.EDIT_SUGGESTIONS)
-            )
-    );
-    const canDelete = usePermission(
-        (user: User) =>
-            !!(
-                (suggestion.id &&
-                    hasPermission(user, Permission.MAKE_SUGGESTIONS) &&
-                    user.discordId === suggestion.user.discordId) ||
-                hasPermission(user, Permission.DELETE_SUGGESTIONS)
-            )
-    );
-    const canRenderCard = usePermission(Permission.RENDER_CARDS);
+            <MyDraftsModal
+                isOpen={isDraftsOpen}
+                onClose={() => setIsDraftsOpen(false)}
+                onSelectDraft={(draft) => setEditing(draft)}
+            />
 
-    const dropdownItems: DropdownItemDef[] = [
-        canEdit && {
-            key: "edit",
-            label: "Edit",
-            group: "Suggestion",
-            icon: faPencil,
-            onPress: () => onEdit(suggestion)
-        },
-        canCreate && {
-            key: "copy",
-            label: "Copy",
-            group: "Suggestion",
-            icon: faCopy,
-            onPress: () => onCopy(suggestion)
-        },
-        canRenderCard && {
-            key: "export-png",
-            label: "Export PNG",
-            group: "Suggestion",
-            icon: faFileImage,
-            onPress: () => onExportPNG(suggestion)
-        },
-        canDelete && {
-            key: "delete",
-            label: "Delete",
-            group: "Suggestion",
-            icon: faTrash,
-            className: "text-danger",
-            onPress: () => onDelete(suggestion)
-        }
-    ].flatMap((item) => (item ? [item] : []));
-    const grouped = groupBy(dropdownItems, (item) => item.group);
+            <SuggestionsGuideModal
+                isOpen={isGuideOpen}
+                onClose={() => setIsGuideOpen(false)}
+                onCreateSuggestion={canCreate ? () => setEditing({}) : undefined}
+                onViewAll={() => openAll()}
+            />
 
-    return (
-        <div className="relative">
-            {isDeleting && (
-                <div className="absolute right-0 w-full h-full z-2 flex justify-center items-center">
-                    <Spinner size="lg" />
+            <SuggestionSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+
+            {canEditSettings && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("settings"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("settings")} />
+                    <Button
+                        isIconOnly
+                        radius="full"
+                        size="lg"
+                        color="default"
+                        className="shadow-lg"
+                        aria-label="Settings"
+                        onPress={() => setIsSettingsOpen(true)}
+                    >
+                        <FontAwesomeIcon icon={faGear} />
+                    </Button>
                 </div>
             )}
-            <div className="absolute top-0 right-0 z-1 opacity-25 p-1 hover:opacity-90 transition-opacity">
-                <Dropdown>
-                    <DropdownTrigger>
-                        <Button isIconOnly radius="full" size="sm" variant="faded">
-                            <FontAwesomeIcon icon={faEllipsis} />
+            {hasStash && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
+                    <Badge content={stashCount} color="primary" showOutline={false}>
+                        <MyStashDropdown {...stashDropdownProps}>
+                            <Button
+                                isIconOnly
+                                radius="full"
+                                size="lg"
+                                color="default"
+                                className="shadow-lg"
+                                aria-label="My Stash"
+                            >
+                                <FontAwesomeIcon icon={faBoxOpen} />
+                            </Button>
+                        </MyStashDropdown>
+                    </Badge>
+                </div>
+            )}
+            {canCreate && !hasStash && !!myDraftsCount && (
+                <div className={classNames("sm:hidden fixed bottom-6 z-20", fabSlot("drafts"))}>
+                    <FloatingSlot index={1 + floatingButtons.indexOf("drafts")} />
+                    <Badge content={myDraftsCount} color="primary" showOutline={false}>
+                        <Button
+                            isIconOnly
+                            radius="full"
+                            size="lg"
+                            color="default"
+                            className="shadow-lg"
+                            aria-label="My Drafts"
+                            onPress={() => setIsDraftsOpen(true)}
+                        >
+                            <FontAwesomeIcon icon={faFileLines} />
                         </Button>
-                    </DropdownTrigger>
-                    <DropdownMenu emptyContent="No actions">
-                        {Object.entries(grouped).map(([group, items]) => (
-                            <DropdownSection key={group} title={group}>
-                                {items.map((item) => (
-                                    <DropdownItem
-                                        key={item.key}
-                                        className={item.className}
-                                        style={item.style}
-                                        startContent={<FontAwesomeIcon icon={item.icon} />}
-                                        onPress={item.onPress}
-                                    >
-                                        {item.label}
-                                    </DropdownItem>
-                                ))}
-                            </DropdownSection>
-                        ))}
-                    </DropdownMenu>
-                </Dropdown>
-            </div>
-            <CardPreview
-                card={renderCardSuggestion(suggestion)}
-                orientation="vertical"
-                rounded={true}
-                className={classNames("relative transition-all", { "blur-xs": isDeleting })}
-            />
+                    </Badge>
+                </div>
+            )}
+            {canCreate && (
+                <div className="sm:hidden fixed bottom-6 right-4 z-20">
+                    <FloatingSlot index={0} />
+                    <Button
+                        isIconOnly
+                        radius="full"
+                        size="lg"
+                        color="primary"
+                        className="shadow-lg"
+                        aria-label="Create Suggestion"
+                        onPress={() => setEditing({})}
+                    >
+                        <FontAwesomeIcon icon={faPlus} />
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
+
+function StatCard({ label, value, footer, isLoading = false, onPress }: StatCardProps) {
+    if (isLoading) {
+        return (
+            <div className="bg-content2 px-5 py-5 space-y-2">
+                <Skeleton className="h-4 w-32 rounded-sm" />
+                <Skeleton className="h-12 w-16 rounded-sm" />
+                <Skeleton className="h-4 w-28 rounded-sm" />
+            </div>
+        );
+    }
+    const content = (
+        <>
+            <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">{label}</div>
+            <div className="text-5xl font-sans text-foreground mt-2 leading-none">{value ?? "-"}</div>
+            {footer && <div className="text-sm font-serif italic text-foreground/50 mt-2">{footer}</div>}
+        </>
+    );
+    if (!onPress) {
+        return <div className="bg-content2 px-5 py-5">{content}</div>;
+    }
+    return (
+        <button
+            type="button"
+            onClick={onPress}
+            className="bg-content2 px-5 py-5 text-left cursor-pointer hover:bg-content3 transition-colors"
+        >
+            {content}
+        </button>
+    );
+}
+type StatCardProps = {
+    label: string;
+    value?: ReactNode;
+    footer?: ReactNode;
+    isLoading?: boolean;
+    onPress?: () => void;
+};

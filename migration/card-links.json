@@ -1,0 +1,481 @@
+{
+    "BaS #62 Sansa Stark": {
+        "options": [
+            "2588: 51% like the card - Diego - Insight. ⏎ Reaction: After Sansa Stark enters play…",
+            "2589: 16% like the card - Ryan - While Sansa Stark is kneeling, players cannot brin…",
+            "2592: 7% like the card - Ryan - Reaction: After a House Stark character is sacrifi…",
+            "2590: 5% like the card - Nils (Stephen edit) - Insight. ⏎ For each power on Sansa Stark, draw an …",
+            "2587: 5% like the card - Ryan - While there are no cards in shadows, Sansa Stark d…",
+            "2591: 3% like the card - Nils - Insight. ⏎ You draw X cards with Sansa Stark's Ins…"
+        ],
+        "link": "none"
+    },
+    "BaS #63 Rickon Stark": {
+        "options": [
+            "2566: 0% like the card - Nils - Action: Kneel Rickon Stark to reduce the cost of t…",
+            "2567: 0% like the card - Ryan - Shadow (2). ⏎ Interrupt: When a unique House Stark…"
+        ],
+        "link": "none"
+    },
+    "BaS #87 Renly Baratheon": {
+        "options": [
+            "3313: Ryan - During challenges in which Renly Baratheon is part…",
+            "3314: Fabrizzio - Renly Baratheon gets +1 STR for each Rainbow Guard…",
+            "3315: Ryan - Insight. ⏎ Renly Baratheon cannot be saved. ⏎ Whil…",
+            "3316: Ryan - Renown. ⏎ Reaction: After Renly Baratheon gains po…",
+            "3317: Ryan - Insight. ⏎ Action: Remove Renly Baratheon from the…",
+            "3318: Collin - Renown. ⏎ Reaction: After a character controlled b…",
+            "3319: Nils - Insight. ⏎ Reaction: After a challenge is initiate…"
+        ],
+        "link": "3317"
+    },
+    "OatN #10 The Wall": {
+        "options": [
+            "364: 41% like the card - Fabrizzio (Stephen edit) - While there is a Winter plot card revealed, each o…",
+            "365: 35% like the card - Stephen - While there is a Winter plot card revealed, each o…",
+            "366: 20% like the card - Fabrizzio - Each out of faction character you control gets +1 …",
+            "363: 10% like the card - Nils - Reaction: After a Power challenge is initiated aga…"
+        ],
+        "link": ""
+    },
+    "OatN #13 Euron Crow's Eye": {
+        "options": [
+            "450: 38% like the card - Stephen - Shadow (6). Pillage. ⏎ Reaction: After a card come…",
+            "444: 35% like the card - Stephen - Shadow (5). Pillage. ⏎ Reaction: After a card come…",
+            "449: 28% like the card - Stephen - Shadow (6). Pillage. ⏎ Reaction: After a character…",
+            "447: 26% like the card - Nils - Pillage. Renown. Shadow (6). ⏎ Reaction: After a c…",
+            "452: 23% like the card - Hanno - Pillage. ⏎ Euron Crow's Eye cannot leave play whil…",
+            "443: 16% like the card - Samuel - Euron Crow's Eye gains the icons and keywords of e…",
+            "451: 12% like the card - Fabrizzio - Pillage. Stealth. ⏎ While Euron Crow's Eye is stan…",
+            "446: 9% like the card - Samuel - Euron Crow's Eye gets +1 STR for each dead unique …",
+            "448: 8% like the card - Paul - Renown. Pillage. ⏎ While you control another House…",
+            "445: 3% like the card - Stephen - Shadow (5). Pillage. ⏎ While an opponent has 10 or…"
+        ],
+        "link": ""
+    },
+    "OatN #15 Blind Beron": {
+        "options": [
+            "414: 81% like the card - Stephen - Reaction: After you win a challenge by 5 or more S…",
+            "420: 27% like the card - Francisco - Intimidate. ⏎ Cannot be declared as a defender. ⏎ …",
+            "413: 23% like the card - Alex - Forced Reaction: After a player wins a Power chall…",
+            "416: 19% like the card - Fabrizzio - Reaction: After a House Greyjoy character enters p…",
+            "417: 17% like the card - Alex - While you have: ⏎ - 4 characters in your dead pile…",
+            "415: 16% like the card - Stephen - Bestow (3). ⏎ Reaction: After a Drowned God charac…",
+            "412: 13% like the card - Stephen - Bestow (2). ⏎ Reaction: After a Drowned God charac…",
+            "418: 9% like the card - Stephen - Reduce the cost of the first Drowned God character…",
+            "419: 6% like the card - Stephen - Challenges Action: During a Power challenge, kneel…"
+        ],
+        "link": ""
+    },
+    "OatN #19 Captain of the Iron Fleet": {
+        "options": [
+            "426: 68% like the card - Fabrizzio - Ironborn character only. ⏎ If attached character i…",
+            "425: 24% like the card - Ryan - Attached character gains the Captain trait. ⏎ Reac…"
+        ],
+        "link": ""
+    },
+    "OatN #27 Podrick Payne": {
+        "options": [
+            "779: 100% like the card - Paul - While you control Brienne of Tarth, Podrick Payne …",
+            "780: 100% like the card - Paul (Stephen edit) - While you control Brienne of Tarth, Podrick Payne …",
+            "783: 68% like the card - Paul - While you control a Lord character, Podrick Payne …",
+            "781: 21% like the card - Fabrizzio - If you control Tyrion Lannister, he gains a Milita…",
+            "782: 20% like the card - Ryan - Interrupt: When claim is applied for a Military ch…"
+        ],
+        "link": ""
+    },
+    "OatN #3 Ser Patrek of King's Mountain": {
+        "options": [
+            "272: 78% like the card - Peter - Reaction: After you win a challenge in which Ser P…",
+            "273: 17% like the card - Ryan - Renown. ⏎ Interrupt: When the effects of a card th…"
+        ],
+        "link": ""
+    },
+    "OatN #38 Nymella Toland": {
+        "options": [
+            "1083: 11% like the card - Fabrizzio - While no opponent controls cards in shadows Nymell…",
+            "1082: 4% like the card - Nils - Reaction: after a Knight character is declared as …"
+        ],
+        "link": ""
+    },
+    "OatN #40 Doran's Spy": {
+        "options": [
+            "1014: 67% like the card - Stefan - Interrupt: When Doran's Spy would be discarded for…",
+            "1013: 11% like the card - Paul - Shadow (2). ⏎ Reaction: After Doran's Spy is revea…"
+        ],
+        "link": ""
+    },
+    "OatN #43 Prince of Dorne": {
+        "options": [
+            "1111: 35% like the card - Ryan - House Martell Lord character only. ⏎ Attached char…",
+            "1113: 17% like the card - Ryan - Unique House Martell character only. ⏎ If attached…",
+            "1109: 14% like the card - Stephen - House Martell Lord or Lady only. ⏎ Attached charac…",
+            "1110: 11% like the card - Nils - House Martell -Lord or -Lady character only. ⏎ Rea…",
+            "1112: 11% like the card - Stephen - Unique House Martell character you control only. ⏎…"
+        ],
+        "link": ""
+    },
+    "OatN #47 A Game of Cyvasse": {
+        "options": [
+            "963: 72% like the card - Stephen - Interrupt: When the challenges phase would end, ea…",
+            "964: 5% like the card - Stefan - Reaction: When you win an challenge by 5 or more S…"
+        ],
+        "link": ""
+    },
+    "OatN #49 Ser Alliser Thorne": {
+        "options": [
+            "2234: 28% like the card - Ryan - You may ambush The Night's Watch characters from y…",
+            "2235: 7% like the card - Stefan - Intimidate. ⏎ Whilst Ser Alliser Thorne is standin…"
+        ],
+        "link": ""
+    },
+    "OatN #63 Whoresbane Umber": {
+        "options": [
+            "2722: 19% like the card - Fabrizzio - While you have 3 or fewer plots in your used pile,…",
+            "2721: 18% like the card - Paul - Shadow (3). ⏎ While there is fewer than 3 plot car…",
+            "2718: 17% like the card - Richard - Renown. ⏎ Increase the cost to marshal Whoresbane …",
+            "2720: 12% like the card - Diego (Stephen edit) - While there are fewer than 3 plots in your used pi…",
+            "2719: 11% like the card - Diego - Intimidate. ⏎ While there are fewer than 3 plots i…"
+        ],
+        "link": ""
+    },
+    "OatN #67 Ancient Traditions": {
+        "options": [
+            "2314: 43% like the card - Stephen - Old Gods character only. ⏎ While attached characte…",
+            "2315: 14% like the card - Nils - If attached character is Eddard Stark, he gains Ol…"
+        ],
+        "link": ""
+    },
+    "OatN #68 Lord of Winterfell": {
+        "options": [
+            "2488: 18% like the card - Ryan - House Stark Lord character only. ⏎ If attached cha…",
+            "2489: 17% like the card - Ryan - House Stark Lord character only. ⏎ If attached cha…"
+        ],
+        "link": ""
+    },
+    "OatN #77 Purple Graces": {
+        "options": [
+            "2921: 5% like the card - Stephen - Interrupt: When Purple Graces would be killed for …",
+            "2922: 0% like the card - Nils - Each Grace character you control gets +1 STR for e…"
+        ],
+        "link": ""
+    },
+    "OatN #78 Sons of the Harpy": {
+        "options": [
+            "2957: 38% like the card - Evzen - Shadow (1). ⏎ Reaction: After Sons of Harpy comes …",
+            "2958: 30% like the card - Fabrizzio - Shadow(2). No attachments. ⏎ Reaction: After Sons …"
+        ],
+        "link": ""
+    },
+    "OatN #80 Blood of Valyria": {
+        "options": [
+            "2786: 82% like the card - Fabrizzio (Stephens edit) - Unique House Targaryen character only. ⏎ Attached …",
+            "2785: 70% like the card - Fabrizzio - Unique House Targaryen character only. ⏎ Attached …"
+        ],
+        "link": ""
+    },
+    "OatN #81 Yunkai": {
+        "options": [
+            "3021: 24% like the card - Ryan - Dominance Action: Discard 1 card from your hand an…",
+            "3022: 0% like the card - Stefan - Interrupt: When a non-unique character with printe…"
+        ],
+        "link": ""
+    },
+    "OatN #84 Toast in Secret": {
+        "options": [
+            "2996: 95% like the card - Ryan - Shadow (1). ⏎ Action: Reveal a Lord or Lady charac…",
+            "2995: 71% like the card - Ryan - Shadow (0). ⏎ Action: Reveal a House Targaryen Lor…"
+        ],
+        "link": ""
+    },
+    "OatN #85 Paxter Redwyne": {
+        "options": [
+            "3280: 29% like the card - Nils - Insight. ⏎ Reaction: after a character stands, it …",
+            "3281: 19% like the card - Ryan - Paxter Redwyne gets +1 STR for each other Small Co…",
+            "3285: 15% like the card - Stephen - Renown. ⏎ Reaction: After you win a challenge, pay…",
+            "3284: 13% like the card - Francisco - Insight. ⏎ The Redwyne Fleet gains Intimidate. ⏎ A…",
+            "3277: 11% like the card - Stephen - Reaction: After a characters STR is increased by a…",
+            "3279: 11% like the card - Ryan - Reduce the cost of each House Tyrell Warship locat…",
+            "3283: 10% like the card - Francisco - Renown. ⏎ Challenges Action: Kneel a House Redwyne…",
+            "3282: 8% like the card - Ryan - Reaction: After a player marshals or plays a Warsh…",
+            "3276: 0% like the card - Paul - Renown. ⏎ Challenges Action: Stand The Redwyne Fle…",
+            "3278: 0% like the card - Ryan - Each House Redwyne character you control gets +1 S…"
+        ],
+        "link": ""
+    },
+    "OatN #86 The Mad Maid": {
+        "options": [
+            "3397: 86% like the card - Ryan - Reaction: After a House Hightower character is kne…",
+            "3396: 15% like the card - Nils - Action: If you have 7 or more cards in your hand, …",
+            "3398: 10% like the card - Ryan - While you have a Prophecy agenda revealed, The Mad…"
+        ],
+        "link": ""
+    },
+    "OatN #92 Morningstar": {
+        "options": [
+            "3242: 54% like the card - Calv - Attached character gets +2 STR. ⏎ Reaction: When a…",
+            "3243: 31% like the card - Stephen - Character you control only. ⏎ Reaction: After you …"
+        ],
+        "link": ""
+    },
+    "OatN #93 Horn Hill": {
+        "options": [
+            "3168: 54% like the card - Ryan - During the first challenge you initiate each phase…",
+            "3167: 36% like the card - Stephen - During a Military or Power challenge in which you …",
+            "3166: 0% like the card - Ryan - Each House Tarly character you control gets +1 STR…"
+        ],
+        "link": ""
+    },
+    "OatN #96 Praying for Loras": {
+        "options": [
+            "3293: 80% like the card - Paul - Play only if you control a kneeling Lady character…",
+            "3294: 31% like the card - Paul - Play only if you control a Lady character. ⏎ Actio…",
+            "3292: 21% like the card - Ryan - Action: Kneel a Lady character you control to choo…",
+            "3291: 20% like the card - Ryan - Interrupt: When a House Tyrell character would be …"
+        ],
+        "link": ""
+    },
+    "SoS #1 Melisandre": {
+        "options": [
+            "169: 43% like the card - Richard - Reaction: After you win a challenge in which Melis…",
+            "168: 35% like the card - Ryan - Insight. ⏎ Reaction: After you win a challenge in …",
+            "167: 19% like the card - Ryan - Insight. ⏎ Challenges Action: During a Power chall…",
+            "173: 14% like the card - Stephen - Shadow (5). Insight. ⏎ Reaction: After a card you …",
+            "170: 14% like the card - Michael - Reaction: After you win a challenge with a partici…",
+            "172: 8% like the card - Stephen - Shadow (5). Insight. ⏎ Reaction: After a card you …",
+            "171: 8% like the card - Michael - Shadow (5). ⏎ Melisandre gets +1 STR for each powe…"
+        ],
+        "link": ""
+    },
+    "SoS #100 Alleras the Sphinx": {
+        "options": [
+            "1294: 44% like the card - Stephen - Reaction: After you lose a challenge in which a Ma…",
+            "1295: 29% like the card - Ryan - While Alleras the Sphinx has 3 or more link tokens…",
+            "1296: 15% like the card - Stefan - Stealth. ⏎ Marshaling Action: Discard a card at ra…"
+        ],
+        "link": ""
+    },
+    "SoS #104 The Warden of the East": {
+        "options": [
+            "2011: 72% like the card - Stephen - Lord character only. ⏎ Attached character gains th…",
+            "2010: 17% like the card - Nils - House Arryn - Lord characters only. ⏎ The attached…"
+        ],
+        "link": ""
+    },
+    "SoS #107 The Milkwater": {
+        "options": [
+            "1983: 8% like the card - Stephen - Reduce the cost of the first Wildling character yo…",
+            "1982: 0% like the card - Diego - While Milkwater is standing, each card in the shad…"
+        ],
+        "link": ""
+    },
+    "SoS #108 \"Widows Ford\"": {
+        "options": [
+            "1269: 83% like the card - Stephen - Shadow (0). ⏎ Reaction: After an attachment or loc…",
+            "1268: 69% like the card - Stephen - Reaction: After an attachment or location you cont…"
+        ],
+        "link": ""
+    },
+    "SoS #2 Edric Storm": {
+        "options": [
+            "81: 0% like the card - Ryan - Reaction: After you marshal Edric Storm, search th…",
+            "82: 0% like the card - Ryan (Stephen edit) - Shadow (2). ⏎ Reaction: After a R'hllor character …",
+            "83: 0% like the card - Ryan - Shadow (2). Stealth. ⏎ Reaction: After a R'hllor c…",
+            "84: 0% like the card - Ryan - Stealth. ⏎ Reaction: After you win a Power challen…",
+            "85: 0% like the card - Nils - Stealth. Shadow (3). ⏎ Reaction: After a character…",
+            "86: 0% like the card - Ryan - While you control a King character, it gets +1 STR…"
+        ],
+        "link": ""
+    },
+    "SoS #26 Ser Osfryd Kettleblack": {
+        "options": [
+            "842: 39% like the card - Evzen - While you have more cards in hand than each oppone…",
+            "841: 11% like the card - Evzen - Action: Kneel Ser Osfryd Kettleblack to choose a L…"
+        ],
+        "link": ""
+    },
+    "SoS #27 Gyles Rosby": {
+        "options": [
+            "687: 51% like the card - Nils - Forced Reaction: After you collect income, if you …",
+            "688: 48% like the card - Stefan - Gyles Rosby has -2 STR during the challenges phase…",
+            "690: 8% like the card - Alex - Reaction: After a player returns any amount of gol…",
+            "689: 0% like the card - Fabrizzio - Reaction: After a War or Siege plot card is reveal…"
+        ],
+        "link": ""
+    },
+    "SoS #33 Lannisport": {
+        "options": [
+            "750: 32% like the card - Paul (Stephen edit) - While an opponent has 0 cards in hand, the cannot …",
+            "749: 25% like the card - Paul - While an opponent has 0 cards in hand, that oppone…",
+            "751: 0% like the card - Paul - Each House Lannister Lord and Lady character you c…"
+        ],
+        "link": ""
+    },
+    "SoS #37 The Red Viper": {
+        "options": [
+            "1210: 86% like the card - Stephen - Renown. Shadow (4). ⏎ Action: During a challenge i…",
+            "1213: 76% like the card - Fabrizzio - Renown. Shadow (6). ⏎ Reaction: After you win a ch…",
+            "1216: 39% like the card - Nils - No Attachments controlled by opponents. Stealth. ⏎…",
+            "1214: 31% like the card - Stephen - Shadow (6). ⏎ Action: Discard a card from shadows …",
+            "1215: 26% like the card - Ryan - Intimidate. Renown. ⏎ Reaction: After you win a ch…",
+            "1211: 7% like the card - Evzen - Renown. ⏎ The Red Viper does not kneel to attack a…",
+            "1212: 0% like the card - Ryan - Small Council characters cannot be saved. ⏎ Reacti…"
+        ],
+        "link": ""
+    },
+    "SoS #38 Ser Manfrey Martell": {
+        "options": [
+            "1161: 10% like the card - Calv - Reaction: After you lose a challenge, you may trig…",
+            "1160: 0% like the card - Evzen - Shadow (3). ⏎ Reaction: After you lose dominance, …"
+        ],
+        "link": ""
+    },
+    "SoS #45 Yronwood": {
+        "options": [
+            "1249: 90% like the card - Stefan (Stephen Edit) - Interrupt: When the effects of an opponent's trigg…",
+            "1248: 67% like the card - Stefan - Interrupt: When the effects of an opponent's trigg…",
+            "1250: 11% like the card - Stefan - While you control a defending House Yronwood chara…",
+            "1251: 3% like the card - Ryan - While you are not the first player, each House Yro…"
+        ],
+        "link": ""
+    },
+    "SoS #49 Benjen Stark": {
+        "options": [
+            "2138: 81% like the card - Alex - Reaction: After you win a Military challenge in wh…",
+            "2137: 6% like the card - Fabrizzio - Stealth. ⏎ Reaction: After a Wildling or non-uniqu…"
+        ],
+        "link": ""
+    },
+    "SoS #50 Dirk": {
+        "options": [
+            "2158: 10% like the card - Hanno - No attachments except Weapon. ⏎ Reaction: After a …",
+            "2157: 0% like the card - Paul - Stealth. ⏎ Forced Reaction: After you win a challe…"
+        ],
+        "link": ""
+    },
+    "SoS #51 Wick Wittlestick": {
+        "options": [
+            "2290: 41% like the card - Fabrizzio - Shadow (3). ⏎ Reaction: After Wick Wittlestick com…",
+            "2289: 0% like the card - Ryan - Commander characters cannot be saved.",
+            "2291: 0% like the card - Nils - Shadow (2). ⏎ Action: Return Wick Whittlestick to …"
+        ],
+        "link": ""
+    },
+    "SoS #6 Shadow Assassin": {
+        "options": [
+            "282: 25% like the card - Stephen - Shadow (2). ⏎ Reaction: After Shadow Assassin come…",
+            "281: 18% like the card - Evzen - Shadow (-). ⏎ Action: Kneel a R'hllor character wi…"
+        ],
+        "link": ""
+    },
+    "SoS #60 When All is Darkest": {
+        "options": [
+            "2287: 72% like the card - Nils (Stephen edit) - Shadow (1). ⏎ Reaction: After a character enters p…",
+            "2286: 31% like the card - Nils - Reaction: After a character comes out of shadows d…"
+        ],
+        "link": ""
+    },
+    "SoS #61 Tytos Blackwood": {
+        "options": [
+            "2688: 0% like the card - Ryan - While a War plot card is revealed, increase the co…",
+            "2689: 0% like the card - Alex - Renown. ⏎ Interrupt: When a House Tully or Knight …"
+        ],
+        "link": ""
+    },
+    "SoS #69 Winterfell Kennels": {
+        "options": [
+            "2755: 37% like the card - Paul - Each Direwolf character you control does not keel …",
+            "2752: 18% like the card - Stephen - Reaction: After you win a challenge, kneel Winterf…",
+            "2756: 15% like the card - Diego (Stephen edit) - Each character you control gets +X STR. X is the t…",
+            "2753: 11% like the card - Diego - Each House Stark character you control with a Dire…",
+            "2754: 11% like the card - Diego - Each House Stark character you control with Direwo…",
+            "2750: 10% like the card - Ryan - Each character with a Direwolf attachment attached…",
+            "2749: 6% like the card - Diego - Direwolf attachments you control cannot stand. ⏎ I…",
+            "2751: 6% like the card - Ryan - Interrupt: When a character with a Direwolf attach…"
+        ],
+        "link": ""
+    },
+    "SoS #73 Magister Illyrio": {
+        "options": [
+            "2901: 59% like the card - Ryan - Insight. ⏎ Reaction: After you gain income, kneel …",
+            "2902: 0% like the card - Stefan - Magister Illyrio gains renown if another Lord or L…",
+            "2903: 0% like the card - Alasdair - Action: Sacrifice an attachment you control to sea…"
+        ],
+        "link": ""
+    },
+    "SoS #74 Harry Strickland": {
+        "options": [
+            "2867: 86% like the card - Stephen - Shadow (5). ⏎ Reaction: After Harry Strickland com…",
+            "2868: 17% like the card - Nils - Renown. Shadow (5). ⏎ Each card you control with s…",
+            "2865: 11% like the card - Paul - Harry Strickland cannot be declared as an attacker…",
+            "2866: 7% like the card - Paul - Renown. ⏎ Forced Reaction: After defenders are dec…"
+        ],
+        "link": ""
+    },
+    "SoS #78 White Graces": {
+        "options": [
+            "3016: 78% like the card - Stephen - Reaction: After White Graces is discarded from you…",
+            "3015: 4% like the card - Nils - Reaction: after an opponent applies Military claim…",
+            "3017: 0% like the card - Francisco - unique Grace characters you control gain +1 str an…"
+        ],
+        "link": ""
+    },
+    "SoS #80 Poisoned Locusts": {
+        "options": [
+            "2919: 84% like the card - Stephen - Opponent's character only. Terminal. ⏎ While attac…",
+            "2918: 18% like the card - Ryan - Opponent's character only. ⏎ Attached character ca…"
+        ],
+        "link": ""
+    },
+    "SoS #81 Slaver's Bay": {
+        "options": [
+            "2954: 5% like the card - Ryan - Action: Kill an Ally character you control to gain…",
+            "2955: 5% like the card - Ryan - Limited. ⏎ Each Astapor, Meereen, and Yunkai locat…"
+        ],
+        "link": ""
+    },
+    "SoS #83 Take To The Sky!": {
+        "options": [
+            "2971: 94% like the card - Paul (Stephen edit) - Play only if you control a Dragon character. ⏎ Int…",
+            "2970: 60% like the card - Paul - Play only if you control a Dragon character. ⏎ Int…"
+        ],
+        "link": ""
+    },
+    "SoS #84 Stallion Who Mounts the World": {
+        "options": [
+            "2965: 53% like the card - Stephen - Shadow (3). ⏎ Challenges Action: Kneel your factio…",
+            "2964: 34% like the card - Stephen - Shadow (2). ⏎ Reaction: After you win a Military c…",
+            "2963: 26% like the card - Stephen - Shadow (0). ⏎ Challenges Action: Return a Dothraki…",
+            "2962: 24% like the card - Ryan - Challenges Action: Kneel your faction card to put …",
+            "2966: 19% like the card - Stephen - Shadow (X). ⏎ Play only if there is a Summer plot …"
+        ],
+        "link": ""
+    },
+    "SoS #85 Baelor Brightsmile": {
+        "options": [
+            "3056: 31% like the card - Stephen - Renown. ⏎ Reaction: After you marshal Baelor Brigh…",
+            "3054: 21% like the card - Stephen - Dominance Action: Kneel Baelor Brightsmile to reve…",
+            "3053: 19% like the card - Stephen - Dominance Action: Stand Baelor Brightsmile to reve…",
+            "3055: 9% like the card - Stephen - Renown. ⏎ Reaction: After a House Tyrell card ente…",
+            "3052: 7% like the card - Nils - Reaction: after Baelor Brightsmile enters play, if…",
+            "3051: 7% like the card - Ryan - Bestow (3). No attachments except Weapon. ⏎ Action…"
+        ],
+        "link": ""
+    },
+    "SoS #95 Beneath the Petals": {
+        "options": [
+            "3063: 72% like the card - Stephen - Shadow (0). ⏎ Interrupt: When Beneath the Petals i…",
+            "3064: 17% like the card - Ryan - Shadow (1). ⏎ Challenges Action: During an Intrigu…"
+        ],
+        "link": ""
+    },
+    "SoS #98 Biter": {
+        "options": [
+            "1343: 18% like the card - Ryan - No attachments. ⏎ Reaction: After you win a Milita…",
+            "1341: 10% like the card - Stephen - Intimidate. ⏎ Reaction: After you win a challenge …",
+            "1340: 8% like the card - Hanno - Bestow (2). ⏎ Reaction: After the challenge phase …",
+            "1342: 5% like the card - Nils - Intimidate. Pillage. No Attachments. ⏎ Forced Inte…"
+        ],
+        "link": ""
+    }
+}

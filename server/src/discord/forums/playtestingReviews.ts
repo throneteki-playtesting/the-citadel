@@ -20,32 +20,30 @@ import { factionNames, isPreview, parseCardCode } from "common/utils";
 import { createSyncEmitter } from "@/services/sseService";
 import { syncImage } from "@/rendering/hosting";
 import { User } from "common/models/auth";
-import { Mutex } from "async-mutex";
+import { byCard, cardLock, orderedStep, syncBatch } from "@/concurrency";
 
-const syncReviewForumMutex = new Mutex();
+// A review's place among reviews: its card's, then its reviewer
+const byReview = (a: IPlaytestReview, b: IPlaytestReview) => byCard(a, b) || a.reviewer.localeCompare(b.reviewer);
+const reviewLock = (review: IPlaytestReview) => `${cardLock(review)}|${review.reviewer}`;
 
 export async function syncReviewForum(reviews: IPlaytestReview[], forced?: boolean): Promise<IPlaytestReview[]> {
-    const release = await syncReviewForumMutex.acquire();
-    try {
-        const context = await getPlaytestingReviewContext();
-        const results: IPlaytestReview[] = [];
-        for (const review of reviews) {
-            results.push(await syncReviewThread(review, context, forced));
-        }
-        return results;
-    } finally {
-        release();
-    }
+    return await syncBatch(reviews, {
+        emitterFor: (review) => createSyncEmitter("review", "discord", review),
+        context: getPlaytestingReviewContext,
+        key: reviewLock,
+        order: byReview,
+        work: (review, context, emitter) => syncReviewThread(review, context, emitter, forced)
+    });
 }
 
 async function syncReviewThread(
     review: IPlaytestReview,
-    context?: PlaytestingReviewContext,
+    context: PlaytestingReviewContext | undefined,
+    emitter: ReturnType<typeof createSyncEmitter<"review">>,
     forced: boolean = false
 ): Promise<IPlaytestReview> {
-    context = context ?? (await getPlaytestingReviewContext());
-    const emitter = createSyncEmitter("review", "discord", review);
     try {
+        context = context ?? (await getPlaytestingReviewContext());
         if (isMessageOutdated(review)) {
             emitter.progress("Syncing");
             logger.info(
@@ -257,15 +255,15 @@ async function createThreadFor(
     const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
     const autoArchiveDuration = context.channel.defaultAutoArchiveDuration;
 
-    const thread = await context.channel.threads.create({
-        name,
-        reason,
-        message,
-        appliedTags: tags.map((tag) => tag.id),
-        autoArchiveDuration
-    });
-
-    return thread;
+    return await orderedStep(() =>
+        context.channel.threads.create({
+            name,
+            reason,
+            message,
+            appliedTags: tags.map((tag) => tag.id),
+            autoArchiveDuration
+        })
+    );
 }
 async function getThreadFor(review: IPlaytestReview) {
     const { messageId: threadId } = extractFromURL(review._metadata.discord.messageUrl);

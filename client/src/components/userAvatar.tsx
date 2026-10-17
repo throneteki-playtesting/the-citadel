@@ -1,8 +1,9 @@
-import { ReactNode, Ref } from "react";
+import { Fragment, ReactNode, Ref } from "react";
 import { Avatar, AvatarProps } from "@heroui/react";
 import classNames from "classnames";
 import { useGetUserQuery } from "../api";
 import { BaseElementProps } from "../types";
+import { formatListParts } from "../utils";
 
 export default function UserAvatar({ className, style, discordId, title, size = "sm", ref, ...rest }: UserAvatarProps) {
     const { data: user, isLoading } = useGetUserQuery({ discordId });
@@ -13,7 +14,9 @@ export default function UserAvatar({ className, style, discordId, title, size = 
             src={user?.avatarUrl}
             name={user?.displayname?.charAt(0) ?? "?"}
             isDisabled={isLoading}
-            title={title ?? user?.displayname}
+            // `title={false}` opts out entirely - for a caller already wrapping this in its own
+            // TouchTooltip, the native title attribute duplicates it (both show up on hover).
+            title={title === false ? undefined : (title ?? user?.displayname)}
             className={classNames("shrink-0", className)}
             style={style}
             {...rest}
@@ -22,12 +25,19 @@ export default function UserAvatar({ className, style, discordId, title, size = 
 }
 
 // Avatar, display name, and whatever the caller wants pinned to the right of the row
-export function UserRow({ className, style, discordId, trailing }: UserRowProps) {
+export function UserRow({
+    className,
+    style,
+    discordId,
+    trailing,
+    avatarClassName,
+    textClassName = "text-sm"
+}: UserRowProps) {
     const { data: user } = useGetUserQuery({ discordId });
     return (
         <div className={classNames("flex items-center gap-2 min-w-0", className)} style={style}>
-            <UserAvatar discordId={discordId} />
-            <span className="text-sm min-w-0 truncate" title={user?.displayname}>
+            <UserAvatar discordId={discordId} className={avatarClassName} />
+            <span className={classNames("min-w-0 truncate", textClassName)} title={user?.displayname}>
                 {user?.displayname ?? "…"}
             </span>
             {trailing}
@@ -35,12 +45,38 @@ export function UserRow({ className, style, discordId, trailing }: UserRowProps)
     );
 }
 
-type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children"> &
+// People as a running sentence - "A, B and C" - wrapping between people rather than through them
+export function UserNameList({ className, style, discordIds }: UserNameListProps) {
+    return (
+        <span className={className} style={style}>
+            {formatListParts(discordIds).map((part, index) =>
+                part.type === "element" ? (
+                    <UserName key={part.value} discordId={part.value} />
+                ) : (
+                    <Fragment key={index}>{part.value}</Fragment>
+                )
+            )}
+        </span>
+    );
+}
+
+function UserName({ discordId }: { discordId: string }) {
+    const { data: user } = useGetUserQuery({ discordId });
+    return (
+        <span className="inline-flex items-center gap-1 align-middle whitespace-nowrap font-semibold">
+            <UserAvatar discordId={discordId} title={false} className="!size-5 text-[0.55rem]" />
+            {user?.displayname ?? "…"}
+        </span>
+    );
+}
+
+type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "children" | "title"> &
     Omit<BaseElementProps, "children"> & {
         ref?: Ref<HTMLSpanElement>;
         discordId: string;
-        /** Overrides the hover title, which is otherwise just the display name */
-        title?: string;
+        /** Overrides the hover title, which is otherwise just the display name - pass `false` to
+         *  suppress the native title entirely (eg. when already wrapped in a TouchTooltip). */
+        title?: string | false;
         /** HeroUI Avatar size; defaults to the small avatar used in rows and tallies */
         size?: AvatarProps["size"];
     };
@@ -48,4 +84,12 @@ type UserAvatarProps = Omit<AvatarProps, "src" | "name" | "isDisabled" | "childr
 type UserRowProps = Omit<BaseElementProps, "children"> & {
     discordId: string;
     trailing?: ReactNode;
+    /** Overrides the avatar's size classes - eg. shrinking it to match a smaller line of text. */
+    avatarClassName?: string;
+    /** Overrides the name's text size - defaults to text-sm. */
+    textClassName?: string;
+};
+
+type UserNameListProps = Omit<BaseElementProps, "children"> & {
+    discordIds: string[];
 };

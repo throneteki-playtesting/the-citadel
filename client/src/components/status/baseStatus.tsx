@@ -5,6 +5,7 @@ import { ReactNode, RefObject, useRef, useState } from "react";
 import { BaseElementProps } from "../../types";
 import { TouchTooltip } from "../touchTooltip";
 import { ActionItem } from "../actions/types";
+import { inertButtonClasses } from "../../constants";
 
 const TRACE_STROKE = 2;
 
@@ -202,6 +203,9 @@ export function BaseStatus({
             </div>
         );
 
+        // Dimmed rather than isDisabled while there is nothing to do, so its tooltip can still explain why
+        const isInert = !hasLongPress && !data.onPress && !data.href;
+
         const handleButtonPress = () => {
             clearTimer();
             if (!lpRef.current.triggered) {
@@ -240,7 +244,6 @@ export function BaseStatus({
                     size={size}
                     color={data.color}
                     style={style}
-                    isDisabled={!hasLongPress && !data.onPress && !data.href}
                     onPressStart={hasLongPress ? startTimer : undefined}
                     onPressEnd={hasLongPress ? clearTimer : undefined}
                     onPress={hasLongPress ? handleButtonPress : data.onPress}
@@ -249,9 +252,11 @@ export function BaseStatus({
                     target={!hasLongPress && data.href ? "_blank" : undefined}
                     rel={!hasLongPress && data.href ? "noreferrer" : undefined}
                     disableAnimation={!data.onPress && !data.href}
+                    aria-disabled={isInert || undefined}
                     className={classNames(
                         "font-sans",
                         { [interactiveClass]: !!(data.onPress || data.href) },
+                        isInert && inertButtonClasses,
                         elementClass
                     )}
                 >

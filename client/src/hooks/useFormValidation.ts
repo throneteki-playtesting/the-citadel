@@ -2,6 +2,17 @@ import { useCallback, useState } from "react";
 import Joi from "joi";
 import { toNormalizedError } from "../api/errors";
 
+// Each failing field's message by its schema path, for a form holding more than one set of errors at once
+export function schemaErrors(schema: Joi.Schema, data: unknown): Record<string, string> {
+    const { error } = schema.validate(data, { allowUnknown: true, abortEarly: false, errors: { label: false } });
+    return Object.fromEntries(
+        (error?.details ?? []).map((detail) => [
+            detail.path.join("."),
+            detail.message.replace(/^\w/, (c) => c.toUpperCase())
+        ])
+    );
+}
+
 // The wizard's schema & server-field-error handling, extracted for standalone forms: feed `errors`
 // to a HeroUI Form, gate submission on validate(), and pass API errors through isValidationError()
 export function useFormValidation(schema: Joi.Schema) {
@@ -9,19 +20,7 @@ export function useFormValidation(schema: Joi.Schema) {
 
     const validate = useCallback(
         (data: unknown): boolean => {
-            const { error } = schema.validate(data, {
-                allowUnknown: true,
-                abortEarly: false,
-                errors: { label: false }
-            });
-
-            const inputErrors: Record<string, string> = {};
-            if (error) {
-                error.details.forEach((detail) => {
-                    const inputId = detail.path.join(".");
-                    inputErrors[inputId] = detail.message.replace(/^\w/, (c) => c.toUpperCase());
-                });
-            }
+            const inputErrors = schemaErrors(schema, data);
             setErrors(inputErrors);
             return Object.keys(inputErrors).length === 0;
         },

@@ -17,6 +17,7 @@ import { dataService, discordService, logger } from "@/services";
 import { extractFromURL } from "../utils";
 import { toDiscord } from "common/richText/toDiscord";
 import { getThreadFor } from "./cardForum";
+import { inOrder, orderedStep } from "@/concurrency";
 
 const syncChecksMutex = new Mutex();
 
@@ -39,11 +40,7 @@ export async function syncReleaseChecks(slots: ISlot[]): Promise<ISlot[]> {
 
     const release = await syncChecksMutex.acquire();
     try {
-        const results: ISlot[] = [];
-        for (const slot of slots) {
-            results.push(targets.has(slot) ? await syncSlotChecks(slot) : slot);
-        }
-        return results;
+        return await Promise.all(slots.map((slot) => (targets.has(slot) ? syncSlotChecks(slot) : slot)));
     } catch (err) {
         logger.warn(new Error("[Discord] Failed to sync release checks", { cause: err }));
         return slots;
@@ -54,22 +51,23 @@ export async function syncReleaseChecks(slots: ISlot[]): Promise<ISlot[]> {
 
 /** Removes the check messages belonging to slots which no longer exist */
 export async function deleteReleaseChecks(slots: ISlot[]) {
-    for (const slot of slots) {
-        for (const entry of slot.statuses.design.checks.release.filter(
-            (check) => check._metadata?.discord?.messageUrl
-        )) {
-            try {
-                const message = await fetchMessage(entry._metadata.discord.messageUrl);
-                await message?.delete();
-            } catch (err) {
-                logger.warn(
-                    new Error(`[Discord] Failed to delete release check message for ${label(slot)}`, {
-                        cause: err
-                    })
-                );
-            }
-        }
-    }
+    const deletions = slots.flatMap((slot) =>
+        slot.statuses.design.checks.release
+            .filter((check) => check._metadata?.discord?.messageUrl)
+            .map(async (entry) => {
+                try {
+                    const message = await fetchMessage(entry._metadata.discord.messageUrl);
+                    await message?.delete();
+                } catch (err) {
+                    logger.warn(
+                        new Error(`[Discord] Failed to delete release check message for ${label(slot)}`, {
+                            cause: err
+                        })
+                    );
+                }
+            })
+    );
+    await Promise.all(deletions);
     return slots;
 }
 
@@ -119,21 +117,22 @@ async function syncSlotChecks(slot: ISlot): Promise<ISlot> {
         return slot;
     }
 
-    let changed = false;
-    for (const entry of pending) {
+    // Every check at once, though posted into the slot's thread in the order they were made
+    const results = await inOrder(pending, async (entry) => {
         try {
             await postOrEdit(slot, entry);
-            changed = true;
+            return true;
         } catch (err) {
             logger.warn(
                 new Error(`[Discord] Failed to sync release check for ${label(slot)} by ${entry.createdBy}`, {
                     cause: err
                 })
             );
+            return false;
         }
-    }
+    });
 
-    if (!changed) {
+    if (!results.some(Boolean)) {
         return slot;
     }
     return await persistMetadata(slot);
@@ -155,7 +154,8 @@ async function postOrEdit(slot: ISlot, entry: IReleaseCheck) {
 
     logger.info(`[Discord] Posting release check for ${label(slot)} by ${entry.createdBy}`);
     const thread = await threadFor(slot, entry);
-    const posted = await thread.send(await checkMessage(slot, entry, false));
+    const message = await checkMessage(slot, entry, false);
+    const posted = await orderedStep(() => thread.send(message));
     merge(entry, { _metadata: { discord: { messageUrl: posted.url, lastSynced: new Date() } } });
 }
 

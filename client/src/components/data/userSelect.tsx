@@ -22,8 +22,11 @@ const UserSelect = ({
     isDisabled,
     onChange
 }: UserSelectProps) => {
-    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } =
-        usePaginatedUsers(EXCLUDE_ANONYMOUS_USER_FILTER);
+    // A disabled picker can't be opened, so only the people already in it are needed
+    const { items, isLoading, isFetching, hasMore, handleLoadMore, search, setSearch } = usePaginatedUsers(
+        EXCLUDE_ANONYMOUS_USER_FILTER,
+        { skip: isDisabled }
+    );
     const { data: selectedData } = useGetUsersQuery(
         { filter: { discordId: { $in: selectedIds } } },
         { skip: selectedIds.length === 0 }
@@ -90,11 +93,12 @@ const UserSelect = ({
     );
 };
 
-// The avatar itself is the remove button - a cross over it on hover, kept off the Select's own press handling
+// The avatar is the remove control - a span, not a button, as the Select's trigger is already a <button>
 function RemovableUser({ user, onRemove }: { user: User; onRemove: () => void }) {
     return (
-        <button
-            type="button"
+        <span
+            role="button"
+            tabIndex={0}
             aria-label={`Remove ${user.displayname}`}
             title={`Remove ${user.displayname}`}
             className="group relative shrink-0 rounded-full cursor-pointer"
@@ -103,12 +107,19 @@ function RemovableUser({ user, onRemove }: { user: User; onRemove: () => void })
                 e.stopPropagation();
                 onRemove();
             }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRemove();
+                }
+            }}
         >
             <Avatar size="sm" src={user.avatarUrl} alt={user.displayname} className="pointer-events-none" />
             <span className="absolute inset-0 grid place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                 <FontAwesomeIcon icon={faXmark} />
             </span>
-        </button>
+        </span>
     );
 }
 

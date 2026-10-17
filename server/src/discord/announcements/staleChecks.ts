@@ -29,53 +29,61 @@ export async function notifyStaleChecks(project: IProject, cards: IPlaytestCard[
             return;
         }
 
+        // Every card looked at at once, then gathered in card order so each person's list reads the same every time
+        const found = await Promise.all(
+            [...cards]
+                .sort((a, b) => a.number - b.number)
+                .map(async (card): Promise<{ discordId: string; check: StaledCheck }[]> => {
+                    // Preview cards overwrite their own version, so nothing they replace was ever fresh
+                    if (isPreview(card)) {
+                        return [];
+                    }
+
+                    const [slot] = await dataService.slots.read({ project: project.number, number: card.number });
+                    if (!slot?.release || !confirming.has(slot.release.code)) {
+                        return [];
+                    }
+
+                    // Nothing to chase once the design is locked in - the check can no longer be answered again
+                    if (checksClosedBy(slot.statuses.design.status)) {
+                        return [];
+                    }
+
+                    // Only checks answering the version this update replaced have just gone stale - anything
+                    // older was already stale, and has been chased once before
+                    const previous = await dataService.cards.previous(card);
+                    if (!previous) {
+                        return [];
+                    }
+
+                    return slot.statuses.design.checks.release
+                        .filter((check) => check.version === previous.version)
+                        .map((entry) => ({
+                            discordId: entry.createdBy,
+                            check: {
+                                number: card.number,
+                                name: card.name,
+                                code: slot.release.code,
+                                from: previous.version,
+                                to: card.version,
+                                url: `${process.env.CLIENT_HOST}/project/${project.number}/${card.number}?releaseCheck=1`
+                            }
+                        }));
+                })
+        );
         const staled = new Map<string, StaledCheck[]>();
+        found
+            .flat()
+            .forEach(({ discordId, check }) => staled.set(discordId, [...(staled.get(discordId) ?? []), check]));
 
-        for (const card of cards) {
-            // Preview cards overwrite their own version, so nothing they replace was ever fresh
-            if (isPreview(card)) {
-                continue;
-            }
-
-            const [slot] = await dataService.slots.read({ project: project.number, number: card.number });
-            if (!slot?.release || !confirming.has(slot.release.code)) {
-                continue;
-            }
-
-            // Nothing to chase once the design is locked in - the check can no longer be answered again
-            if (checksClosedBy(slot.statuses.design.status)) {
-                continue;
-            }
-
-            // Only checks answering the version this update replaced have just gone stale - anything
-            // older was already stale, and has been chased once before
-            const previous = await dataService.cards.previous(card);
-            if (!previous) {
-                continue;
-            }
-
-            for (const entry of slot.statuses.design.checks.release.filter(
-                (check) => check.version === previous.version
-            )) {
-                const existing = staled.get(entry.createdBy) ?? [];
-                existing.push({
-                    number: card.number,
-                    name: card.name,
-                    code: slot.release.code,
-                    from: previous.version,
-                    to: card.version,
-                    url: `${process.env.CLIENT_HOST}/project/${project.number}/${card.number}?releaseCheck=1`
-                });
-                staled.set(entry.createdBy, existing);
-            }
-        }
-
-        for (const [discordId, checks] of staled) {
-            const delivered = await discordService.sendDirectMessage(discordId, messages.staled(checks));
-            if (!delivered) {
-                logger.verbose(`[Discord] Could not DM stale release checks to ${discordId}`);
-            }
-        }
+        await Promise.all(
+            [...staled].map(async ([discordId, checks]) => {
+                const delivered = await discordService.sendDirectMessage(discordId, messages.staled(checks));
+                if (!delivered) {
+                    logger.verbose(`[Discord] Could not DM stale release checks to ${discordId}`);
+                }
+            })
+        );
     } catch (err) {
         logger.warn(new Error("[Discord] Failed to notify stale release checks", { cause: err }));
     }

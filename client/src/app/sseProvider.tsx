@@ -5,51 +5,23 @@ import { ResourceDataMap, ResourceType, resourceIdFuncs } from "common/resources
 import { DeepPartial } from "common/types";
 import api from "../api";
 import { store } from "../api/store";
+import { mergeCachedEntity, patchEntityEverywhere } from "../api/cacheHelpers";
 import { getConnectionId } from "../api/connectionId";
 import { flushPending, invalidateFor, tagTypes } from "../api/tagManager";
 import { useRefreshToast } from "./refreshToast";
 import { useProactiveRefresh } from "../hooks/useProactiveRefresh";
-import { mergeWith, isPlainObject } from "lodash-es";
 import { refreshSession } from "../api/refresh";
 import { emitLogCreate, emitResync, hasLogListeners } from "../pages/admin/logs/logStream";
 import { ILogEntry } from "common/models/logs";
 
-function updateCachedEntity<T extends object>(draft: unknown, matchFn: (entity: T) => boolean, data: DeepPartial<T>) {
-    const update = (entity: T) =>
-        mergeWith(entity, data, (_entityVal, dataVal) => {
-            if (Array.isArray(dataVal)) return dataVal;
-            if (isPlainObject(dataVal) && Object.keys(dataVal).length === 0) return {};
-        });
-
-    if (Array.isArray(draft)) {
-        const entity = (draft as T[]).find(matchFn);
-        if (entity) update(entity);
-    } else if (draft !== null && typeof draft === "object" && "items" in draft) {
-        const entity = (draft as { items: T[] }).items.find(matchFn);
-        if (entity) update(entity);
-    } else {
-        update(draft as T);
-    }
-}
-
 function handlePatch<K extends ResourceType>(type: K, items: { id: string; data: DeepPartial<ResourceDataMap[K]> }[]) {
-    const idFunc = resourceIdFuncs[type];
-
     items.forEach(({ id, data }) => {
         if (!data || Object.keys(data).length === 0) return;
-
-        const invalidated = api.util.selectInvalidatedBy(store.getState(), [{ type, id }]);
-        invalidated.forEach(({ endpointName, originalArgs }) => {
-            try {
-                store.dispatch(
-                    api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                        updateCachedEntity(draft, (entity) => idFunc(entity as ResourceDataMap[K]) === id, data);
-                    })
-                );
-            } catch (error) {
-                console.error(`SSE cache update failed for "${type}" id "${id}"`, error);
-            }
-        });
+        try {
+            patchEntityEverywhere(type, id, (entity) => mergeCachedEntity(entity, data));
+        } catch (error) {
+            console.error(`SSE cache update failed for "${type}" id "${id}"`, error);
+        }
     });
 }
 
@@ -61,7 +33,7 @@ function handleMePatch(data: DeepPartial<ResourceDataMap["user"]>) {
         try {
             store.dispatch(
                 api.util.updateQueryData(endpointName as never, originalArgs as never, (draft) => {
-                    updateCachedEntity<ResourceDataMap["user"]>(draft, () => true, data);
+                    mergeCachedEntity(draft as unknown as ResourceDataMap["user"], data);
                 })
             );
         } catch (error) {
@@ -173,7 +145,11 @@ export function SSEProvider({ children }: { children: React.ReactNode }) {
                     }
                 }
 
-                items.forEach(({ data }) => invalidateFor(type, data as ResourceDataMap[ResourceType]));
+                // `silent` (a reaction, an approval) can't disrupt an in-progress edit, so it always
+                // applies immediately rather than possibly queuing behind the "new data" toast.
+                items.forEach(({ data }) =>
+                    invalidateFor(type, data as ResourceDataMap[ResourceType], { immediate: event.silent })
+                );
             } else if (event.status === "create") {
                 const type = event.type as ResourceType;
 

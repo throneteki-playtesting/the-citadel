@@ -6,7 +6,6 @@ import {
     Button,
     Card,
     Link,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -18,6 +17,7 @@ import {
     Skeleton,
     Tooltip
 } from "@heroui/react";
+import Modal from "../../components/modal";
 import RichText from "../../components/richText";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Faction, ILabeledCard } from "common/models/cards";
@@ -47,7 +47,8 @@ import { IconDefinition } from "@fortawesome/free-brands-svg-icons";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
 import { Link as RouterLink } from "react-router-dom";
-import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery, useGetUserQuery } from "../../api";
+import { useGetReviewsQuery, useGetCardsQuery, useGetCardQuery } from "../../api";
+import useUser from "../../hooks/useUser";
 import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { BaseElementProps } from "../../types";
@@ -323,7 +324,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                     </div>
                 </ScrollShadow>
             </div>
-            <Modal isOpen={isOutdatedModalOpen} onOpenChange={setIsOutdatedModalOpen} placement="center">
+            <Modal isOpen={isOutdatedModalOpen} onOpenChange={setIsOutdatedModalOpen}>
                 <ModalContent>
                     {(onClose) => (
                         <>
@@ -345,7 +346,7 @@ function ReviewSummaries({ className, style, project, number, dataSet }: ReviewS
                                 <Button
                                     as={RouterLink}
                                     to={`/review/submit?project=${project}&number=${number}`}
-                                    onClick={onClose}
+                                    onPress={onClose}
                                     color="primary"
                                 >
                                     Submit a new review
@@ -366,7 +367,7 @@ type ReviewSummariesProps = Omit<BaseElementProps, "children"> & {
 };
 
 function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: ReviewSummaryProps) {
-    const { data: user, isLoading: isUserLoading } = useGetUserQuery({ discordId: review.reviewer });
+    const { user, isLoading: isUserLoading } = useUser(review.reviewer);
     const { data: card, isLoading: isCardLoading } = useGetCardQuery({
         project: review.project,
         number: review.number,
@@ -475,7 +476,7 @@ function ReviewSummary({ className, style, review, getEditTarget, onOutdated }: 
                 <div className="flex flex-col-reverse md:flex-row">
                     <Timestamp
                         className="self-end px-2 md:mb-auto text-xs italic text-foreground/40"
-                        date={new Date(review.updated)}
+                        date={review.updated}
                     />
                     <div className="flex flex-wrap items-center gap-1">
                         <PermissionGate

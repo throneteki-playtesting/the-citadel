@@ -97,7 +97,7 @@ export default function PlaytestingUpdateMiniCard({
                         </div>
                         <Timestamp
                             className="ml-auto shrink-0 text-xs italic text-foreground/40 leading-none font-sans"
-                            date={new Date(playtestingUpdate.updated)}
+                            date={playtestingUpdate.updated}
                         />
                     </div>
                     <div className={classNames("flex flex-col gap-2", { "px-5": pinched })}>

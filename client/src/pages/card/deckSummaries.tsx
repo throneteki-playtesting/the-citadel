@@ -12,7 +12,8 @@ import { IDeck } from "common/models/decks";
 import { Code, IPlaytestCard } from "common/models/cards";
 import { sortBy } from "lodash-es";
 import { useMemo } from "react";
-import { useGetCardsQuery, useGetDecksQuery, useGetUserQuery } from "../../api";
+import { useGetCardsQuery, useGetDecksQuery } from "../../api";
+import useUser from "../../hooks/useUser";
 import CardImage from "../../components/cardImage";
 import CardStack from "../../components/cardStack";
 import { BaseElementProps } from "../../types";
@@ -108,7 +109,7 @@ type DeckSummariesProps = Omit<BaseElementProps, "children"> & {
 };
 
 function DeckSummary({ deck, code, card, otherCards }: DeckSummaryProps) {
-    const { data: user, isLoading } = useGetUserQuery({ discordId: deck.updatedBy });
+    const { user, isLoading } = useUser(deck.updatedBy);
 
     const faction = deck.faction;
     const agendas = [...deck.agendas].reverse();

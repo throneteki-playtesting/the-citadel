@@ -39,7 +39,7 @@ import { ScopeParams, useSearchParamsScope } from "../../../hooks/useSearchParam
 import { useIsPageActive } from "../../../hooks/useIsPageActive";
 import { useAuth } from "../../../hooks/useAuth";
 import { showApiErrorToast } from "../../../api/errors";
-import { designLane, EASE_STANDARD, inquirySeverityMeta, laneSteps } from "../../../constants";
+import { designLane, inquirySeverityMeta, laneSteps, NOTICE_TRANSITION } from "../../../constants";
 import StatusStepper from "../../../components/statusStepper";
 import StatusNotice from "../../../components/statusNotice";
 import ConfirmModal from "../../../components/confirmModal";
@@ -58,7 +58,6 @@ import { DraftActions, StackedVersion } from "../cardDetail";
 import { versionLabel } from "../versionLabel";
 
 const trackSteps = laneSteps(designLane);
-const NOTICE_TRANSITION = { duration: 0.2, ease: EASE_STANDARD } as const;
 const INQUIRY_URL_KEYS = ["severities", "open", "resolved"];
 
 /**

@@ -1,4 +1,5 @@
 import { SemanticVersion } from "common/utils";
+import { ISO8601String } from "common/types";
 import { useState, useEffect } from "react";
 import { SyncStatus, SyncType, SyncOperation } from "server/types";
 
@@ -6,6 +7,8 @@ export interface SyncState {
     status?: SyncStatus;
     step?: string;
     error?: string;
+    /** When what stopped it can be tried again, if that is known */
+    retryAt?: ISO8601String;
 }
 
 // Converts a union A | B into an intersection A & B via contravariant inference
@@ -21,7 +24,10 @@ const defaultStates: { [K in SyncType]: SyncListenerState<K> } = {
     card: { image: {}, discord: {}, github: {} },
     review: { discord: {} },
     playtestingUpdate: { github: { code: {}, data: {} }, discord: {} },
-    release: { github: { data: {} } }
+    release: { github: { data: {} } },
+    suggestion: { discord: {} },
+    project: { discord: {} },
+    slot: { discord: {}, preview: {} }
 };
 
 // One level of keyed SyncState, e.g. { code: SyncState, data: SyncState }
@@ -73,7 +79,7 @@ function connectProgress() {
                     partial = { status: "complete" };
                     break;
                 case "error":
-                    partial = { status: "error", error: event.error };
+                    partial = { status: "error", error: event.error, retryAt: event.retryAt };
                     break;
                 default:
                     return;
@@ -149,4 +155,13 @@ export function usePlaytestingUpdateSync(playtestingUpdate?: { project: number; 
 export function useReleaseSync(release?: { project: number; code: string }) {
     const id = release ? `${release.project}|${release.code}` : undefined;
     return useSyncListener("release", id);
+}
+export function useSuggestionSync(suggestion?: { id: string }) {
+    return useSyncListener("suggestion", suggestion?.id);
+}
+export function useProjectSync(project?: { number: number }) {
+    return useSyncListener("project", project && String(project.number));
+}
+export function useSlotSync(slot?: { project: number; number: number }) {
+    return useSyncListener("slot", slot && `${slot.project}|${slot.number}`);
 }

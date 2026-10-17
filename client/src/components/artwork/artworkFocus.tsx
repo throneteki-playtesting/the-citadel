@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button, Image, Link, Skeleton } from "@heroui/react";
@@ -15,7 +15,17 @@ const EDGE_PADDING = 24;
 
 // Driven from the trigger's own measured rectangle so there is no clipping ancestor to cut the returning
 // piece off. Portalled to the body so a fixed child positions against the viewport, not SlidingPages.
-export default function ArtworkFocus({ origin, src, url, alt, onClose }: ArtworkFocusProps) {
+export default function ArtworkFocus({
+    origin,
+    src,
+    url,
+    alt,
+    linkLabel = "Open original",
+    showSkeleton = true,
+    naturalSize,
+    children,
+    onClose
+}: ArtworkFocusProps) {
     const viewport = useViewport();
 
     const candidates = src ? [src, ...displayableUrls(url).filter((entry) => entry !== src)] : displayableUrls(url);
@@ -39,11 +49,20 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
         });
     };
 
-    const focused = {
-        top: EDGE_PADDING,
-        left: EDGE_PADDING,
+    const available = {
         width: Math.max(viewport.width - EDGE_PADDING * 2, 0),
         height: Math.max(viewport.height - EDGE_PADDING * 2 - 44, 0)
+    };
+    // Content with no intrinsic size of its own is given one, and sized as an image of that size would be - scaled
+    // down to fit, never up, and centred
+    const scale = naturalSize
+        ? Math.min(1, available.width / naturalSize.width, available.height / naturalSize.height)
+        : 1;
+    const fitted = naturalSize ? { width: naturalSize.width * scale, height: naturalSize.height * scale } : available;
+    const focused = {
+        top: EDGE_PADDING + (available.height - fitted.height) / 2,
+        left: EDGE_PADDING + (available.width - fitted.width) / 2,
+        ...fitted
     };
 
     const resting = origin && {
@@ -71,14 +90,20 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                         exit={resting}
                         transition={PIECE_TRANSITION}
                     >
-                        {state === "failed" ? (
+                        {children ? (
+                            <div className="size-full pointer-events-auto" onClick={(event) => event.stopPropagation()}>
+                                {children}
+                            </div>
+                        ) : state === "failed" ? (
                             <div className="flex flex-col items-center gap-2 text-white/40">
                                 <FontAwesomeIcon icon={faLinkSlash} className="text-3xl" />
                                 <span className="text-sm">Image unavailable</span>
                             </div>
                         ) : (
                             <>
-                                {state === "loading" && <Skeleton className="absolute inset-0 rounded-none" />}
+                                {state === "loading" && showSkeleton && (
+                                    <Skeleton className="absolute inset-0 rounded-none" />
+                                )}
                                 <Image
                                     removeWrapper
                                     src={candidates[attempt]}
@@ -110,9 +135,8 @@ export default function ArtworkFocus({ origin, src, url, alt, onClose }: Artwork
                                 anchorIcon={<FontAwesomeIcon icon={faUpRightFromSquare} className="ml-1.5" />}
                                 color="foreground"
                                 className="shrink-0 pointer-events-auto text-white/70 text-sm data-[hover=true]:text-white"
-                                onClick={(event) => event.stopPropagation()}
                             >
-                                Open original
+                                {linkLabel}
                             </Link>
                         )}
                     </motion.div>
@@ -158,5 +182,15 @@ type ArtworkFocusProps = {
     /** Where the piece really lives, for the caption's way out */
     url?: string;
     alt: string;
+    /** Text for the `url` link - defaults to "Open original", the wording that fits real artwork;
+     *  a caller pointing `url` somewhere else (eg. a ThronesDB card page) can say so instead. */
+    linkLabel?: string;
+    /** Whether a loading skeleton covers the piece while it loads - on by default (real artwork can
+     *  be a large, slow Drive image), a caller with a quick-loading image can opt out instead. */
+    showSkeleton?: boolean;
+    /** Drawn in place of an image - for a piece rendered on the page rather than loaded from a url */
+    children?: ReactNode;
+    /** The size `children` is drawn at, as an image's own would be - an image already has one */
+    naturalSize?: { width: number; height: number };
     onClose: () => void;
 };

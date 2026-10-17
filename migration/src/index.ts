@@ -21,6 +21,8 @@ import { migration as richTextMigration } from "./migrations/010_richText";
 import { migration as mergeReleaseStatusesMigration } from "./migrations/011_mergeReleaseStatuses";
 import { migration as renameProjectDataSyncPermissionMigration } from "./migrations/012_renameProjectDataSyncPermission";
 import { migration as slotRefinementMigration } from "./migrations/013_slotRefinement";
+import { migration as suggestionsReworkMigration } from "./migrations/014_suggestionsRework";
+import { migration as standardTemplateMigration } from "./migrations/015_standardTemplate";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
@@ -35,7 +37,9 @@ const ALL_MIGRATIONS: Migration[] = [
     richTextMigration,
     mergeReleaseStatusesMigration,
     renameProjectDataSyncPermissionMigration,
-    slotRefinementMigration
+    slotRefinementMigration,
+    suggestionsReworkMigration,
+    standardTemplateMigration
 ];
 
 const args = process.argv.slice(2);

@@ -1,10 +1,11 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleQuestion } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@heroui/react";
+import GuideBubble from "./guideBubble";
 import SectionTitle from "./sectionTitle";
 
 /** The description+button and title+icon-button rows shared by a tab's loaded view and its skeleton */
-export default function TabGuideHeader({ description, title, guideLabel, onOpenGuide }: TabGuideHeaderProps) {
+export default function TabGuideHeader({ description, title, guideLabel, onOpenGuide, isActive }: TabGuideHeaderProps) {
     return (
         <>
             <div className="flex items-start justify-between gap-2">
@@ -24,17 +25,7 @@ export default function TabGuideHeader({ description, title, guideLabel, onOpenG
                 <SectionTitle size="lg" className="flex-1">
                     {title}
                 </SectionTitle>
-                <Button
-                    isIconOnly
-                    color="primary"
-                    variant="flat"
-                    size="sm"
-                    aria-label={guideLabel}
-                    onPress={onOpenGuide}
-                    className="sm:hidden shrink-0"
-                >
-                    <FontAwesomeIcon icon={faCircleQuestion} />
-                </Button>
+                <GuideBubble label={guideLabel} onOpen={onOpenGuide} isActive={isActive} />
             </div>
         </>
     );
@@ -45,4 +36,6 @@ type TabGuideHeaderProps = {
     title: string;
     guideLabel: string;
     onOpenGuide: () => void;
+    /** False while the tab is not the one on show, so its bubble is not either */
+    isActive: boolean;
 };

@@ -48,16 +48,29 @@ export default class UsersRepository extends BasicRepository<"user"> {
         return Array.isArray(creating) ? data : data[0];
     }
 
-    public override async update(updating: User, upsert?: boolean, sync?: boolean, broadcast?: boolean): Promise<User>;
+    public override async update(
+        updating: User,
+        upsert?: boolean,
+        sync?: boolean,
+        broadcast?: boolean,
+        silent?: boolean
+    ): Promise<User>;
     public override async update(
         updating: User[],
         upsert?: boolean,
         sync?: boolean,
-        broadcast?: boolean
+        broadcast?: boolean,
+        silent?: boolean
     ): Promise<User[]>;
-    public override async update(updating: SingleOrArray<User>, upsert = true, sync = true, broadcast = true) {
+    public override async update(
+        updating: SingleOrArray<User>,
+        upsert = true,
+        sync = true,
+        broadcast = true,
+        silent = false
+    ) {
         let data = asArray(updating);
-        data = await super.update(data, upsert, broadcast);
+        data = await super.update(data, upsert, broadcast, silent);
         if (sync) {
             data = await this.sync(data);
         }

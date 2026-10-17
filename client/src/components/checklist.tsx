@@ -1,10 +1,11 @@
 import { HTMLAttributes, ReactNode, Ref } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircle, faCircleCheck } from "@fortawesome/free-regular-svg-icons";
-import { faListCheck } from "@fortawesome/free-solid-svg-icons";
+import { faCircleInfo, faListCheck, faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 import { AnimatePresence, motion } from "framer-motion";
 import classNames from "classnames";
 import { EASE_STANDARD } from "../constants";
+import { TouchTooltip } from "./touchTooltip";
 
 const ROW_TRANSITION = { duration: 0.25, ease: EASE_STANDARD } as const;
 
@@ -21,7 +22,7 @@ export default function Checklist({ children }: { children: ReactNode }) {
 }
 
 /** Rows are animated to help transition checklist items being added/removed */
-export function ChecklistRow({ done, children }: { done: boolean; children: ReactNode }) {
+export function ChecklistRow({ done, warning, children }: { done: boolean; warning?: boolean; children: ReactNode }) {
     return (
         <motion.li
             className="overflow-hidden"
@@ -31,19 +32,52 @@ export function ChecklistRow({ done, children }: { done: boolean; children: Reac
             transition={ROW_TRANSITION}
         >
             <div className="flex items-start gap-1.5 pt-1">
-                <ChecklistMark done={done} className="mt-0.5" />
+                <ChecklistMark done={done} warning={warning} className="mt-0.5" />
                 <span className={classNames("min-w-0", done && "text-foreground/40")}>{children}</span>
             </div>
         </motion.li>
     );
 }
 
-/** The same tick a row carries, on its own - a filled circle for done, an empty one for not */
-export function ChecklistMark({ done, className }: { done: boolean; className?: string }) {
+/** Rows drawn from plain data - a label, with a dimmed note on what is left beside it */
+export function ChecklistItems({ items }: { items: ChecklistItem[] }) {
+    return (
+        <Checklist>
+            {items.map(({ label, detail, hint, done, warning }) => (
+                <ChecklistRow key={label} done={done} warning={warning}>
+                    {label}
+                    {detail && <span className="text-foreground/40"> - {detail}</span>}
+                    {hint && <ChecklistHint hint={hint} />}
+                </ChecklistRow>
+            ))}
+        </Checklist>
+    );
+}
+
+/** A row's extra explanation, behind an info icon beside it - the same as a suggestion checklist rule's */
+function ChecklistHint({ hint }: { hint: string }) {
+    return (
+        <TouchTooltip content={<div className="max-w-64 py-1 text-xs leading-relaxed text-foreground/80">{hint}</div>}>
+            <span className="ml-1.5 cursor-help text-foreground/40 hover:text-foreground/70">
+                <FontAwesomeIcon icon={faCircleInfo} />
+            </span>
+        </TouchTooltip>
+    );
+}
+
+type ChecklistItem = { label: string; detail?: string; hint?: string; done: boolean; warning?: boolean };
+
+/** A row's tick on its own - filled for done, empty for not, a warning for done with a caveat */
+export function ChecklistMark({ done, warning, className }: { done: boolean; warning?: boolean; className?: string }) {
+    const isWarning = done && warning;
     return (
         <FontAwesomeIcon
-            icon={done ? faCircleCheck : faCircle}
-            className={classNames("shrink-0", done ? "text-success" : "text-foreground/30", className)}
+            icon={isWarning ? faTriangleExclamation : done ? faCircleCheck : faCircle}
+            className={classNames(
+                "shrink-0",
+                isWarning ? "text-warning" : done ? "text-success" : "text-foreground/30",
+                className
+            )}
         />
     );
 }

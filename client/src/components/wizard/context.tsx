@@ -1,15 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { DeepPartial } from "common/types";
+import Joi from "joi";
 import { createContext, useContext } from "react";
 
-export const WizardContext = createContext<WizardContextProps<any> | null>(null);
+export const WizardContext = createContext<WizardContextProps | null>(null);
 
-export function useWizard<T>(): WizardContextProps<T> {
+export function useWizard(): WizardContextProps {
     const context = useContext(WizardContext);
     if (!context) {
         throw new Error("Wizard components must be used within a Wizard provider");
     }
-    return context as WizardContextProps<T>;
+    return context;
+}
+
+// Scoped to the single `WizardPage` a field lives on, not the global current-page - every page is
+// mounted at once, so this tells "has MY page's Next/Submit been pressed" apart from any other's.
+export const WizardPageSubmitContext = createContext(false);
+
+export function useWizardPageSubmitted(): boolean {
+    return useContext(WizardPageSubmitContext);
 }
 
 // A schema re-check on a field may clear its own or a prior server verdict, but never an "external" one
@@ -36,6 +44,25 @@ export function countErrorsInDirection(
     return count;
 }
 
+// `flatten()` recurses into plain objects, so a NESTED field never appears as its own key - only its
+// leaves do. A path is "covered" if it's in the key set, or anything nested under it is.
+export function isPathCovered(path: string, flatKeys: readonly string[]): boolean {
+    return flatKeys.includes(path) || flatKeys.some((key) => key.startsWith(`${path}.`));
+}
+
+// The other direction of the same gap: a changed LEAF needs to also clear whatever error is keyed
+// on one of ITS ancestors, since a leaf changing is exactly what answers for its parent object.
+export function withPathAncestors(paths: readonly string[]): string[] {
+    const expanded = new Set<string>();
+    for (const path of paths) {
+        const parts = path.split(".");
+        for (let i = 1; i <= parts.length; i++) {
+            expanded.add(parts.slice(0, i).join("."));
+        }
+    }
+    return [...expanded];
+}
+
 export function titleizeFieldName(name: string): string {
     const leaf = name.split(".").pop() ?? name;
     const spaced = leaf.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ");
@@ -44,13 +71,11 @@ export function titleizeFieldName(name: string): string {
 
 export type WizardFieldMeta = { onPage: number; label: string };
 
-export type WizardContextProps<T> = {
+export type WizardContextProps = {
     id: string;
     currentPage: number;
     totalPages: number;
     setTotalPages: React.Dispatch<React.SetStateAction<number>>;
-    data: DeepPartial<T>;
-    setData: React.Dispatch<React.SetStateAction<DeepPartial<T>>>;
     isFirstPage: boolean;
     isLastPage: boolean;
     validationErrors: Record<string, string>;
@@ -64,4 +89,7 @@ export type WizardContextProps<T> = {
     setFieldMeta: React.Dispatch<React.SetStateAction<Record<string, WizardFieldMeta>>>;
     onPageSubmit: (data: Record<string, any>) => void;
     onPageBack: () => void;
+    /** Full-object validation against an arbitrary schema, outside the page-by-page Next/Submit flow -
+     *  same field-error mapping either way, just not scoped to "what did this page just submit". */
+    validateForm: (data: Record<string, any>, schemaOverride?: Joi.Schema) => boolean;
 };

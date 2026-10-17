@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
     addToast,
     Input,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
@@ -10,6 +9,7 @@ import {
     ScrollShadow,
     Spinner
 } from "@heroui/react";
+import Modal from "../../../components/modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
@@ -76,9 +76,7 @@ export default function PublishReleaseModal({
     return (
         <Modal
             isOpen={isOpen}
-            placement="center"
             size="3xl"
-            // "inside" fights the Wizard's own auto-height sizing; the grid below scrolls itself instead
             scrollBehavior="outside"
             onOpenChange={(isOpen) => !isOpen && onModalClose?.(false)}
         >

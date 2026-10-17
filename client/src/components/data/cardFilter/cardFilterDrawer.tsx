@@ -1,4 +1,4 @@
-import { Button, Chip, DrawerBody, DrawerFooter, DrawerHeader, Input, SharedSelection } from "@heroui/react";
+import { Button, DrawerBody, DrawerFooter, DrawerHeader, Input, SharedSelection } from "@heroui/react";
 import { useMemo, useState } from "react";
 import { ChallengeIcon, challengeIcons, Faction, factions, Icons, Type, types } from "common/models/cards";
 import { factionNames, typeNames, escapeRegExp } from "common/utils";
@@ -107,31 +107,16 @@ function compose(state: InternalState): CardFilterValue {
     };
 }
 
-// Shared by every "chips with an x to remove one" multiselect section below
-function renderChips(items: string[], onRemove: (item: string) => void) {
-    return (
-        <div className="flex flex-wrap gap-1 py-1">
-            {items.map((item) => (
-                <Chip key={item} variant="flat" onClose={() => onRemove(item)}>
-                    {item}
-                </Chip>
-            ))}
-        </div>
-    );
-}
-
 type MultiSelectFieldProps = {
-    // Omit when the search placeholder alone already makes the field's purpose clear
-    label?: string;
     placeholder: string;
     options: string[];
     value: string[];
     onChange: (value: string[]) => void;
 };
 
-// Search, per-chip clear and clear-all over a plain string option list. Already-selected values stay
-// visible even once filtered out by the search, so their chip never silently loses its label.
-function MultiSelectField({ label, placeholder, options, value, onChange }: MultiSelectFieldProps) {
+// Search over a plain string option list - already-selected values stay visible even once filtered
+// out by the search, so their chip never silently loses its label.
+function MultiSelectField({ placeholder, options, value, onChange }: MultiSelectFieldProps) {
     const [search, setSearch] = useState("");
 
     // SearchableMultiSelect requires object items (its "sentinel" trick needs a real reference to
@@ -148,41 +133,21 @@ function MultiSelectField({ label, placeholder, options, value, onChange }: Mult
     };
 
     return (
-        <div className="flex flex-col gap-1">
-            {(label || value.length > 0) && (
-                <div className="flex items-center justify-between">
-                    <div className="text-xs text-default-500">{label}</div>
-                    {value.length > 0 && (
-                        <button
-                            type="button"
-                            className="text-xs text-primary hover:underline"
-                            onClick={() => onChange([])}
-                        >
-                            Clear
-                        </button>
-                    )}
-                </div>
-            )}
-            <SearchableMultiSelect
-                size="sm"
-                placeholder={placeholder}
-                items={items}
-                getKey={(item) => item.key}
-                renderItem={(item) => item.key}
-                renderSelected={(selected) =>
-                    renderChips(
-                        selected.map((item) => item.key),
-                        (key) => onChange(value.filter((v) => v !== key))
-                    )
-                }
-                selectedKeys={value}
-                onSelectionChange={handleSelectionChange}
-                search={search}
-                onSearchChange={setSearch}
-                hasMore={false}
-                onLoadMore={() => undefined}
-            />
-        </div>
+        <SearchableMultiSelect
+            size="md"
+            radius="sm"
+            placeholder={placeholder}
+            items={items}
+            getKey={(item) => item.key}
+            renderItem={(item) => item.key}
+            getChipLabel={(item) => item.key}
+            selectedKeys={value}
+            onSelectionChange={handleSelectionChange}
+            search={search}
+            onSearchChange={setSearch}
+            hasMore={false}
+            onLoadMore={() => undefined}
+        />
     );
 }
 

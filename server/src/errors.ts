@@ -2,7 +2,7 @@ import { isCelebrateError } from "celebrate";
 import { StatusCodes } from "http-status-codes";
 import { logger } from "./services";
 import { NextFunction, Request, Response } from "express";
-import { ApiError, ApiFieldError, isApiError } from "./types";
+import { ApiError, ApiFieldError, isApiError } from "@/types";
 import { isEnvironment } from "./env";
 
 export class ApiErrorResponse extends Error implements ApiError {
@@ -10,7 +10,8 @@ export class ApiErrorResponse extends Error implements ApiError {
         public code: StatusCodes,
         public error: string,
         public message: string,
-        public cause?: unknown
+        public cause?: unknown,
+        public fields?: ApiFieldError[]
     ) {
         super();
     }

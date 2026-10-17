@@ -1,0 +1,622 @@
+import {
+    ActionRowBuilder,
+    AnyThreadChannel,
+    AttachmentBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    Channel,
+    ContainerBuilder,
+    DiscordAPIError,
+    ForumChannel,
+    Guild,
+    GuildForumTag,
+    GuildForumThreadMessageCreateOptions,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
+    MessageEditOptions,
+    MessageFlags,
+    resolveColor,
+    RESTJSONErrorCodes,
+    SeparatorBuilder,
+    TextDisplayBuilder,
+    ThreadChannel
+} from "discord.js";
+import { orderedStep, syncBatch, syncInOrder } from "@/concurrency";
+import { isEqual, merge } from "lodash-es";
+import { colors, extractFromURL } from "../utils";
+import { Code, countReactionsByType, ICardSuggestion } from "common/models/cards";
+import { dataService, discordService, logger, thronesDbCardPoolService } from "@/services";
+import { factionNames, renderCardSuggestion, THRONESDB_URL } from "common/utils";
+import { asPNG } from "@/rendering";
+import { checklistRules } from "common/designGuidelines/checklistRules";
+import { createSyncEmitter } from "@/services/sseService";
+import { toDiscord } from "common/richText/toDiscord";
+import { closeLegacyThread } from "./legacySuggestionThreads";
+
+export const FORUM_NAME = "suggestion-forum";
+// Discord's own cap on a thread's name
+const THREAD_NAME_MAX = 100;
+// Shared with server/src/discord/buttons/, which routes a click back here by this customId prefix
+export const SUGGESTION_REACTION_PREFIX = "suggestion-reaction";
+
+export function isSuggestionForumThread(channel: Channel | null | undefined): channel is AnyThreadChannel {
+    return !!channel?.isThread() && !!channel.parent?.name.endsWith(FORUM_NAME);
+}
+
+// Suggestions have no number, so they take their places in the order they were made
+const bySuggestion = (a: ICardSuggestion, b: ICardSuggestion) =>
+    new Date(a.created).getTime() - new Date(b.created).getTime() || (a.id ?? "").localeCompare(b.id ?? "");
+const suggestionLock = (suggestion: ICardSuggestion) => `suggestion|${suggestion.id}`;
+
+/** Shallow snapshot of the fields the "what changed" edit notice watches - deliberately not the whole
+ *  suggestion, so an edit to eg. pivotPoints or comparableCards never triggers a changed-fields message. */
+interface WatchedSnapshot {
+    [key: string]: unknown;
+    name: string;
+    text: string;
+    cost?: unknown;
+    faction: string;
+    type: string;
+    questions: unknown;
+}
+const WATCHED_LABELS: Record<keyof WatchedSnapshot, string> = {
+    name: "Name",
+    text: "Ability Text",
+    cost: "Cost",
+    faction: "Faction",
+    type: "Type",
+    questions: "Questions"
+};
+function watchedSnapshot(suggestion: ICardSuggestion): WatchedSnapshot {
+    return {
+        name: suggestion.card.name,
+        text: suggestion.card.text,
+        cost: suggestion.card.cost,
+        faction: suggestion.card.faction,
+        type: suggestion.card.type,
+        questions: suggestion.questions
+    };
+}
+/** Labels only, never values - the caller decides what to do with them */
+function diffSnapshot(previous: Record<string, unknown> | undefined, current: Record<string, unknown>): string[] {
+    if (!previous) {
+        return [];
+    }
+    return (Object.keys(WATCHED_LABELS) as (keyof WatchedSnapshot)[])
+        .filter((key) => !isEqual(previous[key], current[key]))
+        .map((key) => WATCHED_LABELS[key]);
+}
+
+/** Syncs a batch of submitted suggestions to their forum threads - creating one where none exists yet,
+ *  otherwise refreshing the starter message and posting a changed-fields notice when warranted. */
+export async function syncSuggestionForum(
+    suggestions: ICardSuggestion[],
+    forced?: boolean
+): Promise<ICardSuggestion[]> {
+    return await syncBatch(suggestions, {
+        emitterFor: (suggestion) => createSyncEmitter("suggestion", "discord", suggestion),
+        context: getSuggestionForumContext,
+        key: suggestionLock,
+        order: bySuggestion,
+        work: (suggestion, context, emitter) => syncSuggestionThread(suggestion, context, emitter, forced)
+    });
+}
+
+async function syncSuggestionThread(
+    suggestion: ICardSuggestion,
+    context: SuggestionForumContext,
+    emitter: ReturnType<typeof createSyncEmitter<"suggestion">>,
+    forced: boolean = false
+): Promise<ICardSuggestion> {
+    try {
+        if (forced || isMessageOutdated(suggestion)) {
+            const messageExists = !!suggestion._metadata?.discord?.messageUrl;
+            if (messageExists) {
+                emitter.progress("Refreshing");
+                logger.info(`[Discord] Refreshing suggestion thread for "${suggestion.card.name}" (${suggestion.id})`);
+                suggestion = await refreshSuggestionThread(suggestion, context);
+            } else {
+                emitter.progress("Creating");
+                logger.info(`[Discord] Creating suggestion thread for "${suggestion.card.name}" (${suggestion.id})`);
+                suggestion = await createSuggestionThread(suggestion, context);
+            }
+            [suggestion] = await dataService.suggestions.update([suggestion], true, false, false);
+            logger.verbose(
+                `[Discord] Synced suggestion "${suggestion.card.name}" (${suggestion.id}): ${suggestion._metadata?.discord?.messageUrl}`
+            );
+        }
+        emitter.complete(suggestion);
+    } catch (err) {
+        emitter.error("Failure");
+        logger.warn(
+            new Error(`[Discord] Failed to sync suggestion "${suggestion.card.name}" (${suggestion.id})`, {
+                cause: err
+            })
+        );
+    }
+    return suggestion;
+}
+
+function isMessageOutdated(suggestion: ICardSuggestion) {
+    return !suggestion._metadata?.discord?.lastSynced || suggestion.updated > suggestion._metadata.discord.lastSynced;
+}
+
+async function createSuggestionThread(
+    suggestion: ICardSuggestion,
+    context: SuggestionForumContext
+): Promise<ICardSuggestion> {
+    const submitter = await submitterName(suggestion);
+    const { options, snapshot } = await buildStarterMessage(suggestion, submitter);
+    const tag = context.factionTags[suggestion.card.faction];
+
+    const thread = await orderedStep(() =>
+        context.channel.threads.create({
+            name: threadNameFor(suggestion),
+            reason: `Suggestion discussion for ${suggestion.card.name} (submitted by ${submitter ?? suggestion.createdBy})`,
+            message: options,
+            appliedTags: tag ? [tag.id] : [],
+            autoArchiveDuration: context.channel.defaultAutoArchiveDuration
+        })
+    );
+
+    const starter = await thread.fetchStarterMessage();
+    await starter.pin();
+
+    merge(suggestion, {
+        _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date(), lastSyncedSnapshot: snapshot } }
+    });
+
+    const legacyUrl = suggestion._metadata?.discord?.legacyUrl;
+    if (legacyUrl) {
+        await closeLegacyThread(legacyUrl, thread.url);
+    }
+    return suggestion;
+}
+
+async function refreshSuggestionThread(
+    suggestion: ICardSuggestion,
+    context: SuggestionForumContext
+): Promise<ICardSuggestion> {
+    const { channelId, messageId } = extractFromURL(suggestion._metadata.discord.messageUrl);
+    const channel = await context.guild.channels.fetch(channelId);
+    if (!channel?.isThread()) {
+        throw new Error(`Found channel is not a thread with id: ${channelId}`);
+    }
+    if (channel.archived) {
+        await channel.setArchived(false);
+    }
+
+    const message = await channel.messages.fetch(messageId);
+    const { options, snapshot } = await buildStarterMessage(suggestion, await submitterName(suggestion));
+    await message.edit(options as MessageEditOptions);
+
+    const changed = diffSnapshot(suggestion._metadata?.discord?.lastSyncedSnapshot, snapshot);
+    if (changed.length > 0) {
+        await channel.send(updatedNotice(suggestion, changed));
+    }
+
+    merge(suggestion, { _metadata: { discord: { lastSynced: new Date(), lastSyncedSnapshot: snapshot } } });
+    return suggestion;
+}
+
+/** Edits the reaction buttons' labels in place - never a full rebuild, since that re-renders and
+ *  re-uploads the card image for what's only ever a count change. */
+export async function onSuggestionReactionChanged(suggestion: ICardSuggestion) {
+    await withSuggestionThread(suggestion, async (thread) => {
+        const starter = await thread.fetchStarterMessage();
+        if (!starter) {
+            return;
+        }
+        await starter.edit({ components: await buildComponents(suggestion, suggestionImageFilename(suggestion)) });
+    });
+}
+
+export function suggestionImageFilename(suggestion: ICardSuggestion): string {
+    return `${suggestion.id}.png`;
+}
+
+/** Posts who approved (or that approval was revoked) - the only two engagement events that reach Discord */
+export async function onSuggestionApproved(suggestion: ICardSuggestion) {
+    await withSuggestionThread(suggestion, async (thread) => {
+        const approvedBy = suggestion._metadata?.engagement?.approvedBy;
+        const heading = `### ✅ Suggestion Approved\n<@${approvedBy}> approved this suggestion.`;
+        await thread.send(notice(suggestion, heading, ["users"]));
+    });
+}
+
+export async function onSuggestionUnapproved(suggestion: ICardSuggestion) {
+    await withSuggestionThread(suggestion, async (thread) => {
+        const heading = "### Approval Removed\nThis suggestion's approval has been revoked.";
+        await thread.send(notice(suggestion, heading, []));
+    });
+}
+
+/** Says the suggestion is gone, then locks+archives - never deletes the thread, which holds the discussion */
+export async function onSuggestionDeleted(suggestion: ICardSuggestion) {
+    await withSuggestionThread(suggestion, async (thread) => {
+        const container = new ContainerBuilder()
+            .setAccentColor(resolveColor(colors[suggestion.card.faction]))
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(
+                    "### Suggestion Deleted\nThis suggestion has been deleted and no longer stands for consideration."
+                )
+            );
+        await thread.send({
+            flags: MessageFlags.IsComponentsV2,
+            allowedMentions: { parse: [] },
+            components: [container]
+        });
+        await thread.setLocked(true);
+        await thread.setArchived(true);
+        logger.info(`[Discord] Closed deleted suggestion thread for "${suggestion.card.name}" (${suggestion.id})`);
+    });
+}
+
+/** Silently archives the threads of suggestions that have just been archived - no notice, unlike every
+ *  other transition here. */
+export async function closeSuggestionThreads(suggestions: ICardSuggestion[]) {
+    await syncInOrder(
+        suggestions.filter((suggestion) => suggestion._metadata?.discord?.messageUrl),
+        {
+            key: suggestionLock,
+            work: async (suggestion) => {
+                try {
+                    const thread = await fetchThread(suggestion._metadata!.discord!.messageUrl!);
+                    if (thread && !thread.archived) {
+                        await thread.setArchived(true);
+                        logger.info(
+                            `[Discord] Archived suggestion thread for "${suggestion.card.name}" (${suggestion.id})`
+                        );
+                    }
+                } catch (err) {
+                    logger.warn(
+                        new Error(
+                            `[Discord] Failed to archive suggestion thread for "${suggestion.card.name}" (${suggestion.id})`,
+                            { cause: err }
+                        )
+                    );
+                }
+            }
+        }
+    );
+}
+
+/** Clears the stored thread of a suggestion whose thread was deleted from Discord, so it can sync again */
+export async function onSuggestionForumMessageDeleted(messageUrl: string) {
+    logger.info(`[Discord] Forum thread message deleted: ${messageUrl}`);
+
+    let suggestions = await dataService.suggestions.read({ _metadata: { discord: { messageUrl } } });
+    if (suggestions.length === 0) {
+        return;
+    }
+
+    for (const suggestion of suggestions) {
+        if (suggestion._metadata) {
+            // Where it was migrated from is a fact about the suggestion, not about the thread just lost
+            const legacyUrl = suggestion._metadata.discord?.legacyUrl;
+            suggestion._metadata.discord = legacyUrl ? { legacyUrl } : undefined;
+        }
+    }
+    suggestions = await dataService.suggestions.update(suggestions, true, false, false);
+
+    logger.info(`[Discord] Removed discord metadata for ${suggestions.length} suggestion(s)`);
+}
+
+interface SuggestionForumContext {
+    guild: Guild;
+    channel: ForumChannel;
+    factionTags: Record<string, GuildForumTag>;
+}
+
+async function getSuggestionForumContext(): Promise<SuggestionForumContext> {
+    const guild = await discordService.getGuild();
+    const errors: string[] = [];
+
+    const channel = guild.channels.cache.find(
+        (c) => c instanceof ForumChannel && c.name.endsWith(FORUM_NAME)
+    ) as ForumChannel;
+    if (!channel) {
+        errors.push(`"${FORUM_NAME}" channel does not exist or is not a forum`);
+    }
+
+    const factionTags: Record<string, GuildForumTag> = {};
+    for (const [faction, name] of Object.entries(factionNames)) {
+        const factionTag = channel?.availableTags.find((t) => t.name === name);
+        if (!factionTag) {
+            errors.push(`"${name}" tag is missing on forum "${FORUM_NAME}"`);
+        } else {
+            factionTags[faction] = factionTag;
+        }
+    }
+
+    if (errors.length > 0) {
+        throw new Error(`Failed to build context: ${errors.join(", ")}`);
+    }
+
+    return { guild, channel, factionTags };
+}
+
+/** Runs something against a suggestion's thread, if it has one - failures are logged and swallowed
+ *  rather than refusing the decision the caller already saved. */
+async function withSuggestionThread(suggestion: ICardSuggestion, action: (thread: ThreadChannel) => Promise<void>) {
+    const messageUrl = suggestion._metadata?.discord?.messageUrl;
+    if (!messageUrl) {
+        return;
+    }
+
+    try {
+        const thread = await fetchThread(messageUrl);
+        if (!thread) {
+            return;
+        }
+        if (thread.archived) {
+            await thread.setArchived(false);
+        }
+        await action(thread);
+    } catch (err) {
+        logger.warn(
+            new Error(`[Discord] Failed to update suggestion thread for "${suggestion.card.name}" (${suggestion.id})`, {
+                cause: err
+            })
+        );
+    }
+}
+
+/** The thread behind a stored url, or undefined where it has since been deleted */
+async function fetchThread(messageUrl: string) {
+    const { messageId: threadId } = extractFromURL(messageUrl);
+    const guild = await discordService.getGuild();
+    try {
+        const channel = await guild.channels.fetch(threadId);
+        if (!channel?.isThread()) {
+            return undefined;
+        }
+        return channel;
+    } catch (err) {
+        if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownChannel) {
+            return undefined;
+        }
+        throw err;
+    }
+}
+
+function threadNameFor(suggestion: ICardSuggestion) {
+    const name = suggestion.card.name;
+    return name.length > THREAD_NAME_MAX ? `${name.slice(0, THREAD_NAME_MAX - 1)}…` : name;
+}
+
+function viewOnCitadelButton(suggestion: ICardSuggestion) {
+    return new ButtonBuilder()
+        .setLabel("View on Citadel")
+        .setURL(`${process.env.CLIENT_HOST}/suggestions/${suggestion.id}`)
+        .setStyle(ButtonStyle.Link);
+}
+
+function addSuggestionButton() {
+    return new ButtonBuilder()
+        .setLabel("Add your own suggestion")
+        .setURL(`${process.env.CLIENT_HOST}/suggestions`)
+        .setStyle(ButtonStyle.Link);
+}
+
+function suggestionButton(suggestion: ICardSuggestion) {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(viewOnCitadelButton(suggestion));
+}
+
+function notice(suggestion: ICardSuggestion, heading: string, mentions: ("users" | "roles")[]) {
+    const container = new ContainerBuilder()
+        .setAccentColor(resolveColor(colors[suggestion.card.faction]))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading))
+        .addActionRowComponents(suggestionButton(suggestion));
+
+    return {
+        flags: MessageFlags.IsComponentsV2 as const,
+        allowedMentions: { parse: mentions },
+        components: [container]
+    };
+}
+
+function updatedNotice(suggestion: ICardSuggestion, changed: string[]) {
+    const heading = `### Suggestion Updated\n<@${suggestion.updatedBy}> updated: **${changed.join(", ")}**`;
+    return notice(suggestion, heading, ["users"]);
+}
+
+function labelsFor(options: { id: string; label: string }[], ids: string[]): string[] {
+    return ids.flatMap((id) => options.find((option) => option.id === id)?.label ?? []);
+}
+
+/** Resolves ThronesDB codes to a masked link to the card's page, falling back to the bare code where
+ *  one doesn't resolve - same tolerance the client's own ComparableCombosSection shows for that case. */
+async function resolveCardLinks(codes: string[]): Promise<string[]> {
+    if (codes.length === 0) {
+        return [];
+    }
+    const { items } = await thronesDbCardPoolService.search(
+        { code: { $in: codes as Code[] } },
+        undefined,
+        1,
+        codes.length
+    );
+    const byCode = new Map(items.filter((card) => card.code).map((card) => [card.code as string, card.label]));
+    return codes.map((code) => {
+        const name = byCode.get(code);
+        return name ? `[${name}](${THRONESDB_URL}/card/${code})` : code;
+    });
+}
+
+/** One plain count rather than a per-rule breakdown - `SlimChecklistNotice` already owns the detailed view */
+async function checklistSummary(suggestion: ICardSuggestion): Promise<string | undefined> {
+    const [plotMedian, settings] = await Promise.all([
+        thronesDbCardPoolService.getPlotMedianForCardType(suggestion.card.type),
+        dataService.settings.getByType("suggestions")
+    ]);
+    const results = checklistRules({
+        card: suggestion.card,
+        questions: suggestion.questions,
+        derived: suggestion.derived,
+        pivotPoints: suggestion.pivotPoints,
+        plotMedian,
+        rewardOptions: settings?.rewardOptions ?? [],
+        downsideOptions: settings?.downsideOptions ?? []
+    });
+    if (results.length === 0) {
+        return undefined;
+    }
+    const passed = results.filter((r) => r.status === "pass").length;
+    const flagged = results.filter((r) => r.status === "warn").length;
+    const parts = [passed > 0 && `${passed} passed`, flagged > 0 && `${flagged} flagged`].filter(Boolean) as string[];
+    return parts.length > 0 ? parts.join(", ") : undefined;
+}
+
+/** Renders as two icon-led groups (details, then context) separated by a rule, plus a checklist line -
+ *  each only shown when it has content. */
+async function addSuggestionDetails(container: ContainerBuilder, suggestion: ICardSuggestion): Promise<void> {
+    const answers: string[] = [];
+    const settings = await dataService.settings.getByType("suggestions");
+    const rewardLabels = labelsFor(settings?.rewardOptions ?? [], suggestion.questions.rewards);
+    if (rewardLabels.length > 0) {
+        answers.push(`🎁 **Reward Types:** ${rewardLabels.join(", ")}`);
+    }
+    const downsideLabels = labelsFor(settings?.downsideOptions ?? [], suggestion.questions.downsides);
+    if (downsideLabels.length > 0) {
+        answers.push(`⚠️ **Downsides:** ${downsideLabels.join(", ")}`);
+    }
+    const gameModes = suggestion.questions.intendedGameModes ?? [];
+    if (gameModes.length > 0) {
+        answers.push(`🎲 **Game Modes:** ${gameModes.join(", ")}`);
+    }
+    if (suggestion.questions.naturalTrigger !== undefined) {
+        answers.push(`🎯 **Natural Trigger:** ${suggestion.questions.naturalTrigger ? "Yes" : "No"}`);
+    }
+    if (suggestion.questions.repeatabilityRestricted !== undefined) {
+        answers.push(`🔁 **Safely Limited:** ${suggestion.questions.repeatabilityRestricted ? "Yes" : "No"}`);
+    }
+
+    const context: string[] = [];
+    if (suggestion.pivotPoints.length > 0) {
+        context.push(`📌 **Pivot Points**\n${suggestion.pivotPoints.map((point) => `- ${point}`).join("\n")}`);
+    }
+    const comparableLinks = await resolveCardLinks(suggestion.comparableCards);
+    if (comparableLinks.length > 0) {
+        context.push(`🔍 **Comparable Cards:** ${comparableLinks.join(", ")}`);
+    }
+    const comboLinks = await resolveCardLinks(suggestion.combosWith);
+    if (comboLinks.length > 0) {
+        context.push(`🤝 **Combos With:** ${comboLinks.join(", ")}`);
+    }
+
+    const checklist = await checklistSummary(suggestion);
+
+    let hasPriorSection = false;
+    const addSection = (content: string) => {
+        if (hasPriorSection) {
+            container.addSeparatorComponents(new SeparatorBuilder());
+        }
+        container.addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+        hasPriorSection = true;
+    };
+
+    if (answers.length > 0) {
+        addSection(`### Design Details\n${answers.join("\n")}`);
+    }
+    if (context.length > 0) {
+        addSection(`### Design Context\n${context.join("\n")}`);
+    }
+    if (checklist) {
+        addSection(`✅ **Design Checklist:** ${checklist}`);
+    }
+}
+
+/** The two live-count reaction buttons - a click resolves back to its suggestion via the clicked
+ *  message's own url (see server/src/discord/buttons/suggestionReaction.ts), never a suggestion id here. */
+function buildReactionRow(suggestion: ICardSuggestion): ActionRowBuilder<ButtonBuilder> {
+    const reactions = suggestion._metadata?.engagement?.reactions;
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${SUGGESTION_REACTION_PREFIX}:like`)
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("👍")
+            .setLabel(String(countReactionsByType(reactions, "like"))),
+        new ButtonBuilder()
+            .setCustomId(`${SUGGESTION_REACTION_PREFIX}:dislike`)
+            .setStyle(ButtonStyle.Secondary)
+            .setEmoji("👎")
+            .setLabel(String(countReactionsByType(reactions, "dislike")))
+    );
+}
+
+/** Sits above the card of a suggestion migrated from an older forum thread, pointing back at it */
+function legacyAlert(legacyUrl: string) {
+    return new ContainerBuilder()
+        .setAccentColor(resolveColor(colors.citadel))
+        .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(
+                "### 📜 Migrated from a previous thread\n" +
+                    `This suggestion was first posted and discussed in [an earlier thread](${legacyUrl}). ` +
+                    "Visit it for the previous conversation and context."
+            )
+        );
+}
+
+/** Everything but the rendered card image - lets a reaction-only change refresh the button labels
+ *  without re-rendering/re-uploading the PNG. */
+export async function buildComponents(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder[]> {
+    const legacyUrl = suggestion._metadata?.discord?.legacyUrl;
+    const container = await buildContainer(suggestion, filename);
+    return legacyUrl ? [legacyAlert(legacyUrl), container] : [container];
+}
+
+async function buildContainer(suggestion: ICardSuggestion, filename: string): Promise<ContainerBuilder> {
+    const heading = `## Card Suggestion\n<@${suggestion.createdBy}> has submitted **${suggestion.card.name}** for consideration.`;
+    const container = new ContainerBuilder()
+        .setAccentColor(resolveColor(colors[suggestion.card.faction]))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading));
+
+    if (suggestion.notes) {
+        const emojis = await discordService.getEmojiMap();
+        container.addTextDisplayComponents(
+            new TextDisplayBuilder().setContent(toDiscord(suggestion.notes, { emojis }))
+        );
+    }
+
+    container
+        .addSeparatorComponents(new SeparatorBuilder())
+        .addMediaGalleryComponents(
+            new MediaGalleryBuilder().addItems(new MediaGalleryItemBuilder().setURL(`attachment://${filename}`))
+        )
+        .addSeparatorComponents(new SeparatorBuilder());
+
+    await addSuggestionDetails(container, suggestion);
+
+    container.addActionRowComponents(
+        new ActionRowBuilder<ButtonBuilder>().addComponents(viewOnCitadelButton(suggestion), addSuggestionButton())
+    );
+    container.addActionRowComponents(buildReactionRow(suggestion));
+
+    return container;
+}
+
+async function submitterName(suggestion: ICardSuggestion) {
+    const [user] = await dataService.users.read({ discordId: suggestion.createdBy });
+    return user?.displayname;
+}
+
+async function buildStarterMessage(
+    suggestion: ICardSuggestion,
+    submitter?: string
+): Promise<{ options: GuildForumThreadMessageCreateOptions; snapshot: Record<string, unknown> }> {
+    const filename = suggestionImageFilename(suggestion);
+    const render = renderCardSuggestion(suggestion, submitter);
+    const { buffer } = await asPNG(render);
+    const attachment = new AttachmentBuilder(buffer, { name: filename });
+
+    return {
+        options: {
+            flags: MessageFlags.IsComponentsV2,
+            allowedMentions: { parse: ["users"] },
+            files: [attachment],
+            components: await buildComponents(suggestion, filename)
+        },
+        snapshot: watchedSnapshot(suggestion)
+    };
+}

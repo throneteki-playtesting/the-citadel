@@ -4,6 +4,7 @@ import { Button } from "@heroui/react";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCirclePlus } from "@fortawesome/free-solid-svg-icons";
+import { FLAT_BUTTON_CLASS } from "../constants";
 
 const RadialMenu = ({
     className,
@@ -17,6 +18,21 @@ const RadialMenu = ({
     styles: styleGroups
 }: RadialMenuProps) => {
     const [isActive, setIsActive] = useState(isOpen ?? false);
+    // Its items stay unmounted until first opened - a page of closed menus is otherwise a page of hidden buttons
+    const [hasOpened, setHasOpened] = useState(isActive);
+    if (isActive && !hasOpened) {
+        setHasOpened(true);
+    }
+    // Drawn closed for a frame after mounting, so even the first opening travels out from the centre
+    const [isPrimed, setIsPrimed] = useState(hasOpened);
+    useEffect(() => {
+        if (!hasOpened) {
+            return;
+        }
+        const frame = requestAnimationFrame(() => setIsPrimed(true));
+        return () => cancelAnimationFrame(frame);
+    }, [hasOpened]);
+    const isShown = isActive && isPrimed;
 
     useEffect(() => {
         setIsActive(isOpen ?? false);
@@ -34,6 +50,7 @@ const RadialMenu = ({
                 radius="full"
                 className={classNames(
                     "absolute transition-all duration-500 ease-soft-spring cursor-pointer z-50 pointer-events-auto text-tiny md:text-small md:size-10 lg:text-medium lg:size-12",
+                    FLAT_BUTTON_CLASS,
                     isActive ? "text-2xl md:text-3xl lg:text-4xl rotate-45" : "text-5xl md:text-6xl lg:text-7xl",
                     classGroups?.button
                 )}
@@ -71,17 +88,17 @@ const RadialMenu = ({
                     key={index}
                     className="absolute transition-all duration-500 ease-soft-spring pointer-events-none"
                     style={{
-                        transform: isActive
+                        transform: isShown
                             ? `translate(calc(${Math.cos(angle)} * 50cqw), calc(${Math.sin(angle)} * 50cqw))`
                             : "translate(0, 0)",
-                        opacity: isActive ? 1 : 0
+                        opacity: isShown ? 1 : 0
                     }}
                 >
-                    <div className={isActive ? "pointer-events-auto" : "pointer-events-none"}>{item}</div>
+                    <div className={isShown ? "pointer-events-auto" : "pointer-events-none"}>{item}</div>
                 </div>
             );
         });
-    }, [angleCalc, children, isActive]);
+    }, [angleCalc, children, isShown]);
 
     if (items.length === 0) {
         return null;
@@ -97,7 +114,7 @@ const RadialMenu = ({
             style={{ ...style, ...styleGroups?.wrapper }}
         >
             {trigger}
-            {items}
+            {hasOpened && items}
         </div>
     );
 };

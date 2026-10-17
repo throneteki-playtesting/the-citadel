@@ -20,6 +20,8 @@ export const challengeIcons = ["military", "intrigue", "power"] as const;
 export const plotStats = ["income", "initiative", "claim", "reserve"] as const;
 export type Faction = (typeof factions)[number];
 export type Type = (typeof types)[number];
+export const uniqueTypes: readonly Type[] = ["character", "attachment", "location"];
+export const costTypes: readonly Type[] = ["character", "attachment", "location", "event"];
 export type NoteType = (typeof noteTypes)[number];
 export type ChallengeIcon = (typeof challengeIcons)[number];
 export type PlotStat = (typeof plotStats)[number];
@@ -30,9 +32,7 @@ export type Strength = number | "X";
 export type PlotValue = number | "X";
 export type Quantity = 1 | 2 | 3;
 
-/**
- * Base released card, fitting structure of JSON Card Data Repository, minus certain fields
- */
+/** Base released card, fitting the JSON Card Data Repository's structure, minus certain fields */
 export interface ICard {
     code?: Code;
     cost?: Cost;
@@ -103,6 +103,8 @@ export interface IPlaytestCard extends ICard, IAuditable {
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;
+            /** A draft project's preview thread once closed - reopened if revealed again, or handed on to the initial card's */
+            previewUrl?: string;
         };
         imageUrl?: string;
     };
@@ -156,28 +158,220 @@ export interface ILabeledCard extends ICard {
     workInProgress: boolean;
 }
 
+export const gameModeTypes = ["Joust", "Melee"] as const;
+export type GameModeType = (typeof gameModeTypes)[number];
+
+/** Questions asked of a suggestion's submitter - distinct from `IDerivedFields`, which is computed
+ *  automatically from `card.text` and never asked of anyone. */
+export interface ISuggestionQuestions {
+    // Ids are dynamic/DB-driven (see common/models/settings.ts), not a compile-time-known union
+    rewards: string[];
+    downsides: string[];
+    /** Manual count of triggered abilities - gates naturalTrigger/repeatabilityRestricted and the
+     *  triggeredAbilityFocus checklist rule. */
+    triggeredAbilityCount?: number;
+    /** Whether any ability can trigger through normal rules alone, not only via another card's effect. */
+    naturalTrigger?: boolean;
+    /** Whether every recurring ability is kept in check (a one-time trigger, hard limit, or paid cost). */
+    repeatabilityRestricted?: boolean;
+    /** all card types - feeds the strength calc only for characters, otherwise a plain filter */
+    iconic?: boolean;
+    /** The game modes this design is meant to be played in - at least one once submitted */
+    intendedGameModes?: GameModeType[];
+}
+
+export type TriggerType =
+    | "Action"
+    | "Challenges Action"
+    | "Dominance Action"
+    | "Draw Action"
+    | "Marshaling Action"
+    | "Plot Action"
+    | "Standing Action"
+    | "Taxation Action"
+    | "Interrupt"
+    | "Reaction"
+    | "Forced Reaction"
+    | "Forced Interrupt"
+    | "When Revealed";
+
+export interface IDerivedKeyword {
+    keyword: string;
+    /** the "(X)" parameter, or the "except {trait}" suffix */
+    value?: number | string;
+}
+
+/** Always server-computed from `card.text` via `deriveFields()` - never asked of, or sent by, a client */
+export interface IDerivedFields {
+    triggerTypes: TriggerType[];
+    keywords: IDerivedKeyword[];
+}
+
+export const checklistRuleIds = [
+    "strGuideline",
+    "rewardFocus",
+    "downsideFocus",
+    "loyaltyConsistency",
+    "triggeredAbilityFocus",
+    "repeatabilityControl",
+    "plotBudget",
+    "textBoxLines",
+    "pivotPointBalance"
+] as const;
+export type ChecklistRuleId = (typeof checklistRuleIds)[number];
+
+export const reactionTypes = ["like", "dislike", "ignore"] as const;
+export type ReactionType = (typeof reactionTypes)[number];
+
+export const archiveReasons = ["usedInProject", "duplicate", "rejected", "other"] as const;
+export const archiveReasonLabels: Record<(typeof archiveReasons)[number], string> = {
+    usedInProject: "Used in a Project",
+    duplicate: "Duplicate",
+    rejected: "Rejected",
+    other: "Other"
+};
+
+/** Justification text per checklist rule, keyed by rule id - holds no pass/fail flag of its own,
+ *  since that's always `checklistRules()`'s call, recomputed server-side at submit time. */
+export type ChecklistJustifications = Partial<Record<ChecklistRuleId, string>>;
+
+export type ArchiveReason = (typeof archiveReasons)[number];
+
+export interface IArchivedInfo {
+    reason: ArchiveReason;
+    /** required when reason is "other" or "rejected" */
+    details?: string;
+    /** set when reason is "usedInProject" */
+    project?: { code: string; number: number };
+    archivedAt: Date;
+    /** undefined for the system archive at project-initialise time */
+    archivedBy?: string;
+}
+
 export interface ICardSuggestion extends IAuditable {
     /** Unique Id of this saved suggestion (undefined for new) */
     id?: string;
-    /** User who suggested */
-    user: {
-        discordId: string;
-        displayname: string;
-    };
     _metadata?: {
         discord?: {
             messageUrl?: string;
             lastSynced?: Date;
+            /** shallow snapshot of watched fields as of the last sync, for the "what changed" edit message */
+            lastSyncedSnapshot?: Record<string, unknown>;
+            /** the forum thread this suggestion was migrated from, before the Citadel managed its thread */
+            legacyUrl?: string;
+        };
+        /** Never client-writable - lives under `_metadata` so reacting/approving never bumps `updated` */
+        engagement?: {
+            reactions: Record<string, { type: ReactionType; reactedAt: Date }>;
+            approvedBy?: string;
+            approvedAt?: Date;
         };
     };
-    /** Discord Id array of users who like this suggestion */
-    likedBy: string[];
-    /** Discord Id of user who approved this suggestion */
-    approvedBy?: string;
-    /** Reason for this suggestion to be archived, or undefined if not archived */
-    archivedReason?: string;
-    /** Additional tags related to this suggestion */
-    tags: string[];
+    /** Present only once archived - see IArchivedInfo */
+    archived?: IArchivedInfo;
     /** Card design */
     card: ICard;
+    /** true until formally Submitted; only `card` needs to be valid while true */
+    draft: boolean;
+    /** Imported from the design team's spreadsheet with only its card - submitted, so visible to everyone,
+     *  but without `questions` until its designer completes it. Server-owned; completing it clears this. */
+    legacy?: boolean;
+    questions: ISuggestionQuestions;
+    /** always server-computed from card.text, never client-supplied */
+    derived: IDerivedFields;
+    /** Union of tags carried by every currently-selected reward/downside option - denormalized here so
+     *  filtering by tag is a plain string-array field. Always server-computed, never client-supplied. */
+    tags: string[];
+    /** justification text per rule the submitter has explained - see ChecklistJustifications */
+    checklistJustifications: ChecklistJustifications;
+    /** 0-many short callouts, each capped at PIVOT_POINT_MAX_LENGTH - see common/designGuidelines/pivotPoints */
+    pivotPoints: string[];
+    /** ThronesDB card codes */
+    comparableCards: string[];
+    /** ThronesDB card codes - printed cards only, same shape as comparableCards */
+    combosWith: string[];
+    notes?: string;
+}
+
+// Filter/sort-only field - a like tally computed server-side from the stored reactions map, never
+// itself stored. Shared here so the client can also type filters/sorts against it.
+export type ICardSuggestionFilterable = ICardSuggestion & { likes?: number };
+
+// GET /suggestions extras handled by dedicated server-side middleware, not the generic `filter` param -
+// `_metadata.engagement.reactions` is a Joi `.pattern()`-keyed object the generic deriver can't validate.
+export type ISuggestionsListQuery = {
+    unseen?: boolean;
+    /** Comma-separated ReactionType values; absent/empty falls back to "hide ignored-by-me" */
+    myReactions?: string;
+    /** Keeps suggestions ignored-by-me in, where neither of the above narrows by reaction - for counting the whole pool */
+    includeIgnored?: boolean;
+    /** Only legacy suggestions a project card may already have been developed from - MANAGE_SUGGESTIONS_ARCHIVE only */
+    developed?: boolean;
+    /** Only suggestions which fit a draft project's slot, named as "{project}:{slot}" - see fitsSlot */
+    fitsSlot?: string;
+    /** Only the suggestions in a draft project's pool, named by its number - for those who can draft in it */
+    pooledIn?: number;
+};
+
+/** Whether `viewerDiscordId` may see `suggestion` at all - a draft is only visible to the user who
+ *  created it, with no permission able to override that. */
+export function canViewSuggestion(suggestion: Pick<ICardSuggestion, "draft" | "createdBy">, viewerDiscordId?: string) {
+    return !suggestion.draft || suggestion.createdBy === viewerDiscordId;
+}
+
+/** Shared by the server route (the actual gate) and the client (to hide the affordance) - mirrors
+ *  artworkBlocker's shape. Says nothing about drafts; that falls out of canViewSuggestion alone. */
+export function suggestionReactionBlockReason(
+    suggestion: Pick<ICardSuggestion, "createdBy">,
+    reactorDiscordId?: string
+): string | undefined {
+    return !reactorDiscordId || suggestion.createdBy === reactorDiscordId
+        ? "You cannot react to your own suggestion"
+        : undefined;
+}
+
+/** A project card a legacy suggestion may already have been developed as - see GET /suggestions/:id/card-matches */
+export interface ISuggestionCardMatch {
+    project: { number: number; code: string; isDraft: boolean };
+    number: number;
+    /** Set for a draft project, whose slot holds each version as a separate candidate card - the one matched */
+    version?: SemanticVersion;
+    /** The card as it first entered the project - the version most likely to read like the suggestion. For a draft
+     *  project, the matched version itself. */
+    firstVersion: IPlaytestCard;
+    /** Other unarchived legacy suggestions this same card could equally have come from */
+    others: number;
+}
+
+export type ProjectCardRef = { project: { number: number; code: string }; number: number; version?: SemanticVersion };
+
+export function cardMatchLabel(match: ProjectCardRef) {
+    return `${match.project.code} #${match.number}`;
+}
+
+export function cardMatchKey(match: ProjectCardRef) {
+    return `${match.project.number}|${match.number}|${match.version ?? ""}`;
+}
+
+export interface ISuggestionCardMatches {
+    matches: ISuggestionCardMatch[];
+    /** Set once linked to a draft project's card instead, which archives the suggestion when that project begins */
+    linkedTo?: { project: { number: number; code: string }; number: number };
+}
+
+/** A thread of the suggestion forum, as broadcast whenever one is started, changed or removed - never stored,
+ *  only announced, so an open search of the forum's threads (a legacy suggestion being completed) refreshes */
+export interface ISuggestionForumThread {
+    id: string;
+}
+
+/** Shared by the approve route (the actual gate) and the approval panel (to explain the disabled button) */
+export function suggestionApprovalBlockReason(suggestion: Pick<ICardSuggestion, "legacy">): string | undefined {
+    return suggestion.legacy ? "Legacy suggestions must be completed before they can be approved" : undefined;
+}
+
+type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];
+
+export function countReactionsByType(reactions: SuggestionReactions | undefined, type: ReactionType): number {
+    return Object.values(reactions ?? {}).filter((entry) => entry.type === type).length;
 }

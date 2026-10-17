@@ -4,7 +4,7 @@ import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
 import { ReactElement } from "react";
 import Suggestions from "./suggestions";
-import CardEditorPage from "./cardEditor";
+import SuggestionDetail from "./suggestions/suggestionDetail";
 import Users from "./admin/users";
 import Roles from "./admin/roles";
 import Integrations from "./admin/integrations";
@@ -37,7 +37,7 @@ export const navItems: NavItem[] = [
         element: <Privacy />
     },
     {
-        path: "/project/:number",
+        path: "/project/:project",
         permission: Permission.READ_PROJECTS,
         element: <Project />
     },
@@ -63,21 +63,15 @@ export const navItems: NavItem[] = [
         ]
     },
     {
-        path: "/card-editor",
-        label: "Card Editor",
-        permission: Permission.USE_CARD_EDITOR,
-        element: <CardEditorPage />
-    },
-    {
         path: "/suggestions",
         label: "Suggestions",
-        permission: [
-            Permission.READ_SUGGESTIONS,
-            Permission.MAKE_SUGGESTIONS,
-            Permission.EDIT_SUGGESTIONS,
-            Permission.DELETE_SUGGESTIONS
-        ],
+        permission: Permission.READ_SUGGESTIONS,
         element: <Suggestions />
+    },
+    {
+        path: "/suggestions/:id",
+        permission: Permission.READ_SUGGESTIONS,
+        element: <SuggestionDetail />
     },
     {
         path: "/review/submit",

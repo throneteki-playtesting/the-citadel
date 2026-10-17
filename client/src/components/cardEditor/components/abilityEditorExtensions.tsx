@@ -1,6 +1,7 @@
 import { Extension, getMarkRange, Mark, Node } from "@tiptap/core";
 import HardBreak from "@tiptap/extension-hard-break";
 import { abilityIcons } from "common/utils";
+import { ABILITY_TEXT_SOURCE } from "common/designGuidelines/deriveFields";
 import { isPlotModifierLine, parsePlotModifiers, plotModifierCaptureKey, PlotModifiers } from "./plotModifiers";
 import { ICON_REGEX } from "./iconHtml";
 import { Fragment, MarkType, Node as ProseMirrorNode, Schema, Slice } from "prosemirror-model";
@@ -37,8 +38,6 @@ export const TriggeredAbility = Mark.create({
     })
 });
 
-const ABILITY_TEXT_SOURCE =
-    "(?:(?:Forced )?(?:Reaction|Interrupt)|(?:When Revealed)|(?:(?:Plot |Draw |Marshaling |Challenges |Dominance |Standing |Taxation )?Action)):";
 const ABILITY_TEXT_REGEX = new RegExp(`^(${ABILITY_TEXT_SOURCE})`);
 // Markdown bolding arriving by paste; the lookarounds keep it off a ***trait*** wrapper's inner asterisks
 const BOLD_ABILITY_TEXT_REGEX = new RegExp(`(?<!\\*)\\*\\*(${ABILITY_TEXT_SOURCE})\\*\\*(?!\\*)`);
@@ -48,7 +47,7 @@ const autoConvertKey = new PluginKey("autoTextConversions");
 const markRemovedKey = new PluginKey("markRemoved");
 const pastedNewLinesKey = new PluginKey("pastedNewLines");
 
-/** Stands in for inline nodes which carry no text (icons, hard breaks), so line text stays position-accurate */
+// Stands in for inline nodes which carry no text (icons, hard breaks), so line text stays position-accurate
 const NON_TEXT_PLACEHOLDER = "￼";
 
 type EditorLine = { start: number; end: number; text: string };
@@ -93,11 +92,8 @@ function isRangeFullyMarked(doc: ProseMirrorNode, from: number, to: number, type
     return fullyMarked;
 }
 
-/**
- * Keeps the triggered ability mark aligned to exactly the prefix each line currently matches, adding it once
- * the prefix is complete and dropping it again the moment the prefix is broken. Marks never shift positions,
- * so this stays valid for any replacements applied to the same transaction afterwards.
- */
+/** Keeps the triggered ability mark aligned to exactly the prefix each line currently matches, adding
+ *  it once complete and dropping it the moment it's broken. */
 function reconcileTriggeredAbility(tr: Transaction, doc: ProseMirrorNode, type: MarkType) {
     let modified = false;
 
@@ -120,10 +116,8 @@ function reconcileTriggeredAbility(tr: Transaction, doc: ProseMirrorNode, type: 
 
 type TextReplacement = { start: number; end: number; apply: () => void };
 
-/**
- * Gathers every match of `pattern` within a text node as a deferred replacement. Nothing is applied here
- * because overlapping and earlier replacements would shift the positions of those still to come.
- */
+/** Gathers every match of `pattern` within a text node as a deferred replacement - nothing is applied
+ *  here, since overlapping/earlier replacements would shift the positions of those still to come. */
 function collectReplacements(
     text: string,
     pos: number,
@@ -293,11 +287,8 @@ export const AbilityIcon = Node.create({
     })
 });
 
-/**
- * Plot modifiers belong to the chip row, not the document, so any line the user types (or pastes) which the
- * card renderer would draw as modifier shapes is lifted straight back out. Its values travel to the chip row
- * on the meta of the very transaction that removed them.
- */
+/** Plot modifiers belong to the chip row, not the document - any typed/pasted line the card renderer
+ *  would draw as modifier shapes is lifted straight back out, its values riding the removing transaction's meta. */
 export const PlotModifierCapture = Extension.create({
     name: "plotModifierCapture",
 

@@ -3,10 +3,14 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ContainerBuilder,
+    DiscordAPIError,
     ForumChannel,
     Guild,
     GuildForumTag,
     GuildForumThreadMessageCreateOptions,
+    RateLimitError,
+    RESTJSONErrorCodes,
+    ThreadChannel,
     MediaGalleryBuilder,
     MediaGalleryItemBuilder,
     Message,
@@ -16,16 +20,18 @@ import {
     Role,
     TextDisplayBuilder
 } from "discord.js";
-import { labelEmojis, colors, extractFromURL, TEXT_DISPLAY_MAX } from "../utils";
+import { labelEmojis, colors, extractFromURL, TEXT_DISPLAY_MAX, unicodeEmojis } from "../utils";
 import { toDiscord } from "common/richText/toDiscord";
 import { truncateHtml } from "common/richText/truncate";
 import { dataService, discordService, logger } from "@/services";
 import { IPlaytestCard } from "common/models/cards";
+import { previewUrlOf } from "common/models/slots";
 import { IPlaytestingUpdate, IProject } from "common/models/projects";
 import { factionNames, isInitial, isPreview } from "common/utils";
 import { getTimeLockedImageUrl, syncImage } from "@/rendering/hosting";
-import { capitalize, merge } from "lodash-es";
+import { capitalize, merge, omit } from "lodash-es";
 import { createSyncEmitter } from "@/services/sseService";
+import { byCard, cardLock, orderedStep, syncBatch } from "@/concurrency";
 import { Mutex } from "async-mutex";
 
 const syncCardForumMutex = new Mutex();
@@ -36,28 +42,23 @@ const syncCardForumMutex = new Mutex();
  * @param cards Cards to sync
  */
 export async function syncCardForum(cards: IPlaytestCard[], forced?: boolean): Promise<IPlaytestCard[]> {
-    const release = await syncCardForumMutex.acquire();
-    try {
-        const context = await getCardForumContext();
-        const results: IPlaytestCard[] = [];
-        for (const card of cards) {
-            results.push(await syncCardThread(card, context, forced));
-        }
-        return results;
-    } finally {
-        release();
-    }
+    return await syncBatch(cards, {
+        emitterFor: (card) => createSyncEmitter("card", "discord", card),
+        context: () => getCardForumContext(),
+        key: cardLock,
+        order: byCard,
+        work: (card, context, emitter) => syncCardThread(card, context, emitter, forced)
+    });
 }
 
 async function syncCardThread(
     card: IPlaytestCard,
-    context?: CardForumContext,
+    context: CardForumContext | undefined,
+    emitter: ReturnType<typeof createSyncEmitter<"card">>,
     forced: boolean = false
 ): Promise<IPlaytestCard> {
-    context = context ?? (await getCardForumContext());
-    const emitter = createSyncEmitter("card", "discord", card);
     try {
-        emitter.start();
+        context = context ?? (await getCardForumContext());
         if (forced || isMessageOutdated(card)) {
             // Drafts & Regular releases are treated differently:
             // - Draft posts a new message per revision (striking the old one) once actually outdated; a forced
@@ -183,12 +184,34 @@ export async function createInitial(card: IPlaytestCard, context?: CardForumCont
             // Close preview thread, if it exists
             await closeThreadFor(preview, context);
         }
+        await handOverPreview(card, starter.url, context);
 
         merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating initial thread for ${card.name} (${card.version})`, { cause: err });
     }
+}
+
+// A draft project's preview thread says where its card's initial thread is, then closes - the discussion stays
+async function handOverPreview(card: IPlaytestCard, initialUrl: string, context: CardForumContext) {
+    const previewUrl = card._metadata?.discord?.previewUrl;
+    if (!previewUrl) {
+        return;
+    }
+    try {
+        const thread = await threadAt(previewUrl, context.guild);
+        if (thread.archived) {
+            await thread.setArchived(false);
+        }
+        await thread.send(
+            previewNotice(card, `### Now in playtesting\nThe initial card has its own thread: ${initialUrl}`)
+        );
+        await lockAndArchive(thread, { ...card, latest: false }, context);
+    } catch (err) {
+        logger.warn(new Error(`[Discord] Failed to close the preview thread of ${card.name}`, { cause: err }));
+    }
+    delete card._metadata.discord.previewUrl;
 }
 
 export async function createNewLatest(card: IPlaytestCard, context?: CardForumContext) {
@@ -407,7 +430,11 @@ async function refreshDraft(card: IPlaytestCard, context: CardForumContext) {
 export async function onCardForumMessageDeleted(messageUrl: string) {
     logger.info(`[Discord] Forum thread message deleted: ${messageUrl}`);
 
-    let cards = await dataService.cards.read({ _metadata: { discord: { messageUrl } } });
+    await forgetSlotPreview(messageUrl);
+    let cards = await dataService.cards.read([
+        { _metadata: { discord: { messageUrl } } },
+        { _metadata: { discord: { previewUrl: messageUrl } } }
+    ]);
     if (cards.length === 0) return;
 
     for (const card of cards) {
@@ -418,9 +445,23 @@ export async function onCardForumMessageDeleted(messageUrl: string) {
         }
         emitter.complete(card);
     }
-    cards = await dataService.cards.update(cards, false, false, false);
+    cards = await dataService.cards.update(cards, false, false);
 
     logger.info(`[Discord] Removed discord metadata for ${cards.length} card(s)`);
+}
+
+// A preview thread deleted in Discord is no longer one - its slot is left unrevealed
+async function forgetSlotPreview(messageUrl: string) {
+    const slots = await dataService.slots.read({
+        "_metadata.preview._metadata.discord.messageUrl": messageUrl
+    } as never);
+    if (slots.length > 0) {
+        await dataService.slots.update(
+            slots.map((slot) => ({ ...slot, _metadata: omit(slot._metadata, "preview") })),
+            true,
+            false
+        );
+    }
 }
 
 /**
@@ -434,24 +475,144 @@ export function clearDiscordMetadata(cards: IPlaytestCard[]) {
     }
 }
 
-/**
- * Closes the forum threads of any provided cards which have one, retaining their discussion.
- * Note: Failures are logged rather than thrown, as a thread is never critical enough to fail its caller
- */
-export async function closeThreads(cards: IPlaytestCard[]) {
+async function threadAt(messageUrl: string, guild: Guild) {
+    const { channelId } = extractFromURL(messageUrl);
+    const channel = await guild.channels.fetch(channelId);
+    if (!channel?.isThread()) {
+        throw new Error(`Found channel is not a thread with id: ${channelId}`);
+    }
+    return channel;
+}
+
+function previewNotice(card: Pick<IPlaytestCard, "faction">, content: string) {
+    const container = new ContainerBuilder()
+        .setAccentColor(resolveColor(colors[card.faction]))
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+    return {
+        components: [container],
+        flags: MessageFlags.IsComponentsV2 as const,
+        allowedMentions: { parse: [] as never[] }
+    };
+}
+
+// Says why a preview is over in its thread, then locks and archives it - the discussion stays
+async function closePreview(preview: IPlaytestCard, context: CardForumContext, content: string) {
+    const thread = await threadAt(previewUrlOf(preview), context.guild);
+    if (thread.archived) {
+        await thread.setArchived(false);
+    }
+    await thread.send(previewNotice(preview, content));
+    await lockAndArchive(thread, preview, context);
+}
+
+const previewOf = (card: IPlaytestCard, messageUrl: string): IPlaytestCard => ({
+    ...omit(card, "_metadata"),
+    _metadata: { discord: { messageUrl, lastSynced: new Date() } }
+});
+
+// Only making a draft project's tag is shared work, so only that is done one at a time - the previews go side by side
+async function getRevealContext(project: number) {
     const release = await syncCardForumMutex.acquire();
     try {
-        const context = await getCardForumContext();
-        for (const card of cards) {
-            if (card._metadata?.discord?.messageUrl) {
-                await closeThreadFor(card, context);
-            }
-        }
-    } catch (err) {
-        logger.warn(new Error("[Discord] Failed to close card threads", { cause: err }));
+        return await getCardForumContext(project);
     } finally {
         release();
     }
+}
+
+/** Posts a draft project's card as a preview thread, closing the preview it replaces with a link to the new */
+export async function revealDraftCard(card: IPlaytestCard, replacing?: IPlaytestCard) {
+    const context = await getRevealContext(card.project);
+    const revealed = (await reopenPreview(card, context)) ?? (await createPreview(card, context));
+    const { messageUrl } = revealed._metadata.discord;
+    if (replacing) {
+        await closePreview(
+            replacing,
+            context,
+            `### Preview replaced\nThe preview of this slot is now [${revealed.name}](${messageUrl}).`
+        );
+    }
+    return previewOf(revealed, messageUrl);
+}
+
+/** Brings a preview up to date in place - its post, and its thread's name and tags - from the card as it is now */
+export async function updateReveal(card: IPlaytestCard, preview: IPlaytestCard) {
+    const context = await getRevealContext(card.project);
+    const refreshed = await refreshPreview(
+        { ...card, _metadata: { ...card._metadata, discord: { messageUrl: previewUrlOf(preview) } } },
+        context
+    );
+    return previewOf(refreshed, previewUrlOf(preview));
+}
+
+async function refreshPreview(card: IPlaytestCard, context: CardForumContext) {
+    card = await refreshCardMessage(card, context);
+    const thread = await threadAt(card._metadata.discord.messageUrl, context.guild);
+    const name = threadNameFor(card);
+    try {
+        if (thread.name !== name) {
+            await thread.setName(name);
+        }
+        await thread.setAppliedTags(tagsFor(card, context).map((tag) => tag.id));
+    } catch (err) {
+        if (!(err instanceof RateLimitError)) {
+            throw err;
+        }
+        logger.warn(
+            `[Discord] Can't rename the preview of ${card.name} yet - it will be tried again on the next update`
+        );
+    }
+    return card;
+}
+
+// A card revealed before keeps the thread it was closed with, so revealing it again opens that rather than a new one
+async function reopenPreview(card: IPlaytestCard, context: CardForumContext) {
+    const previewUrl = card._metadata?.discord?.previewUrl;
+    if (!previewUrl) {
+        return undefined;
+    }
+    try {
+        const thread = await threadAt(previewUrl, context.guild);
+        if (thread.archived) {
+            await thread.setArchived(false);
+        }
+        if (thread.locked) {
+            await thread.setLocked(false);
+        }
+        const reopened = await refreshPreview(
+            { ...card, _metadata: { ...card._metadata, discord: { messageUrl: previewUrl } } },
+            context
+        );
+        await thread.send(previewNotice(card, "### Preview reopened\nThis card is being previewed again."));
+        return reopened;
+    } catch (err) {
+        if (err instanceof DiscordAPIError && err.code === RESTJSONErrorCodes.UnknownChannel) {
+            return undefined;
+        }
+        throw err;
+    }
+}
+
+/** The card as it is once its preview thread is closed - no longer previewed, but still pointing to the thread */
+export function withClosedThread(card: IPlaytestCard, messageUrl: string): IPlaytestCard {
+    return { ...card, _metadata: { ...omit(card._metadata, "discord"), discord: { previewUrl: messageUrl } } };
+}
+
+/** The card without the link to a closed thread, as it is once that thread is open again as its preview */
+export function withoutClosedThread(card: IPlaytestCard): IPlaytestCard {
+    return { ...card, _metadata: omit(card._metadata, "discord") };
+}
+
+// What a preview thread is told as it is closed, by why
+export const PREVIEW_NOTICES = {
+    withdrawn: "### Preview withdrawn\nThis card is no longer being previewed.",
+    slotRemoved: "### Slot removed\nThis slot is no longer part of the project.",
+    projectDeleted: "### Project deleted\nThe project this card was drafted for has been deleted."
+};
+
+/** Closes a preview thread, saying it is withdrawn - its card, if there is one, is left as it is */
+export async function withdrawReveal(preview: IPlaytestCard, notice = PREVIEW_NOTICES.withdrawn) {
+    await closePreview(preview, await getRevealContext(preview.project), notice);
 }
 
 export async function deleteDraft(card: IPlaytestCard) {
@@ -499,7 +660,7 @@ interface CardForumContext {
 
 // Used to fetch all Discord forum data once, and re-use details.
 // Ensures that forum is valid before any alterations begin
-async function getCardForumContext(): Promise<CardForumContext> {
+async function getCardForumContext(revealing?: number): Promise<CardForumContext> {
     const forumName = "card-forum";
     const guild = await discordService.getGuild();
     const errors: string[] = [];
@@ -517,11 +678,17 @@ async function getCardForumContext(): Promise<CardForumContext> {
         errors.push('"Design Team" role does not exist');
     }
 
-    const projects = await dataService.projects.read({ active: true });
+    const projects = await dataService.projects.read([
+        { active: true },
+        ...(revealing === undefined ? [] : [{ number: revealing }])
+    ]);
     const projectTags: Record<number, GuildForumTag> = {};
     for (const project of projects) {
-        // Check project tag exists
-        const projectTag = channel?.availableTags.find((t) => t.name === project.code);
+        // Check project tag exists - a draft project being revealed has none until it is first revealed
+        let projectTag = channel?.availableTags.find((t) => t.name === project.code);
+        if (!projectTag && channel && project.number === revealing) {
+            projectTag = await addProjectTag(channel, project);
+        }
         if (!projectTag) {
             errors.push(`"${project.code}" tag is missing on forum "${forumName}"`);
         } else {
@@ -550,6 +717,16 @@ async function getCardForumContext(): Promise<CardForumContext> {
     }
 
     return { guild, channel, taggedRole, projectTags, factionTags, latestTag };
+}
+
+async function addProjectTag(channel: ForumChannel, project: IProject) {
+    const emoji = project.emoji && unicodeEmojis[project.emoji];
+    await channel.setAvailableTags([
+        ...channel.availableTags,
+        { name: project.code, ...(emoji && { emoji: { id: null, name: emoji } }) }
+    ]);
+    logger.info(`[Discord] Added the "${project.code}" tag to the card forum`);
+    return channel.availableTags.find((tag) => tag.name === project.code);
 }
 
 function createMessageButtons(card: IPlaytestCard, previousUrl?: string) {
@@ -597,6 +774,20 @@ async function createCardContainer(card: IPlaytestCard, heading: string): Promis
     );
 }
 
+// The small print of a card made from a suggestion - which one, and a link to it
+async function suggestionFooter(card: IPlaytestCard) {
+    if (!card.suggestionId) {
+        return undefined;
+    }
+    const [suggestion] = await dataService.suggestions.read({ id: card.suggestionId });
+    if (!suggestion) {
+        return undefined;
+    }
+    const name = suggestion.card.name.replace(/[[\]]/g, "");
+    const author = suggestion.createdBy ? ` by <@${suggestion.createdBy}>` : "";
+    return `-# From the suggestion [${name}](${process.env.CLIENT_HOST}/suggestions/${suggestion.id})${author}`;
+}
+
 // Thread helper functions
 function threadNameFor(card: IPlaytestCard) {
     const cardLabel = `${card.name} (${isPreview(card) ? "Preview" : card.version})`;
@@ -614,7 +805,9 @@ export async function getThreadFor(card: IPlaytestCard) {
             logger.info(
                 `[Discord] previous card for draft card "${card.code}" is missing thread. Attempting to create...`
             );
-            previous = await syncCardThread(previous);
+            const emitter = createSyncEmitter("card", "discord", previous);
+            emitter.start();
+            previous = await syncCardThread(previous, undefined, emitter);
         }
 
         target = previous;
@@ -643,21 +836,18 @@ async function createThreadFor(
     logger.info(`[Discord] Creating thread for ${card.name} (${card.version})`);
     const name = threadNameFor(card);
     const reason = `Design Team discussion for ${card.code} - ${name}`;
-    const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
-    if (card.latest && !isPreview(card)) {
-        tags.unshift(context.latestTag);
-    }
+    const tags = tagsFor(card, context);
     const autoArchiveDuration = context.channel.defaultAutoArchiveDuration;
 
-    const thread = await context.channel.threads.create({
-        name,
-        reason,
-        message,
-        appliedTags: tags.map((tag) => tag.id),
-        autoArchiveDuration
-    });
-
-    return thread;
+    return await orderedStep(() =>
+        context.channel.threads.create({
+            name,
+            reason,
+            message,
+            appliedTags: tags.map((tag) => tag.id),
+            autoArchiveDuration
+        })
+    );
 }
 async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
     try {
@@ -665,22 +855,32 @@ async function closeThreadFor(card: IPlaytestCard, context: CardForumContext) {
         logger.info(
             `[Discord] Closing thread for ${card.name} (${card.version}): ${card._metadata.discord.messageUrl}`
         );
-        if (thread.archived) {
-            await thread.setArchived(false);
-        }
-        if (!thread.locked) {
-            await thread.setLocked(true);
-        }
-        const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
-        if (card.latest && !isPreview(card)) {
-            tags.unshift(context.latestTag);
-        }
-        await thread.setAppliedTags(tags.map((tag) => tag.id));
-        await thread.setArchived(true);
-        return thread;
+        return await lockAndArchive(thread, card, context);
     } catch (err) {
         logger.warn(new Error(`[Discord] Failed to close thread for ${card.name} (${card.version})`, { cause: err }));
     }
+}
+
+type ThreadedCard = Pick<IPlaytestCard, "project" | "faction" | "latest" | "version">;
+
+async function lockAndArchive(thread: ThreadChannel, card: ThreadedCard, context: CardForumContext) {
+    if (thread.archived) {
+        await thread.setArchived(false);
+    }
+    if (!thread.locked) {
+        await thread.setLocked(true);
+    }
+    await thread.setAppliedTags(tagsFor(card, context).map((tag) => tag.id));
+    await thread.setArchived(true);
+    return thread;
+}
+
+function tagsFor(card: ThreadedCard, context: CardForumContext) {
+    const tags = [context.projectTags[card.project], context.factionTags[card.faction]];
+    if (card.latest && !isPreview(card)) {
+        tags.unshift(context.latestTag);
+    }
+    return tags;
 }
 
 const messages = {
@@ -690,17 +890,19 @@ const messages = {
         context: CardForumContext
     ): Promise<GuildForumThreadMessageCreateOptions> {
         const heading =
-            "## Card Reveal" +
-            `\n<@&${context.taggedRole.id}> See the early preview of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} below. Feel free to give your quick feedback for us to consider prior to public reveal.` +
-            "\n\n*Please keep in mind that this card preview is subject to major change or replacement prior to the initial playtesting release, and should be treated more as an indication of direction rather than balance - opinions on balance are fine, but are not a focus at this point.*";
+            `## ${project.emoji ? `:${project.emoji}: ` : ""}${project.name} #${card.number} - ${card.name}` +
+            `\n<@&${context.taggedRole.id}> Early preview of **${project.code} #${card.number}** - quick feedback is welcome before the public reveal.` +
+            "\n\n:warning: *Subject to major change or replacement before the initial release. Feedback on direction matters more than balance.*";
 
         const container = await createCardContainer(card, heading);
-        const buttons = createMessageButtons(card);
-        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+        const footer = await suggestionFooter(card);
+        if (footer) {
+            container.addTextDisplayComponents(new TextDisplayBuilder().setContent(footer));
+        }
         return {
             flags: MessageFlags.IsComponentsV2,
             allowedMentions: { parse: ["roles"] },
-            components: [container, buttonRow]
+            components: [container]
         };
     },
     async initial(

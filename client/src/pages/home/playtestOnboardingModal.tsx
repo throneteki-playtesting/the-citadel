@@ -1,6 +1,7 @@
 import { faLayerGroup, faGamepad, faScroll } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { Button, Link, Modal, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import { Button, Link, ModalBody, ModalContent, ModalHeader } from "@heroui/react";
+import Modal from "../../components/modal";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { BaseElementProps } from "../../types";
 import { THRONESDB_URL, PLAYTESTING_TIT_URL } from "common/utils";
@@ -41,14 +42,7 @@ const steps: { icon: IconDefinition; title: string; description: React.ReactNode
 
 export default function PlaytestOnboardingModal({ isOpen, onClose }: PlaytestOnboardingModalProps) {
     return (
-        <Modal
-            isOpen={isOpen}
-            placement="center"
-            size="2xl"
-            scrollBehavior="inside"
-            className="max-h-[90vh]"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="2xl" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 {(close) => (
                     <>

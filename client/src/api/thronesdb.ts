@@ -3,6 +3,7 @@ import { Code, ILabeledCard } from "common/models/cards";
 import { buildUrl } from "common/utils";
 import { IDecklist } from "common/models/decks";
 import { UUID } from "common/models/shared";
+import { IGetRequest, IGetResponse } from "server/types";
 
 const thronesdbApi = createApi({
     reducerPath: "thronesdbApi",
@@ -11,6 +12,14 @@ const thronesdbApi = createApi({
         getTDBCard: builder.query<ILabeledCard, Code>({
             query: (code) => {
                 const url = buildUrl(`card/${code}`);
+                return { url, method: "GET" };
+            }
+        }),
+        // Same filter/orderBy/page/perPage shape as every other list query - the pool cache/paging
+        // live server-side in thronesDbCardPoolService, since ThronesDB's own API has neither.
+        searchTDBCards: builder.query<IGetResponse<ILabeledCard>, IGetRequest<ILabeledCard> | void>({
+            query: (options) => {
+                const url = buildUrl("cards", options ?? undefined);
                 return { url, method: "GET" };
             }
         }),
@@ -23,6 +32,12 @@ const thronesdbApi = createApi({
     })
 });
 
-export const { useGetTDBCardQuery, useLazyGetTDBCardQuery, useGetTDBDeckQuery, useLazyGetTDBDeckQuery } = thronesdbApi;
+export const {
+    useGetTDBCardQuery,
+    useLazyGetTDBCardQuery,
+    useSearchTDBCardsQuery,
+    useGetTDBDeckQuery,
+    useLazyGetTDBDeckQuery
+} = thronesdbApi;
 
 export default thronesdbApi;

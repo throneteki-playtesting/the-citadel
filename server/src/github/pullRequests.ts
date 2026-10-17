@@ -29,16 +29,16 @@ export async function syncCodePullRequests(forced?: boolean) {
             _metadata: { github: { status: "closed" } },
             implemented: false
         });
-        const context = githubService.getContext();
 
+        // Created and started before the context resolves, so a context failure still fails them properly.
         const emitters = new Map(
             playtestingUpdates.map((pt) => [pt, createSyncEmitter("playtestingUpdate", "github.code", pt)])
         );
         emitters.forEach((e) => e.start());
 
-        const branches = { head: `${context.owner}:${DEVELOPMENT_BRANCH}`, base: PLAYTESTING_BRANCH };
-
         try {
+            const context = githubService.getContext();
+            const branches = { head: `${context.owner}:${DEVELOPMENT_BRANCH}`, base: PLAYTESTING_BRANCH };
             const lastSynced = new Date();
             const canCreatePullRequest = await isPlaytestingBranchBehind(context);
             if (!canCreatePullRequest) {
@@ -152,110 +152,139 @@ export async function syncDataPullRequests(forced?: boolean) {
     const touchedProjects: IProject[] = [];
     try {
         const projects = await dataService.projects.read({});
-        const context = githubService.getContext("data");
 
-        const branchRef = await context.client.rest.git
-            .getRef({ owner: context.owner, repo: context.repo, ref: `heads/${STAGING_BRANCH}` })
-            .then((result) => result.data)
-            .catch(() => null as BranchRef);
-        const branchRefHolder = { current: branchRef };
-        const branches = { head: `${context.owner}:${STAGING_BRANCH}`, base: DEVELOPMENT_BRANCH };
-        const existingPR = await findOpenPullRequest(context, branches);
-
-        const syncedProjects: IProject[] = [];
-        const pendingProjects: IProject[] = [];
-        const releasedByProject = new Map<number, Map<string, number>>();
-        const deferred: DeferredStamp[] = [];
-        const lastSynced = new Date();
-
-        let mergedPR: PullRequest | null = null;
-        const getMergedPullRequest = async () => {
-            mergedPR ??= await findMergedPullRequest(context, branches);
-            return mergedPR;
-        };
-
-        for (const project of projects) {
-            const [playtestingUpdate] = await dataService.playtestingUpdates.read({
-                project: project.number,
-                version: project.version
-            });
-            const ptEmitter = playtestingUpdate
-                ? createSyncEmitter("playtestingUpdate", "github.data", playtestingUpdate)
-                : undefined;
-            ptEmitter?.start();
-
-            try {
-                const result = await syncProjectDataFile(project, context, branchRefHolder, forced ?? false);
-
+        // Emitters are created and started before the shared context resolves; `pending` tracks units
+        // not yet finalized, whether immediately below or via the deferred stamp further down.
+        const units: DeferredStamp[] = await Promise.all(
+            projects.map(async (project) => {
+                const [playtestingUpdate] = await dataService.playtestingUpdates.read({
+                    project: project.number,
+                    version: project.version
+                });
                 // Every published release is stamped every round, not just ones this round's diff explains -
                 // otherwise a release whose removal already merged never receives a first stamp at all
                 const releases = project.releases.filter((r) => !!r.releasedDate);
-                if (result.releasedCounts.size > 0) {
-                    releasedByProject.set(project.number, result.releasedCounts);
-                }
-                const releaseEmitters = new Map(
-                    releases.map((r) => [
-                        r,
-                        createSyncEmitter("release", "github.data", { ...r, project: project.number })
-                    ])
-                );
-                releaseEmitters.forEach((e) => e.start());
+                return {
+                    project,
+                    playtestingUpdate,
+                    releases,
+                    ptEmitter: playtestingUpdate
+                        ? createSyncEmitter("playtestingUpdate", "github.data", playtestingUpdate)
+                        : undefined,
+                    releaseEmitters: new Map(
+                        releases.map((r) => [
+                            r,
+                            createSyncEmitter("release", "github.data", { ...r, project: project.number })
+                        ])
+                    )
+                };
+            })
+        );
+        units.forEach(({ ptEmitter, releaseEmitters }) => {
+            ptEmitter?.start();
+            releaseEmitters.forEach((e) => e.start());
+        });
+        const pending = new Set(units);
 
-                if (result.action === "matches-development" || result.action === "unchanged") {
-                    const merged = result.action === "matches-development" ? await getMergedPullRequest() : null;
-                    stampProjectEntities(
-                        { project, playtestingUpdate, releases, ptEmitter, releaseEmitters },
-                        lastSynced,
-                        (entity) => (merged ? toMergedState(merged, entity) : undefined),
-                        touchedPlaytestingUpdates,
-                        touchedProjects
-                    );
-                } else {
-                    // "pruned" or "committed" - final state depends on the batched PR sync below
-                    syncedProjects.push(project);
-                    if (result.action === "committed") {
-                        pendingProjects.push(project);
+        try {
+            const context = githubService.getContext("data");
+
+            const branchRef = await context.client.rest.git
+                .getRef({ owner: context.owner, repo: context.repo, ref: `heads/${STAGING_BRANCH}` })
+                .then((result) => result.data)
+                .catch(() => null as BranchRef);
+            const branchRefHolder = { current: branchRef };
+            const branches = { head: `${context.owner}:${STAGING_BRANCH}`, base: DEVELOPMENT_BRANCH };
+            const existingPR = await findOpenPullRequest(context, branches);
+
+            const syncedProjects: IProject[] = [];
+            const pendingProjects: IProject[] = [];
+            const releasedByProject = new Map<number, Map<string, number>>();
+            const deferred: DeferredStamp[] = [];
+            const lastSynced = new Date();
+
+            let mergedPR: PullRequest | null = null;
+            const getMergedPullRequest = async () => {
+                mergedPR ??= await findMergedPullRequest(context, branches);
+                return mergedPR;
+            };
+
+            for (const unit of units) {
+                const { project, ptEmitter, releaseEmitters } = unit;
+                try {
+                    const result = await syncProjectDataFile(project, context, branchRefHolder, forced ?? false);
+
+                    if (result.releasedCounts.size > 0) {
+                        releasedByProject.set(project.number, result.releasedCounts);
                     }
-                    deferred.push({ project, playtestingUpdate, releases, ptEmitter, releaseEmitters });
+
+                    if (result.action === "matches-development" || result.action === "unchanged") {
+                        const merged = result.action === "matches-development" ? await getMergedPullRequest() : null;
+                        stampProjectEntities(
+                            unit,
+                            lastSynced,
+                            (entity) => (merged ? toMergedState(merged, entity) : undefined),
+                            touchedPlaytestingUpdates,
+                            touchedProjects
+                        );
+                        pending.delete(unit);
+                    } else {
+                        // "pruned" or "committed" - final state depends on the batched PR sync below
+                        syncedProjects.push(project);
+                        if (result.action === "committed") {
+                            pendingProjects.push(project);
+                        }
+                        deferred.push(unit);
+                    }
+                } catch (err) {
+                    ptEmitter?.error("Failure");
+                    releaseEmitters.forEach((e) => e.error("Failure"));
+                    pending.delete(unit);
+                    logger.warn(
+                        new Error(`[Github] Failed to sync data pull request for project #${project.number}`, {
+                            cause: err
+                        })
+                    );
                 }
-            } catch (err) {
+            }
+
+            // Only touches the Pull Request if something changed this round (a real sync, or pruning a stale file)
+            if (syncedProjects.length > 0) {
+                let state: PullRequestState | null | undefined;
+                if (pendingProjects.length > 0) {
+                    state = await internalDataSync(existingPR, pendingProjects, releasedByProject, context);
+                } else if (existingPR) {
+                    // Every project that had outstanding data has since been fully released - nothing left to review
+                    logger.info(
+                        `[Github] Closing pull request #${existingPR.number} as no unreleased project data remains`
+                    );
+                    await context.client.rest.pulls.update({
+                        owner: context.owner,
+                        repo: context.repo,
+                        pull_number: existingPR.number,
+                        state: "closed"
+                    });
+                    state = null;
+                }
+                for (const stamp of deferred) {
+                    stampProjectEntities(stamp, lastSynced, () => state, touchedPlaytestingUpdates, touchedProjects);
+                    pending.delete(stamp);
+                }
+            }
+
+            if (touchedPlaytestingUpdates.length > 0) {
+                await dataService.playtestingUpdates.update(touchedPlaytestingUpdates, false, false, false);
+            }
+            if (touchedProjects.length > 0) {
+                await dataService.projects.update(touchedProjects, false, false, false);
+            }
+        } catch (err) {
+            // Only reaches units still pending - per-project failures above already handled their own.
+            pending.forEach(({ ptEmitter, releaseEmitters }) => {
                 ptEmitter?.error("Failure");
-                logger.warn(
-                    new Error(`[Github] Failed to sync data pull request for project #${project.number}`, {
-                        cause: err
-                    })
-                );
-            }
-        }
-
-        // Only touches the Pull Request if something changed this round (a real sync, or pruning a stale file)
-        if (syncedProjects.length > 0) {
-            let state: PullRequestState | null | undefined;
-            if (pendingProjects.length > 0) {
-                state = await internalDataSync(existingPR, pendingProjects, releasedByProject, context);
-            } else if (existingPR) {
-                // Every project that had outstanding data has since been fully released - nothing left to review
-                logger.info(
-                    `[Github] Closing pull request #${existingPR.number} as no unreleased project data remains`
-                );
-                await context.client.rest.pulls.update({
-                    owner: context.owner,
-                    repo: context.repo,
-                    pull_number: existingPR.number,
-                    state: "closed"
-                });
-                state = null;
-            }
-            for (const stamp of deferred) {
-                stampProjectEntities(stamp, lastSynced, () => state, touchedPlaytestingUpdates, touchedProjects);
-            }
-        }
-
-        if (touchedPlaytestingUpdates.length > 0) {
-            await dataService.playtestingUpdates.update(touchedPlaytestingUpdates, false, false, false);
-        }
-        if (touchedProjects.length > 0) {
-            await dataService.projects.update(touchedProjects, false, false, false);
+                releaseEmitters.forEach((e) => e.error("Failure"));
+            });
+            throw err;
         }
     } finally {
         release();

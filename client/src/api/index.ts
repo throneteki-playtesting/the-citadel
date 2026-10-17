@@ -4,11 +4,14 @@ import {
     FetchArgs,
     fetchBaseQuery,
     FetchBaseQueryError,
-    FetchBaseQueryMeta
+    FetchBaseQueryMeta,
+    TypedMutationOnQueryStarted
 } from "@reduxjs/toolkit/query/react";
 import {
     IPlaytestingUpdate,
+    IPoolEntry,
     IProject,
+    IProjectSave,
     IProjectProgress,
     IProjectRelease,
     IReleaseProgress
@@ -18,13 +21,22 @@ import { IPack } from "common/models/pack";
 import { buildUrl, SemanticVersion } from "common/utils";
 import { StatusCodes } from "http-status-codes";
 import type { BatchRenderJob, IGetRequest, IGetResponse, SingleRenderJob } from "server/types";
-import { Faction, ICardSuggestion, IPlaytestCard, IRenderCard } from "common/models/cards";
+import {
+    ICardSuggestion,
+    ICardSuggestionFilterable,
+    IPlaytestCard,
+    IRenderCard,
+    ISuggestionCardMatches,
+    ISuggestionsListQuery,
+    ReactionType
+} from "common/models/cards";
 import {
     DesignStatus,
     IReleaseCheckSummary,
     ISlot,
     ISlotArtwork,
     ISlotArtworkDetail,
+    ISlotOptions,
     ISlotRef,
     ISlotRefinement,
     ISlotRefinementDetail,
@@ -32,6 +44,7 @@ import {
     SlotStatuses
 } from "common/models/slots";
 import { IArtist, IArtworkProgress } from "common/models/artwork";
+import { ISettingsMap, SettingsType } from "common/models/settings";
 import { InquirySeverity } from "common/models/refinement";
 import { ICardProgress } from "common/progress/calc";
 import { IPlaytestReview } from "common/models/reviews";
@@ -41,9 +54,46 @@ import { MeResponse, Role, RoleWithUserCount, SafeIntegration, User } from "comm
 import { ILogEntry } from "common/models/logs";
 import { GlobalStats, ProjectStats } from "common/models/stats";
 import { getConnectionId } from "./connectionId";
+import { cacheNow, patchEntityEverywhere } from "./cacheHelpers";
 import { ApiTag, generateFor, tagTypes } from "./tagManager";
 import { toNormalizedError } from "./errors";
 import { refreshSession } from "./refresh";
+
+/** A suggestion forum thread from before the Citadel managed them, described for migrating it */
+export type LegacyThreadInfo = {
+    id: string;
+    url: string;
+    name: string;
+    createdAt: string;
+    ownerId: string;
+    faction?: ICardSuggestion["card"]["faction"];
+    type?: ICardSuggestion["card"]["type"];
+    /** 👍s on its opening post, its own author's left out */
+    likes: number;
+};
+
+export type SuggestionMigration = {
+    thread: LegacyThreadInfo;
+    /** The caller's own legacy suggestions that look like the thread's card - one may be merged into it */
+    candidates: ICardSuggestion[];
+};
+
+export type SuggestionsFeed = {
+    recent: ICardSuggestion[];
+    stats: {
+        total: number;
+        totalSubmitters: number;
+        awaitingApproval: number;
+        /** Suggestions the current user hasn't reacted to at all yet (Like/Dislike/Ignore) */
+        unreacted: number;
+        mine: number;
+        myDrafts: number;
+        myLegacy: number;
+        /** Legacy suggestions a project card may already have been developed from - only counted for those who
+         *  can archive them as that card (MANAGE_SUGGESTIONS_ARCHIVE), otherwise always 0 */
+        possiblyDeveloped: number;
+    };
+};
 
 const baseQuery = fetchBaseQuery({
     baseUrl: "/api/v1",
@@ -81,6 +131,29 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
 
     return result;
 };
+
+// Every cached response belongs to the previous identity, including queries with no tags, so the whole cache is
+// reset. /me is restored from the response so nothing reads as signed out while mounted queries refetch.
+const switchIdentity: TypedMutationOnQueryStarted<MeResponse, unknown, typeof baseQueryWithReauth> = async (
+    _arg,
+    { dispatch, queryFulfilled }
+) => {
+    try {
+        const { data } = await queryFulfilled;
+        dispatch(api.util.resetApiState());
+        dispatch(api.util.upsertQueryData("getMe", undefined, data));
+    } catch {
+        // Identity unchanged, so the cache is still valid
+    }
+};
+
+// Saving a draft project may lay out its slots - choosing a template, opening or closing them - so every slot list
+// is refetched along with the project itself, and its cards too, since closing a slot deletes the cards in it
+const projectSaveTags = (result: IProject | undefined, project: Pick<IProjectSave, "slotCounts">) => [
+    ...generateFor(result, "project"),
+    ...(result?.draft || project.slotCounts ? [{ type: "slot" as const, id: undefined }] : []),
+    ...(result?.draft && project.slotCounts ? [{ type: "card" as const, id: `LIST|${result.number}` }] : [])
+];
 
 const api = createApi({
     reducerPath: "api",
@@ -126,21 +199,21 @@ const api = createApi({
                 const url = buildUrl(`impersonation/role/${roleId}`);
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         impersonateUser: builder.mutation<MeResponse, { discordId: string }>({
             query: ({ discordId }) => {
                 const url = buildUrl(`impersonation/user/${discordId}`);
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         stopImpersonating: builder.mutation<MeResponse, void>({
             query: () => {
                 const url = buildUrl("impersonation/stop");
                 return { url, method: "POST" };
             },
-            invalidatesTags: [{ type: "me" }]
+            onQueryStarted: switchIdentity
         }),
         getUsers: builder.query<IGetResponse<User>, IGetRequest<User> | void>({
             query: (options) => {
@@ -304,6 +377,17 @@ const api = createApi({
                 { type: "slot" as const, id: `${project}|${number}` }
             ]
         }),
+        addSlotOptions: builder.mutation<IPlaytestCard[], { project: number; number: number; cards: IPlaytestCard[] }>({
+            query: ({ project, number, cards }) => {
+                const url = buildUrl(`cards/${project}/${number}/options`);
+                return { url, method: "POST", body: { cards } };
+            },
+            // The slot too, as its preference order takes the new options in
+            invalidatesTags: (result, _error, { project, number }) => [
+                ...generateFor(result, "card"),
+                { type: "slot" as const, id: `${project}|${number}` }
+            ]
+        }),
         deleteDraft: builder.mutation<IPlaytestCard, IPlaytestCard>({
             query: (card) => {
                 const url = buildUrl(`cards/${card.project}/${card.number}/draft/${card.version}`);
@@ -327,19 +411,27 @@ const api = createApi({
             invalidatesTags: (result) => generateFor(result, "card")
         }),
         // Suggestions API
-        getSuggestions: builder.query<IGetResponse<ICardSuggestion>, IGetRequest<ICardSuggestion> | void>({
+        getSuggestions: builder.query<
+            IGetResponse<ICardSuggestionFilterable>,
+            (IGetRequest<ICardSuggestionFilterable> & ISuggestionsListQuery) | void
+        >({
             query: (options) => {
                 const url = buildUrl("suggestions", options);
                 return { url, method: "GET" };
             },
-            providesTags: (response) => generateFor(response?.items, "suggestion")
+            providesTags: (response, _error, options) => [
+                ...generateFor(response?.items, "suggestion"),
+                ...(options?.pooledIn === undefined ? [] : [{ type: "pool" as const, id: `LIST|${options.pooledIn}` }])
+            ]
         }),
-        getSuggestionsBy: builder.query<IGetResponse<ICardSuggestion>, { discordId: string }>({
-            query: (options) => {
-                const url = buildUrl(`suggestions/${options.discordId}`);
+        getSuggestion: builder.query<ICardSuggestion, string>({
+            query: (id) => {
+                const url = buildUrl(`suggestions/${id}`);
                 return { url, method: "GET" };
             },
-            providesTags: (result) => generateFor(result?.items, "suggestion")
+            // `includeList: false` - the default LIST tag wrongly queued a "new data" toast on any
+            // other suggestion's reaction change, instead of a silent background invalidate.
+            providesTags: (result) => generateFor(result, "suggestion", { includeList: false })
         }),
         createSuggestion: builder.mutation<ICardSuggestion, Omit<ICardSuggestion, "created" | "updated">>({
             query: (suggestion) => {
@@ -347,29 +439,203 @@ const api = createApi({
                 const body = suggestion;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
-        updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
+        // Draft save - only ever valid while the suggestion is still a draft (or new); the server
+        // rejects this once a suggestion has been submitted.
+        saveDraftSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion>({
             query: (suggestion) => {
-                const url = buildUrl(`suggestions/${suggestion.id}`);
+                const url = buildUrl(`suggestions/${suggestion.id}/draft`);
                 const body = suggestion;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // General save - always fully validates and results in a submitted suggestion. `legacyThread` carries
+        // one of a legacy suggestion's old forum threads over as it is completed.
+        updateSuggestion: builder.mutation<ICardSuggestion, ICardSuggestion & { legacyThread?: string }>({
+            query: ({ legacyThread, ...suggestion }) => {
+                const url = buildUrl(`suggestions/${suggestion.id}`, { legacyThread });
+                const body = suggestion;
+                return { url, method: "PUT", body };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // The designer's old forum threads that look like this legacy suggestion's card, as it is completed
+        getSuggestionThreadMatches: builder.query<
+            LegacyThreadInfo[],
+            { id: string } & Partial<Pick<ICardSuggestion["card"], "name" | "faction" | "type">>
+        >({
+            query: ({ id, ...card }) => {
+                const url = buildUrl(`suggestions/${id}/thread-matches`, card);
+                return { url, method: "GET" };
+            },
+            // Refetched whenever the suggestion forum announces a thread started, changed or removed
+            providesTags: () => [{ type: "suggestionThread", id: "LIST" }]
+        }),
+        getSuggestionCardMatches: builder.query<ISuggestionCardMatches, string>({
+            query: (id) => {
+                const url = buildUrl(`suggestions/${id}/card-matches`);
+                return { url, method: "GET" };
+            },
+            // Anything a claim touches - another suggestion archived, or a card linked - can change what's on offer
+            providesTags: () => [
+                { type: "suggestion", id: "LIST" },
+                { type: "card", id: "LIST" }
+            ]
+        }),
+        markSuggestionDevelopedAs: builder.mutation<
+            ICardSuggestion,
+            { id: string; project: number; number: number; version?: SemanticVersion }
+        >({
+            query: ({ id, project, number, version }) => {
+                const url = buildUrl(`suggestions/${id}/developed-as`);
+                return { url, method: "POST", body: { project, number, version } };
+            },
+            invalidatesTags: (result) => [...generateFor(result, "suggestion"), { type: "card", id: "LIST" }]
+        }),
+        getSuggestionMigration: builder.query<SuggestionMigration, string>({
+            query: (threadId) => {
+                const url = buildUrl(`suggestions/migrate/${threadId}`);
+                return { url, method: "GET" };
+            }
+        }),
+        migrateSuggestion: builder.mutation<
+            ICardSuggestion,
+            { threadId: string; mergeId?: string; suggestion: ICardSuggestion }
+        >({
+            query: ({ threadId, mergeId, suggestion }) => {
+                const url = buildUrl(`suggestions/migrate/${threadId}`, { mergeId });
+                return { url, method: "POST", body: suggestion };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
         deleteSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
             query: (options) => {
                 const url = buildUrl(`suggestions/${options.id}`);
                 return { url, method: "DELETE" };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), ...generateFor(result?.tags, "tag")]
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
-        getTags: builder.query<string[], void>({
+        // `discordId` is only used client-side, to patch the right key of the cached reactions map
+        // optimistically - the server derives it from the authenticated principal, never the body.
+        reactToSuggestion: builder.mutation<
+            ICardSuggestion,
+            { id: string; reactType: ReactionType; discordId: string }
+        >({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/reaction`);
+                return { url, method: "POST", body: { reactType: options.reactType } };
+            },
+            async onQueryStarted({ id, reactType, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    suggestion._metadata ??= {};
+                    suggestion._metadata.engagement ??= { reactions: {} };
+                    suggestion._metadata.engagement.reactions[discordId] = {
+                        type: reactType,
+                        reactedAt: cacheNow()
+                    };
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        clearSuggestionReaction: builder.mutation<ICardSuggestion, { id: string; discordId: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/reaction`);
+                return { url, method: "DELETE" };
+            },
+            async onQueryStarted({ id, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    delete suggestion._metadata?.engagement?.reactions[discordId];
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // `discordId` is only used client-side (the optimistic approvedBy, before the server's own
+        // response confirms it) - same reasoning as reactToSuggestion's own `discordId` above.
+        approveSuggestion: builder.mutation<ICardSuggestion, { id: string; discordId: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/approve`);
+                return { url, method: "POST" };
+            },
+            async onQueryStarted({ id, discordId }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    suggestion._metadata ??= {};
+                    suggestion._metadata.engagement ??= { reactions: {} };
+                    suggestion._metadata.engagement.approvedBy = discordId;
+                    suggestion._metadata.engagement.approvedAt = cacheNow();
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        unapproveSuggestion: builder.mutation<ICardSuggestion, { id: string }>({
+            query: (options) => {
+                const url = buildUrl(`suggestions/${options.id}/approve`);
+                return { url, method: "DELETE" };
+            },
+            async onQueryStarted({ id }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("suggestion", id, (suggestion) => {
+                    if (suggestion._metadata?.engagement) {
+                        delete suggestion._metadata.engagement.approvedBy;
+                        delete suggestion._metadata.engagement.approvedAt;
+                    }
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // Full-universe traits/submitters for the advanced filter drawer - server-cached (short TTL),
+        // so a stale value just waits out the cache rather than needing its own invalidation wiring.
+        getSuggestionFilterOptions: builder.query<
+            { traits: string[]; submitters: { discordId: string; displayname: string }[] },
+            void
+        >({
             query: () => {
-                const url = buildUrl("suggestions/tags");
+                const url = buildUrl("suggestions/filter-options");
+                return { url, method: "GET" };
+            }
+        }),
+        getSuggestionsFeed: builder.query<SuggestionsFeed, void>({
+            query: () => {
+                const url = buildUrl("suggestions/feed");
                 return { url, method: "GET" };
             },
-            providesTags: (results) => generateFor(results, "tag")
+            providesTags: () => [{ type: "suggestion", id: "LIST" }]
+        }),
+        // Refreshed at most daily server-side, so once fetched it's kept for the life of the tab -
+        // toggling a plot type on/off/on must never re-request it.
+        getSuggestionPlotMedian: builder.query<{ median?: number }, void>({
+            query: () => {
+                const url = buildUrl("suggestions/stats/plot-median");
+                return { url, method: "GET" };
+            },
+            keepUnusedDataFor: Infinity
+        }),
+        syncSuggestionDiscord: builder.mutation<ICardSuggestion, { id: string; forced?: boolean }>({
+            query: ({ id, forced }) => {
+                const url = buildUrl(`suggestions/${id}/sync/discord`, { forced });
+                return { url, method: "POST" };
+            },
+            invalidatesTags: (result) => generateFor(result, "suggestion")
         }),
         // Render API
         renderImage: builder.mutation<Blob, IRenderCard>({
@@ -415,13 +681,13 @@ const api = createApi({
             },
             providesTags: (result, _error, args) => generateFor(result, "project", { includeList: false, args })
         }),
-        createProject: builder.mutation<IProject, Omit<IProject, "created" | "updated">>({
+        createProject: builder.mutation<IProject, Omit<IProjectSave, "created" | "updated">>({
             query: (project) => {
                 const url = buildUrl("projects");
                 const body = project;
                 return { url, method: "POST", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
         }),
         initialiseProject: builder.mutation<{ project: IProject; cards: IPlaytestCard[] }, { number: number }>({
             query: (options) => {
@@ -434,13 +700,44 @@ const api = createApi({
                 ...generateFor(undefined, "slot", { includeList: true })
             ]
         }),
-        updateProject: builder.mutation<IProject, IProject>({
+        updateProject: builder.mutation<IProject, IProjectSave>({
             query: (project) => {
                 const url = buildUrl(`projects/${project.number}`);
                 const body = project;
                 return { url, method: "PUT", body };
             },
-            invalidatesTags: (result) => generateFor(result, "project")
+            invalidatesTags: (result, _error, project) => projectSaveTags(result, project)
+        }),
+        getPool: builder.query<IPoolEntry[], { project: number }>({
+            query: ({ project }) => ({ url: buildUrl(`projects/${project}/pool`), method: "GET" }),
+            providesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        addToPool: builder.mutation<
+            IPoolEntry,
+            { project: number; suggestion: string; isUnapprovedConfirmed?: boolean }
+        >({
+            query: ({ project, suggestion, ...body }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "PUT",
+                body
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
+        }),
+        removeFromPool: builder.mutation<IPoolEntry, { project: number; suggestion: string }>({
+            query: ({ project, suggestion }) => ({
+                url: buildUrl(`projects/${project}/pool/${suggestion}`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "pool", { includeList: false }),
+                { type: "pool", id: `LIST|${project}` }
+            ]
         }),
         deleteProject: builder.mutation<IProject, { number: number }>({
             query: (options) => {
@@ -489,6 +786,32 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "artist")
         }),
+        // One document per SettingsType, tag keyed directly by type. `includeUsage` is opt-in (only the
+        // settings modal's delete-guard needs it), keeping a separate cache entry for label-only callers.
+        getSettings: builder.query<
+            ISettingsMap[SettingsType],
+            SettingsType | { type: SettingsType; includeUsage: boolean }
+        >({
+            query: (args) => {
+                const { type, includeUsage } = typeof args === "string" ? { type: args, includeUsage: false } : args;
+                const url = buildUrl(`settings/${type}`, includeUsage ? { includeUsage: true } : undefined);
+                return { url, method: "GET" };
+            },
+            providesTags: (_result, _error, args) => {
+                const { type, includeUsage } = typeof args === "string" ? { type: args, includeUsage: false } : args;
+                return [
+                    { type: "setting" as ApiTag, id: type },
+                    ...(includeUsage ? [{ type: "suggestion" as ApiTag, id: "LIST" }] : [])
+                ];
+            }
+        }),
+        updateSettings: builder.mutation<
+            ISettingsMap[SettingsType],
+            { type: SettingsType; data: Partial<ISettingsMap[SettingsType]> }
+        >({
+            query: ({ type, data }) => ({ url: buildUrl(`settings/${type}`), method: "PATCH", body: data }),
+            invalidatesTags: (_result, _error, { type }) => [{ type: "setting" as ApiTag, id: type }]
+        }),
         // Slots API
         getSlot: builder.query<ISlot, { project: number; number: number }>({
             query: ({ project, number }) => {
@@ -504,31 +827,59 @@ const api = createApi({
             },
             providesTags: (response, _error, args) => generateFor(response?.items, "slot", { args })
         }),
-        createSlot: builder.mutation<ISlot, { project: number; faction: Faction }>({
-            query: ({ project, faction }) => {
-                const url = buildUrl(`projects/${project}/slots`);
-                return { url, method: "POST", body: { faction } };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
-        }),
-        deleteSlot: builder.mutation<ISlot, { project: number; number: number }>({
-            query: ({ project, number }) => {
-                const url = buildUrl(`projects/${project}/slots/${number}`);
-                return { url, method: "DELETE" };
-            },
-            invalidatesTags: (result) => generateFor(result, "slot")
-        }),
-        updateSlot: builder.mutation<
-            ISlot,
-            { project: number; number: number; statuses?: DeepPartial<SlotStatuses> } & Partial<
-                Pick<ISlot, "type" | "notes">
-            >
-        >({
+        updateSlot: builder.mutation<ISlot, { project: number; number: number; statuses?: DeepPartial<SlotStatuses> }>({
             query: ({ project, number, ...body }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}`);
                 return { url, method: "PATCH", body };
             },
             invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        startSlotDiscussion: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/discussion`),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        revealSlot: builder.mutation<ISlot, ISlotRef & { action?: "update" | "replace" }>({
+            query: ({ project, number, action }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`, { action }),
+                method: "POST"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        withdrawSlotReveal: builder.mutation<ISlot, ISlotRef>({
+            query: ({ project, number }) => ({
+                url: buildUrl(`projects/${project}/slots/${number}/reveal`),
+                method: "DELETE"
+            }),
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        // Drawn in its new order straight away - a drag shouldn't wait on the round trip to settle
+        updateSlotPreferences: builder.mutation<ISlot, ISlotRef & { preferences: SemanticVersion[] }>({
+            query: ({ project, number, preferences }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/preferences`);
+                return { url, method: "PUT", body: { preferences } };
+            },
+            async onQueryStarted({ project, number, preferences }, { queryFulfilled }) {
+                const patches = patchEntityEverywhere("slot", `${project}|${number}`, (slot) => {
+                    slot.preferences = preferences;
+                });
+                try {
+                    await queryFulfilled;
+                } catch {
+                    patches.forEach((patch) => patch.undo());
+                }
+            },
+            invalidatesTags: (result) => generateFor(result, "slot")
+        }),
+        updateSlotOptions: builder.mutation<ISlot, ISlotRef & ISlotOptions>({
+            query: ({ project, number, ...options }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/options`);
+                return { url, method: "PUT", body: options };
+            },
+            // A slot which no longer matches its project's template turns the project custom
+            invalidatesTags: (result) => [...generateFor(result, "slot"), { type: "project" as const, id: undefined }]
         }),
         // The artwork lane alone - gated by READ_ARTWORKS/EDIT_ARTWORKS rather than READ_SLOTS/EDIT_SLOTS
         getSlotArtwork: builder.query<ISlotArtworkDetail, { project: number; number: number }>({
@@ -839,7 +1190,11 @@ const api = createApi({
                 const url = buildUrl(`projects/${project}/sync/discord`, { number, forced });
                 return { url, method: "POST" };
             },
-            invalidatesTags: (result) => generateFor(result, "card")
+            // A draft project syncs no cards, but its planning forum is recorded on the project
+            invalidatesTags: (result, _error, { project }) => [
+                ...generateFor(result, "card"),
+                { type: "project" as const, id: project }
+            ]
         }),
         syncProjectGithub: builder.mutation<IPlaytestCard[], { project: number; number?: number; forced?: boolean }>({
             query: ({ project, number, forced }) => {
@@ -1047,15 +1402,35 @@ export const {
     useGetPreviousCardQuery,
     useLazyGetCardsQuery,
     usePutDraftCardMutation,
+    useAddSlotOptionsMutation,
+    useGetPoolQuery,
+    useStartSlotDiscussionMutation,
+    useRevealSlotMutation,
+    useWithdrawSlotRevealMutation,
+    useAddToPoolMutation,
+    useRemoveFromPoolMutation,
     useDeleteDraftMutation,
     useMoveCardMutation,
 
     useGetSuggestionsQuery,
-    useGetSuggestionsByQuery,
+    useGetSuggestionQuery,
     useCreateSuggestionMutation,
+    useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation,
     useDeleteSuggestionMutation,
-    useGetTagsQuery,
+    useReactToSuggestionMutation,
+    useClearSuggestionReactionMutation,
+    useApproveSuggestionMutation,
+    useUnapproveSuggestionMutation,
+    useGetSuggestionFilterOptionsQuery,
+    useGetSuggestionsFeedQuery,
+    useGetSuggestionPlotMedianQuery,
+    useSyncSuggestionDiscordMutation,
+    useLazyGetSuggestionThreadMatchesQuery,
+    useGetSuggestionMigrationQuery,
+    useMigrateSuggestionMutation,
+    useGetSuggestionCardMatchesQuery,
+    useMarkSuggestionDevelopedAsMutation,
 
     useRenderImageMutation,
     useRenderPrintSheetMutation,
@@ -1075,13 +1450,15 @@ export const {
     useCreateArtistMutation,
     useUpdateArtistMutation,
     useDeleteArtistMutation,
+    useGetSettingsQuery,
+    useUpdateSettingsMutation,
 
     useGetSlotQuery,
     useGetSlotsQuery,
     useLazyGetSlotsQuery,
-    useCreateSlotMutation,
-    useDeleteSlotMutation,
     useUpdateSlotMutation,
+    useUpdateSlotOptionsMutation,
+    useUpdateSlotPreferencesMutation,
     useGetSlotArtworkQuery,
     useGetSlotArtworksQuery,
     useUpdateSlotArtworkMutation,

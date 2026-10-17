@@ -17,10 +17,6 @@ enum Permission {
     ARCHIVE_PROJECTS = "ARCHIVE_PROJECTS",
     /** Can view slots for a project */
     READ_SLOTS = "READ_SLOTS",
-    /** Can create new slots (draft projects only) */
-    CREATE_SLOTS = "CREATE_SLOTS",
-    /** Can delete empty slots (draft projects only) */
-    DELETE_SLOTS = "DELETE_SLOTS",
     /** Can edit slot statuses, type & notes */
     EDIT_SLOTS = "EDIT_SLOTS",
     /** Can move (or emergency-reverse) a card's design into the finalising phase */
@@ -83,10 +79,15 @@ enum Permission {
     EDIT_SUGGESTIONS = "EDIT_SUGGESTIONS",
     /** Can delete other users card suggestions */
     DELETE_SUGGESTIONS = "DELETE_SUGGESTIONS",
-    /** Can import card suggestions in bulk */
-    IMPORT_SUGGESTIONS = "IMPORT SUGGESTIONS",
-    /** Can export card suggestions in bulk */
-    EXPORT_SUGGESTIONS = "EXPORT_SUGGESTIONS",
+    /** Can approve (or unapprove) a submitted suggestion */
+    APPROVE_SUGGESTIONS = "APPROVE_SUGGESTIONS",
+    /** Can see archived suggestions, and filter by archive reason */
+    MANAGE_SUGGESTIONS_ARCHIVE = "MANAGE_SUGGESTIONS_ARCHIVE",
+    /** Can sync suggestion discord forum threads */
+    SYNC_SUGGESTIONS_DISCORD = "SYNC_SUGGESTIONS_DISCORD",
+    /** Can open and edit suggestion settings (minimum likes threshold, reward/downside options, loyalty tags and
+     *  the rest) - reading them needs only READ_SUGGESTIONS, since the suggestions pages draw with them */
+    EDIT_SETTINGS_SUGGESTIONS = "EDIT_SETTINGS_SUGGESTIONS",
     /** Can view a single user by ID */
     READ_USER = "READ_USER",
     /** Can view all users */
@@ -125,8 +126,6 @@ enum Permission {
     ASSIGN_OWN_PLAYTESTING_ROLE = "ASSIGN_OWN_PLAYTESTING_ROLE",
     /** Can render cards to another format (eg. PDF, PNG)*/
     RENDER_CARDS = "RENDER_CARDS",
-    /** Can use the standalone card editor tool */
-    USE_CARD_EDITOR = "USE_CARD_EDITOR",
     /** Can view all card reviews */
     READ_REVIEWS = "READ_REVIEWS",
     /** Can create, edit and delete their own card reviews */
@@ -145,6 +144,10 @@ enum Permission {
     READ_DISCORD_CARD_FORUM = "READ_DISCORD_CARD_FORUM",
     /** Can access & read from the review forum on discord */
     READ_DISCORD_REVIEW_FORUM = "READ_DISCORD_REVIEW_FORUM",
+    /** Can view the links to a draft project's planning forum threads, and is given access to the forum itself */
+    READ_DISCORD_PLANNING_FORUM = "READ_DISCORD_PLANNING_FORUM",
+    /** Can reveal a draft project's Favoured cards to the card forum as previews, and update or withdraw them */
+    REVEAL_DRAFT_CARDS = "REVEAL_DRAFT_CARDS",
     /** Can sync card images */
     SYNC_CARD_IMAGES = "SYNC_CARD_IMAGES",
     /** Can sync card discord forum threads */
@@ -162,6 +165,51 @@ enum Permission {
 }
 
 export default Permission;
+
+// What owning a project grants within it - running the project, not taking part in its sign-offs
+export const projectOwnerPermissions: Permission[] = [
+    Permission.READ_PROJECTS,
+    Permission.READ_ARCHIVED_PROJECTS,
+    Permission.EDIT_PROJECTS,
+    Permission.DELETE_PROJECTS,
+    Permission.INITIALISE_PROJECTS,
+    Permission.ARCHIVE_PROJECTS,
+    Permission.READ_SLOTS,
+    Permission.EDIT_SLOTS,
+    Permission.READ_DISCORD_PLANNING_FORUM,
+    Permission.READ_DISCORD_CARD_FORUM,
+    Permission.REVEAL_DRAFT_CARDS,
+    Permission.APPROVE_CARD_DESIGN,
+    Permission.READ_ARTWORKS,
+    Permission.EDIT_ARTWORKS,
+    Permission.READ_REFINEMENT,
+    Permission.EDIT_INQUIRIES,
+    Permission.DELETE_INQUIRIES,
+    Permission.RESOLVE_INQUIRIES,
+    Permission.READ_FAQ,
+    Permission.EDIT_FAQ,
+    Permission.READ_RELEASE_CHECKS,
+    Permission.READ_RELEASES,
+    Permission.CREATE_RELEASES,
+    Permission.EDIT_RELEASES,
+    Permission.DELETE_RELEASES,
+    Permission.READ_PLAYTESTING_UPDATES,
+    Permission.CREATE_PLAYTESTING_UPDATES,
+    Permission.READ_CARDS,
+    Permission.READ_LATEST_CARDS,
+    Permission.CREATE_CARDS,
+    Permission.EDIT_CARDS,
+    Permission.DELETE_CARDS,
+    Permission.READ_STATS_PROJECT,
+    Permission.READ_STATS_SLOT,
+    Permission.READ_STATS_RELEASE,
+    Permission.SYNC_CARD_IMAGES,
+    Permission.SYNC_CARD_DISCORD,
+    Permission.SYNC_CARD_GITHUB,
+    Permission.SYNC_PROJECT_GITHUB_DATA,
+    Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE,
+    Permission.SYNC_PLAYTESTINGUPDATE_DISCORD
+];
 
 export type PermissionMeta = {
     label: string;
@@ -182,8 +230,6 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         dependencies: Permission.READ_PROJECTS
     },
     [Permission.READ_SLOTS]: { label: "Read Slots", group: "Projects", dependencies: Permission.READ_PROJECTS },
-    [Permission.CREATE_SLOTS]: { label: "Create Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
-    [Permission.DELETE_SLOTS]: { label: "Delete Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.EDIT_SLOTS]: { label: "Edit Slots", group: "Projects", dependencies: Permission.READ_SLOTS },
     [Permission.APPROVE_CARD_DESIGN]: {
         label: "Approve Card Design",
@@ -276,7 +322,6 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS]
     },
     [Permission.RENDER_CARDS]: { label: "Render", group: "Cards" },
-    [Permission.USE_CARD_EDITOR]: { label: "Use Card Editor", group: "Cards" },
     [Permission.READ_SUGGESTIONS]: { label: "Read", group: "Suggestions" },
     [Permission.MAKE_SUGGESTIONS]: {
         label: "Make Own",
@@ -293,8 +338,17 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
         group: "Suggestions",
         dependencies: Permission.READ_SUGGESTIONS
     },
-    [Permission.IMPORT_SUGGESTIONS]: { label: "Import", group: "Suggestions" },
-    [Permission.EXPORT_SUGGESTIONS]: { label: "Export", group: "Suggestions" },
+    [Permission.APPROVE_SUGGESTIONS]: {
+        label: "Approve",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
+    [Permission.MANAGE_SUGGESTIONS_ARCHIVE]: {
+        label: "Manage Archive",
+        group: "Suggestions",
+        dependencies: Permission.READ_SUGGESTIONS
+    },
+    [Permission.EDIT_SETTINGS_SUGGESTIONS]: { label: "Edit Settings", group: "Suggestions" },
     [Permission.READ_REVIEWS]: { label: "Read", group: "Reviews" },
     [Permission.MAKE_REVIEWS]: {
         label: "Make Own",
@@ -346,13 +400,24 @@ export const permissionMeta: Record<Permission, PermissionMeta> = {
     [Permission.ASSIGN_OWN_PLAYTESTING_ROLE]: { label: "Become Playtester", group: "Roles" },
     [Permission.READ_DISCORD_CARD_FORUM]: { label: "View Card Forum", group: "Discord" },
     [Permission.READ_DISCORD_REVIEW_FORUM]: { label: "View Review Forum", group: "Discord" },
+    [Permission.READ_DISCORD_PLANNING_FORUM]: { label: "View Planning Forum", group: "Discord" },
+    [Permission.REVEAL_DRAFT_CARDS]: {
+        label: "Reveal Draft Cards",
+        group: "Discord",
+        dependencies: [Permission.READ_PROJECTS, Permission.READ_CARDS]
+    },
     [Permission.SYNC_CARD_IMAGES]: { label: "Card Images", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_CARD_DISCORD]: { label: "Card Discord", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_CARD_GITHUB]: { label: "Card GitHub", group: "Sync", dependencies: Permission.EDIT_CARDS },
     [Permission.SYNC_PLAYTESTINGUPDATE_GITHUB_CODE]: { label: "PT Update Github Code", group: "Sync" },
     [Permission.SYNC_PROJECT_GITHUB_DATA]: { label: "Project Github Data", group: "Sync" },
     [Permission.SYNC_PLAYTESTINGUPDATE_DISCORD]: { label: "PT Update Discord", group: "Sync" },
-    [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS }
+    [Permission.SYNC_REVIEW_DISCORD]: { label: "Review Discord", group: "Sync", dependencies: Permission.EDIT_REVIEWS },
+    [Permission.SYNC_SUGGESTIONS_DISCORD]: {
+        label: "Suggestion Discord",
+        group: "Sync",
+        dependencies: Permission.READ_SUGGESTIONS
+    }
 };
 
 export const permissionGroups = (Object.entries(permissionMeta) as [Permission, PermissionMeta][]).reduce<

@@ -5,12 +5,12 @@ import {
     DropdownItem,
     DropdownMenu,
     DropdownTrigger,
-    Modal,
     ModalBody,
     ModalContent,
     ModalFooter,
     ModalHeader
 } from "@heroui/react";
+import Modal from "./modal";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { faCaretDown, faCheck, faGlobe } from "@fortawesome/free-solid-svg-icons";
@@ -83,7 +83,7 @@ export default function DiscordLinkButton({
     }
 
     const ask = (
-        <Modal isOpen={isAsking} size="sm" placement="center" onClose={() => setIsAsking(false)}>
+        <Modal isOpen={isAsking} size="sm" onClose={() => setIsAsking(false)}>
             <ModalContent>
                 <ModalHeader className="items-center gap-2">
                     <FontAwesomeIcon icon={faDiscord} /> Where should this open?

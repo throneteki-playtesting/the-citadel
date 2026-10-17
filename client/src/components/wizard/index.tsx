@@ -22,25 +22,41 @@ import SlidingPages from "../slidingPages";
 import { showApiErrorToast, toNormalizedError } from "../../api/errors";
 import {
     countErrorsInDirection,
+    isPathCovered,
     titleizeFieldName,
     useWizard,
     WizardContext,
     WizardContextProps,
     WizardFieldError,
-    WizardFieldMeta
+    WizardFieldMeta,
+    WizardPageSubmitContext,
+    withPathAncestors
 } from "./context";
 
 export { default as ValidationSummary } from "./components/validationSummary";
+
+// Module level, so a caller leaving these out doesn't give the Wizard a new function every render
+const IGNORE_SUBMIT = () => undefined;
+const IGNORE_VALIDATION_ERROR = () => true;
 
 export function Wizard<T>({
     schema,
     data: initial,
     page: initialPage = 1,
-    onSubmit = () => undefined,
-    onValidationError = () => true,
+    onSubmit = IGNORE_SUBMIT,
+    onValidationError = IGNORE_VALIDATION_ERROR,
+    onPageChange,
     children
 }: WizardProps<T>) {
-    const [internalData, setInternalData] = useState(initial ?? ({} as DeepPartial<T>));
+    // What the pages have submitted, merged over the caller's data for the final validation.
+    // A ref rather than state, so edits don't re-render the Wizard.
+    const internalData = useRef(initial ?? ({} as DeepPartial<T>));
+    const [id] = useState(() =>
+        crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString()
+    );
+    // Read when needed, so an inline onSubmit doesn't change the context every render
+    const latest = useRef({ schema, onSubmit, onValidationError });
+    latest.current = { schema, onSubmit, onValidationError };
     const [currentPage, setCurrentPage] = useState(initialPage);
     const [fieldErrors, setFieldErrors] = useState<Record<string, WizardFieldError>>({});
     const [totalPages, setTotalPages] = useState(0);
@@ -55,12 +71,18 @@ export function Wizard<T>({
     const isLastPage = useMemo(() => currentPage >= totalPages, [currentPage, totalPages]);
 
     useEffect(() => {
-        setInternalData(initial ?? ({} as DeepPartial<T>));
+        internalData.current = initial ?? ({} as DeepPartial<T>);
     }, [initial]);
 
     useEffect(() => {
         setCurrentPage(initialPage);
     }, [initialPage]);
+
+    const onPageChangeRef = useRef(onPageChange);
+    onPageChangeRef.current = onPageChange;
+    useEffect(() => {
+        onPageChangeRef.current?.(currentPage);
+    }, [currentPage]);
 
     const setError = useCallback((path: string, message: string) => {
         setFieldErrors((prev) => ({ ...prev, [path]: { message, source: "external" } }));
@@ -111,61 +133,68 @@ export function Wizard<T>({
         [setServerErrors]
     );
 
-    const validate = useCallback(
-        (data: Record<string, any>, partial = false) => {
-            const { error } = schema.validate(data, {
-                allowUnknown: true,
-                abortEarly: false,
-                errors: { label: false }
+    const validate = useCallback((data: Record<string, any>, partial = false, schemaOverride?: Joi.Schema) => {
+        const { error } = (schemaOverride ?? latest.current.schema).validate(data, {
+            allowUnknown: true,
+            abortEarly: false,
+            errors: { label: false }
+        });
+
+        // Flattened once, reused below - a page submitting only *part* of an object another page
+        // shares needs the exact leaf path checked, or every sibling left for later reads missing.
+        const flatData = flatten(data as object) as Record<string, unknown>;
+
+        // See isPathCovered - an object-level error would otherwise always look untouched and get
+        // silently dropped, even though this page plainly submitted it.
+        const touchedKeys = Object.keys(flatData);
+        const isTouched = (path: string) => isPathCovered(path, touchedKeys);
+
+        const inputErrors: Record<string, string> = {};
+        if (error) {
+            error.details.forEach((detail) => {
+                const inputId = detail.path.join(".");
+                // A page only answers for paths it lists - a sibling left for a later page is
+                // absent and mustn't block Next; a key it DOES list must surface its own error.
+                if (partial && !isTouched(inputId)) {
+                    return;
+                }
+                const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
+                inputErrors[inputId] = message;
             });
+        }
 
-            const inputErrors: Record<string, string> = {};
-            if (error) {
-                error.details.forEach((detail) => {
-                    if (partial && !(detail.path[0] in data)) {
-                        return;
-                    }
-                    const inputId = detail.path.join(".");
-                    const message = detail.message.replace(/^\w/, (c) => c.toUpperCase());
-                    inputErrors[inputId] = message;
-                });
-            }
-
-            const touchedPaths = Object.keys(flatten(data as object));
-            setFieldErrors((prev) => {
-                const next = { ...prev };
-                touchedPaths.forEach((path) => {
-                    if (next[path]?.source !== "external") {
-                        delete next[path];
-                    }
-                });
-                Object.entries(inputErrors).forEach(([path, message]) => {
-                    next[path] = { message, source: "schema" };
-                });
-                return next;
+        setFieldErrors((prev) => {
+            const next = { ...prev };
+            Object.keys(next).forEach((path) => {
+                if (next[path]?.source !== "external" && isTouched(path)) {
+                    delete next[path];
+                }
             });
+            Object.entries(inputErrors).forEach(([path, message]) => {
+                next[path] = { message, source: "schema" };
+            });
+            return next;
+        });
 
-            if (Object.keys(inputErrors).length > 0) {
-                console.error("Validation Error Details:", inputErrors);
-                onValidationError(inputErrors, partial);
-                return false;
-            }
-            return true;
-        },
-        [onValidationError, schema]
-    );
+        if (Object.keys(inputErrors).length > 0) {
+            console.error("Validation Error Details:", inputErrors);
+            latest.current.onValidationError(inputErrors, partial);
+            return false;
+        }
+        return true;
+    }, []);
 
     const onPageSubmit = useCallback(
         async (data: Record<string, any>) => {
             const pageData = data ?? {};
 
             if (validate(pageData, true)) {
-                const submitData = merge({}, internalData, pageData);
-                setInternalData(submitData);
+                const submitData = merge({}, internalData.current, pageData);
+                internalData.current = submitData;
                 if (isLastPage) {
                     if (validate(submitData as Record<string, any>)) {
                         try {
-                            await onSubmit(submitData as T, isValidationError);
+                            await latest.current.onSubmit(submitData as T, isValidationError);
                         } catch (err) {
                             if (!isValidationError(err)) {
                                 showApiErrorToast(err);
@@ -177,21 +206,26 @@ export function Wizard<T>({
                 }
             }
         },
-        [validate, isLastPage, internalData, onSubmit, totalPages, isValidationError]
+        [validate, isLastPage, totalPages, isValidationError]
     );
 
     const onPageBack = useCallback(() => {
         setCurrentPage((prev) => Math.max(prev - 1, 0));
     }, [setCurrentPage]);
 
-    const contextValue = useMemo<WizardContextProps<T>>(
+    // For callers outside the page/Next flow (eg. a "Save Draft" button) that still want the same
+    // client-first validation, against a schema of their own choosing.
+    const validateForm = useCallback(
+        (data: Record<string, any>, schemaOverride?: Joi.Schema) => validate(data, false, schemaOverride),
+        [validate]
+    );
+
+    const contextValue = useMemo<WizardContextProps>(
         () => ({
-            id: crypto?.randomUUID ? crypto.randomUUID() : (Math.floor(Math.random() * 100) + 1).toString(),
+            id,
             currentPage,
             totalPages,
             setTotalPages,
-            data: internalData,
-            setData: setInternalData,
             isFirstPage,
             isLastPage,
             validationErrors,
@@ -203,12 +237,13 @@ export function Wizard<T>({
             fieldMeta,
             setFieldMeta,
             onPageSubmit,
-            onPageBack
+            onPageBack,
+            validateForm
         }),
         [
+            id,
             currentPage,
             totalPages,
-            internalData,
             isFirstPage,
             isLastPage,
             validationErrors,
@@ -219,7 +254,8 @@ export function Wizard<T>({
             isValidationError,
             fieldMeta,
             onPageSubmit,
-            onPageBack
+            onPageBack,
+            validateForm
         ]
     );
 
@@ -231,6 +267,9 @@ type WizardProps<T> = {
     data?: DeepPartial<T>;
     onSubmit?: (data: T, isValidationError: (err: unknown) => boolean) => void | Promise<void>;
     page?: number;
+    /** Fires on every page change, including the initial mount - lets a caller keep its own page number
+     *  in sync with a Wizard that may unmount/remount (eg. behind a Modal that closes and reopens). */
+    onPageChange?: (page: number) => void;
     onValidationError?: (errors: Record<string, string>, partial: boolean) => void;
     children: ReactNode | ReactNode[];
 };
@@ -333,6 +372,10 @@ type WizardPagesProps = Omit<BaseElementProps, "children"> & {
 export function WizardPage({ className, style, children, controlledData, pageNo }: WizardPageProps) {
     const { id, validationErrors, onPageSubmit, clearAnsweredErrors } = useWizard();
 
+    // Once true, stays true - "has this page's own Next/Submit ever been pressed", for fields that
+    // only answer for themselves from that point on. See WizardPageSubmitContext.
+    const [submitted, setSubmitted] = useState(false);
+
     const values = useRef<Record<string, unknown> | undefined>(undefined);
     const hasErrors = Object.keys(validationErrors).length > 0;
     useEffect(() => {
@@ -348,13 +391,16 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
         }
         const answered = Object.keys({ ...previous, ...flat }).filter((path) => !isEqual(previous[path], flat[path]));
         if (answered.length > 0) {
-            clearAnsweredErrors(answered);
+            // A changed leaf answers for an object-level error keyed on one of its ancestors too -
+            // see isPathCovered/withPathAncestors in wizard/context.tsx.
+            clearAnsweredErrors(withPathAncestors(answered));
         }
     }, [controlledData, hasErrors, clearAnsweredErrors]);
 
     const onSubmit = useCallback(
         (e: FormEvent<HTMLFormElement>) => {
             e.preventDefault();
+            setSubmitted(true);
 
             // If controlled, simply submit that (ignore form data)
             if (controlledData !== undefined) {
@@ -393,7 +439,7 @@ export function WizardPage({ className, style, children, controlledData, pageNo 
             validationErrors={validationErrors}
             onSubmit={onSubmit}
         >
-            {children}
+            <WizardPageSubmitContext.Provider value={submitted}>{children}</WizardPageSubmitContext.Provider>
         </Form>
     );
 }
@@ -446,11 +492,13 @@ export function WizardBack({
 }: WizardBackButtonProps) {
     const { onPageBack, isFirstPage, currentPage, fieldErrors, fieldMeta } = useWizard();
 
+    // There is no page behind the first to go back to, so cancelling leaves the pages where they are
     const onPress = useCallback(() => {
-        onPageBack();
-        if (isFirstPage && onCancel) {
-            onCancel();
+        if (isFirstPage) {
+            onCancel?.();
+            return;
         }
+        onPageBack();
     }, [onPageBack, isFirstPage, onCancel]);
 
     const errorCount = useMemo(

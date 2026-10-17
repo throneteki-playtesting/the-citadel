@@ -6,7 +6,17 @@ import Permission from "common/models/permissions";
 import CardImage from "../../components/cardImage";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useGetArtistsQuery, useGetCardsQuery, useGetReviewsQuery, useGetSlotsQuery } from "../../api";
-import { memo, useCallback, useDeferredValue, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+    memo,
+    ReactNode,
+    useCallback,
+    useDeferredValue,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useTransition
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
@@ -16,17 +26,30 @@ import ThronesIcon from "../../components/thronesIcon";
 import SectionTitle from "../../components/sectionTitle";
 import SortSelect from "../../components/sortSelect";
 import { IProject, IProjectRelease } from "common/models/projects";
-import { highlightTarget, reorderTransition, watermarkClasses } from "../../constants";
+import { ISlot } from "common/models/slots";
+import { slotConditionIssues } from "common/models/slotConditions";
+import SlotFrame, { SlotAction } from "../../components/slots/slotFrame";
+import SlotOptionsModal from "../../components/slots/slotOptionsModal";
+import {
+    cornerBadgeBottomRightClasses,
+    cornerBadgeDiscFillClasses,
+    cornerBadgeFadeClasses,
+    highlightTarget,
+    reorderTransition,
+    watermarkClasses
+} from "../../constants";
 import Error from "../../components/error";
 import {
     faCrosshairs,
     faFeather,
     faFlagCheckered,
     faScroll,
+    faSliders,
     faTableCells,
     faTableList
 } from "@fortawesome/free-solid-svg-icons";
 import { TouchTooltip } from "../../components/touchTooltip";
+import CardCornerBadges, { CardBadgeLayer, CornerBadge } from "../../components/cardCornerBadges";
 import Watermark from "../../components/watermark";
 import ProgressRing from "../../components/progressRing";
 import CardProgressBreakdown from "../../components/cardProgressBreakdown";
@@ -91,8 +114,7 @@ const sortOptions: Record<SortOption, string> = {
 const FADE_TRANSITION = { duration: 0.12 } as const;
 
 // Shared by the sort-specific badges pinned to a card's bottom-right corner
-const CORNER_BADGE_CLASS =
-    "absolute bottom-0 right-0 m-2 z-10 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100";
+const CORNER_BADGE_CLASS = classNames(cornerBadgeBottomRightClasses, cornerBadgeFadeClasses);
 
 function compareByReviews(cardStats: Map<number, CardStats>, a: IPlaytestCard, b: IPlaytestCard) {
     const statA = cardStats.get(a.number) ?? { latest: 0, total: 0 };
@@ -124,7 +146,7 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
     const { data: reviewsData, isLoading: isLoadingReviews } = useGetReviewsQuery({
         filter: { project: project.number }
     });
-    const { data: slotsData } = useGetSlotsQuery({ project: project.number });
+    const { data: slotsData, isLoading: isLoadingSlots } = useGetSlotsQuery({ project: project.number });
 
     // Drafts are only ever visible to READ_CARDS holders - a READ_LATEST_CARDS-only viewer sees latest only
     const canReadDrafts = usePermission(Permission.READ_CARDS);
@@ -199,6 +221,10 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
 
     // Progress lives on the slots, so sorting by it is only offered to those able to read either
     const canReadSlots = usePermission(Permission.READ_SLOTS);
+    const canEditSlots = usePermission(Permission.EDIT_SLOTS);
+    // Kept past close, so the modal has something to animate away
+    const [optionsSlot, setOptionsSlot] = useState<ISlot>();
+    const [isOptionsOpen, setIsOptionsOpen] = useState(false);
     const canReadProgress = usePermission(Permission.READ_STATS_SLOT) && canReadSlots;
     const availableSortOptions = useMemo(
         () =>
@@ -273,6 +299,35 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
         () => releaseBoundByNumber(slotsData?.items ?? [], project),
         [slotsData?.items, project]
     );
+    // Each card in its slot's frame, flagged where it strays - none without READ_SLOTS
+    const framing = useMemo((): SlotFraming => {
+        const slots = new Map(canReadSlots ? (slotsData?.items ?? []).map((slot) => [slot.number, slot]) : []);
+        const editOptions = (slot: ISlot): SlotAction[][] => [
+            [
+                {
+                    key: "options",
+                    label: "Edit options",
+                    icon: faSliders,
+                    onPress: () => {
+                        setOptionsSlot(slot);
+                        setIsOptionsOpen(true);
+                    }
+                }
+            ]
+        ];
+        return {
+            slots,
+            actions: new Map(
+                [...slots].map(([number, slot]) => [number, canEditSlots ? editOptions(slot) : NO_ACTIONS])
+            ),
+            issues: new Map(
+                visibleCards.map((card) => [
+                    card.number,
+                    card.released ? NO_ISSUES : slotConditionIssues(slots.get(card.number)?.conditions, card)
+                ])
+            )
+        };
+    }, [canReadSlots, canEditSlots, slotsData?.items, visibleCards]);
     const distinctTraits = useMemo(
         () => [...new Set(visibleCards.flatMap((card) => card.traits))].sort(),
         [visibleCards]
@@ -436,12 +491,12 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                     </div>
                 </div>
             </div>
-            {isLoading ? (
+            {isLoading || (canReadSlots && isLoadingSlots) ? (
                 <div className="flex flex-col gap-2">
                     {Object.entries(project.cardCount)
                         .filter(([, count]) => count > 0)
                         .map(([faction, count]) => (
-                            <FactionCarouselSkeleton key={faction} count={count} />
+                            <FactionCarouselSkeleton key={faction} count={count} isFramed={canReadSlots} />
                         ))}
                 </div>
             ) : (
@@ -477,42 +532,48 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                                         ) : (
                                             <CardGrid cards={filteredCards} size={allFilteredArePlots ? "lg" : "md"}>
                                                 {(card) => (
-                                                    <div
+                                                    <SlotFramed
                                                         key={parseCardCode(false, card.project, card.number)}
-                                                        className={classNames(
-                                                            "w-full",
-                                                            card.type === "plot"
-                                                                ? "aspect-[333/240]"
-                                                                : "aspect-[240/333]"
-                                                        )}
+                                                        framing={framing}
+                                                        number={card.number}
+                                                        className="w-full"
                                                     >
-                                                        <PermissionedLink
-                                                            to={`/project/${card.project}/${card.number}`}
-                                                            requires={Permission.READ_LATEST_CARDS}
-                                                            className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                                        <div
+                                                            className={classNames(
+                                                                "w-full",
+                                                                card.type === "plot"
+                                                                    ? "aspect-[333/240]"
+                                                                    : "aspect-[240/333]"
+                                                            )}
                                                         >
-                                                            <ProjectContentCard
-                                                                card={card}
-                                                                stats={
-                                                                    isLoadingReviews
-                                                                        ? undefined
-                                                                        : cardStats.get(card.number)
-                                                                }
-                                                                release={cardReleases.get(card.number)}
-                                                                progress={cardProgress.get(card.number)}
-                                                                isReleaseBound={
-                                                                    cardIsReleaseBound.get(card.number) ?? false
-                                                                }
-                                                                isNextRelease={
-                                                                    !!nextReleaseCode &&
-                                                                    cardReleases.get(card.number)?.code ===
-                                                                        nextReleaseCode
-                                                                }
-                                                                showReviewBadge={sortBy === "reviews"}
-                                                                showProgressBadge={sortBy === "progress"}
-                                                            />
-                                                        </PermissionedLink>
-                                                    </div>
+                                                            <PermissionedLink
+                                                                to={`/project/${card.project}/${card.number}`}
+                                                                requires={Permission.READ_LATEST_CARDS}
+                                                                className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                                            >
+                                                                <ProjectContentCard
+                                                                    card={card}
+                                                                    stats={
+                                                                        isLoadingReviews
+                                                                            ? undefined
+                                                                            : cardStats.get(card.number)
+                                                                    }
+                                                                    release={cardReleases.get(card.number)}
+                                                                    progress={cardProgress.get(card.number)}
+                                                                    isReleaseBound={
+                                                                        cardIsReleaseBound.get(card.number) ?? false
+                                                                    }
+                                                                    isNextRelease={
+                                                                        !!nextReleaseCode &&
+                                                                        cardReleases.get(card.number)?.code ===
+                                                                            nextReleaseCode
+                                                                    }
+                                                                    showReviewBadge={sortBy === "reviews"}
+                                                                    showProgressBadge={sortBy === "progress"}
+                                                                />
+                                                            </PermissionedLink>
+                                                        </div>
+                                                    </SlotFramed>
                                                 )}
                                             </CardGrid>
                                         )}
@@ -535,6 +596,7 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                                                 cardReleases={cardReleases}
                                                 cardProgress={cardProgress}
                                                 cardIsReleaseBound={cardIsReleaseBound}
+                                                framing={framing}
                                                 nextReleaseCode={nextReleaseCode}
                                                 sortBy={sortBy}
                                                 showReviewBadge={sortBy === "reviews"}
@@ -558,6 +620,9 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                     viewTarget="card"
                 />
             )}
+            {optionsSlot && (
+                <SlotOptionsModal isOpen={isOptionsOpen} slot={optionsSlot} onClose={() => setIsOptionsOpen(false)} />
+            )}
         </div>
     );
 }
@@ -573,6 +638,7 @@ function FactionCarousel({
     cardReleases,
     cardProgress,
     cardIsReleaseBound,
+    framing,
     nextReleaseCode,
     sortBy,
     showReviewBadge,
@@ -618,38 +684,44 @@ function FactionCarousel({
             <div className="relative">
                 <div
                     ref={scrollRef}
-                    className="w-full h-64 sm:h-72 md:h-80 flex overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [overflow-anchor:none] gap-2"
+                    className="w-full min-h-64 sm:min-h-72 md:min-h-80 flex items-start overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [overflow-anchor:none] gap-2"
                 >
                     {cards.map((card) => (
                         <motion.div
                             key={parseCardCode(false, card.project, card.number)}
                             layout
                             transition={reorderTransition}
-                            className={classNames(
-                                "snap-start",
-                                card.type === "plot"
-                                    ? "w-64 sm:w-72 md:w-80 aspect-[333/240]"
-                                    : "h-full aspect-[240/333]"
-                            )}
+                            className="snap-start shrink-0"
                         >
-                            <PermissionedLink
-                                to={`/project/${card.project}/${card.number}`}
-                                requires={Permission.READ_LATEST_CARDS}
-                                className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
-                            >
-                                <ProjectContentCard
-                                    card={card}
-                                    stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
-                                    release={cardReleases.get(card.number)}
-                                    progress={cardProgress.get(card.number)}
-                                    isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
-                                    isNextRelease={
-                                        !!nextReleaseCode && cardReleases.get(card.number)?.code === nextReleaseCode
+                            <SlotFramed framing={framing} number={card.number}>
+                                <div
+                                    className={
+                                        card.type === "plot"
+                                            ? "w-64 sm:w-72 md:w-80 aspect-[333/240]"
+                                            : "h-64 sm:h-72 md:h-80 aspect-[240/333]"
                                     }
-                                    showReviewBadge={showReviewBadge}
-                                    showProgressBadge={showProgressBadge}
-                                />
-                            </PermissionedLink>
+                                >
+                                    <PermissionedLink
+                                        to={`/project/${card.project}/${card.number}`}
+                                        requires={Permission.READ_LATEST_CARDS}
+                                        className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                    >
+                                        <ProjectContentCard
+                                            card={card}
+                                            stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
+                                            release={cardReleases.get(card.number)}
+                                            progress={cardProgress.get(card.number)}
+                                            isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
+                                            isNextRelease={
+                                                !!nextReleaseCode &&
+                                                cardReleases.get(card.number)?.code === nextReleaseCode
+                                            }
+                                            showReviewBadge={showReviewBadge}
+                                            showProgressBadge={showProgressBadge}
+                                        />
+                                    </PermissionedLink>
+                                </div>
+                            </SlotFramed>
                         </motion.div>
                     ))}
                 </div>
@@ -664,6 +736,7 @@ type FactionCarouselProps = {
     cardReleases: Map<number, IProjectRelease>;
     cardProgress: Map<number, CardLaneBreakdown>;
     cardIsReleaseBound: Map<number, boolean>;
+    framing: SlotFraming;
     nextReleaseCode?: string;
     sortBy: SortOption;
     showReviewBadge: boolean;
@@ -671,7 +744,7 @@ type FactionCarouselProps = {
     isLoadingReviews: boolean;
 };
 
-function FactionCarouselSkeleton({ count }: FactionCarouselSkeletonProps) {
+function FactionCarouselSkeleton({ count, isFramed }: FactionCarouselSkeletonProps) {
     return (
         <div className="relative border border-content3 bg-content1 overflow-hidden">
             <div className="relative flex h-20 items-center">
@@ -682,18 +755,60 @@ function FactionCarouselSkeleton({ count }: FactionCarouselSkeletonProps) {
                     <Skeleton className="w-28 h-7 rounded-md" />
                 </div>
             </div>
-            <div className="w-full h-64 sm:h-72 md:h-80 flex overflow-hidden gap-2 p-2">
-                {[...Array(count)].map((_, i) => (
-                    <div key={i} className="h-full aspect-[240/333] shrink-0">
-                        <Skeleton className="w-full h-full rounded-xl" />
-                    </div>
-                ))}
+            <div className="w-full flex overflow-hidden gap-2">
+                {[...Array(count)].map((_, i) =>
+                    isFramed ? (
+                        <div key={i} className="shrink-0 flex flex-col gap-1 rounded-lg border border-content3 p-1">
+                            <Skeleton className="h-6 w-1/2 rounded-sm" />
+                            <Skeleton className="h-64 sm:h-72 md:h-80 aspect-[240/333] rounded-xl" />
+                        </div>
+                    ) : (
+                        <Skeleton key={i} className="h-64 sm:h-72 md:h-80 aspect-[240/333] shrink-0 rounded-xl" />
+                    )
+                )}
             </div>
         </div>
     );
 }
 type FactionCarouselSkeletonProps = {
     count: number;
+    /** Its cards will sit in their slots' frames, so the skeleton holds the room those take too */
+    isFramed: boolean;
+};
+
+// What every card needs to be drawn in its slot's frame, by card number
+type SlotFraming = {
+    slots: Map<number, ISlot>;
+    actions: Map<number, SlotAction[][]>;
+    issues: Map<number, string[]>;
+};
+
+const NO_ACTIONS: SlotAction[][] = [];
+const NO_ISSUES: string[] = [];
+
+// A card in its slot's frame - or just the card, for someone who can't read slots
+function SlotFramed({ framing, number, className, children }: SlotFramedProps) {
+    const slot = framing.slots.get(number);
+    if (!slot) {
+        return <div className={className}>{children}</div>;
+    }
+    return (
+        <SlotFrame
+            slot={slot}
+            actions={framing.actions.get(number) ?? NO_ACTIONS}
+            issues={framing.issues.get(number)}
+            className={className}
+        >
+            {children}
+        </SlotFrame>
+    );
+}
+
+type SlotFramedProps = {
+    framing: SlotFraming;
+    number: number;
+    className?: string;
+    children: ReactNode;
 };
 
 const ProjectContentCard = memo(function ProjectContentCard({
@@ -745,112 +860,77 @@ const ProjectContentCard = memo(function ProjectContentCard({
                     </div>
                 )}
             </div>
-            <div className="absolute top-0 right-0 m-2 z-10 flex items-center gap-1 transition-opacity duration-200 group-hover:opacity-50 hover:!opacity-100">
-                {card.draft && isReleaseBound && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faFlagCheckered} /> Marked For Release
+            <CardCornerBadges
+                badges={[
+                    card.draft &&
+                        isReleaseBound && {
+                            key: "release-bound",
+                            icon: faFlagCheckered,
+                            title: "Marked For Release",
+                            description:
+                                "This pack is out of planning, so this draft is refinement in progress — it won't trigger a playtesting update."
+                        },
+                    card.draft &&
+                        !isReleaseBound && {
+                            key: "drafting",
+                            icon: faFeather,
+                            pulse: true,
+                            title: "New Version Being Drafted",
+                            description:
+                                "The maesters are penning a revised version of this card — not yet in playtesting, it will not enter the field until published with the next Playtesting Update."
+                        },
+                    isNextRelease && {
+                        key: "next-release",
+                        icon: faCrosshairs,
+                        iconClassName: "text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]",
+                        title: "High Priority",
+                        description: "This card is slotted for the next release & needs focus.",
+                        onClick: goToRelease,
+                        onAuxClick: openReleaseInNewTab
+                    }
+                ]}
+            />
+            <CardBadgeLayer>
+                {showProgressBadge && progress && (
+                    <div className={CORNER_BADGE_CLASS}>
+                        <TouchTooltip content={<CardProgressBreakdown progress={progress} />}>
+                            <ProgressRing value={progress.overall} className="size-[2.25em]">
+                                <div
+                                    className={classNames(
+                                        "flex items-center justify-center size-[1.75em] rounded-full font-bold text-primary",
+                                        cornerBadgeDiscFillClasses
+                                    )}
+                                >
+                                    <span className="text-[0.6em]">{Math.round(progress.overall)}%</span>
                                 </div>
-                                <div className="text-xs">
-                                    This pack is out of planning, so this draft is refinement in progress — it won't
-                                    trigger a playtesting update.
-                                </div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
-                            <FontAwesomeIcon icon={faFlagCheckered} className="text-lg text-primary" />
-                        </div>
-                    </TouchTooltip>
+                            </ProgressRing>
+                        </TouchTooltip>
+                    </div>
                 )}
-                {card.draft && !isReleaseBound && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faFeather} /> New Version Being Drafted
-                                </div>
-                                <div className="text-xs">
-                                    The maesters are penning a revised version of this card — not yet in playtesting,
-                                    it will not enter the field until published with the next Playtesting Update.
-                                </div>
-                            </div>
-                        }
-                    >
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 animate-pulse">
-                            <FontAwesomeIcon icon={faFeather} className="text-lg text-primary" />
-                        </div>
-                    </TouchTooltip>
-                )}
-                {isNextRelease && (
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faCrosshairs} /> High Priority
-                                </div>
-                                <div className="text-xs">This card is slotted for the next release & needs focus.</div>
-                            </div>
-                        }
-                    >
-                        <div
-                            onClick={goToRelease}
-                            onAuxClick={openReleaseInNewTab}
-                            className="flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70 cursor-pointer"
-                        >
-                            <FontAwesomeIcon
-                                icon={faCrosshairs}
-                                className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
-                            />
-                        </div>
-                    </TouchTooltip>
-                )}
-            </div>
-            {showProgressBadge && progress && (
-                <div className={CORNER_BADGE_CLASS}>
-                    <TouchTooltip content={<CardProgressBreakdown progress={progress} />}>
-                        <ProgressRing value={progress.overall} className="size-9">
-                            <div className="flex items-center justify-center size-7 rounded-full bg-black/60 text-[0.6rem] font-bold text-primary">
-                                {Math.round(progress.overall)}%
-                            </div>
-                        </ProgressRing>
-                    </TouchTooltip>
-                </div>
-            )}
-            {showReviewBadge && stats && (
-                <div className={CORNER_BADGE_CLASS}>
-                    <TouchTooltip
-                        content={
-                            <div className="max-w-64 px-1 py-0.5">
-                                <div className="text-sm font-cinzel">
-                                    <FontAwesomeIcon icon={faScroll} /> Reviews
-                                </div>
-                                <div className="text-xs">
-                                    {stats.latest} review{stats.latest !== 1 ? "s" : ""} for the latest version.
-                                </div>
-                                {previousReviews > 0 && (
-                                    <div className="text-xs">
-                                        {previousReviews} review{previousReviews !== 1 ? "s" : ""} for previous
-                                        versions.
+                {showReviewBadge && stats && (
+                    <div className={cornerBadgeBottomRightClasses}>
+                        <CornerBadge
+                            icon={faScroll}
+                            iconClassName="text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
+                            title="Reviews"
+                            description={
+                                <>
+                                    <div>
+                                        {stats.latest} review{stats.latest !== 1 ? "s" : ""} for the latest version.
                                     </div>
-                                )}
-                            </div>
-                        }
-                    >
-                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-black/60 ring-1 ring-primary/70">
-                            <FontAwesomeIcon
-                                icon={faScroll}
-                                className="text-lg text-primary drop-shadow-[0_0_4px_rgba(197,160,89,0.9)]"
-                            />
-                            <div className="absolute -bottom-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-primary text-primary-foreground text-[0.65rem] leading-4 text-center font-bold">
-                                {stats.total}
-                            </div>
-                        </div>
-                    </TouchTooltip>
-                </div>
-            )}
+                                    {previousReviews > 0 && (
+                                        <div>
+                                            {previousReviews} review{previousReviews !== 1 ? "s" : ""} for previous
+                                            versions.
+                                        </div>
+                                    )}
+                                </>
+                            }
+                            count={stats.total}
+                        />
+                    </div>
+                )}
+            </CardBadgeLayer>
         </div>
     );
 });

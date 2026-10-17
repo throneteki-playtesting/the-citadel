@@ -1,15 +1,6 @@
 import { useEffect, useState } from "react";
-import {
-    Alert,
-    Button,
-    Checkbox,
-    Modal,
-    ModalBody,
-    ModalContent,
-    ModalFooter,
-    ModalHeader,
-    Skeleton
-} from "@heroui/react";
+import { Alert, Button, Checkbox, ModalBody, ModalContent, ModalFooter, ModalHeader, Skeleton } from "@heroui/react";
+import Modal from "../../components/modal";
 import { DesignStatus, designPhase } from "common/models/slots";
 import Permission from "common/models/permissions";
 import { useGetSlotQuery, useSetSlotDesignStatusMutation, useUpdateSlotMutation } from "../../api";
@@ -44,7 +35,7 @@ export default function DesignProgressModal({ isOpen, onClose, project, number }
 
     if (isLoading || !slot || !design) {
         return (
-            <Modal isOpen={isOpen} size="lg" placement="center" onOpenChange={(open) => !open && onClose()}>
+            <Modal isOpen={isOpen} size="lg" onOpenChange={(open) => !open && onClose()}>
                 <ModalContent>
                     <ModalHeader>Design</ModalHeader>
                     <ModalBody className="pb-6">
@@ -94,13 +85,7 @@ export default function DesignProgressModal({ isOpen, onClose, project, number }
     };
 
     return (
-        <Modal
-            isOpen={isOpen}
-            size="lg"
-            placement="center"
-            scrollBehavior="inside"
-            onOpenChange={(open) => !open && onClose()}
-        >
+        <Modal isOpen={isOpen} size="lg" onOpenChange={(open) => !open && onClose()}>
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-0.5">
                     <span>Design</span>

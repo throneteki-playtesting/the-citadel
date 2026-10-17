@@ -2,11 +2,11 @@ import Permission from "common/models/permissions";
 import { ReactNode } from "react";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
-import { useAuth } from "../hooks/useAuth";
+import { useScopedUser } from "../hooks/useScopedUser";
 import AccessDenied from "../components/accessDenied";
 
 export default function Page({ children, required }: PageProps) {
-    const { user, isLoading } = useAuth();
+    const { user, isLoading } = useScopedUser();
 
     if (isLoading) {
         return null;

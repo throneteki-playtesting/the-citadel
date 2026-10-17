@@ -9,13 +9,16 @@ import { usePermission } from "../../hooks/usePermission";
 import classNames from "classnames";
 import ProjectHeaderDraftNotice from "./draft/projectHeaderDraftNotice";
 import ProjectProgressMeter from "../../components/projectProgressMeter";
+import DraftingGuideButton from "./draft/draftingGuideButton";
 import { useMemo, ReactNode } from "react";
 import HeaderActions from "../../components/actions/headerActions";
 import { statusActionItem } from "../../components/actions/statusActionItem";
 import { BaseStatus } from "../../components/status/baseStatus";
 import { useProjectImageStatus } from "../../components/status/useProjectImageStatus";
 import { useDiscordProjectStatus } from "../../components/status/useDiscordProjectStatus";
+import { useDiscordForumStatus } from "../../components/status/useDiscordForumStatus";
 import { useGithubProjectStatus } from "../../components/status/useGithubProjectStatus";
+import { UserNameList } from "../../components/userAvatar";
 
 const ProjectHeader = ({
     className,
@@ -24,9 +27,11 @@ const ProjectHeader = ({
     onEdit = () => true,
     onDelete = () => true
 }: ProjectHeaderProps) => {
-    const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES);
-    const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD);
-    const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB);
+    const isSyncable = !project.draft;
+    const canSyncImages = usePermission(Permission.SYNC_CARD_IMAGES) && isSyncable;
+    const canSyncDiscord = usePermission(Permission.SYNC_CARD_DISCORD) && isSyncable;
+    const canSyncGithub = usePermission(Permission.SYNC_CARD_GITHUB) && isSyncable;
+    const canViewForum = usePermission(Permission.READ_DISCORD_PLANNING_FORUM) && project.draft;
     const canEdit = usePermission(Permission.EDIT_PROJECTS) && (project.draft || project.active);
     const canDelete = usePermission(Permission.DELETE_PROJECTS) && project.draft && !project.active;
     const canArchive = usePermission(Permission.ARCHIVE_PROJECTS) && !project.draft && project.active;
@@ -34,6 +39,7 @@ const ProjectHeader = ({
     const { data: imageStatus, isLoading: isImageStatusLoading } = useProjectImageStatus(project.number);
     const { data: discordStatus, isLoading: isDiscordStatusLoading } = useDiscordProjectStatus(project.number);
     const { data: githubStatus, isLoading: isGithubStatusLoading } = useGithubProjectStatus(project.number);
+    const forumStatus = useDiscordForumStatus(project);
 
     const headerComponents = useMemo(() => {
         const components: ReactNode[] = [
@@ -47,6 +53,14 @@ const ProjectHeader = ({
             components.push(<span key="version">In Draft</span>);
         } else {
             components.push(<span key="version">{project.version} updates</span>);
+        }
+
+        if (project.owners?.length) {
+            components.push(
+                <span key="owners">
+                    By <UserNameList discordIds={project.owners} />
+                </span>
+            );
         }
 
         if (project.mandateUrl) {
@@ -71,17 +85,18 @@ const ProjectHeader = ({
                 )}
             </>
         );
-    }, [project.draft, project.mandateUrl, project.number, project.type, project.version]);
+    }, [project.draft, project.mandateUrl, project.number, project.owners, project.type, project.version]);
 
     return (
         <div className={classNames("px-4 md:px-0 space-y-2 md:space-y-4", className)} style={style}>
             <div className="flex flex-col gap-2">
                 <div className="flex flex-row items-start justify-between gap-2">
-                    <div className="text-xs tracking-widest font-cinzel uppercase text-foreground/40">
+                    <div className="min-w-0 text-xs tracking-widest font-cinzel uppercase text-foreground/40">
                         {headerComponents}
                     </div>
                     <div className="flex items-center gap-1.5">
                         <div className="hidden sm:flex items-center gap-1.5">
+                            {canViewForum && <BaseStatus data={forumStatus} isIconOnly />}
                             {canSyncImages && (
                                 <BaseStatus data={imageStatus} isLoading={isImageStatusLoading} isIconOnly />
                             )}
@@ -94,6 +109,8 @@ const ProjectHeader = ({
                         </div>
                         <HeaderActions
                             items={[
+                                canViewForum &&
+                                    statusActionItem("forum-discord", forumStatus, { isDropdownOnly: true }),
                                 canSyncImages &&
                                     statusActionItem("sync-images", imageStatus, {
                                         isLoading: isImageStatusLoading,
@@ -140,9 +157,15 @@ const ProjectHeader = ({
                     <div className="flex-1 min-w-0 font-semibold font-cinzel tracking-widest text-3xl sm:text-4xl">
                         {project.name}
                     </div>
-                    <div className="hidden md:block w-64 shrink-0 pb-1">
-                        <ProjectProgressMeter project={project.number} />
-                    </div>
+                    {project.draft ? (
+                        <div className="flex shrink-0 items-center pb-1">
+                            <DraftingGuideButton />
+                        </div>
+                    ) : (
+                        <div className="hidden md:block w-64 shrink-0 pb-1">
+                            <ProjectProgressMeter project={project.number} />
+                        </div>
+                    )}
                 </div>
             </div>
             {project.description && (
@@ -150,9 +173,11 @@ const ProjectHeader = ({
                     <RichText html={project.description} />
                 </div>
             )}
-            <div className="md:hidden">
-                <ProjectProgressMeter project={project.number} />
-            </div>
+            {!project.draft && (
+                <div className="md:hidden">
+                    <ProjectProgressMeter project={project.number} />
+                </div>
+            )}
             {project.draft && <ProjectHeaderDraftNotice project={project} />}
         </div>
     );

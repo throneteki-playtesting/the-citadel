@@ -6,6 +6,7 @@ import Page from "./pages/page";
 import { isPageItem, NavItem, navItems } from "./pages";
 import LoginPage from "./pages/login";
 import Render from "./pages/render";
+import ProjectScope from "./components/projectScope";
 
 const router = createBrowserRouter([
     {
@@ -34,7 +35,11 @@ function pageItemRoutes() {
         if (isPageItem(item)) {
             routes.push({
                 path: item.path,
-                element: item.element ? <Page required={item.permission}>{item.element}</Page> : null
+                element: item.element ? (
+                    <ProjectScope>
+                        <Page required={item.permission}>{item.element}</Page>
+                    </ProjectScope>
+                ) : null
             });
         } else {
             item.subPages.forEach(addRoute);

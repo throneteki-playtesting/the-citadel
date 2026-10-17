@@ -1,27 +1,23 @@
 import { PlotStat, plotStats } from "common/models/cards";
 import { titleCase } from "common/utils";
+import { isPlotModifierLine } from "common/designGuidelines/deriveFields";
 import { PluginKey, Transaction } from "prosemirror-state";
 
 export type PlotModifiers = Partial<Record<PlotStat, number>>;
 
-/** Value a modifier starts at when toggled on */
+// Value a modifier starts at when toggled on
 export const DEFAULT_PLOT_MODIFIER = 1;
 const MAX_PLOT_MODIFIER = 9;
 
 // Mirrors how the card renderer itself matches modifiers (see Ability in @agot/card-preview): case
-// insensitive, the trailing full stop optional, and any amount of whitespace around each one. A line the
-// renderer would draw as shapes must be one this captures, or the two would disagree about what is text.
+// insensitive, the trailing full stop optional, and any amount of whitespace around each one.
 const PLOT_MODIFIER_PATTERN = `\\s*([+-])(\\d+) (${plotStats.join("|")})\\.?\\s*`;
 const PLOT_MODIFIER_REGEX = new RegExp(PLOT_MODIFIER_PATTERN, "gi");
-const PLOT_MODIFIER_LINE_REGEX = new RegExp(`^(?:${PLOT_MODIFIER_PATTERN})+$`, "i");
+
+export { isPlotModifierLine };
 
 export function formatPlotModifier(value: number) {
     return `${value > 0 ? "+" : ""}${value}`;
-}
-
-/** A line the card renderer would draw as modifier shapes rather than as ability text */
-export function isPlotModifierLine(line: string) {
-    return PLOT_MODIFIER_LINE_REGEX.test(line);
 }
 
 export function parsePlotModifiers(line: string): PlotModifiers {

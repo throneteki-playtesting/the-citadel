@@ -6,7 +6,6 @@ import * as Schemas from "common/models/schemas";
 import { SchemaType } from "common/models/schemas";
 import {
     checksClosedBy,
-    DefaultSlotStatuses,
     DesignStatus,
     designPhase,
     designStatuses,
@@ -16,10 +15,15 @@ import {
     ISlot,
     ISlotArtwork,
     ISlotArtworkDetail,
+    ISlotOptions,
     ISlotRefinement,
     ISlotRefinementDetail,
+    previewUrlOf,
+    orderByPreference,
+    previewedCard,
     ReleaseCheckCategory,
     resolveFinalCard,
+    slotOptionKeys,
     SlotStatuses
 } from "common/models/slots";
 import { artworkBlocker, IArtworkProgress } from "common/models/artwork";
@@ -31,21 +35,25 @@ import {
     isInquiryOpen,
     refinementBlocker
 } from "common/models/refinement";
-import { factions, IPlaytestCard } from "common/models/cards";
+import { IPlaytestCard } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
 import { factionNames, getPositionFaction, hasPermission } from "common/utils";
 import { areReleaseChecksClosed, IProject } from "common/models/projects";
+import { settleTemplate } from "@/services/draftSlotService";
 import { validateRequest } from "@/middleware/permissions";
 import Permission from "common/models/permissions";
 import { StatusCodes } from "http-status-codes";
 import { ApiErrorResponse } from "@/errors";
-import { loadProjectByNumber, generateGetResponse, applyToFilter, syncProjectCardCount, clearRelease } from "@/utils";
+import { loadProject, generateGetResponse, applyToFilter, clearRelease } from "@/utils";
 import { IGetRequest, IGetResponse } from "@/types";
 import { getRequestSchema } from "@/schemas";
-import { isEqual } from "lodash-es";
+import { ISlotFilterable } from "@/data/repositories/slotsRepository";
+import { isEqual, omit, xor } from "lodash-es";
+import { conditionsBlocker } from "common/models/slotConditions";
 import { cardSnapshot, logActivity, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
-import { getContext } from "@/middleware/context";
+import { getContext, requestContext } from "@/middleware/context";
+import { createSyncEmitter } from "@/services/sseService";
 import { computeCardProgress } from "@/services/progressService";
 import {
     closeInquiryDiscussion,
@@ -53,20 +61,28 @@ import {
     reopenInquiryDiscussion,
     startInquiryDiscussion
 } from "@/discord/forums/refinementForum";
+import { openSlotDiscussion, slotDiscussionChanged } from "@/discord/forums/planningForum";
+import {
+    revealDraftCard,
+    updateReveal,
+    withClosedThread,
+    withdrawReveal,
+    withoutClosedThread
+} from "@/discord/forums/cardForum";
 
 const router = express.Router({ mergeParams: true });
 
 const SlotParams = {
-    number: Joi.number().required(),
+    project: Joi.number().required(),
     slot: Joi.number().required()
 };
 
 async function getSlots(
-    filter: IGetRequest<ISlot>["filter"],
-    orderBy: IGetRequest<ISlot>["orderBy"],
-    page: IGetRequest<ISlot>["page"],
-    perPage: IGetRequest<ISlot>["perPage"]
-): Promise<IGetResponse<ISlot>> {
+    filter: IGetRequest<ISlotFilterable>["filter"],
+    orderBy: IGetRequest<ISlotFilterable>["orderBy"],
+    page: IGetRequest<ISlotFilterable>["page"],
+    perPage: IGetRequest<ISlotFilterable>["perPage"]
+): Promise<IGetResponse<ISlotFilterable>> {
     const [result, count] = await Promise.all([
         dataService.slots.read(filter, orderBy, page, perPage),
         dataService.slots.count(filter)
@@ -211,19 +227,28 @@ function withRefinementCheck(checks: IRefinementCheck[], by: string, version: Se
     return existing ? checks.map((check) => (check.createdBy === by ? entry : check)) : [...checks, entry];
 }
 
-const getQuerySchema = getRequestSchema(Schemas.Slot.Full, { project: "asc", number: "asc" });
+// Filter/sort-only fields - computed server-side by SlotsRepository's virtualFields, never stored
+const SlotFilterExtensions = {
+    artworkMeta: Joi.object({ artistName: Joi.string(), needsAttention: Joi.boolean() }),
+    refinementMeta: Joi.object({ openInquiries: Joi.number() })
+};
+
+const getQuerySchema = getRequestSchema<ISlotFilterable>(Schemas.Slot.Full.keys(SlotFilterExtensions), {
+    project: "asc",
+    number: "asc"
+});
 
 // Read slots for project
 router.get(
     "/",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_SLOTS),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
-        const { number: project } = req.params;
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
+        const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
@@ -236,13 +261,13 @@ router.get(
 router.get(
     "/artworks",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_ARTWORKS),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
-        const { number: project } = req.params;
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
+        const { project } = req.params;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project });
         const response = await getSlots(normalizedFilter, orderBy, page, perPage);
@@ -254,12 +279,12 @@ router.get(
 router.get(
     "/refinements",
     celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
+        [Segments.PARAMS]: { project: Joi.number().required() },
         [Segments.QUERY]: getQuerySchema
     }),
     validateRequest(Permission.READ_REFINEMENT),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, unknown, IGetRequest<ISlot>>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number }, unknown, unknown, IGetRequest<ISlotFilterable>>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { filter, orderBy, page, perPage } = req.query;
         const normalizedFilter = applyToFilter(filter, { project: project.number });
@@ -294,8 +319,8 @@ router.get(
     "/:slot",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_SLOTS),
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot } = req.params;
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot } = req.params;
         const result = await requireSlot(project, slot);
         res.status(StatusCodes.OK).json(result);
     })
@@ -306,8 +331,8 @@ router.get(
     "/:slot/artwork",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_ARTWORKS),
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot } = req.params;
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot } = req.params;
         const result = await requireSlot(project, slot);
         res.status(StatusCodes.OK).json(toArtworkDetail(result));
     })
@@ -318,109 +343,12 @@ router.get(
     "/:slot/refinement",
     celebrate({ [Segments.PARAMS]: SlotParams }),
     validateRequest(Permission.READ_REFINEMENT),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const slot = await requireSlot(project.number, req.params.slot);
         const version = await readFinalVersion(project, slot);
         res.status(StatusCodes.OK).json(toRefinementDetail(slot, version, canReadFaq()));
-    })
-);
-
-// Create a new slot for a faction (draft projects only) - always appended after the current highest slot number
-router.post(
-    "/",
-    validateRequest(Permission.CREATE_SLOTS),
-    celebrate({
-        [Segments.PARAMS]: { number: Joi.number().required() },
-        [Segments.BODY]: {
-            faction: Joi.string()
-                .required()
-                .valid(...factions)
-        }
-    }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number }, unknown, { faction: (typeof factions)[number] }, unknown>(async (req, res) => {
-        const project = res.locals.project as IProject;
-        const { faction } = req.body;
-
-        if (!project.draft) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Project",
-                "Slots can only be added while a project is in draft"
-            );
-        }
-
-        const existingSlots = await dataService.slots.read({ project: project.number });
-        const nextNumber = existingSlots.reduce((max, slot) => Math.max(max, slot.number), 0) + 1;
-
-        const slot = await dataService.slots.create({
-            project: project.number,
-            number: nextNumber,
-            faction,
-            statuses: DefaultSlotStatuses
-        } as ISlot);
-
-        await syncProjectCardCount(project.number);
-
-        await logActivity(LogCategory.SLOT, "slot.created", `<principal> created a ${faction} slot in <project>`, {
-            context: { project: projectSnapshot(project) }
-        });
-
-        res.status(StatusCodes.OK).json(slot);
-    })
-);
-
-// Delete an empty slot (draft projects only) - must be the highest-numbered slot within its own faction
-router.delete(
-    "/:slot",
-    validateRequest(Permission.DELETE_SLOTS),
-    celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const project = res.locals.project as IProject;
-        const { slot: slotNumber } = req.params;
-
-        if (!project.draft) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Project",
-                "Slots can only be removed while a project is in draft"
-            );
-        }
-
-        const slot = await requireSlot(project.number, slotNumber);
-
-        const factionSlots = await dataService.slots.read({ project: project.number, faction: slot.faction });
-        const highestForFaction = Math.max(...factionSlots.map((s) => s.number));
-        if (slotNumber !== highestForFaction) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Slot",
-                "Only the last slot in a faction can be removed"
-            );
-        }
-
-        const cardCount = await dataService.cards.count({ project: project.number, number: slotNumber });
-        if (cardCount > 0) {
-            throw new ApiErrorResponse(
-                StatusCodes.NOT_ACCEPTABLE,
-                "Invalid Slot",
-                "Cannot remove a slot which has cards assigned to it"
-            );
-        }
-
-        const [deleted] = await dataService.slots.destroy({ project: project.number, number: slotNumber });
-
-        await syncProjectCardCount(project.number);
-
-        await logActivity(LogCategory.SLOT, "slot.deleted", `<principal> deleted slot ${slotNumber} from <project>`, {
-            context: { project: projectSnapshot(project) },
-            severity: "warn"
-        });
-
-        res.status(StatusCodes.OK).json(deleted);
     })
 );
 
@@ -432,11 +360,11 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.Partial
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, Partial<ISlot>, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
-        const { type, notes, faq, statuses } = req.body;
+        const { faq, statuses } = req.body;
 
         const slot = await requireSlot(project.number, slotNumber);
 
@@ -544,8 +472,6 @@ router.patch(
 
         const updated = await dataService.slots.update({
             ...slot,
-            ...(type !== undefined && { type }),
-            ...(notes !== undefined && { notes }),
             ...(mergedStatuses && { statuses: mergedStatuses })
         });
 
@@ -557,6 +483,87 @@ router.patch(
     })
 );
 
+// Replace a slot's options outright - one left out is cleared, which a PATCH merge can't express
+router.put(
+    "/:slot/options",
+    validateRequest(Permission.EDIT_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.Options
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, ISlotOptions, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const slot = await requireSlot(project.number, req.params.slot);
+
+        // The schema can't see the slot's faction, so the one rule that depends on it is checked here
+        const blocker = conditionsBlocker(req.body.conditions ?? [], slot.faction);
+        if (blocker) {
+            throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Invalid Data", blocker);
+        }
+
+        const updated = await dataService.slots.update({ ...omit(slot, slotOptionKeys), ...req.body });
+        await settleTemplate(project);
+        void slotDiscussionChanged(project.number, slot.number);
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.options_updated",
+            `<principal> updated the options of slot #${slot.number} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
+        res.status(StatusCodes.OK).json(updated);
+    })
+);
+
+// Reorder a draft slot's options, most preferred first - the order has to name every option the slot holds
+router.put(
+    "/:slot/preferences",
+    validateRequest(Permission.EDIT_SLOTS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.BODY]: Schemas.Slot.Preferences
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { preferences: SemanticVersion[] }, unknown>(
+        async (req, res) => {
+            const project = res.locals.project as IProject;
+            if (!project.draft) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Project",
+                    "Options are only ordered while a project is in draft"
+                );
+            }
+            const slot = await requireSlot(project.number, req.params.slot);
+            const { preferences } = req.body;
+
+            const options = await dataService.cards.read({ project: project.number, number: slot.number, draft: true });
+            const versions = options.map((option) => option.version);
+            if (xor(versions, preferences).length > 0) {
+                throw new ApiErrorResponse(
+                    StatusCodes.BAD_REQUEST,
+                    "Invalid Data",
+                    "The order has to name every option in the slot, and nothing else"
+                );
+            }
+
+            const updated = await dataService.slots.update({ ...slot, preferences });
+            void slotDiscussionChanged(project.number, slot.number);
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.preferences_updated",
+                `<principal> rearranged the options of slot #${slot.number} in <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
+
+            res.status(StatusCodes.OK).json(updated);
+        }
+    )
+);
+
 // Edit a slot's artwork lane alone, gated by EDIT_ARTWORKS rather than EDIT_SLOTS - see PATCH /:slot
 router.patch(
     "/:slot/artwork",
@@ -565,8 +572,8 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.ArtworkProgress
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, Partial<IArtworkProgress>, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, Partial<IArtworkProgress>, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
         const artworkUpdate = req.body;
@@ -622,8 +629,8 @@ router.patch(
                 .valid(...designStatuses)
         }
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { status: DesignStatus }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { status: DesignStatus }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
         const { status } = req.body;
@@ -697,9 +704,9 @@ router.patch(
         [Segments.PARAMS]: SlotParams,
         [Segments.BODY]: Schemas.Slot.ReleaseCheck
     }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number },
+        { project: number; slot: number },
         unknown,
         { ready: boolean; categories?: ReleaseCheckCategory[]; note?: string },
         unknown
@@ -818,9 +825,9 @@ router.get(
     "/:slot/design/checks/summary",
     validateRequest(Permission.READ_RELEASE_CHECKS),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot: slotNumber } = req.params;
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot: slotNumber } = req.params;
 
         const slot = await requireSlot(project, slotNumber);
 
@@ -866,9 +873,9 @@ router.post(
     "/:slot/inquiries",
     validateRequest(Permission.RAISE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: SlotParams, [Segments.BODY]: Schemas.Slot.Inquiry }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number },
+        { project: number; slot: number },
         unknown,
         { severity: InquirySeverity; summary: string; detail?: string },
         unknown
@@ -939,9 +946,9 @@ router.put(
             hasPermission(principal, Permission.EDIT_INQUIRIES) || hasPermission(principal, Permission.RAISE_INQUIRIES)
     ),
     celebrate({ [Segments.PARAMS]: InquiryParams, [Segments.BODY]: Schemas.Slot.Inquiry }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number; inquiry: number },
+        { project: number; slot: number; inquiry: number },
         unknown,
         { severity: InquirySeverity; summary: string; detail?: string },
         unknown
@@ -1005,8 +1012,8 @@ router.delete(
             hasPermission(principal, Permission.RAISE_INQUIRIES)
     ),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1058,9 +1065,9 @@ router.patch(
     // The body is validated in the handler rather than by celebrate: whether the note is required depends
     // on the stored inquiry, which is not loaded until the handler runs
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
+    loadProject,
     asyncHandler<
-        { number: number; slot: number; inquiry: number },
+        { project: number; slot: number; inquiry: number },
         unknown,
         { status: "resolved"; note?: string },
         unknown
@@ -1114,8 +1121,8 @@ router.delete(
     "/:slot/inquiries/:inquiry/resolution",
     validateRequest(Permission.RESOLVE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1159,8 +1166,8 @@ router.post(
     "/:slot/inquiries/:inquiry/discussion",
     validateRequest(Permission.RAISE_INQUIRIES),
     celebrate({ [Segments.PARAMS]: InquiryParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
 
@@ -1211,14 +1218,197 @@ router.post(
     })
 );
 
+// Open a Discord thread in a draft project's planning forum for one slot, for a slot which has none yet - opening
+// itself as its first card arrives is the usual way, so this is for talking a slot over before it holds anything
+router.post(
+    "/:slot/discussion",
+    validateRequest(Permission.CREATE_CARDS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const slot = await requireSlot(project.number, req.params.slot);
+        if (!project.draft) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Slot",
+                "A discussion can only be opened for a slot of a project in draft"
+            );
+        }
+
+        const { principal } = getContext();
+        try {
+            await openSlotDiscussion(project, slot, principal.id);
+        } catch (err) {
+            logger.warn(
+                new Error(`[Discord] Failed to open discussion for slot #${slot.number} of ${project.code}`, {
+                    cause: err
+                })
+            );
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_GATEWAY,
+                "Discord Error",
+                "A discussion could not be opened for this slot. The planning forum may be missing or out of reach.",
+                err
+            );
+        }
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.discussed",
+            `<principal> opened a discussion for slot ${slot.number} in <project>`,
+            { context: { project: projectSnapshot(project) } }
+        );
+
+        res.status(StatusCodes.OK).json(await requireSlot(project.number, slot.number));
+    })
+);
+
+async function readRevealSlot(project: IProject, slotNumber: number) {
+    const slot = await requireSlot(project.number, slotNumber);
+    if (!project.draft) {
+        throw new ApiErrorResponse(
+            StatusCodes.NOT_ACCEPTABLE,
+            "Invalid Slot",
+            "A card can only be revealed from an open slot of a project in draft"
+        );
+    }
+    const cards = await dataService.cards.read({ project: project.number, number: slot.number });
+    const options = orderByPreference(cards, slot.preferences);
+    const preview = slot._metadata?.preview;
+    return { slot, options, preview, previewed: previewedCard(options, preview) };
+}
+
+function notAllowed(message: string) {
+    return new ApiErrorResponse(StatusCodes.NOT_ACCEPTABLE, "Invalid Slot", message);
+}
+
+// Carries on with the work on a slot's preview after the request is answered, reporting it as it goes
+function previewing(slot: ISlot, step: string, work: () => Promise<ISlot>) {
+    // Detached, so the change reaches the page of whoever asked for it too
+    const context = getContext();
+    const detached = context.source === "client" ? { ...context, detached: true as const } : context;
+    void requestContext.run(detached, async () => {
+        const emitter = createSyncEmitter("slot", "preview", slot);
+        emitter.start();
+        try {
+            emitter.progress(step);
+            emitter.complete(await work());
+        } catch (err) {
+            emitter.error("Failure");
+            logger.warn(
+                new Error(`[Discord] Failed to ${step.toLowerCase()} the preview of slot #${slot.number}`, {
+                    cause: err
+                })
+            );
+        }
+    });
+}
+
+// Reveal a draft slot's Favoured card as a preview, or update the revealed one or replace it. Answered at once
+router.post(
+    "/:slot/reveal",
+    validateRequest(Permission.REVEAL_DRAFT_CARDS),
+    celebrate({
+        [Segments.PARAMS]: SlotParams,
+        [Segments.QUERY]: { action: Joi.string().valid("update", "replace") }
+    }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, { action?: "update" | "replace" }>(
+        async (req, res) => {
+            const project = res.locals.project as IProject;
+            const { action } = req.query;
+            const { slot, options, preview, previewed } = await readRevealSlot(project, req.params.slot);
+            const [favoured] = options;
+
+            if (!preview && !favoured) {
+                throw notAllowed("This slot has no card to reveal");
+            }
+            if (preview && action === "update" && !previewed) {
+                throw notAllowed(
+                    "The card which was revealed is no longer in this slot, so there is nothing to update"
+                );
+            }
+            if (preview && action === "replace" && (!favoured || previewed === favoured)) {
+                throw notAllowed("The Favoured card is already the one revealed");
+            }
+            if (preview && !action) {
+                throw notAllowed("Choose whether to update the reveal or replace it");
+            }
+
+            previewing(slot, !preview ? "Revealing" : action === "update" ? "Updating" : "Replacing", async () => {
+                let next: IPlaytestCard;
+                if (preview && action === "update") {
+                    next = await updateReveal(previewed!, preview);
+                } else {
+                    next = await revealDraftCard(favoured, preview);
+                    // A card keeps the thread it was closed with, to open again if it is revealed again
+                    if (preview && previewed) {
+                        await dataService.cards.update(withClosedThread(previewed, previewUrlOf(preview)), true, false);
+                    }
+                    if (favoured._metadata?.discord?.previewUrl) {
+                        await dataService.cards.update(withoutClosedThread(favoured), true, false);
+                    }
+                }
+                const updated = await dataService.slots.setMetadata(slot, "preview", next);
+                void slotDiscussionChanged(project.number, slot.number);
+
+                await logActivity(
+                    LogCategory.SLOT,
+                    "slot.revealed",
+                    `<principal> revealed a card of slot ${slot.number} in <project>`,
+                    { context: { project: projectSnapshot(project) } }
+                );
+                return updated;
+            });
+
+            res.status(StatusCodes.ACCEPTED).json(slot);
+        }
+    )
+);
+
+// Withdraw a draft slot's preview, closing its thread - the cards themselves are untouched. Answered at once
+router.delete(
+    "/:slot/reveal",
+    validateRequest(Permission.REVEAL_DRAFT_CARDS),
+    celebrate({ [Segments.PARAMS]: SlotParams }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot, preview, previewed } = await readRevealSlot(project, req.params.slot);
+        if (!preview) {
+            throw notAllowed("This slot has no card revealed");
+        }
+
+        previewing(slot, "Withdrawing", async () => {
+            await withdrawReveal(preview);
+            if (previewed) {
+                await dataService.cards.update(withClosedThread(previewed, previewUrlOf(preview)), true, false);
+            }
+            const updated = await dataService.slots.setMetadata(slot, "preview", undefined);
+            void slotDiscussionChanged(project.number, slot.number);
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.reveal_withdrawn",
+                `<principal> withdrew the revealed card of slot ${slot.number} in <project>`,
+                { context: { project: projectSnapshot(project) } }
+            );
+            return updated;
+        });
+
+        res.status(StatusCodes.ACCEPTED).json(slot);
+    })
+);
+
 // Record that the caller has looked this card over. One entry per person, stamped with the version they
 // read - a later version stales it, since refinement is largely about the exact wording
 router.patch(
     "/:slot/refinement/check",
     validateRequest(Permission.SUBMIT_REFINEMENT_CHECK),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1257,8 +1447,8 @@ router.delete(
     "/:slot/refinement/check",
     validateRequest(Permission.SUBMIT_REFINEMENT_CHECK),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1290,8 +1480,8 @@ router.patch(
     "/:slot/faq",
     validateRequest(Permission.EDIT_FAQ),
     celebrate({ [Segments.PARAMS]: SlotParams, [Segments.BODY]: Schemas.Slot.Faq }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { faq: string }, unknown>(async (req, res) => {
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { faq: string }, unknown>(async (req, res) => {
         const project = res.locals.project as IProject;
         const { slot: slotNumber } = req.params;
 
@@ -1314,9 +1504,9 @@ router.get(
     "/:slot/progress",
     validateRequest(Permission.READ_STATS_SLOT),
     celebrate({ [Segments.PARAMS]: SlotParams }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
-        const { number: project, slot: slotNumber } = req.params;
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, unknown, unknown>(async (req, res) => {
+        const { project, slot: slotNumber } = req.params;
         const progress = await computeCardProgress(project, slotNumber);
         res.status(StatusCodes.OK).json(progress);
     })
@@ -1337,8 +1527,8 @@ router.patch(
             })
         })
     }),
-    loadProjectByNumber,
-    asyncHandler<{ number: number; slot: number }, unknown, { code: string | null; position?: number }, unknown>(
+    loadProject,
+    asyncHandler<{ project: number; slot: number }, unknown, { code: string | null; position?: number }, unknown>(
         async (req, res) => {
             const project = res.locals.project as IProject;
             const { slot: slotNumber } = req.params;
