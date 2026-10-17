@@ -25,7 +25,17 @@ import {
     SuggestionMigration
 } from "../../api";
 import ConfirmModal from "../../components/confirmModal";
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+    ComponentProps,
+    memo,
+    useCallback,
+    useDeferredValue,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState
+} from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
@@ -48,7 +58,7 @@ import {
 } from "../../components/designGuidelines/suggestionChecklist";
 import StatusNotice from "../../components/statusNotice";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { EDITOR_CARD_WIDTH } from "../../constants";
+import { EDITOR_CARD_WIDTH, PLOT_RATIO } from "../../constants";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChevronDown, faChevronUp, faTriangleExclamation, faUserPen } from "@fortawesome/free-solid-svg-icons";
@@ -72,6 +82,40 @@ const EMPTY_REWARD_DOWNSIDE_OPTIONS: IRewardDownsideOption[] = [];
 // Same "shared reference, not a fresh `?? {}` every render" reasoning as EMPTY_STRINGS above.
 const EMPTY_JUSTIFICATIONS: DeepPartial<ChecklistJustifications> = {};
 const EMPTY_SUGGESTIONS: ICardSuggestion[] = [];
+
+/** The rail's card, drawn at the largest size the room above the checklist allows - the checklist keeps its
+ *  height and the card gives way, so the rail never needs to scroll. */
+const RailCard = memo(function RailCard({
+    card,
+    isPlot
+}: {
+    card: ComponentProps<typeof EditorCardPreview>["card"];
+    isPlot: boolean;
+}) {
+    const room = useRef<HTMLDivElement>(null);
+    const [roomHeight, setRoomHeight] = useState<number>();
+
+    useLayoutEffect(() => {
+        const element = room.current;
+        if (!element) {
+            return;
+        }
+        const measure = () => setRoomHeight(element.clientHeight);
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
+
+    const fitted = roomHeight === undefined ? Infinity : isPlot ? roomHeight : roomHeight / PLOT_RATIO;
+    const verticalWidth = Math.max(0, Math.min(EDITOR_CARD_WIDTH.suggestion, Math.floor(fitted)));
+
+    return (
+        <div ref={room} className="flex-1 min-h-0 min-w-0 overflow-hidden flex items-center justify-center">
+            <EditorCardPreview card={card} isPlot={isPlot} verticalWidth={verticalWidth} />
+        </div>
+    );
+});
 
 /** Replaced by the engagement-clear warning on the last page - both stay mounted, stacked in one CSS
  *  grid cell, crossfading only opacity (not height), avoiding the "fighting for space" jitter. */
@@ -1020,14 +1064,8 @@ const EditSuggestionModal = ({
                                                 isPlot ? "md:w-[calc(18rem*333/240+2rem)]" : "md:w-80"
                                             )}
                                         >
-                                            <div className="flex-1 min-h-0 flex flex-col gap-3 overflow-y-auto pr-2 pb-3">
-                                                <EditorCardPreview
-                                                    card={renderedCard}
-                                                    isPlot={isPlot}
-                                                    verticalWidth={EDITOR_CARD_WIDTH.suggestion}
-                                                    isClamped={false}
-                                                    className="mx-auto"
-                                                />
+                                            <div className="flex-1 min-h-0 min-w-0 flex flex-col gap-3 overflow-hidden pr-2 pb-3">
+                                                <RailCard card={renderedCard} isPlot={isPlot} />
                                                 <ChecklistRail
                                                     results={checklistResults}
                                                     hasEngagement={hasEngagement}
