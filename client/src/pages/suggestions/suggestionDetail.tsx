@@ -1,5 +1,5 @@
 import { Navigate, useParams } from "react-router-dom";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
     useApproveSuggestionMutation,
     useClearSuggestionReactionMutation,
@@ -54,8 +54,10 @@ import { showApiErrorToast } from "../../api/errors";
 import { cardThumbnailWidthRem, downloadBlob } from "../../utils";
 import usePageTitle from "../../hooks/usePageTitle";
 import EditSuggestionModal from "./editSuggestionModal";
-import PoolMenu from "./poolMenu";
-import { usePoolableProjects } from "./usePoolableProjects";
+import PoolMenu, { PoolModal } from "./poolMenu";
+import FeatherCheckIcon from "../../components/featherCheckIcon";
+import FeatherPlusIcon from "../../components/featherPlusIcon";
+import { poolLabel, useIsPooledByMe, usePoolableProjects } from "./usePoolableProjects";
 import ConfirmModal from "../../components/confirmModal";
 import {
     Code,
@@ -165,6 +167,59 @@ function ReactionTooltipContent({
         </div>
     );
 }
+
+// A phone's slim stand-in for the reaction buttons' counts - who reacted is a tap away
+function MobileReactionSummary({ likedBy, dislikedBy, myReaction }: MobileReactionSummaryProps) {
+    if (likedBy.length + dislikedBy.length === 0) {
+        return null;
+    }
+    return (
+        <div className="order-4 basis-full flex items-center gap-4 text-sm sm:hidden">
+            {(
+                [
+                    ["like", faThumbsUp, likedBy],
+                    ["dislike", faThumbsDown, dislikedBy]
+                ] as const
+            ).map(([type, icon, entries]) => {
+                const summary = (
+                    <span
+                        className={classNames(
+                            "inline-flex items-center gap-1.5",
+                            entries.length > 0 ? "cursor-help" : "text-foreground/40",
+                            myReaction === type && "text-primary"
+                        )}
+                    >
+                        <FontAwesomeIcon icon={icon} />
+                        {entries.length}
+                    </span>
+                );
+                return entries.length === 0 ? (
+                    <Fragment key={type}>{summary}</Fragment>
+                ) : (
+                    <TouchTooltip
+                        key={type}
+                        content={
+                            <ReactionTooltipContent
+                                type={type}
+                                isActive={myReaction === type}
+                                showHint={false}
+                                entries={entries}
+                            />
+                        }
+                    >
+                        {summary}
+                    </TouchTooltip>
+                );
+            })}
+        </div>
+    );
+}
+
+type MobileReactionSummaryProps = {
+    likedBy: { discordId: string; reactedAt: Date }[];
+    dislikedBy: { discordId: string; reactedAt: Date }[];
+    myReaction?: ReactionType;
+};
 
 // The button's own width used to jump between "Approve" and "Unapprove" - an invisible copy of the
 // longer label reserves the width permanently, and the real label crossfades over the top of it.
@@ -373,6 +428,8 @@ const SuggestionDetail = () => {
     const [unapproveSuggestion, { isLoading: isUnapproving }] = useUnapproveSuggestionMutation();
     const [editing, setEditing] = useState<DeepPartial<ICardSuggestion>>();
     const poolableProjects = usePoolableProjects();
+    const isPooled = useIsPooledByMe(suggestion?.id, poolableProjects);
+    const [isPoolOpen, setIsPoolOpen] = useState(false);
     const [isConfirmingApprove, setIsConfirmingApprove] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
     const { user } = useAuth();
@@ -485,6 +542,7 @@ const SuggestionDetail = () => {
             showApiErrorToast(err, { title: "Failed to React" });
         }
     };
+    const canPool = !!suggestion.id && !suggestion.draft && poolableProjects.length > 0;
     const likedBy = Object.entries(reactions)
         .filter(([, entry]) => entry.type === "like")
         .map(([discordId, entry]) => ({ discordId, reactedAt: entry.reactedAt }));
@@ -649,6 +707,7 @@ const SuggestionDetail = () => {
                             </div>
                         )}
                     </div>
+                    <MobileReactionSummary likedBy={likedBy} dislikedBy={dislikedBy} myReaction={myReaction} />
                 </div>
 
                 <div className="flex flex-col items-end gap-2 self-end sm:self-start">
@@ -680,16 +739,26 @@ const SuggestionDetail = () => {
                         <div className="hidden sm:flex items-center gap-1.5">
                             <DiscordSuggestionStatus id={suggestion.id!} isIconOnly />
                         </div>
-                        {suggestion.id && !suggestion.draft && poolableProjects.length > 0 && (
-                            <PoolMenu
-                                suggestion={suggestion.id}
-                                isApproved={!!approvedBy}
-                                projects={poolableProjects}
-                            />
+                        {canPool && (
+                            <div className="hidden sm:block">
+                                <PoolMenu
+                                    suggestion={suggestion.id!}
+                                    isApproved={!!approvedBy}
+                                    projects={poolableProjects}
+                                />
+                            </div>
                         )}
                         <HeaderActions
                             items={[
                                 approveActionItem,
+                                canPool && {
+                                    key: "add-to-pool",
+                                    title: poolLabel(isPooled),
+                                    icon: isPooled ? <FeatherCheckIcon /> : <FeatherPlusIcon />,
+                                    color: isPooled ? "success" : undefined,
+                                    onPress: () => setIsPoolOpen(true),
+                                    isDropdownOnly: true
+                                },
                                 statusActionItem("discord-status", discordStatus, { isDropdownOnly: true }),
                                 canRenderCard && {
                                     key: "export-png",
@@ -1048,6 +1117,15 @@ const SuggestionDetail = () => {
                 }
             />
 
+            {canPool && (
+                <PoolModal
+                    isOpen={isPoolOpen}
+                    onClose={() => setIsPoolOpen(false)}
+                    suggestion={suggestion.id!}
+                    isApproved={!!approvedBy}
+                    projects={poolableProjects}
+                />
+            )}
             <ConfirmModal
                 isOpen={isConfirmingApprove}
                 isLoading={isApproving}

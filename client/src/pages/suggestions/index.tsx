@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import classNames from "classnames";
 import Reveal from "../../components/reveal";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
@@ -142,18 +142,27 @@ function SuggestionsContent() {
         }
     }, [location.state, location.pathname, location.search, navigate]);
 
-    // Discord's /migrate links here with the thread's id - looked up once, then dropped from the url so a
-    // refresh can't start the same migration over
-    const [migrateThreadId, setMigrateThreadId] = useState(
-        () => new URLSearchParams(location.search).get("migrate") ?? undefined
-    );
+    // Discord's /migrate links here with the thread's id, which stays in the url for as long as the migration is
+    // open - so the link can be copied elsewhere and open the same editor, the server checking permission each time
+    const migrateThreadId = new URLSearchParams(location.search).get("migrate") ?? undefined;
     const { data: migrationData, error: migrationError } = useGetSuggestionMigrationQuery(migrateThreadId ?? "", {
         skip: !migrateThreadId
     });
+    const handledThreadRef = useRef<string | undefined>(undefined);
+    const clearMigrateParam = useCallback(() => {
+        const params = new URLSearchParams(window.location.search);
+        params.delete("migrate");
+        navigate({ pathname: window.location.pathname, search: params.toString() }, { replace: true });
+    }, [navigate]);
     useEffect(() => {
-        if (!migrateThreadId || (!migrationData && !migrationError)) {
+        if (!migrateThreadId) {
+            handledThreadRef.current = undefined;
             return;
         }
+        if (handledThreadRef.current === migrateThreadId || (!migrationData && !migrationError)) {
+            return;
+        }
+        handledThreadRef.current = migrateThreadId;
         if (migrationData) {
             const { thread } = migrationData;
             setMigration({ ...migrationData, threadId: migrateThreadId });
@@ -161,12 +170,9 @@ function SuggestionsContent() {
             setEditing({ draft: false, card: { name: thread.name, faction: thread.faction, type: thread.type } });
         } else {
             showApiErrorToast(migrationError, { title: "Can't migrate this thread" });
+            clearMigrateParam();
         }
-        setMigrateThreadId(undefined);
-        const params = new URLSearchParams(location.search);
-        params.delete("migrate");
-        navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    }, [migrateThreadId, migrationData, migrationError, location.pathname, location.search, navigate]);
+    }, [migrateThreadId, migrationData, migrationError, clearMigrateParam]);
 
     // All "browse everything" state is shareable via the url, seeded once on mount. `hasOpenedAll` is
     // sticky (unlike `isBrowsingAll`) so SuggestionsGrid mounts once and keeps its own state thereafter.
@@ -440,6 +446,9 @@ function SuggestionsContent() {
                 onClose={() => {
                     setEditing(undefined);
                     setMigration(undefined);
+                    if (migrateThreadId) {
+                        clearMigrateParam();
+                    }
                 }}
                 onSave={(suggestion) =>
                     addToast({
@@ -452,7 +461,12 @@ function SuggestionsContent() {
                 onReturnToDrafts={() => setIsDraftsOpen(true)}
             />
 
-            <Modal isOpen={!!migrateThreadId} hideCloseButton isDismissable={false} size="sm">
+            <Modal
+                isOpen={!!migrateThreadId && !migration && !migrationError}
+                hideCloseButton
+                isDismissable={false}
+                size="sm"
+            >
                 <ModalContent>
                     <ModalBody className="flex flex-row items-center gap-3 py-6">
                         <Spinner size="sm" />

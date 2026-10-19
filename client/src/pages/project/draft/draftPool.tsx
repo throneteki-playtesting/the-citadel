@@ -1,13 +1,16 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button, Skeleton, Tooltip } from "@heroui/react";
+import { Button, Skeleton, Switch, Tooltip } from "@heroui/react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
 import { factions, ICardSuggestion } from "common/models/cards";
+import { IPoolMark } from "common/models/projects";
 import { suggestionToPlaytestCard } from "common/utils";
+import { useAuth } from "../../../hooks/useAuth";
+import PoolMarkers from "./poolMarkers";
 import { useGetPoolQuery, useGetSuggestionsQuery, useRemoveFromPoolMutation } from "../../../api";
 import { showApiErrorToast } from "../../../api/errors";
 import DraftPoolIcon from "../../../components/draftPoolIcon";
@@ -26,6 +29,7 @@ import {
 import { DragData, POOLED_FROM, useDragState } from "./draftDragStore";
 
 const SKELETON_CARDS = [0, 1, 2, 3];
+const NO_MARKS: IPoolMark[] = [];
 
 // The suggestions set aside for this project: a button in the project's header, opening a panel of the cards still to
 // place. A card placed in a slot leaves the panel - and returns to it if that slot lets it go
@@ -50,17 +54,27 @@ export default function DraftPool({ project, used, host, onPlace }: DraftPoolPro
 
     // What is still in the pool - not placed in a slot - in the order it was pooled, then by faction. And how many
     // suggestions have ever been set aside in it, which a deleted suggestion no longer counts toward
-    const { cards, pooledCount } = useMemo(() => {
+    const { cards, pooledCount, marks } = useMemo(() => {
         const byId = new Map(suggestions?.items.map((suggestion) => [suggestion.id, suggestion]));
         const pooled = (pool ?? []).flatMap((entry) => byId.get(entry.suggestion) ?? []);
         const waiting = pooled.filter((suggestion) => !suggestion.id || !used.has(suggestion.id));
         return {
             cards: factions.flatMap((faction) => waiting.filter((suggestion) => suggestion.card.faction === faction)),
-            pooledCount: pooled.length
+            pooledCount: pooled.length,
+            marks: new Map((pool ?? []).map((entry) => [entry.suggestion, entry.adds]))
         };
     }, [pool, suggestions, used]);
     const count = cards.length;
     const placedCount = pooledCount - count;
+    const me = useAuth().user?.discordId;
+    const [isMineOnly, setIsMineOnly] = useState(false);
+    const shown = useMemo(
+        () =>
+            isMineOnly
+                ? cards.filter((suggestion) => marks.get(suggestion.id ?? "")?.some((mark) => mark.user === me))
+                : cards,
+        [cards, isMineOnly, marks, me]
+    );
     const isLoading = pool === undefined || (pool.length > 0 && suggestions === undefined);
 
     // Picking a card up puts the panel away, so the card can be carried to its slot
@@ -123,21 +137,32 @@ export default function DraftPool({ project, used, host, onPlace }: DraftPoolPro
                         </p>
                     ) : (
                         <div className="flex flex-col gap-3">
-                            <p className="text-sm text-foreground/60">
-                                Tap a card to place it in its faction's next slot, or drag it to a slot
-                            </p>
-                            <ul className={POOL_CARD_GRID_CLASS}>
-                                {cards.map((suggestion) => (
-                                    <PoolCard
-                                        key={suggestion.id}
-                                        suggestion={suggestion}
-                                        project={project}
-                                        isInteractive={isInteractive}
-                                        onRemove={remove}
-                                        onPlace={place}
-                                    />
-                                ))}
-                            </ul>
+                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                                <p className="min-w-0 flex-1 text-sm text-foreground/60">
+                                    Tap a card to place it in its faction's next slot, or drag it to a slot
+                                </p>
+                                <Switch size="sm" isSelected={isMineOnly} onValueChange={setIsMineOnly}>
+                                    Marked by me
+                                </Switch>
+                            </div>
+                            {shown.length === 0 ? (
+                                <p className="py-8 text-center text-foreground/60">You haven't added any of these</p>
+                            ) : (
+                                <ul className={POOL_CARD_GRID_CLASS}>
+                                    {shown.map((suggestion) => (
+                                        <PoolCard
+                                            key={suggestion.id}
+                                            suggestion={suggestion}
+                                            project={project}
+                                            marks={marks.get(suggestion.id ?? "") ?? NO_MARKS}
+                                            me={me}
+                                            isInteractive={isInteractive}
+                                            onRemove={remove}
+                                            onPlace={place}
+                                        />
+                                    ))}
+                                </ul>
+                            )}
                         </div>
                     )
                 }
@@ -298,7 +323,16 @@ type PoolTriggerProps = {
     onOpen: (rect: DOMRect) => void;
 };
 
-const PoolCard = memo(function PoolCard({ suggestion, project, isInteractive, onRemove, onPlace }: PoolCardProps) {
+const PoolCard = memo(function PoolCard({
+    suggestion,
+    project,
+    marks,
+    me,
+    isInteractive,
+    onRemove,
+    onPlace
+}: PoolCardProps) {
+    const isMine = marks.some((mark) => mark.user === me);
     const card = useMemo(() => suggestionToPlaytestCard(suggestion, project, POOLED_FROM), [suggestion, project]);
     const isCarried = useDragState((state) => !!suggestion.id && state.active?.suggestion?.id === suggestion.id);
     const { attributes, listeners, setNodeRef } = useDraggable({
@@ -326,25 +360,36 @@ const PoolCard = memo(function PoolCard({ suggestion, project, isInteractive, on
                 rounded
             />
             <CardBadgeLayer>
-                <div
-                    className="absolute right-0 top-0 m-[0.5em] opacity-25 transition-opacity hover:opacity-90 group-hover:opacity-90"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => event.stopPropagation()}
-                >
-                    <Tooltip content="Remove from this pool" color="danger">
-                        <Button
-                            isIconOnly
-                            radius="full"
-                            size="sm"
-                            variant="faded"
-                            aria-label={`Remove ${suggestion.card.name} from this project's pool`}
-                            className={classNames(FLAT_BUTTON_CLASS, CORNER_CONTROL_CLASS, "text-danger")}
-                            onPress={() => suggestion.id && onRemove(suggestion.id)}
-                        >
-                            <FontAwesomeIcon icon={faXmark} />
-                        </Button>
-                    </Tooltip>
-                </div>
+                {isMine && (
+                    <div
+                        className="absolute right-0 top-0 m-[0.5em] opacity-25 transition-opacity hover:opacity-90 group-hover:opacity-90"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <Tooltip content="Remove my mark from this pool" color="danger">
+                            <Button
+                                isIconOnly
+                                radius="full"
+                                size="sm"
+                                variant="faded"
+                                aria-label={`Remove ${suggestion.card.name} from my picks for this project's pool`}
+                                className={classNames(FLAT_BUTTON_CLASS, CORNER_CONTROL_CLASS, "text-danger")}
+                                onPress={() => suggestion.id && onRemove(suggestion.id)}
+                            >
+                                <FontAwesomeIcon icon={faXmark} />
+                            </Button>
+                        </Tooltip>
+                    </div>
+                )}
+                {marks.length > 0 && (
+                    <div
+                        className="absolute bottom-0 left-0 m-[0.5em]"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <PoolMarkers marks={marks} />
+                    </div>
+                )}
             </CardBadgeLayer>
         </li>
     );
@@ -353,6 +398,9 @@ const PoolCard = memo(function PoolCard({ suggestion, project, isInteractive, on
 type PoolCardProps = {
     suggestion: ICardSuggestion;
     project: number;
+    /** Everyone who has added it to the pool */
+    marks: IPoolMark[];
+    me?: string;
     isInteractive: boolean;
     onRemove: (suggestion: string) => void;
     onPlace: (data: DragData, from: DOMRect) => void;

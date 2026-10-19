@@ -23,6 +23,7 @@ import { migration as renameProjectDataSyncPermissionMigration } from "./migrati
 import { migration as slotRefinementMigration } from "./migrations/013_slotRefinement";
 import { migration as suggestionsReworkMigration } from "./migrations/014_suggestionsRework";
 import { migration as standardTemplateMigration } from "./migrations/015_standardTemplate";
+import { migration as poolMarksMigration } from "./migrations/016_poolMarks";
 
 const ALL_MIGRATIONS: Migration[] = [
     projectsMigration,
@@ -39,7 +40,8 @@ const ALL_MIGRATIONS: Migration[] = [
     renameProjectDataSyncPermissionMigration,
     slotRefinementMigration,
     suggestionsReworkMigration,
-    standardTemplateMigration
+    standardTemplateMigration,
+    poolMarksMigration
 ];
 
 const args = process.argv.slice(2);

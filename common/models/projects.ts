@@ -116,13 +116,19 @@ export type SlotCounts = Partial<FactionCardCount>;
 // A project as it is saved - the counts are not stored, but opened, created or closed towards by the server
 export type IProjectSave = IProject & { slotCounts?: SlotCounts; slotOrder?: Faction[] };
 
-/** A suggestion set aside in a draft project, to be drawn on for its slots - it stays pooled once placed */
+/** One person's mark on a pooled suggestion */
+export interface IPoolMark {
+    /** Discord id of whoever marked it */
+    user: string;
+    added: Date;
+}
+
+/** A suggestion set aside in a draft project, to be drawn on for its slots - it stays pooled once placed. Everyone
+ *  who can draft keeps their own list of what they want in the pool, so it holds one mark per person, oldest first */
 export interface IPoolEntry {
     project: number;
     suggestion: string;
-    /** Discord id of whoever pooled it */
-    addedBy: string;
-    added: Date;
+    adds: IPoolMark[];
 }
 
 export const CUSTOM_TEMPLATE = "custom";

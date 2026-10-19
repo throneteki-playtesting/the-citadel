@@ -26,6 +26,7 @@ import type { AppDispatch } from "../../../api/store";
 import { cacheNow } from "../../../api/cacheHelpers";
 import SlotOptionsModal from "../../../components/slots/slotOptionsModal";
 import { slotTitle } from "../../../components/slots/slotTitle";
+import { useAuth } from "../../../hooks/useAuth";
 import { usePermission } from "../../../hooks/usePermission";
 import { useDragSensors } from "../../../hooks/useDragSensors";
 import { useHasOpened } from "../../../hooks/useHasOpened";
@@ -160,6 +161,7 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
     const poolHost = useDraftPoolHost();
     const canDraft = usePermission(Permission.CREATE_CARDS);
     const { data: pool } = useGetPoolQuery({ project: project.number }, { skip: !canDraft });
+    const me = useAuth().user?.discordId;
     const dispatch = useDispatch<AppDispatch>();
 
     const [factionSlots, setFactionSlots] = useState<FactionSlots>(new Map());
@@ -443,7 +445,10 @@ export default function ProjectDrafting({ project }: ProjectDraftingProps) {
             return;
         }
         try {
-            if (!pool?.some((entry) => entry.suggestion === suggestion)) {
+            const isMarkedByMe = pool?.some(
+                (entry) => entry.suggestion === suggestion && entry.adds.some((mark) => mark.user === me)
+            );
+            if (!isMarkedByMe) {
                 await addToPool({ project: project.number, suggestion, isUnapprovedConfirmed: true }).unwrap();
             }
         } catch (error) {

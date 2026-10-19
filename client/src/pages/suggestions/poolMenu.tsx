@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Button, Popover, PopoverContent, PopoverTrigger, Spinner } from "@heroui/react";
+import { Fragment, useState } from "react";
+import {
+    Button,
+    ModalBody,
+    ModalContent,
+    ModalHeader,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+    Spinner
+} from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCheck, faTriangleExclamation, faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -7,36 +16,64 @@ import classNames from "classnames";
 import { IProject } from "common/models/projects";
 import { useAddToPoolMutation, useGetPoolQuery, useGetUserQuery, useRemoveFromPoolMutation } from "../../api";
 import { showApiErrorToast } from "../../api/errors";
+import FeatherCheckIcon from "../../components/featherCheckIcon";
 import FeatherPlusIcon from "../../components/featherPlusIcon";
+import { poolLabel, useIsPooledByMe } from "./usePoolableProjects";
+import Modal from "../../components/modal";
+import { useAuth } from "../../hooks/useAuth";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { NOTICE_TRANSITION } from "../../constants";
 
 // Sets a suggestion aside in the pool of any draft project the viewer can draft in - a checked project already has it
 export default function PoolMenu({ suggestion, isApproved, projects }: PoolMenuProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const isPooled = useIsPooledByMe(suggestion, projects);
     return (
-        <TouchTooltip content="Add to Pool">
+        <TouchTooltip content={poolLabel(isPooled)}>
             <span className="inline-flex">
                 <Popover isOpen={isOpen} onOpenChange={setIsOpen} placement="bottom-end" offset={8}>
                     <PopoverTrigger>
-                        <Button isIconOnly color="primary" variant="flat" aria-label="Add to Pool">
-                            <FeatherPlusIcon />
+                        <Button
+                            isIconOnly
+                            color={isPooled ? "success" : "primary"}
+                            variant="flat"
+                            aria-label={poolLabel(isPooled)}
+                        >
+                            {isPooled ? <FeatherCheckIcon /> : <FeatherPlusIcon />}
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-[22rem] gap-1 p-1.5">
-                        {projects.map((project) => (
-                            <PoolOption
-                                key={project.number}
-                                project={project}
-                                suggestion={suggestion}
-                                isApproved={isApproved}
-                            />
-                        ))}
+                        <PoolOptions suggestion={suggestion} isApproved={isApproved} projects={projects} />
                     </PopoverContent>
                 </Popover>
             </span>
         </TouchTooltip>
     );
+}
+
+// The same choices in a dialog, for a phone - where the page's own button gives way to the bubble menu's entry
+export function PoolModal({ isOpen, onClose, suggestion, isApproved, projects }: PoolMenuProps & PoolModalProps) {
+    return (
+        <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()} size="sm">
+            <ModalContent>
+                <ModalHeader>Add to Pool</ModalHeader>
+                <ModalBody className="gap-1 pb-4">
+                    <PoolOptions suggestion={suggestion} isApproved={isApproved} projects={projects} />
+                </ModalBody>
+            </ModalContent>
+        </Modal>
+    );
+}
+
+type PoolModalProps = {
+    isOpen: boolean;
+    onClose: () => void;
+};
+
+function PoolOptions({ suggestion, isApproved, projects }: PoolMenuProps) {
+    return projects.map((project) => (
+        <PoolOption key={project.number} project={project} suggestion={suggestion} isApproved={isApproved} />
+    ));
 }
 
 type PoolMenuProps = {
@@ -51,9 +88,10 @@ function PoolOption({ project, suggestion, isApproved }: PoolOptionProps) {
     const [addToPool, { isLoading: isAdding }] = useAddToPoolMutation();
     const [removeFromPool, { isLoading: isRemoving }] = useRemoveFromPoolMutation();
     const [isAsking, setIsAsking] = useState(false);
-    const entry = pool?.find((candidate) => candidate.suggestion === suggestion);
-    const isPooled = !!entry;
-    const { data: addedBy } = useGetUserQuery({ discordId: entry?.addedBy ?? "" }, { skip: !entry });
+    const me = useAuth().user?.discordId;
+    const marks = pool?.find((candidate) => candidate.suggestion === suggestion)?.adds;
+    const isPooled = !!marks?.some((mark) => mark.user === me);
+    const others = (marks ?? []).filter((mark) => mark.user !== me).map((mark) => mark.user);
     const isBusy = isAdding || isRemoving;
 
     const add = async (isUnapprovedConfirmed = false) => {
@@ -102,9 +140,9 @@ function PoolOption({ project, suggestion, isApproved }: PoolOptionProps) {
                 <Checkmark isChecked={isPooled} isLoading={pool === undefined || isBusy} />
                 <span className="flex min-w-0 flex-1 flex-col leading-tight">
                     <span className="truncate">{project.name}</span>
-                    {entry && (
+                    {(isPooled || others.length > 0) && (
                         <span className="truncate text-xs text-foreground/60">
-                            Added by {addedBy?.displayname ?? "…"}
+                            <MarkSummary isMine={isPooled} others={others} />
                         </span>
                     )}
                 </span>
@@ -148,6 +186,38 @@ function PoolOption({ project, suggestion, isApproved }: PoolOptionProps) {
             </AnimatePresence>
         </div>
     );
+}
+
+const SUMMARY_NAMES_SHOWN = 2;
+
+// Who has this in the pool, in a line: "Only you", "You and Sam", "You, Sam and 2 others", "Marked by Sam"
+function MarkSummary({ isMine, others }: { isMine: boolean; others: string[] }) {
+    if (isMine && others.length === 0) {
+        return <>Only you</>;
+    }
+    const named = others.slice(0, isMine ? SUMMARY_NAMES_SHOWN - 1 : SUMMARY_NAMES_SHOWN);
+    const rest = others.length - named.length;
+    const people = [
+        ...(isMine ? ["You"] : []),
+        ...named.map((discordId) => <PersonName key={discordId} discordId={discordId} />),
+        ...(rest > 0 ? [`${rest} other${rest === 1 ? "" : "s"}`] : [])
+    ];
+    return (
+        <>
+            {!isMine && "Marked by "}
+            {people.map((person, index) => (
+                <Fragment key={index}>
+                    {index > 0 && (index === people.length - 1 ? " and " : ", ")}
+                    {person}
+                </Fragment>
+            ))}
+        </>
+    );
+}
+
+function PersonName({ discordId }: { discordId: string }) {
+    const { data: user } = useGetUserQuery({ discordId });
+    return <>{user?.displayname ?? "…"}</>;
 }
 
 type PoolOptionProps = {
