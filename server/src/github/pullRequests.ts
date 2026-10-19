@@ -112,6 +112,7 @@ export async function syncCodePullRequests(forced?: boolean) {
 
 type PtEmitter = ReturnType<typeof createSyncEmitter<"playtestingUpdate">>;
 type ReleaseEmitter = ReturnType<typeof createSyncEmitter<"release">>;
+type ProjectRelease = IProjectRelease & { project: number };
 
 // Deferred stamp for a project whose file changed this round - the final PR state for these isn't known
 // until internalDataSync runs once for the whole batch, after every project has been diffed
@@ -130,7 +131,7 @@ function stampProjectEntities(
     lastSynced: Date,
     resolveState: (entity: { created: Date }) => PullRequestState | null | undefined,
     touchedPlaytestingUpdates: IPlaytestingUpdate[],
-    touchedProjects: IProject[]
+    touchedReleases: ProjectRelease[]
 ) {
     if (playtestingUpdate) {
         applyPullRequestState(playtestingUpdate, "data", lastSynced, resolveState(playtestingUpdate));
@@ -139,17 +140,16 @@ function stampProjectEntities(
     }
     for (const r of releases) {
         applyReleasePullRequestState(r, lastSynced, resolveState(r));
-        releaseEmitters.get(r)?.complete({ ...r, project: project.number });
-    }
-    if (releases.length > 0) {
-        touchedProjects.push(project);
+        const stamped = { ...r, project: project.number };
+        releaseEmitters.get(r)?.complete(stamped);
+        touchedReleases.push(stamped);
     }
 }
 
 export async function syncDataPullRequests(forced?: boolean) {
     const release = await syncDataPullRequestMutex.acquire();
     const touchedPlaytestingUpdates: IPlaytestingUpdate[] = [];
-    const touchedProjects: IProject[] = [];
+    const touchedReleases: ProjectRelease[] = [];
     try {
         const projects = await dataService.projects.read({});
 
@@ -225,7 +225,7 @@ export async function syncDataPullRequests(forced?: boolean) {
                             lastSynced,
                             (entity) => (merged ? toMergedState(merged, entity) : undefined),
                             touchedPlaytestingUpdates,
-                            touchedProjects
+                            touchedReleases
                         );
                         pending.delete(unit);
                     } else {
@@ -267,7 +267,7 @@ export async function syncDataPullRequests(forced?: boolean) {
                     state = null;
                 }
                 for (const stamp of deferred) {
-                    stampProjectEntities(stamp, lastSynced, () => state, touchedPlaytestingUpdates, touchedProjects);
+                    stampProjectEntities(stamp, lastSynced, () => state, touchedPlaytestingUpdates, touchedReleases);
                     pending.delete(stamp);
                 }
             }
@@ -275,9 +275,12 @@ export async function syncDataPullRequests(forced?: boolean) {
             if (touchedPlaytestingUpdates.length > 0) {
                 await dataService.playtestingUpdates.update(touchedPlaytestingUpdates, false, false, false);
             }
-            if (touchedProjects.length > 0) {
-                await dataService.projects.update(touchedProjects, false, false, false);
-            }
+            // Only the stamp itself - the projects read above may have changed during the GitHub calls
+            await Promise.all(
+                touchedReleases.map((release) =>
+                    dataService.projects.setReleaseMetadata(release, "github", release._metadata!.github!)
+                )
+            );
         } catch (err) {
             // Only reaches units still pending - per-project failures above already handled their own.
             pending.forEach(({ ptEmitter, releaseEmitters }) => {

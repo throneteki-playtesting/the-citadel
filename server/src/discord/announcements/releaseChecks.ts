@@ -47,21 +47,18 @@ export async function syncReleaseChecks(projects: IProject[], forced?: boolean):
             .sort(
                 (a, b) => byNumber(a.project.number, b.project.number) || byNumber(a.release.number, b.release.number)
             );
-        const changed = new Set<IProject>();
+        const persisted = new Map<IProject, IProject>();
         await inOrder(pending, async ({ project, release }) => {
             if (await syncRelease(project, release, context)) {
-                changed.add(project);
+                // Only the announcement's own metadata - the project held here is from before the Discord calls
+                const updated = await dataService.projects.setReleaseMetadata(
+                    { project: project.number, code: release.code },
+                    "discord",
+                    release._metadata!.discord!
+                );
+                persisted.set(project, updated);
             }
         });
-        // Sync off, or persisting the message url would immediately re-enter this function
-        const persisted = new Map(
-            await Promise.all(
-                [...changed].map(async (project) => {
-                    const [updated] = await dataService.projects.update([project], true, false, false);
-                    return [project, updated] as const;
-                })
-            )
-        );
         return projects.map((project) => persisted.get(project) ?? project);
     } catch (err) {
         logger.warn(new Error("[Discord] Failed to sync release checks", { cause: err }));

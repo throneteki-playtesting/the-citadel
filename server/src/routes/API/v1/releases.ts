@@ -19,7 +19,6 @@ import { getContext } from "@/middleware/context";
 import { logActivity, cardSnapshot, projectSnapshot } from "@/services/activityLogService";
 import { LogCategory } from "common/models/logs";
 import { computeReleasesProgress } from "@/services/progressService";
-import { clearDiscordMetadata } from "@/discord/forums/cardForum";
 import { IPlaytestCard } from "common/models/cards";
 import { syncDataPullRequests } from "@/github/pullRequests";
 
@@ -479,15 +478,12 @@ router.post(
                 if (isPromoted) {
                     promotedNumbers.push(slot.number);
                 }
-                const updated: IPlaytestCard = {
+                return {
                     ...finalCard!,
                     draft: false,
                     illustrator: finalCard!.illustrator || creditedName || "",
                     released
                 };
-                // Forces a fresh "released" thread rather than reusing (or silently ignoring) the card's prior thread
-                clearDiscordMetadata([updated]);
-                return updated;
             });
             await dataService.cards.update(updatedCards);
 
@@ -539,7 +535,15 @@ router.post(
                 );
             }
 
-            res.status(StatusCodes.OK).json(updated);
+            // A promoted draft takes over from the old latest, so whatever showed that card has changed too
+            const superseded = promotedNumbers
+                .map((number) => latestByNumber.get(number))
+                .filter((card): card is IPlaytestCard => !!card);
+            res.status(StatusCodes.OK).json({
+                project: updated,
+                cards: [...updatedCards, ...superseded],
+                slots: forcedSlots
+            });
         }
     )
 );

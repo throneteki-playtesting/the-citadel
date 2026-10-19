@@ -87,7 +87,12 @@ async function syncCardThread(
                 );
             } else {
                 const messageExists = !!card._metadata?.discord?.messageUrl;
-                if (messageExists) {
+                if (messageExists && (await isPlaytestingMessage(card))) {
+                    // Newly released - its thread from playtesting closes behind a released one
+                    emitter.progress("Syncing");
+                    logger.info(`[Discord] Releasing ${card.name} (${card.version})`);
+                    card = await createReleased(card, context);
+                } else if (messageExists) {
                     // Forced or outdated, and a message already exists - refresh it in place, no new thread
                     emitter.progress("Refreshing");
                     logger.info(`[Discord] Refreshing ${card.name} (${card.version})`);
@@ -106,12 +111,13 @@ async function syncCardThread(
                         merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
                     } else {
                         emitter.progress("Syncing");
-                        if (isPreview(card)) {
+                        // Released first - a card released unchanged is still on its initial version
+                        if (card.released) {
+                            card = await createReleased(card, context);
+                        } else if (isPreview(card)) {
                             card = await createPreview(card, context);
                         } else if (isInitial(card)) {
                             card = await createInitial(card, context);
-                        } else if (card.released) {
-                            card = await createReleased(card, context);
                         } else {
                             card = await createNewLatest(card, context);
                         }
@@ -267,16 +273,43 @@ export async function createReleased(card: IPlaytestCard, context?: CardForumCon
         const starter = await thread.fetchStarterMessage();
         await starter.pin();
 
-        const previous = await dataService.cards.previous(card);
-        if (previous) {
-            // Close previous thread, if it exists
-            await closeThreadFor(previous, context);
+        const playtestingUrl = card._metadata?.discord?.messageUrl;
+        if (playtestingUrl) {
+            await closePlaytestingThread(card, playtestingUrl, context);
+        } else {
+            const previous = await dataService.cards.previous(card);
+            if (previous) {
+                // Close previous thread, if it exists
+                await closeThreadFor(previous, context);
+            }
         }
 
         merge(card, { _metadata: { discord: { messageUrl: starter.url, lastSynced: new Date() } } });
         return card;
     } catch (err) {
         throw new Error(`Error creating released thread for ${card.name} (${card.version})`, { cause: err });
+    }
+}
+
+// A released card's message from before its release was published is still the one it was playtested under
+async function isPlaytestingMessage(card: IPlaytestCard) {
+    if (!card.released) {
+        return false;
+    }
+    const [project] = await dataService.projects.read({ number: card.project });
+    const release = project?.releases.find((r) => r.code === card.released.code);
+    const lastSynced = card._metadata?.discord?.lastSynced;
+    return !!release && (!lastSynced || lastSynced < release.updated);
+}
+
+// The thread the card was playtested in - its own, or for a promoted draft the version it replaced
+async function closePlaytestingThread(card: IPlaytestCard, playtestingUrl: string, context: CardForumContext) {
+    try {
+        const thread = await threadAt(playtestingUrl, context.guild);
+        logger.info(`[Discord] Closing playtesting thread for ${card.name}: ${playtestingUrl}`);
+        await lockAndArchive(thread, { ...card, latest: false }, context);
+    } catch (err) {
+        logger.warn(new Error(`[Discord] Failed to close playtesting thread for ${card.name}`, { cause: err }));
     }
 }
 
@@ -290,12 +323,12 @@ async function refreshCardMessage(card: IPlaytestCard, context: CardForumContext
 
         const [project] = await dataService.projects.read({ number: card.project });
         let messageOptions: GuildForumThreadMessageCreateOptions;
-        if (isPreview(card)) {
+        if (card.released) {
+            messageOptions = await messages.released(card, project);
+        } else if (isPreview(card)) {
             messageOptions = await messages.preview(card, project, context);
         } else if (isInitial(card)) {
             messageOptions = await messages.initial(card, project, context);
-        } else if (card.released) {
-            messageOptions = await messages.released(card, project);
         } else {
             const playtestingUpdate = await dataService.playtestingUpdates.for(card);
             if (!playtestingUpdate) {
@@ -790,8 +823,14 @@ async function suggestionFooter(card: IPlaytestCard) {
 
 // Thread helper functions
 function threadNameFor(card: IPlaytestCard) {
-    const cardLabel = `${card.name} (${isPreview(card) ? "Preview" : card.version})`;
-    return `${card.number}. ${cardLabel}`;
+    return `${card.number}. ${card.name} (${threadLabelFor(card)})`;
+}
+// A released card is named apart from the playtesting thread it follows, which may share its version
+function threadLabelFor(card: IPlaytestCard) {
+    if (card.released) {
+        return card.released.code;
+    }
+    return isPreview(card) ? "Preview" : card.version;
 }
 export async function getThreadFor(card: IPlaytestCard) {
     let target = card;
@@ -948,9 +987,10 @@ const messages = {
         };
     },
     async released(card: IPlaytestCard, project: IProject): Promise<GuildForumThreadMessageCreateOptions> {
+        const release = project.releases.find((r) => r.code === card.released.code);
         const heading =
-            "## Card Released" +
-            `\n${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number} has officially been released (${card.released.code} #${card.released.number}).`;
+            "## Final Card" +
+            `\nHere is the final version of ${project.emoji ? `:${project.emoji}: ` : ""}**${project.name}** card #${card.number}, now part of **${release?.name ?? card.released.code}** as #${card.released.number}!`;
 
         const container = await createCardContainer(card, heading);
         const buttons = createMessageButtons(card);

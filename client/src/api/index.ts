@@ -1085,15 +1085,18 @@ const api = createApi({
             },
             invalidatesTags: (result) => generateFor(result, "project")
         }),
-        publishRelease: builder.mutation<IProject, { project: number; code: string; releasedDate: ReleaseDate }>({
+        publishRelease: builder.mutation<
+            { project: IProject; cards: IPlaytestCard[]; slots: ISlot[] },
+            { project: number; code: string; releasedDate: ReleaseDate }
+        >({
             query: ({ project, code, ...body }) => {
                 const url = buildUrl(`projects/${project}/releases/${code}/publish`);
                 return { url, method: "POST", body };
             },
             invalidatesTags: (result) => [
-                ...generateFor(result, "project"),
-                { type: "slot" as const, id: "LIST" },
-                { type: "card" as const, id: "LIST" }
+                ...generateFor(result?.project, "project"),
+                ...generateFor(result?.cards, "card"),
+                ...generateFor(result?.slots, "slot")
             ]
         }),
         deleteRelease: builder.mutation<

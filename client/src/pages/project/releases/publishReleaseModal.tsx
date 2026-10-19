@@ -60,7 +60,7 @@ export default function PublishReleaseModal({
                 code: release.code,
                 releasedDate: data.releasedDate
             }).unwrap();
-            onSave?.(result);
+            onSave?.(result.project);
             onModalClose?.(true);
         } catch {
             addToast({

@@ -1,6 +1,6 @@
-import { IProject } from "common/models/projects";
+import { IProject, IProjectRelease } from "common/models/projects";
 import MongoDataSource from "./dataSources/mongoDataSource";
-import { MongoClient } from "mongodb";
+import { Filter as MongoFilter, MongoClient, UpdateFilter } from "mongodb";
 import { BasicAuditableRepository } from "./shared";
 import { SingleOrArray } from "common/types";
 import { asArray } from "common/utils";
@@ -42,6 +42,24 @@ export default class ProjectsRepository extends BasicAuditableRepository<"projec
             data = await this.sync(data);
         }
         return Array.isArray(updating) ? data : data[0];
+    }
+
+    // Sets one key of one release's metadata alone, so a project written meanwhile survives - never broadcast,
+    // as each caller's sync emitter already tells clients
+    public async setReleaseMetadata<K extends keyof NonNullable<IProjectRelease["_metadata"]> & string>(
+        ref: { project: number; code: string },
+        key: K,
+        value: NonNullable<IProjectRelease["_metadata"]>[K]
+    ) {
+        const updated = await this.database.collection.findOneAndUpdate(
+            { number: ref.project } as MongoFilter<IProject>,
+            { $set: { [`releases.$[release]._metadata.${key}`]: value } } as UpdateFilter<IProject>,
+            { arrayFilters: [{ "release.code": ref.code }], returnDocument: "after", projection: { _id: 0 } }
+        );
+        if (!updated) {
+            throw new Error(`Project #${ref.project} no longer exists`);
+        }
+        return updated as IProject;
     }
 
     public async sync(syncing: IProject, forced?: boolean): Promise<IProject>;
