@@ -106,6 +106,11 @@ export function isDirty<T>(committed: T | undefined, draft: T | undefined): bool
     return !!committed && !!draft && !isEqual(pruneEmpty(draft), pruneEmpty(committed));
 }
 
+// Whether two versions of a card read the same - a field emptied rather than removed is no change
+export function isSameCard(a: DeepPartial<Cards.ICard> | undefined, b: DeepPartial<Cards.ICard> | undefined) {
+    return !isDirty(getBaseCardValues(a ?? {}), getBaseCardValues(b ?? {}));
+}
+
 export function pushSorted<T>(arr: T[], item: T, compareFn: (a: T, b: T) => number) {
     let low = 0,
         high = arr.length;

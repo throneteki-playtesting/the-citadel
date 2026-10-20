@@ -39,7 +39,7 @@ import {
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
-import { getBaseCardValues, renderCardSuggestion } from "common/utils";
+import { getBaseCardValues, isSameCard, renderCardSuggestion } from "common/utils";
 import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { useWizard } from "../../components/wizard/context";
@@ -317,11 +317,11 @@ function editorTitle(isSavedDraft: boolean, isMigrating: boolean, isLegacy: bool
     return isLegacy ? "Complete Legacy Suggestion" : "Suggestion Editor";
 }
 
-// Saving an already-submitted suggestion clears reactions/approval unconditionally - purely
+// Whether saving will clear reactions/approval, which a submitted suggestion loses once its card changes - purely
 // informational (no confirmation modal). Ignore doesn't count as "reactions" here - not feedback.
-function hasEngagementToClear(suggestion: DeepPartial<ICardSuggestion>): boolean {
-    // Completing a legacy suggestion keeps its reactions - see prepareLiveSaveBody on the server
-    if (suggestion.draft !== false || suggestion.legacy) {
+function hasEngagementToClear(suggestion: DeepPartial<ICardSuggestion>, savedCard?: DeepPartial<ICard>): boolean {
+    // Completing a legacy suggestion keeps its reactions - see clearEngagementOnCardChange on the server
+    if (suggestion.draft !== false || suggestion.legacy || isSameCard(savedCard, suggestion.card)) {
         return false;
     }
     const engagement = suggestion._metadata?.engagement;
@@ -332,7 +332,7 @@ function hasEngagementToClear(suggestion: DeepPartial<ICardSuggestion>): boolean
 }
 
 const ENGAGEMENT_CLEAR_MESSAGE =
-    "Saving will clear this suggestion’s reactions and approval - they applied to the version being replaced.";
+    "Saving will clear this suggestion’s reactions and approval - the card has changed since they were given.";
 
 /** A small pulsing icon in the footer, not a full sentence - the row's width is mostly spoken for
  *  already; the explanation lives behind a tap/hover instead. */
@@ -834,7 +834,7 @@ const EditSuggestionModal = ({
     const suggestionRef = useRef(suggestion);
     suggestionRef.current = suggestion;
     const getSuggestion = useCallback(() => suggestionRef.current, []);
-    const hasEngagement = hasEngagementToClear(suggestion);
+    const hasEngagement = hasEngagementToClear(suggestion, initial?.card);
 
     // Only closes the confirmation (and the editor for good) once the delete has actually gone
     // through - a failure leaves both exactly where they were, error surfaced by toast.

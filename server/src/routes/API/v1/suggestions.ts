@@ -16,7 +16,7 @@ import {
     suggestionReactionBlockReason
 } from "common/models/cards";
 import { dataService, thronesDbCardPoolService } from "@/services";
-import { hasPermission, SemanticVersion, validate, withProjectOwnership } from "common/utils";
+import { hasPermission, isSameCard, SemanticVersion, validate, withProjectOwnership } from "common/utils";
 import { fitsSlot } from "common/models/slotConditions";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
@@ -229,25 +229,38 @@ function prepareCreateBody(req: Request, _res: Response, next: NextFunction) {
     next();
 }
 
-// PUT /:id/draft stays a draft - nothing to clear (never reacted to/approved), so persisted
-// engagement just carries over untouched, discarding whatever the client's body contained.
+// Persisted engagement carries over untouched, discarding whatever the client's body contained
+function carryOverEngagement(body: ICardSuggestion, existing: ICardSuggestion) {
+    body._metadata = { ...body._metadata, engagement: existing._metadata?.engagement ?? EMPTY_ENGAGEMENT };
+}
+
+// PUT /:id/draft stays a draft - nothing to clear, since it has never been reacted to or approved
 function prepareDraftSaveBody(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = true;
     applyServerOwnedFields(req.body, existing);
-    req.body._metadata = { ...req.body._metadata, engagement: existing._metadata?.engagement ?? EMPTY_ENGAGEMENT };
+    carryOverEngagement(req.body, existing);
     next();
 }
 
-// Clears reactions/approval, as an edit invalidates them - except when completing a legacy suggestion, whose
-// reactions were given to the card as it already stood. Completing is also what clears `legacy`.
+// Submitting is what clears `legacy`. Engagement is settled after validation, by clearEngagementOnCardChange.
 function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = false;
     applyServerOwnedFields(req.body, existing);
     delete req.body.legacy;
-    const reactions = existing.legacy ? (existing._metadata?.engagement?.reactions ?? {}) : {};
-    req.body._metadata = { ...req.body._metadata, engagement: { reactions } };
+    carryOverEngagement(req.body, existing);
+    next();
+}
+
+// Reactions/approval were given to the card, so only a change to the card clears them - not to the questions around
+// it. Runs after validation, so the stored card is compared against the sanitised one. Completing a legacy suggestion
+// keeps its reactions whatever changed, as they were given to the card as it already stood.
+function clearEngagementOnCardChange(req: Request, res: Response, next: NextFunction) {
+    const existing = res.locals.suggestion as ICardSuggestion;
+    if (!existing.legacy && !isSameCard(existing.card, req.body.card)) {
+        req.body._metadata = { ...req.body._metadata, engagement: EMPTY_ENGAGEMENT };
+    }
     next();
 }
 
@@ -789,6 +802,7 @@ router.put(
     forceTags,
     prepareLiveSaveBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
+    clearEngagementOnCardChange,
     asyncHandler<{ id: string }, unknown, ICardSuggestion, { legacyThread?: string }>(async (req, res) => {
         const { id } = req.params;
         const existing = res.locals.suggestion as ICardSuggestion;
