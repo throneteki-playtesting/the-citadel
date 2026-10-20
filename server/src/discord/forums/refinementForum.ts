@@ -1,12 +1,16 @@
 import {
     ActionRowBuilder,
+    AttachmentBuilder,
     ButtonBuilder,
     ButtonStyle,
+    ComponentType,
     ContainerBuilder,
     DiscordAPIError,
     ForumChannel,
     Guild,
     GuildForumTag,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
     MessageFlags,
     RESTJSONErrorCodes,
     Role,
@@ -18,11 +22,21 @@ import { Mutex } from "async-mutex";
 import { IPlaytestCard } from "common/models/cards";
 import { IProject } from "common/models/projects";
 import { ISlot } from "common/models/slots";
-import { InquirySeverity, inquirySeverityLabels, IRefinementInquiry } from "common/models/refinement";
-import { getFinalCardNumber, parseCardCode } from "common/utils";
+import {
+    inquiryDecision,
+    InquiryLinkAction,
+    inquiryLinkPath,
+    InquirySeverity,
+    inquirySeverityLabels,
+    IRefinementInquiry,
+    isInquiryOpen
+} from "common/models/refinement";
+import { getFinalCardNumber, parseCardCode, renderPlaytestingCard } from "common/utils";
 import { toDiscord } from "common/richText/toDiscord";
 import { truncateHtml } from "common/richText/truncate";
 import { dataService, discordService, logger } from "@/services";
+import { asPNG } from "@/rendering";
+import { getTimeLockedImageUrl } from "@/rendering/hosting";
 import { extractFromURL } from "../utils";
 
 const FORUM_NAME = "refinement-forum";
@@ -43,6 +57,9 @@ const SEVERITY_COLORS: Record<InquirySeverity, number> = {
     majorProblem: 0xd44a3a
 };
 const RESOLVED_COLOR = 0x43b581;
+const ADDRESSED_COLOR = RESOLVED_COLOR;
+const NO_CHANGE_COLOR = 0x8a8a8a;
+const WITHDRAWN_COLOR = 0xd4913a;
 const DELETED_COLOR = 0x6a6a6a;
 
 /**
@@ -65,18 +82,14 @@ export async function startInquiryDiscussion(
         }
 
         const context = await getRefinementForumContext();
+        const [emojis, image] = await Promise.all([
+            discordService.getEmojiMap(),
+            cardImage(card, "card.png", label(slot, inquiry))
+        ]);
         const thread = await context.channel.threads.create({
             name: threadName(slot, inquiry, card),
             reason: `Refinement discussion for ${label(slot, inquiry)}`,
-            message: openingMessage(
-                project,
-                slot,
-                inquiry,
-                card,
-                startedBy,
-                context,
-                await discordService.getEmojiMap()
-            ),
+            message: openingMessage(project, slot, inquiry, card, startedBy, context, emojis, image),
             appliedTags: tagsFor(context, project, inquiry).map((tag) => tag.id),
             autoArchiveDuration: context.channel.defaultAutoArchiveDuration
         });
@@ -102,10 +115,13 @@ export async function closeInquiryDiscussion(project: IProject, slot: ISlot, inq
                 RESOLVED_COLOR,
                 ":white_check_mark: Inquiry Resolved",
                 `<@${inquiry.resolution?.by}> has marked this inquiry as resolved.` +
-                    (inquiry.addressedIn ? `\nAddressed in **${inquiry.addressedIn}**.` : ""),
-                slot
+                    (inquiry.addressedIn ? `\nAddressed in **${inquiry.addressedIn}**.` : "") +
+                    (inquiry.noChange ? "\nSettled with no change to the card." : ""),
+                slot,
+                inquiry
             )
         );
+        await refreshOpening(thread, slot, inquiry);
         await thread.setAppliedTags(tagsFor(context, project, inquiry, true).map((tag) => tag.id));
         await thread.setArchived(true);
         logger.info(`[Discord] Archived resolved refinement discussion for ${label(slot, inquiry)}`);
@@ -121,9 +137,11 @@ export async function reopenInquiryDiscussion(project: IProject, slot: ISlot, in
                 SEVERITY_COLORS[inquiry.severity],
                 ":arrows_counterclockwise: Inquiry Reopened",
                 "This inquiry has been reopened, and stands against the card again.",
-                slot
+                slot,
+                inquiry
             )
         );
+        await refreshOpening(thread, slot, inquiry);
         logger.info(`[Discord] Reopened refinement discussion for ${label(slot, inquiry)}`);
     });
 }
@@ -140,13 +158,102 @@ export async function endInquiryDiscussion(slot: ISlot, inquiry: IRefinementInqu
                 ":wastebasket: Inquiry Deleted",
                 "This inquiry has been deleted, and no longer stands against the card. " +
                     "Anything still worth asking should be raised afresh.",
-                slot
+                slot,
+                inquiry
             )
         );
+        await refreshOpening(thread, slot, inquiry, true);
         await thread.setLocked(true);
         await thread.setArchived(true);
         logger.info(`[Discord] Closed deleted refinement discussion for ${label(slot, inquiry)}`);
     });
+}
+
+// Says a no-change decision was made, or taken back - whichever the inquiry now holds
+export async function noChangeInquiryDiscussion(slot: ISlot, inquiry: IRefinementInquiry) {
+    const message = inquiry.noChange
+        ? notice(
+              NO_CHANGE_COLOR,
+              ":heavy_minus_sign: No Change Planned",
+              `<@${inquiry.noChange.by}> has decided the card stays as it is for this inquiry. ` +
+                  "It stays open until somebody resolves it." +
+                  `
+
+${discordText(inquiry.noChange.note, await discordService.getEmojiMap())}`,
+              slot,
+              inquiry
+          )
+        : notice(
+              SEVERITY_COLORS[inquiry.severity],
+              ":arrows_counterclockwise: No Change Withdrawn",
+              "The decision to leave the card as it is has been taken back. This inquiry is undecided again.",
+              slot,
+              inquiry
+          );
+    await announce(slot, inquiry, message, "no-change decision");
+}
+
+// Tells each thread that an update now claims to address its inquiry (with the card's image), or no longer does
+export async function inquiryClaimsChanged(
+    slot: ISlot,
+    card: IPlaytestCard,
+    claimed: IRefinementInquiry[],
+    withdrawn: IRefinementInquiry[]
+) {
+    const discussed = (entries: IRefinementInquiry[]) =>
+        entries.filter((entry) => entry._metadata?.discord?.messageUrl);
+    const toClaim = discussed(claimed);
+    const toWithdraw = discussed(withdrawn);
+    if (toClaim.length === 0 && toWithdraw.length === 0) {
+        return;
+    }
+
+    const [emojis, image] = await Promise.all([
+        discordService.getEmojiMap(),
+        toClaim.length > 0
+            ? cardImage(card, "update.png", `${parseCardCode(false, slot.project, slot.number)}@${card.version}`)
+            : undefined
+    ]);
+    const note = card.note?.text
+        ? `
+
+${discordText(card.note.text, emojis)}`
+        : "";
+
+    await Promise.all([
+        ...toClaim.map((inquiry) =>
+            announce(
+                slot,
+                inquiry,
+                notice(
+                    ADDRESSED_COLOR,
+                    `:hammer_and_wrench: Addressed in ${card.version}`,
+                    `An update to **${card.name}** claims to address this inquiry. ` +
+                        "It stays open until somebody resolves it." +
+                        note,
+                    slot,
+                    inquiry,
+                    image
+                ),
+                "update"
+            )
+        ),
+        ...toWithdraw.map((inquiry) =>
+            announce(
+                slot,
+                inquiry,
+                notice(
+                    WITHDRAWN_COLOR,
+                    ":warning: Fix Withdrawn",
+                    `**${card.version}** no longer claims to address this inquiry - the draft was changed or ` +
+                        "deleted. This inquiry is undecided again.",
+                    slot,
+                    inquiry
+                ),
+                "withdrawn fix"
+            )
+        )
+    ]);
 }
 
 /** Clears the stored thread of an inquiry whose thread was deleted from Discord, so it can be opened again */
@@ -262,6 +369,15 @@ async function withThread(
     }
 }
 
+// Posts a notice to an inquiry's thread, then redraws its opening post to match
+async function announce(slot: ISlot, inquiry: IRefinementInquiry, message: ReturnType<typeof notice>, posted: string) {
+    await withThread(slot, inquiry, async (thread) => {
+        await thread.send(message);
+        await refreshOpening(thread, slot, inquiry);
+        logger.info(`[Discord] Posted ${posted} to refinement discussion for ${label(slot, inquiry)}`);
+    });
+}
+
 /** The thread behind a stored url, or undefined where it has since been deleted */
 async function fetchThread(messageUrl: string) {
     const { messageId: threadId } = extractFromURL(messageUrl);
@@ -307,12 +423,75 @@ function tagsFor(context: RefinementForumContext, project: IProject, inquiry: IR
     return tags;
 }
 
-function inquiryButton(slot: ISlot) {
-    return new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-            .setLabel("View Inquiry")
-            .setURL(`${process.env.CLIENT_HOST}/project/${slot.project}/${slot.number}?tab=refinement`)
-            .setStyle(ButtonStyle.Link)
+function linkButton(label: string, slot: ISlot, inquiry: IRefinementInquiry, action?: InquiryLinkAction) {
+    return new ButtonBuilder()
+        .setLabel(label)
+        .setURL(`${process.env.CLIENT_HOST}${inquiryLinkPath(slot.project, slot.number, inquiry.inquiry, action)}`)
+        .setStyle(ButtonStyle.Link);
+}
+
+function inquiryButton(slot: ISlot, inquiry: IRefinementInquiry) {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(linkButton("View Inquiry", slot, inquiry));
+}
+
+// Links rather than handlers - the decision is made on the inquiry's own page, which has the note field
+function openingActions(slot: ISlot, inquiry: IRefinementInquiry) {
+    const buttons = [linkButton("View Inquiry", slot, inquiry)];
+    if (isInquiryOpen(inquiry)) {
+        buttons.push(linkButton("Resolve", slot, inquiry, "resolve").setEmoji("✅"));
+        if (!inquiryDecision(inquiry)) {
+            buttons.push(linkButton("No Change", slot, inquiry, "noChange").setEmoji("➖"));
+        }
+    }
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+}
+
+// Swaps the opening post's trailing action row for the inquiry's current one; a post without that row predates it
+async function refreshOpening(thread: ThreadChannel, slot: ISlot, inquiry: IRefinementInquiry, isDeleted = false) {
+    const starter = await thread.fetchStarterMessage();
+    const last = starter?.components.at(-1);
+    if (!starter || last?.type !== ComponentType.ActionRow) {
+        return;
+    }
+    const kept = starter.components.slice(0, -1).map((component) => component.toJSON());
+    await starter.edit({
+        components: isDeleted ? kept : [...kept, openingActions(slot, inquiry).toJSON()],
+        flags: MessageFlags.IsComponentsV2
+    });
+}
+
+interface CardImage {
+    url: string;
+    file?: AttachmentBuilder;
+}
+
+// A hosted image where the card has one, else rendered and attached. Never fails the post it belongs to
+async function cardImage(card: IPlaytestCard, filename: string, describing: string): Promise<CardImage | undefined> {
+    try {
+        if (card._metadata?.imageUrl) {
+            return { url: await getTimeLockedImageUrl(card) };
+        }
+        const { buffer } = await asPNG(renderPlaytestingCard(card));
+        return { url: `attachment://${filename}`, file: new AttachmentBuilder(buffer, { name: filename }) };
+    } catch (err) {
+        logger.warn(new Error(`[Discord] Failed to render card image for ${describing}`, { cause: err }));
+        return undefined;
+    }
+}
+
+function imageGallery(image: CardImage, card?: IPlaytestCard) {
+    const item = new MediaGalleryItemBuilder().setURL(image.url);
+    if (card) {
+        item.setDescription(`${card.name} ${card.version}`);
+    }
+    return new MediaGalleryBuilder().addItems(item);
+}
+
+// Measured as Discord will read it, so the markers the conversion adds are paid for by the cut
+function discordText(html: string, emojis: Record<string, string>) {
+    return toDiscord(
+        truncateHtml(html, DETAIL_MAX, (fragment) => toDiscord(fragment, { emojis }).length),
+        { emojis }
     );
 }
 
@@ -345,7 +524,8 @@ function openingMessage(
     card: IPlaytestCard,
     startedBy: string,
     context: RefinementForumContext,
-    emojis: Record<string, string>
+    emojis: Record<string, string>,
+    image?: CardImage
 ) {
     const heading =
         `## ${inquiry.summary}` +
@@ -358,34 +538,46 @@ function openingMessage(
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(heading));
 
     if (inquiry.detail) {
-        // Measured as Discord will read it, so the markers the conversion adds are paid for by the cut
-        const detail = toDiscord(
-            truncateHtml(inquiry.detail, DETAIL_MAX, (html) => toDiscord(html, { emojis }).length),
-            { emojis }
-        );
         container
             .addSeparatorComponents(new SeparatorBuilder())
-            .addTextDisplayComponents(new TextDisplayBuilder().setContent(detail))
-            .addSeparatorComponents(new SeparatorBuilder());
+            .addTextDisplayComponents(new TextDisplayBuilder().setContent(discordText(inquiry.detail, emojis)));
     }
 
-    container.addActionRowComponents(inquiryButton(slot));
+    if (image) {
+        container.addMediaGalleryComponents(imageGallery(image, card));
+    }
 
+    // Outside the container, so it can be swapped as the inquiry moves on without re-sending the card
     return {
-        components: [container],
+        components: [container, openingActions(slot, inquiry)],
+        files: image?.file ? [image.file] : [],
         flags: MessageFlags.IsComponentsV2 as const,
         allowedMentions: { parse: ["roles"] as const }
     };
 }
 
-function notice(color: number, heading: string, body: string, slot: ISlot) {
+function notice(
+    color: number,
+    heading: string,
+    body: string,
+    slot: ISlot,
+    inquiry: IRefinementInquiry,
+    image?: CardImage
+) {
     const container = new ContainerBuilder()
         .setAccentColor(color)
-        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`### ${heading}\n${body}`))
-        .addActionRowComponents(inquiryButton(slot));
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(`### ${heading}\n${body}`));
+    if (image) {
+        container.addMediaGalleryComponents(imageGallery(image));
+    }
+    container.addActionRowComponents(inquiryButton(slot, inquiry));
 
     return {
         components: [container],
+        // A fresh attachment per post - the same builder sent twice would race over one upload
+        files: image?.file
+            ? [new AttachmentBuilder(image.file.attachment, { name: image.file.name ?? undefined })]
+            : [],
         flags: MessageFlags.IsComponentsV2 as const,
         allowedMentions: { parse: ["roles"] as const }
     };

@@ -10,9 +10,9 @@ import { designStatuses, DesignStatus, ISlotRefinement } from "common/models/slo
 import {
     inquirySeverities,
     InquirySeverity,
-    isCheckStale,
     isInquiryOpen,
     isInquiryStale,
+    isInquiryUnhandled,
     MAX_REFINEMENT_REQUIREMENTS,
     refinementRequirements
 } from "common/models/refinement";
@@ -43,7 +43,7 @@ import { useTabGuideModal } from "../../../hooks/useTabGuideModal";
 import { useUrlListFilter } from "../../../hooks/useUrlListFilter";
 import RefinementsGuideModal from "./refinementsGuideModal";
 
-const URL_OWNED_KEYS = ["status", "severity", "releases", "attention", "mine", "sort", "q", "editing"];
+const URL_OWNED_KEYS = ["status", "severity", "releases", "attention", "unhandled", "mine", "sort", "q", "editing"];
 const UNASSIGNED = "unassigned";
 const FAQ_PREVIEW_LENGTH = 240;
 const REFINEMENTS_GUIDE_SEEN_KEY = "refinements-guide-seen";
@@ -63,6 +63,8 @@ type RefinementRow = {
     card?: IPlaytestCard;
     openCount: number;
     staleCount: number;
+    /** Open with nothing decided - neither addressed by an update nor marked as no change */
+    unhandledCount: number;
     severities: Set<InquirySeverity>;
 };
 
@@ -90,6 +92,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
     });
     const [releases, setReleases] = useUrlListFilter(searchParams, "releases");
     const [attentionOnly, setAttentionOnly] = useState(() => searchParams.get("attention") === "true");
+    const [unhandledOnly, setUnhandledOnly] = useState(() => searchParams.get("unhandled") === "true");
     const [mineOnly, setMineOnly] = useState(() => searchParams.get("mine") === "true");
     const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption | null) ?? "number");
     const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
@@ -113,6 +116,9 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
         if (attentionOnly) {
             params.attention = "true";
         }
+        if (unhandledOnly) {
+            params.unhandled = "true";
+        }
         if (mineOnly) {
             params.mine = "true";
         }
@@ -126,7 +132,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
             params.editing = String(editingNumber);
         }
         return params;
-    }, [status, severity, releases, attentionOnly, mineOnly, sortBy, search, isEditing, editingNumber]);
+    }, [status, severity, releases, attentionOnly, unhandledOnly, mineOnly, sortBy, search, isEditing, editingNumber]);
     useSearchParamsScope("refinements", isActive, scopeParams);
 
     const cardsByNumber = useMemo(
@@ -147,6 +153,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
                 card: cardsByNumber.get(slot.number),
                 openCount: open.length,
                 staleCount: open.filter((inquiry) => isInquiryStale(inquiry, slot.version)).length,
+                unhandledCount: open.filter(isInquiryUnhandled).length,
                 severities: new Set(open.map((inquiry) => inquiry.severity))
             };
         });
@@ -172,6 +179,9 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
             if (attentionOnly && row.openCount === 0 && row.staleCount === 0) {
                 return false;
             }
+            if (unhandledOnly && row.unhandledCount === 0) {
+                return false;
+            }
             if (mineOnly) {
                 const mine =
                     row.slot.inquiries.some((inquiry) => inquiry.createdBy === user?.discordId) ||
@@ -190,7 +200,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
             }
             return true;
         },
-        [status, severity, releases, attentionOnly, mineOnly, user?.discordId, search]
+        [status, severity, releases, attentionOnly, unhandledOnly, mineOnly, user?.discordId, search]
     );
 
     // Filtering to releases re-sorts by printed number, since that is the order the pack is read in
@@ -381,6 +391,9 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
                             <Switch size="sm" isSelected={attentionOnly} onValueChange={setAttentionOnly}>
                                 <span className="text-xs whitespace-nowrap">Needs attention</span>
                             </Switch>
+                            <Switch size="sm" isSelected={unhandledOnly} onValueChange={setUnhandledOnly}>
+                                <span className="text-xs whitespace-nowrap">Unhandled</span>
+                            </Switch>
                             <Switch size="sm" isSelected={mineOnly} onValueChange={setMineOnly}>
                                 <span className="text-xs whitespace-nowrap">Mine</span>
                             </Switch>
@@ -446,7 +459,7 @@ export default function ProjectRefinements({ project, isActive }: ProjectRefinem
 function RefinementRowView({ row, release, showFinalNumber, project, onEdit }: RefinementRowProps) {
     const { slot } = row;
     const step = designLane.meta[slot.designStatus];
-    const currentChecks = slot.refinementChecks.filter((check) => !isCheckStale(check, slot.version));
+    const checks = slot.refinementChecks;
     const requirements = refinementRequirements(slot.inquiries, slot.refinementChecks, slot.version);
     const finalNumber = showFinalNumber ? getFinalCardNumber(project, slot) : undefined;
     const name = row.card?.name ?? `Card #${slot.number}`;
@@ -497,9 +510,9 @@ function RefinementRowView({ row, release, showFinalNumber, project, onEdit }: R
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:contents">
                     <div className="shrink-0 flex items-center gap-1.5 justify-start sm:justify-end sm:w-20">
-                        {currentChecks.length > 0 ? (
+                        {checks.length > 0 ? (
                             <>
-                                {currentChecks.slice(0, 3).map((check) => (
+                                {checks.slice(0, 3).map((check) => (
                                     <UserAvatar
                                         key={check.createdBy}
                                         discordId={check.createdBy}
@@ -507,10 +520,8 @@ function RefinementRowView({ row, release, showFinalNumber, project, onEdit }: R
                                         className="!size-6"
                                     />
                                 ))}
-                                {currentChecks.length > 3 && (
-                                    <span className="text-[.65rem] text-foreground/50">
-                                        +{currentChecks.length - 3}
-                                    </span>
+                                {checks.length > 3 && (
+                                    <span className="text-[.65rem] text-foreground/50">+{checks.length - 3}</span>
                                 )}
                             </>
                         ) : (
@@ -647,6 +658,7 @@ function RefinementsSkeleton({
                 <div className="flex-1 flex flex-wrap items-center justify-between gap-2 sm:shrink-0">
                     <div className="flex items-center gap-3">
                         <Skeleton className="h-6 w-24 rounded-md" />
+                        <Skeleton className="h-6 w-20 rounded-md" />
                         <Skeleton className="h-6 w-16 rounded-md" />
                     </div>
                     <Skeleton className="h-8 w-40 sm:w-44 rounded-md" />

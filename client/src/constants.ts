@@ -14,7 +14,7 @@ import {
     ProductionStatus
 } from "common/models/slots";
 import { ArtworkContactState, ArtworkPrepFlag } from "common/models/artwork";
-import { InquirySeverity, inquirySeverityLabels, InquiryStatus } from "common/models/refinement";
+import { InquiryDecision, InquirySeverity, inquirySeverityLabels, InquiryStatus } from "common/models/refinement";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { UIColor } from "./types";
 import {
@@ -33,6 +33,7 @@ import {
     faLightbulb,
     faLock,
     faMagnifyingGlass,
+    faMinus,
     faPaintbrush,
     faPalette,
     faTriangleExclamation,
@@ -643,6 +644,33 @@ export const inquiryStatusMeta: Record<InquiryStatus, { label: string; icon: Ico
     open: { label: "Open", icon: faCircleDot, color: "primary" },
     resolved: { label: "Resolved", icon: faCircleCheck, color: "success" },
     rejected: { label: "Rejected", icon: faCircleXmark, color: "default" }
+};
+
+export const inquiryDecisionMeta: Record<
+    InquiryDecision,
+    {
+        label: string;
+        icon: IconDefinition;
+        color: "success" | "default";
+        iconClass: string;
+        /** The filled disc pinned to a severity icon in the Refinements list */
+        badgeClass: string;
+    }
+> = {
+    addressed: {
+        label: "Addressed",
+        icon: faCheck,
+        color: "success",
+        iconClass: "text-success",
+        badgeClass: "bg-success text-success-foreground"
+    },
+    noChange: {
+        label: "No change",
+        icon: faMinus,
+        color: "default",
+        iconClass: "text-foreground/40",
+        badgeClass: "bg-default-500 text-white"
+    }
 };
 
 export const highlightTarget = {

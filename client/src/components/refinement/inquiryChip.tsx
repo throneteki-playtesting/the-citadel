@@ -1,12 +1,19 @@
 import { Chip } from "@heroui/react";
-import { faCheck } from "@fortawesome/free-solid-svg-icons";
+import { faComment } from "@fortawesome/free-solid-svg-icons";
 import { faCircleCheck } from "@fortawesome/free-regular-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import classNames from "classnames";
-import { IRefinementInquiry, isInquiryAddressed, isInquiryOpen, isInquiryStale } from "common/models/refinement";
+import {
+    InquiryDecision,
+    inquiryDecision,
+    IRefinementInquiry,
+    isInquiryDiscussing,
+    isInquiryOpen,
+    isInquiryStale
+} from "common/models/refinement";
 import { SemanticVersion } from "common/utils";
 import { truncateHtml } from "common/richText/truncate";
-import { inquirySeverityMeta } from "../../constants";
+import { inquiryDecisionMeta, inquirySeverityMeta } from "../../constants";
 import { TouchTooltip } from "../touchTooltip";
 import UserAvatar from "../userAvatar";
 import RichText from "../richText";
@@ -15,17 +22,15 @@ import { SeverityBadge } from "./severitySelect";
 
 const PREVIEW_LENGTH = 160;
 
-/**
- * One inquiry, small enough to sit in a row of them. The severity icon carries it alone, and the preview is
- * deliberately bite-sized - enough to recognise this inquiry without turning the row into the list it links to.
- */
+// One inquiry in a row of them - its severity icon, with a decision pinned bottom-right and a discussion top-right
 export default function InquiryChip({ inquiry, version, onPress }: InquiryChipProps) {
     const meta = inquirySeverityMeta[inquiry.severity];
     const isStale = isInquiryStale(inquiry, version);
-    const isAddressed = isInquiryAddressed(inquiry);
+    const decision = inquiryDecision(inquiry);
+    const isDiscussing = isInquiryDiscussing(inquiry);
     const isOpen = isInquiryOpen(inquiry);
-    // A resolved one answers to its outcome rather than its severity, the same swap the inquiry card
-    // makes when it turns its title band green - the severity is still named in the tooltip
+    const decisionMeta = decision && inquiryDecisionMeta[decision];
+    // A resolved one answers to its outcome rather than its severity, as the inquiry card does
     const icon = isOpen ? meta.icon : faCircleCheck;
     const iconClass = isOpen ? meta.iconClass : "text-success";
 
@@ -48,19 +53,24 @@ export default function InquiryChip({ inquiry, version, onPress }: InquiryChipPr
                                 #{inquiry.inquiry}
                             </span>
                             <UserAvatar discordId={inquiry.createdBy} className="!size-4" />
-                            {isAddressed && (
+                            {decision && decisionMeta && (
                                 <Chip
                                     size="sm"
                                     variant="flat"
-                                    color="success"
+                                    color={decisionMeta.color}
                                     className="h-5 gap-1 px-1 text-[.65rem] tabular-nums"
-                                    startContent={<FontAwesomeIcon icon={faCheck} className="ml-1" />}
+                                    startContent={<FontAwesomeIcon icon={decisionMeta.icon} className="ml-1" />}
                                 >
-                                    {inquiry.addressedIn}
+                                    {decisionLabel(inquiry, decision)}
                                 </Chip>
                             )}
                             <Timestamp date={inquiry.created} />
                         </div>
+                        {isDiscussing && (
+                            <span className="flex items-center gap-1 text-[.65rem] text-primary">
+                                <FontAwesomeIcon icon={faComment} /> Being discussed
+                            </span>
+                        )}
                         {isStale && <span className="text-[.65rem] text-warning">The card has changed since</span>}
                     </div>
                 </div>
@@ -68,18 +78,50 @@ export default function InquiryChip({ inquiry, version, onPress }: InquiryChipPr
         >
             <button
                 type="button"
-                aria-label={`Inquiry #${inquiry.inquiry} - ${meta.label}`}
+                aria-label={inquiryLabel(inquiry, meta.label, decision, isDiscussing)}
                 className={classNames(
-                    "flex shrink-0 cursor-pointer items-center px-0.5 text-base transition-transform hover:scale-110",
-                    iconClass,
-                    (isStale || !isOpen) && "opacity-50"
+                    "relative flex shrink-0 cursor-pointer items-center px-1 py-0.5 text-base transition-transform hover:scale-110",
+                    iconClass
                 )}
                 onClick={onPress}
             >
-                <FontAwesomeIcon icon={icon} />
+                <FontAwesomeIcon icon={icon} className={classNames((isStale || !isOpen) && "opacity-50")} />
+                {decisionMeta && (
+                    <span
+                        className={classNames(
+                            "absolute bottom-0 right-0 flex size-[0.6em] items-center justify-center rounded-full ring-2 ring-content1",
+                            decisionMeta.badgeClass
+                        )}
+                    >
+                        <FontAwesomeIcon icon={decisionMeta.icon} className="text-[0.4em]" />
+                    </span>
+                )}
+                {isDiscussing && (
+                    <span className="absolute right-0 top-0 size-[0.4em] rounded-full bg-primary ring-2 ring-content1" />
+                )}
             </button>
         </TouchTooltip>
     );
+}
+
+function decisionLabel(inquiry: IRefinementInquiry, decision: InquiryDecision) {
+    return decision === "addressed" ? (inquiry.addressedIn ?? "") : inquiryDecisionMeta.noChange.label;
+}
+
+function inquiryLabel(
+    inquiry: IRefinementInquiry,
+    severity: string,
+    decision: InquiryDecision | undefined,
+    isDiscussing: boolean
+) {
+    const parts = [`Inquiry #${inquiry.inquiry} - ${severity}`];
+    if (decision) {
+        parts.push(decision === "addressed" ? `addressed in ${inquiry.addressedIn}` : "no change");
+    }
+    if (isDiscussing) {
+        parts.push("being discussed");
+    }
+    return parts.join(", ");
 }
 
 type InquiryChipProps = {

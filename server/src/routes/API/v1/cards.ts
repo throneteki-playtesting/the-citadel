@@ -12,7 +12,7 @@ import {
     NEW_OPTION_VERSION,
     nextAvailableOptionVersion
 } from "common/models/slots";
-import { isInquiryOpen } from "common/models/refinement";
+import { IRefinementInquiry, isInquiryOpen, withAddressedIn } from "common/models/refinement";
 import * as Schemas from "common/models/schemas";
 import Permission from "common/models/permissions";
 import { ApiErrorResponse } from "@/errors";
@@ -33,6 +33,7 @@ import { getContext } from "@/middleware/context";
 import { syncImage } from "@/rendering/hosting";
 import { syncCardForum } from "@/discord/forums/cardForum";
 import { slotDiscussionChanged } from "@/discord/forums/planningForum";
+import { inquiryClaimsChanged } from "@/discord/forums/refinementForum";
 import { syncIssues } from "@/github/issues";
 import { getRequestSchema } from "@/schemas";
 import { IProject } from "common/models/projects";
@@ -235,16 +236,18 @@ type DraftCardBody = IPlaytestCard & { addressedInquiries?: number[] };
 
 /**
  * Reconciles which inquiries a version claims to fix. The list is the whole answer for this version, not
- * an addition to it, so a box unticked in the editor takes its claim back. Inquiries stay open either way.
+ * an addition to it, so a box unticked in the editor takes its claim back. A claim replaces a no-change decision.
  */
-async function markInquiriesAddressed(project: number, number: number, version: SemanticVersion, inquiries: number[]) {
+async function markInquiriesAddressed(card: IPlaytestCard, inquiries: number[]) {
+    const { project, number, version } = card;
     const [slot] = await dataService.slots.read({ project, number });
     if (!slot) {
         return;
     }
 
     const targets = new Set(inquiries);
-    let changed = false;
+    const claimed: IRefinementInquiry[] = [];
+    const withdrawn: IRefinementInquiry[] = [];
     const updated = slot.statuses.design.inquiries.map((entry) => {
         // A number naming something already closed is ignored rather than refused - the list came from a
         // form which may be a few seconds behind whoever else was closing them
@@ -252,56 +255,61 @@ async function markInquiriesAddressed(project: number, number: number, version: 
         if (claims === (entry.addressedIn === version)) {
             return entry;
         }
-        changed = true;
         if (claims) {
-            return { ...entry, addressedIn: version };
+            const addressed = withAddressedIn(entry, version);
+            claimed.push(addressed);
+            return addressed;
         }
         const cleared = { ...entry };
         delete cleared.addressedIn;
+        withdrawn.push(cleared);
         return cleared;
     });
 
-    if (!changed) {
+    if (claimed.length === 0 && withdrawn.length === 0) {
         return;
     }
 
-    await dataService.slots.update({
+    const saved = await dataService.slots.update({
         ...slot,
         statuses: { ...slot.statuses, design: { ...slot.statuses.design, inquiries: updated } }
     });
+    void inquiryClaimsChanged(saved, card, claimed, withdrawn);
 }
 
 /**
  * Takes back every claim a version made. The claim is the version's, not the inquiry's, so once the
  * version is gone the inquiry goes back to being unanswered rather than pointing at a card nobody can read.
  */
-async function unmarkInquiriesAddressed(project: number, number: number, version: SemanticVersion) {
+async function unmarkInquiriesAddressed(card: IPlaytestCard) {
+    const { project, number, version } = card;
     const [slot] = await dataService.slots.read({ project, number });
     if (!slot) {
         return;
     }
 
-    let changed = false;
+    const withdrawn: IRefinementInquiry[] = [];
     const updated = slot.statuses.design.inquiries.map((entry) => {
         // An open inquiry loses the claim outright - the fix went with the draft. A resolved one keeps
         // it as the record of how the inquiry was settled; the client marks it as withdrawn instead.
         if (entry.addressedIn !== version || !isInquiryOpen(entry)) {
             return entry;
         }
-        changed = true;
         const cleared = { ...entry };
         delete cleared.addressedIn;
+        withdrawn.push(cleared);
         return cleared;
     });
 
-    if (!changed) {
+    if (withdrawn.length === 0) {
         return;
     }
 
-    await dataService.slots.update({
+    const saved = await dataService.slots.update({
         ...slot,
         statuses: { ...slot.statuses, design: { ...slot.statuses.design, inquiries: updated } }
     });
+    void inquiryClaimsChanged(saved, card, [], withdrawn);
 }
 
 // A card as it is held while a draft - unpublished, and carrying nothing from wherever it was copied
@@ -478,7 +486,7 @@ router.put(
         // Absent means the caller is not speaking for the inquiries at all - only an editor which showed
         // the boxes may reconcile them, or a save from anywhere else would silently drop every claim
         if (addressedInquiries) {
-            await markInquiriesAddressed(project.number, number, card.version, addressedInquiries);
+            await markInquiriesAddressed({ ...card, project: project.number, number }, addressedInquiries);
         }
 
         res.status(StatusCodes.OK).json(card);
@@ -577,7 +585,7 @@ router.delete(
                 );
             }
 
-            await unmarkInquiriesAddressed(project.number, number, deleted.version);
+            await unmarkInquiriesAddressed(deleted);
             if (project.draft) {
                 await updateSlotPreferences(project.number, number, withoutPreference(deleted.version));
                 void slotDiscussionChanged(project.number, number);

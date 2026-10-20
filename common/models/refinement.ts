@@ -37,6 +37,14 @@ export interface IInquiryResolution {
     note?: string;
 }
 
+/** A decision that the card stays as it is - the counterpart to `addressedIn`, and likewise not a close */
+export interface IInquiryNoChange {
+    by: string;
+    at: Date;
+    /** Rich text */
+    note: string;
+}
+
 /** One point raised against a card during refinement, numbered per card from 1 */
 export interface IRefinementInquiry extends IAuditable {
     inquiry: number;
@@ -44,6 +52,8 @@ export interface IRefinementInquiry extends IAuditable {
     version: SemanticVersion;
     /** Set by a card update claiming to fix this; it still awaits somebody resolving it officially */
     addressedIn?: SemanticVersion;
+    /** Set by deciding the card stays as it is. Never held alongside `addressedIn` - the latest decision wins */
+    noChange?: IInquiryNoChange;
     severity: InquirySeverity;
     status: InquiryStatus;
     /** Plain text - it is the Discord thread's name */
@@ -64,11 +74,11 @@ export interface IRefinementInquiry extends IAuditable {
 
 /** One person's assertion that they have looked a card over during refinement */
 export interface IRefinementCheck extends IAuditable {
-    /** Card version checked - stamped server side; any version change stales it */
+    /** Card version checked, stamped server side - for the record only, as an update does not undo a check */
     version: SemanticVersion;
 }
 
-/** A version-stamped record only counts while it matches the card it was made against */
+/** A release check only counts while it matches the card it was made against */
 export function isCheckStale(entry: { version: SemanticVersion }, latest?: SemanticVersion) {
     return !!latest && entry.version !== latest;
 }
@@ -77,15 +87,12 @@ export function isInquiryOpen(inquiry: IRefinementInquiry) {
     return inquiry.status === "open";
 }
 
-/**
- * An open inquiry nobody has re-examined since the card moved on. An update which claimed to fix it is
- * not stale - the fix is in, and what is left is confirming it rather than re-checking it.
- */
+/** An open, undecided inquiry raised against a card which has since moved on */
 export function isInquiryStale(inquiry: IRefinementInquiry, current?: SemanticVersion) {
     if (!current || !isInquiryOpen(inquiry)) {
         return false;
     }
-    return !inquiry.addressedIn && inquiry.version !== current;
+    return !inquiryDecision(inquiry) && inquiry.version !== current;
 }
 
 /**
@@ -102,6 +109,60 @@ export function isVersionWithdrawn(version?: SemanticVersion, current?: Semantic
  */
 export function isInquiryAddressed(inquiry: IRefinementInquiry) {
     return isInquiryOpen(inquiry) && !!inquiry.addressedIn;
+}
+
+/** The inquiry claimed by an update, replacing any no-change decision - the latest decision wins */
+export function withAddressedIn(inquiry: IRefinementInquiry, version: SemanticVersion): IRefinementInquiry {
+    const claimed = { ...inquiry, addressedIn: version };
+    delete claimed.noChange;
+    return claimed;
+}
+
+/** The inquiry decided as no change, replacing any update's claim - the latest decision wins */
+export function withNoChange(inquiry: IRefinementInquiry, noChange: IInquiryNoChange): IRefinementInquiry {
+    const decided = { ...inquiry, noChange };
+    delete decided.addressedIn;
+    return decided;
+}
+
+export function isInquiryNoChange(inquiry: IRefinementInquiry) {
+    return isInquiryOpen(inquiry) && !!inquiry.noChange;
+}
+
+export type InquiryDecision = "addressed" | "noChange";
+
+/** What has been decided for an open inquiry, if anything */
+export function inquiryDecision(inquiry: IRefinementInquiry): InquiryDecision | undefined {
+    if (isInquiryAddressed(inquiry)) {
+        return "addressed";
+    }
+    if (isInquiryNoChange(inquiry)) {
+        return "noChange";
+    }
+    return undefined;
+}
+
+/** An open inquiry with a Discord thread */
+export function isInquiryDiscussing(inquiry: IRefinementInquiry) {
+    return isInquiryOpen(inquiry) && !!inquiry._metadata?.discord?.messageUrl;
+}
+
+/** Open with nothing decided yet */
+export function isInquiryUnhandled(inquiry: IRefinementInquiry) {
+    return isInquiryOpen(inquiry) && !inquiryDecision(inquiry);
+}
+
+// What a link to an inquiry may ask the page to open on arrival
+export const inquiryLinkActions = ["resolve", "noChange"] as const;
+export type InquiryLinkAction = (typeof inquiryLinkActions)[number];
+
+/** The card page's refinement tab, landing on one inquiry - relative, so each side adds its own host */
+export function inquiryLinkPath(project: number, number: number, inquiry: number, action?: InquiryLinkAction) {
+    const params = new URLSearchParams({ tab: "refinement", inquiry: String(inquiry) });
+    if (action) {
+        params.set("action", action);
+    }
+    return `/project/${project}/${number}?${params}`;
 }
 
 /**
@@ -136,7 +197,7 @@ export function refinementRequirements(
     const requirements: IRefinementRequirement[] = [
         {
             label: "Have at least one person check this card",
-            done: checks.some((check) => !isCheckStale(check, current))
+            done: checks.length > 0
         }
     ];
 

@@ -13,6 +13,7 @@ import {
 } from "../../api";
 import { cardVersionRank, IPlaytestCard } from "common/models/cards";
 import { ISlotOptions } from "common/models/slots";
+import { InquiryLinkAction, inquiryLinkActions } from "common/models/refinement";
 import { cloneDeep } from "lodash-es";
 import { CardPreview } from "@agot/card-preview";
 import { getMostRecent, parseCardCode, renderPlaytestingCard, SemanticVersion } from "common/utils";
@@ -68,7 +69,7 @@ import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
 import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
 import Error from "../../components/error";
 
-const CARD_PARAMS = ["releaseCheck"] as const;
+const CARD_PARAMS = ["releaseCheck", "inquiry", "action"] as const;
 
 export type CardTab = "development" | "artwork" | "refinement";
 
@@ -88,7 +89,13 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const { isLoading: isLoadingSlot } = useGetSlotQuery({ project: projectNumber, number }, { skip: !canReadSlots });
     usePageTitle(`#${parseCardCode(false, projectNumber, number)}`);
     // Consumed once here for the whole page - two callers would each strip their own keys and race
-    const { releaseCheck: entryReleaseCheck } = useConsumableParams(CARD_PARAMS);
+    const {
+        releaseCheck: entryReleaseCheck,
+        inquiry: entryInquiry,
+        action: entryAction
+    } = useConsumableParams(CARD_PARAMS);
+    const entryInquiryNumber = entryInquiry !== undefined ? Number(entryInquiry) : undefined;
+    const entryInquiryAction = inquiryLinkActions.find((action) => action === entryAction);
 
     if (isLoadingProject || isLoadingCard || isLoadingSlot) {
         return (
@@ -110,14 +117,20 @@ export default function CardDetail({ className, style, project: projectNumber, n
     return (
         <div className={classNames("space-y-2", className)} style={style}>
             <ScopedSearchParamsProvider>
-                <CardContent project={projectNumber} number={number} entryReleaseCheck={entryReleaseCheck} />
+                <CardContent
+                    project={projectNumber}
+                    number={number}
+                    entryReleaseCheck={entryReleaseCheck}
+                    entryInquiry={entryInquiryNumber}
+                    entryInquiryAction={entryInquiryAction}
+                />
             </ScopedSearchParamsProvider>
         </div>
     );
 }
 
 // Split out so its tab state can sit inside the ScopedSearchParamsProvider CardDetail renders around it
-function CardContent({ project, number, entryReleaseCheck }: CardContentProps) {
+function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryInquiryAction }: CardContentProps) {
     const [searchParams] = useSearchParams();
     const [tab, setTab] = useState<CardTab>(() => entryCardTab(searchParams.get("tab") ?? undefined));
     // Lets a link to the artwork/refinement tab be copy-pasted; development (the default) leaves no trace
@@ -169,7 +182,12 @@ function CardContent({ project, number, entryReleaseCheck }: CardContentProps) {
                         {canReadRefinement ? (
                             <Tab key="refinement" title="Refinement">
                                 <PageActiveContext.Provider value={tab === "refinement"}>
-                                    <RefinementTab project={project} number={number} />
+                                    <RefinementTab
+                                        project={project}
+                                        number={number}
+                                        highlightInquiry={entryInquiry}
+                                        arrivalAction={entryInquiryAction}
+                                    />
                                 </PageActiveContext.Provider>
                             </Tab>
                         ) : null}
@@ -185,6 +203,9 @@ type CardContentProps = {
     project: number;
     number: number;
     entryReleaseCheck?: string;
+    /** An inquiry named by the link the page was opened from, and what the link asked to do with it */
+    entryInquiry?: number;
+    entryInquiryAction?: InquiryLinkAction;
 };
 
 function DevelopmentSection({ project, number }: { project: number; number: number }) {

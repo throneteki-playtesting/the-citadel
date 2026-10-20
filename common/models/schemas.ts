@@ -746,14 +746,14 @@ const refinementCheck = (isFull: boolean) =>
         ...auditKeys(isFull)
     });
 
-/** Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless a card update has
- *  already answered for the inquiry, where the change's own note already stands as the record. */
-export const inquiryResolution = (isAddressed: boolean) =>
+/** Body for PATCH .../inquiries/:inquiry/resolution. The note is required unless something has already
+ *  been decided for the inquiry - a card update's own note, or the no-change note, stands as the record. */
+export const inquiryResolution = (isDecided: boolean) =>
     Joi.object({
         // Closing is one route. `rejected` remains readable in stored data but is no longer produced -
         // "reject" read as the inquiry being wrong, where closing one is often accepting a known risk
         status: Joi.string().required().valid("resolved"),
-        note: isAddressed
+        note: isDecided
             ? NonEmptyRichText
             : NonEmptyRichText.required().messages({
                   "any.required": "Say why this is being resolved",
@@ -766,6 +766,11 @@ const inquiry = (isFull: boolean) =>
         inquiry: isFull ? Joi.number().required() : Joi.number(),
         version: isFull ? semanticVersion.required() : semanticVersion,
         addressedIn: semanticVersion,
+        noChange: Joi.object({
+            by: Joi.string().required(),
+            at: Joi.date().required(),
+            note: NonEmptyRichText.required()
+        }),
         severity: isFull
             ? Joi.string()
                   .required()
@@ -783,7 +788,7 @@ const inquiry = (isFull: boolean) =>
         resolution: Joi.object({
             by: Joi.string().required(),
             at: Joi.date().required(),
-            // Absent where a card update already answered for the inquiry - see inquiryResolution
+            // Absent where something was already decided for the inquiry - see inquiryResolution
             note: NonEmptyRichText
         }),
         _metadata: Joi.object({
@@ -1029,6 +1034,13 @@ export const Slot = {
         detail: RichText
     }),
     InquiryResolution: inquiryResolution,
+    // Body for PUT .../inquiries/:inquiry/no-change
+    InquiryNoChange: Joi.object({
+        note: NonEmptyRichText.required().messages({
+            "any.required": "Say why nothing is changing",
+            "string.empty": "Say why nothing is changing"
+        })
+    }),
     // Body for PATCH /:slot/faq
     Faq: Joi.object({ faq: RichText.required() })
 };

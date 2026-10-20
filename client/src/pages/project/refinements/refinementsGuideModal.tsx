@@ -19,7 +19,8 @@ const STEPS: { icon: IconDefinition; title: string; description: string }[] = [
     {
         icon: faCircleCheck,
         title: "Resolve It",
-        description: "Open a Discord thread for it if it needs discussion, then close it out."
+        description:
+            "Discuss it in Discord if needed, then answer it with a card update or mark it as no change, and close it out."
     }
 ];
 
@@ -58,8 +59,8 @@ export default function RefinementsGuideModal({ isOpen, onClose }: RefinementsGu
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 border border-content3 bg-content2 rounded-lg p-3">
                                 <div className="flex-1 text-sm text-foreground/70">
                                     Once a card's checked and every inquiry's resolved, it's ready to be marked
-                                    Complete. Updating it afterward makes those checks and inquiries stale again, so
-                                    they'll need re-checking.
+                                    Complete. Updating it afterward makes any undecided inquiries stale again, so
+                                    they'll need re-checking. Checks stand.
                                 </div>
                             </div>
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2">

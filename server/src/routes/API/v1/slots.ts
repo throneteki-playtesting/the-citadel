@@ -30,10 +30,11 @@ import { artworkBlocker, IArtworkProgress } from "common/models/artwork";
 import {
     InquirySeverity,
     IRefinementCheck,
+    inquiryDecision,
     IRefinementInquiry,
-    isInquiryAddressed,
     isInquiryOpen,
-    refinementBlocker
+    refinementBlocker,
+    withNoChange
 } from "common/models/refinement";
 import { IPlaytestCard } from "common/models/cards";
 import { SemanticVersion } from "common/utils";
@@ -58,6 +59,7 @@ import { computeCardProgress } from "@/services/progressService";
 import {
     closeInquiryDiscussion,
     endInquiryDiscussion,
+    noChangeInquiryDiscussion,
     reopenInquiryDiscussion,
     startInquiryDiscussion
 } from "@/discord/forums/refinementForum";
@@ -1086,7 +1088,7 @@ router.patch(
         }
 
         const { status, note } = validateBody<{ status: "resolved"; note?: string }>(
-            Schemas.Slot.InquiryResolution(isInquiryAddressed(entry)),
+            Schemas.Slot.InquiryResolution(!!inquiryDecision(entry)),
             req.body
         );
 
@@ -1151,6 +1153,90 @@ router.delete(
             LogCategory.SLOT,
             "slot.inquiry_reopened",
             `<principal> reopened inquiry #${inquiryNumber} on slot ${slotNumber} in <project>`,
+            { context: { project: projectSnapshot(project) }, severity: "warn" }
+        );
+
+        res.status(StatusCodes.OK).json(
+            toRefinementDetail(updated, await readFinalVersion(project, updated), canReadFaq())
+        );
+    })
+);
+
+// Decide the card stays as it is for an inquiry. Not a close - like an update addressing it, the decision
+// still awaits somebody resolving it, and it takes over from any claim an update had made
+router.put(
+    "/:slot/inquiries/:inquiry/no-change",
+    validateRequest(Permission.RESOLVE_INQUIRIES),
+    celebrate({ [Segments.PARAMS]: InquiryParams, [Segments.BODY]: Schemas.Slot.InquiryNoChange }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, { note: string }, unknown>(
+        async (req, res) => {
+            const project = res.locals.project as IProject;
+            const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
+
+            const slot = await requireSlot(project.number, slotNumber);
+            const entry = requireInquiry(slot, inquiryNumber);
+            if (!isInquiryOpen(entry)) {
+                throw new ApiErrorResponse(
+                    StatusCodes.NOT_ACCEPTABLE,
+                    "Invalid Data",
+                    `Inquiry #${inquiryNumber} has already been resolved`
+                );
+            }
+
+            const { principal } = getContext();
+            const now = new Date();
+            const decided = withNoChange(
+                { ...entry, updated: now, updatedBy: principal.id },
+                { by: principal.id, at: now, note: req.body.note }
+            );
+            const updated = await saveInquiries(slot, withInquiry(slot, decided));
+            void noChangeInquiryDiscussion(updated, decided);
+
+            await logActivity(
+                LogCategory.SLOT,
+                "slot.inquiry_no_change",
+                `<principal> marked inquiry #${inquiryNumber} on slot ${slotNumber} in <project> as no change`,
+                { context: { project: projectSnapshot(project) } }
+            );
+
+            res.status(StatusCodes.OK).json(
+                toRefinementDetail(updated, await readFinalVersion(project, updated), canReadFaq())
+            );
+        }
+    )
+);
+
+// Take back a no-change decision, leaving the inquiry undecided again
+router.delete(
+    "/:slot/inquiries/:inquiry/no-change",
+    validateRequest(Permission.RESOLVE_INQUIRIES),
+    celebrate({ [Segments.PARAMS]: InquiryParams }),
+    loadProject,
+    asyncHandler<{ project: number; slot: number; inquiry: number }, unknown, unknown, unknown>(async (req, res) => {
+        const project = res.locals.project as IProject;
+        const { slot: slotNumber, inquiry: inquiryNumber } = req.params;
+
+        const slot = await requireSlot(project.number, slotNumber);
+        const entry = requireInquiry(slot, inquiryNumber);
+        if (!isInquiryOpen(entry) || !entry.noChange) {
+            throw new ApiErrorResponse(
+                StatusCodes.NOT_ACCEPTABLE,
+                "Invalid Data",
+                `Inquiry #${inquiryNumber} is not open and marked as no change`
+            );
+        }
+
+        const { principal } = getContext();
+        const withdrawn: IRefinementInquiry = { ...entry, updated: new Date(), updatedBy: principal.id };
+        delete withdrawn.noChange;
+        const updated = await saveInquiries(slot, withInquiry(slot, withdrawn));
+        void noChangeInquiryDiscussion(updated, withdrawn);
+
+        await logActivity(
+            LogCategory.SLOT,
+            "slot.inquiry_no_change_withdrawn",
+            `<principal> withdrew the no-change decision on inquiry #${inquiryNumber} on slot ${slotNumber} in <project>`,
             { context: { project: projectSnapshot(project) }, severity: "warn" }
         );
 

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Button, Chip, Skeleton, Tab, Tabs } from "@heroui/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { addToast, Button, Chip, Skeleton, Tab, Tabs } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import classNames from "classnames";
@@ -17,6 +17,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { designPhase } from "common/models/slots";
 import { IPlaytestCard } from "common/models/cards";
 import {
+    inquiryDecision,
+    InquiryLinkAction,
     inquirySeverities,
     InquirySeverity,
     IRefinementInquiry,
@@ -32,6 +34,7 @@ import {
     useReopenInquiryMutation,
     useSubmitRefinementCheckMutation,
     useUpdateSlotMutation,
+    useWithdrawInquiryNoChangeMutation,
     useWithdrawRefinementCheckMutation
 } from "../../../api";
 import { usePermission } from "../../../hooks/usePermission";
@@ -53,6 +56,7 @@ import RefinementCheckControl from "./refinementCheckControl";
 import InquiryCard from "./inquiryCard";
 import InquiryModal from "./inquiryModal";
 import ResolveInquiryModal from "./resolveInquiryModal";
+import NoChangeInquiryModal from "./noChangeInquiryModal";
 import FaqSection from "./faqSection";
 import { DraftActions, StackedVersion } from "../cardDetail";
 import { versionLabel } from "../versionLabel";
@@ -96,7 +100,40 @@ type StateChipProps = {
  * A card's refinement, shared by the card page's own tab and the project list's editor. The list travels
  * to this rather than opening it in a dialog, for the same reason artwork does: it is far too tall to sit in one.
  */
-export default function RefinementTab({ project, number, highlightInquiry, showTrack, onBack }: RefinementTabProps) {
+/** Why a link's request cannot be carried out on arrival, or undefined when it can */
+function arrivalRefusal(
+    action: InquiryLinkAction,
+    number: number | undefined,
+    inquiry: IRefinementInquiry | undefined,
+    canResolve: boolean
+) {
+    if (!inquiry) {
+        return `Inquiry #${number} no longer exists on this card.`;
+    }
+    if (!canResolve) {
+        return "You do not have permission to resolve inquiries.";
+    }
+    if (!isInquiryOpen(inquiry)) {
+        return `Inquiry #${inquiry.inquiry} has already been resolved.`;
+    }
+    const decision = inquiryDecision(inquiry);
+    if (action === "noChange" && decision === "addressed") {
+        return `An update already claims to address inquiry #${inquiry.inquiry}.`;
+    }
+    if (action === "noChange" && decision === "noChange") {
+        return `Inquiry #${inquiry.inquiry} is already marked as no change.`;
+    }
+    return undefined;
+}
+
+export default function RefinementTab({
+    project,
+    number,
+    highlightInquiry,
+    arrivalAction,
+    showTrack,
+    onBack
+}: RefinementTabProps) {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const isPageActive = useIsPageActive();
@@ -120,11 +157,13 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
     const [withdrawCheck, { isLoading: isWithdrawing }] = useWithdrawRefinementCheckMutation();
     const [deleteInquiry, { isLoading: isDeleting }] = useDeleteInquiryMutation();
     const [reopenInquiry, { isLoading: isReopening }] = useReopenInquiryMutation();
+    const [withdrawNoChange, { isLoading: isWithdrawingNoChange }] = useWithdrawInquiryNoChangeMutation();
     const [updateSlot, { isLoading: isCompleting }] = useUpdateSlotMutation();
 
     const [editing, setEditing] = useState<IRefinementInquiry>();
     const [isRaising, setIsRaising] = useState(false);
     const [resolving, setResolving] = useState<IRefinementInquiry>();
+    const [noChanging, setNoChanging] = useState<IRefinementInquiry>();
     const [deleting, setDeleting] = useState<IRefinementInquiry>();
     const [reopening, setReopening] = useState<IRefinementInquiry>();
     const [severities, setSeverities] = useState<InquirySeverity[]>(() =>
@@ -153,6 +192,33 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
         return params;
     }, [severities, showOpen, showResolved]);
     useSearchParamsScope("inquiries", isPageActive, scopeParams);
+
+    // A forum link's action is answered once, as soon as the record has loaded - with a toast where it cannot be
+    const pendingArrival = useRef(arrivalAction);
+    useEffect(() => {
+        const action = pendingArrival.current;
+        // Held for the signed-in user too, since permission is read from them and would otherwise refuse
+        if (!action || !refinement || !user) {
+            return;
+        }
+        pendingArrival.current = undefined;
+
+        const target = refinement.inquiries.find((entry) => entry.inquiry === highlightInquiry);
+        const refusal = arrivalRefusal(action, highlightInquiry, target, canResolve);
+        if (refusal) {
+            addToast({
+                title: action === "resolve" ? "Cannot resolve inquiry" : "Cannot mark inquiry as no change",
+                description: refusal,
+                color: "warning"
+            });
+            return;
+        }
+        if (action === "resolve") {
+            setResolving(target);
+        } else {
+            setNoChanging(target);
+        }
+    }, [refinement, user, highlightInquiry, canResolve]);
 
     const inquiries = useMemo(() => refinement?.inquiries ?? [], [refinement?.inquiries]);
     const open = useMemo(() => inquiries.filter(isInquiryOpen), [inquiries]);
@@ -206,7 +272,7 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
         designStatus === "refinement" &&
         isRefinementDone(inquiries, refinement.refinementChecks, refinement.version);
 
-    const isSaving = isChecking || isWithdrawing || isDeleting || isReopening || isCompleting;
+    const isSaving = isChecking || isWithdrawing || isDeleting || isReopening || isWithdrawingNoChange || isCompleting;
 
     const onMarkComplete = async () => {
         try {
@@ -237,6 +303,15 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
             setReopening(undefined);
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to reopen inquiry" });
+        }
+    };
+
+    // Not confirmed - nothing is lost by it, since the decision is one press to make again
+    const onWithdrawNoChange = async (inquiry: IRefinementInquiry) => {
+        try {
+            await withdrawNoChange({ project, number, inquiry: inquiry.inquiry }).unwrap();
+        } catch (err) {
+            showApiErrorToast(err, { title: "Failed to undo no change" });
         }
     };
 
@@ -274,6 +349,8 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
             onDelete={() => setDeleting(inquiry)}
             onResolve={() => setResolving(inquiry)}
             onReopen={() => setReopening(inquiry)}
+            onNoChange={() => setNoChanging(inquiry)}
+            onWithdrawNoChange={() => onWithdrawNoChange(inquiry)}
         />
     );
 
@@ -489,6 +566,13 @@ export default function RefinementTab({ project, number, highlightInquiry, showT
                 inquiry={resolving}
                 onClose={() => setResolving(undefined)}
             />
+            <NoChangeInquiryModal
+                isOpen={!!noChanging}
+                project={project}
+                number={number}
+                inquiry={noChanging}
+                onClose={() => setNoChanging(undefined)}
+            />
             <ConfirmModal
                 isOpen={!!deleting}
                 isLoading={isDeleting}
@@ -613,6 +697,8 @@ type RefinementTabProps = {
     number: number;
     /** An inquiry to draw attention to on arrival, named by whoever sent you here */
     highlightInquiry?: number;
+    /** What the link which named `highlightInquiry` asked to do with it - opens that modal once loaded */
+    arrivalAction?: InquiryLinkAction;
     /** For the project's editor, which has no card progress above it to read the design track from */
     showTrack?: boolean;
     /** Where "All Refinements" leads when the list is already on screen; otherwise it navigates to it */

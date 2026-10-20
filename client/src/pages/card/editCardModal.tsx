@@ -2,9 +2,15 @@ import { IPlaytestCard } from "common/models/cards";
 import { NEW_OPTION_VERSION } from "common/models/slots";
 import { SlotCondition } from "common/models/slotConditions";
 import { BaseElementProps } from "../../types";
-import { ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { Button, ModalBody, ModalContent, ModalFooter, ModalHeader } from "@heroui/react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faClipboardList } from "@fortawesome/free-solid-svg-icons";
 import Modal from "../../components/modal";
-import { usePutDraftCardMutation } from "../../api";
+import { useGetSlotRefinementQuery, usePutDraftCardMutation } from "../../api";
+import Permission from "common/models/permissions";
+import { isInquiryOpen } from "common/models/refinement";
+import { usePermission } from "../../hooks/usePermission";
+import InquiryReference from "./refinement/inquiryReference";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
@@ -59,6 +65,15 @@ export default function EditCardModal({
     // Kept apart from the card - it says something about the card's inquiries, not about the card
     const [addressedInquiries, setAddressedInquiries] = useState<number[]>([]);
 
+    // The same request the tick list below makes, so the two share one cache entry
+    const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+    const { data: refinement } = useGetSlotRefinementQuery(
+        { project: card.project as number, number: card.number as number },
+        { skip: !isOpen || !canReadRefinement || card.project === undefined || card.number === undefined }
+    );
+    const openInquiries = useMemo(() => (refinement?.inquiries ?? []).filter(isInquiryOpen), [refinement?.inquiries]);
+    const [isShowingInquiries, setIsShowingInquiries] = useState(false);
+
     // Left as it is once the card goes, so the modal keeps its shape while it fades out
     useEffect(() => {
         if (!initial) {
@@ -66,6 +81,7 @@ export default function EditCardModal({
         }
         setCard(initial);
         setAddressedInquiries([]);
+        setIsShowingInquiries(false);
     }, [initial]);
 
     const isDraftReleaseBound = useIsReleaseBound(card.project, card.number);
@@ -124,7 +140,22 @@ export default function EditCardModal({
                 <ModalContent>
                     {(onClose) => (
                         <Wizard schema={PlaytestingCard.Draft} onSubmit={onSubmit} data={card}>
-                            <ModalHeader>{title}</ModalHeader>
+                            <ModalHeader className="flex items-center gap-2 pr-12">
+                                <span className="min-w-0 flex-1">{title}</span>
+                                {openInquiries.length > 0 && (
+                                    <Button
+                                        size="sm"
+                                        variant={isShowingInquiries ? "solid" : "flat"}
+                                        color={isShowingInquiries ? "primary" : "default"}
+                                        className="shrink-0"
+                                        aria-pressed={isShowingInquiries}
+                                        startContent={<FontAwesomeIcon icon={faClipboardList} />}
+                                        onPress={() => setIsShowingInquiries((previous) => !previous)}
+                                    >
+                                        Inquiries ({openInquiries.length})
+                                    </Button>
+                                )}
+                            </ModalHeader>
                             <ModalBody>
                                 <ValidationSummary />
                                 {isDraftReleaseBound && (
@@ -136,23 +167,31 @@ export default function EditCardModal({
                                     />
                                 )}
                                 <div className="flex flex-col md:flex-row gap-2 min-w-0">
-                                    <EditorCardPreview
-                                        ref={previewRef}
-                                        faceRef={faceRef}
-                                        card={renderDraftCard}
-                                        handoffKey={revertedTo ? "original" : "edited"}
-                                        isPlot={(shown.type ?? initial?.type) === "plot"}
-                                        isTurning={!!revertedTo}
-                                        verticalWidth={EDITOR_CARD_WIDTH.modal}
-                                        className="self-center md:self-start"
-                                    >
-                                        <SlotCardBadges
-                                            issues={flight.shownIssues}
-                                            actions={[]}
-                                            renamedFrom={renamedFrom}
-                                            isLive
-                                        />
-                                    </EditorCardPreview>
+                                    <div className="flex w-full flex-col items-center gap-2 md:w-auto md:items-stretch md:self-start">
+                                        <EditorCardPreview
+                                            ref={previewRef}
+                                            faceRef={faceRef}
+                                            card={renderDraftCard}
+                                            handoffKey={revertedTo ? "original" : "edited"}
+                                            isPlot={(shown.type ?? initial?.type) === "plot"}
+                                            isTurning={!!revertedTo}
+                                            verticalWidth={EDITOR_CARD_WIDTH.modal}
+                                            className="self-center"
+                                        >
+                                            <SlotCardBadges
+                                                issues={flight.shownIssues}
+                                                actions={[]}
+                                                renamedFrom={renamedFrom}
+                                                isLive
+                                            />
+                                        </EditorCardPreview>
+                                        {isShowingInquiries && (
+                                            <InquiryReference
+                                                inquiries={openInquiries}
+                                                className="w-full md:w-0 md:min-w-full"
+                                            />
+                                        )}
+                                    </div>
                                     <WizardPages className="min-w-0 md:flex-1">
                                         <WizardPage controlledData={getBaseCardValues(card)}>
                                             <CardEditor

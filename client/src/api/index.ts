@@ -963,6 +963,20 @@ const api = createApi({
             },
             invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
         }),
+        markInquiryNoChange: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number; note: string }>({
+            query: ({ project, number, inquiry, note }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/no-change`);
+                return { url, method: "PUT", body: { note } };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
+        withdrawInquiryNoChange: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number }>({
+            query: ({ project, number, inquiry }) => {
+                const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/no-change`);
+                return { url, method: "DELETE" };
+            },
+            invalidatesTags: (_result, _error, { project, number }) => [{ type: "slot", id: `${project}|${number}` }]
+        }),
         startInquiryDiscussion: builder.mutation<ISlotRefinementDetail, ISlotRef & { inquiry: number }>({
             query: ({ project, number, inquiry }) => {
                 const url = buildUrl(`projects/${project}/slots/${number}/inquiries/${inquiry}/discussion`);
@@ -1472,6 +1486,8 @@ export const {
     useDeleteInquiryMutation,
     useResolveInquiryMutation,
     useReopenInquiryMutation,
+    useMarkInquiryNoChangeMutation,
+    useWithdrawInquiryNoChangeMutation,
     useStartInquiryDiscussionMutation,
     useSubmitRefinementCheckMutation,
     useWithdrawRefinementCheckMutation,

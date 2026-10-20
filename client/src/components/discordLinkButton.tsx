@@ -23,6 +23,7 @@ import {
     useDiscordHref
 } from "../hooks/useDiscordLink";
 import { UIColor } from "../types";
+import { TouchTooltip } from "./touchTooltip";
 
 /**
  * A link into Discord, opening wherever this browser was last told to open them. The caret both switches
@@ -31,12 +32,16 @@ import { UIColor } from "../types";
 export default function DiscordLinkButton({
     url,
     children,
+    tooltip,
+    "aria-label": ariaLabel,
     size = "sm",
     variant = "flat",
     color,
     className
 }: DiscordLinkButtonProps) {
     const { href, isApp, clientUrl } = useDiscordHref(url);
+    const isIconOnly = !children;
+    const icon = <FontAwesomeIcon icon={faDiscord} className="text-base" />;
     const choice = useDiscordChoice();
     const [isAsking, setIsAsking] = useState(false);
 
@@ -50,33 +55,29 @@ export default function DiscordLinkButton({
     // choosing it for somebody who has the app is the very thing they would have said no to
     const shouldAsk = !choice && !!clientUrl;
 
-    const button = shouldAsk ? (
-        <Button
-            size={size}
-            variant={variant}
-            color={color}
-            className={className}
-            startContent={<FontAwesomeIcon icon={faDiscord} className="text-base" />}
-            onPress={() => setIsAsking(true)}
-        >
-            {children}
-        </Button>
+    const shared = {
+        size,
+        variant,
+        color,
+        className,
+        isIconOnly,
+        "aria-label": ariaLabel,
+        startContent: isIconOnly ? undefined : icon,
+        children: isIconOnly ? icon : children
+    };
+    const plainButton = shouldAsk ? (
+        <Button {...shared} onPress={() => setIsAsking(true)} />
     ) : (
         <Button
+            {...shared}
             as="a"
-            size={size}
-            variant={variant}
-            color={color}
-            className={className}
             href={href}
             // A custom scheme has nowhere to go in a new tab; the website behaves as any link does
             target={isApp ? undefined : "_blank"}
             rel="noreferrer"
-            startContent={<FontAwesomeIcon icon={faDiscord} className="text-base" />}
-        >
-            {children}
-        </Button>
+        />
     );
+    const button = tooltip ? <TouchTooltip content={tooltip}>{plainButton}</TouchTooltip> : plainButton;
 
     if (!clientUrl) {
         return button;
@@ -157,7 +158,10 @@ export default function DiscordLinkButton({
 type DiscordLinkButtonProps = {
     /** The discord.com address of the thing being linked to */
     url: string;
-    children: ReactNode;
+    /** Left out for the icon alone */
+    children?: ReactNode;
+    tooltip?: ReactNode;
+    "aria-label"?: string;
     size?: "sm" | "md" | "lg";
     variant?: "flat" | "solid" | "light" | "bordered";
     color?: UIColor;

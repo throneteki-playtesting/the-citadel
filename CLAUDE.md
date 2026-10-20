@@ -132,6 +132,17 @@ GridFS upload was considered and deferred; Drive archiving remains pencilled in 
 
 ---
 
+## Refinement (`common/models/refinement.ts`)
+
+- **Decided is not resolved.** An open inquiry can carry one decision: `addressedIn` (a card update claims to fix it, set by ticking it in the card editor) or `noChange` (`{ by, at, note }`, the card stays as it is). Never both — the latest wins, so a claim clears `noChange` and marking no change clears the claim. Either way it still awaits somebody **resolving** it, the decision makes the resolution note optional, and it stops the inquiry going stale. `inquiryDecision()` is the one reading of which applies; `isInquiryUnhandled()` (open, nothing decided) drives the Refinements list's **Unhandled** filter. The legacy `rejected` _status_ is a different thing (a close) and is no longer produced — see `schemas.ts`.
+- **Refinement checks never go stale.** The version is stamped for the record only; an update asks for a second look through its undecided inquiries going stale instead. `isCheckStale` still governs **release** checks.
+- **The row icon carries its state** (`components/refinement/inquiryChip.tsx`): a decision badge in the bottom corner (green check addressed, grey dash no change) and a primary dot in the top corner while a thread is open (`isInquiryDiscussing`), in em of the icon so they scale with it.
+- **The card editor shows the open inquiries beside the card** (`InquiryReference`, behind the header's "Inquiries (n)" toggle, mounted only while shown). It sits under the preview in a column the preview measures to fit a plot, so it is `md:w-0 md:min-w-full` — it must take the column's width without adding to it.
+- **The forum's buttons are links, never handlers.** The opening post's top-level action row (outside its container) holds View Inquiry / Resolve / No Change, each `inquiryLinkPath(..., action)` — `?tab=refinement&inquiry=n&action=resolve|noChange`. `cardDetail` consumes `inquiry`/`action` through `useConsumableParams`, and `RefinementTab` answers the action once, when the record and user have loaded: the modal opens, or a toast says why it can't (resolved, already decided, no permission). There is deliberately no Discord modal routing — the page already knows who is asking and has the note field. `refreshOpening` re-draws only that last row on every state change by sending the earlier components back as JSON; a post whose last component is not an action row predates it and is left alone.
+- **Card images in the forum**: the opening post shows the card, and a newly claimed inquiry's thread gets an "Addressed in X" notice with the draft's note and image (a withdrawn claim gets "Fix withdrawn"). A hosted image is used where there is one; a draft has none and is rendered and attached. Rendering failing never fails the post.
+
+---
+
 ## Card Editor System
 
 ### `CardEditor` (`client/src/components/cardEditor/index.tsx`)

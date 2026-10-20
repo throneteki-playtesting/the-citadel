@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
+import { Button, Chip, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger, Tooltip } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
@@ -18,12 +18,13 @@ import classNames from "classnames";
 import {
     IRefinementInquiry,
     isInquiryAddressed,
+    isInquiryNoChange,
     isInquiryOpen,
     isInquiryStale,
     isVersionWithdrawn
 } from "common/models/refinement";
 import { SemanticVersion } from "common/utils";
-import { EASE_STANDARD, highlightTarget, inquirySeverityMeta } from "../../../constants";
+import { EASE_STANDARD, highlightTarget, inquiryDecisionMeta, inquirySeverityMeta } from "../../../constants";
 import { HighlightTarget } from "../../../components/highlightTarget";
 import RichText from "../../../components/richText";
 import { TouchTooltip } from "../../../components/touchTooltip";
@@ -70,7 +71,7 @@ function TitleChip({ color, icon, label, heading, children }: TitleChipProps) {
 }
 
 type TitleChipProps = {
-    color: "warning" | "success";
+    color: "warning" | "success" | "default";
     icon: IconDefinition;
     /** Short enough to sit beside a summary - a version where there is one worth naming */
     label: string;
@@ -233,9 +234,16 @@ function DiscussionButton({ project, number, inquiry, canStart, isDisabled, clas
 
     if (messageUrl) {
         return (
-            <DiscordLinkButton url={messageUrl} className={className}>
-                Discussion
-            </DiscordLinkButton>
+            <DiscordLinkButton
+                url={messageUrl}
+                className={className}
+                aria-label="Join discussion"
+                tooltip={
+                    <TooltipDetail heading="Join discussion">
+                        This inquiry already has a thread in Discord.
+                    </TooltipDetail>
+                }
+            />
         );
     }
 
@@ -261,21 +269,71 @@ function DiscussionButton({ project, number, inquiry, canStart, isDisabled, clas
     };
 
     return (
-        <Button
-            size="sm"
-            variant="flat"
-            className={className}
-            isLoading={isLoading || isOpening}
-            isDisabled={isDisabled}
-            startContent={
-                isLoading || isOpening ? undefined : <FontAwesomeIcon icon={faDiscord} className="text-base" />
+        <TouchTooltip
+            content={
+                <TooltipDetail heading="Start discussion">
+                    Opens a thread for this inquiry in Discord's refinement forum.
+                </TooltipDetail>
             }
-            onPress={onStart}
         >
-            Start Discussion
-        </Button>
+            <Button
+                isIconOnly
+                size="sm"
+                variant="flat"
+                className={className}
+                aria-label="Start discussion"
+                isLoading={isLoading || isOpening}
+                isDisabled={isDisabled}
+                onPress={onStart}
+            >
+                <FontAwesomeIcon icon={faDiscord} className="text-base" />
+            </Button>
+        </TouchTooltip>
     );
 }
+
+// Folds to an undo icon once marked. A hover tooltip, not a touch one, so a tap always reaches the button
+function NoChangeButton({ isNoChange, isDisabled, onNoChange, onUndo }: NoChangeButtonProps) {
+    return (
+        <Tooltip content="Undo no change" isDisabled={!isNoChange} delay={300}>
+            <Button
+                size="sm"
+                variant="flat"
+                color={isNoChange ? "warning" : "default"}
+                className="min-w-8 shrink-0 gap-0 px-2.5 transition-colors"
+                aria-label={isNoChange ? "Undo no change" : undefined}
+                isDisabled={isDisabled}
+                onPress={isNoChange ? onUndo : onNoChange}
+            >
+                <FontAwesomeIcon
+                    icon={isNoChange ? faRotateLeft : inquiryDecisionMeta.noChange.icon}
+                    className="text-base"
+                />
+                <AnimatePresence initial={false}>
+                    {!isNoChange && (
+                        <motion.span
+                            key="label"
+                            className="overflow-hidden whitespace-nowrap"
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: "auto", opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={FOLD_TRANSITION}
+                        >
+                            <span className="pl-2">No change</span>
+                        </motion.span>
+                    )}
+                </AnimatePresence>
+            </Button>
+        </Tooltip>
+    );
+}
+
+type NoChangeButtonProps = {
+    isNoChange: boolean;
+    isDisabled: boolean;
+    onNoChange: () => void;
+    onUndo: () => void;
+};
 
 type DiscussionButtonProps = {
     project: number;
@@ -301,18 +359,22 @@ export default function InquiryCard({
     onEdit,
     onDelete,
     onResolve,
-    onReopen
+    onReopen,
+    onNoChange,
+    onWithdrawNoChange
 }: InquiryCardProps) {
     const meta = inquirySeverityMeta[inquiry.severity];
     const isOpen = isInquiryOpen(inquiry);
     const isStale = isInquiryStale(inquiry, version);
     const isAddressed = isInquiryAddressed(inquiry);
+    const isNoChange = isInquiryNoChange(inquiry);
     // The version it names is gone rather than merely superseded, which reads differently: nothing about
     // the card moved on, the card it was written against was withdrawn
     const isOutdated = isVersionWithdrawn(inquiry.version, version);
     const isFixWithdrawn = !isOpen && isVersionWithdrawn(inquiry.addressedIn, version);
     const hasBody = !!inquiry.detail;
-    const hasTitleControls = isStale || isAddressed || isFixWithdrawn || (isOpen && (canEdit || canDelete));
+    const hasTitleControls =
+        isStale || isAddressed || !!inquiry.noChange || isFixWithdrawn || (isOpen && (canEdit || canDelete));
 
     // Folded by default so a card's whole list of inquiries is one screen to skim. The exception is one
     // somebody has just been sent to - arriving at an inquiry folded away answers nothing
@@ -411,11 +473,32 @@ export default function InquiryCard({
                             {isAddressed && (
                                 <TitleChip
                                     color="success"
-                                    icon={faCheck}
+                                    icon={inquiryDecisionMeta.addressed.icon}
                                     label={inquiry.addressedIn ?? ""}
                                     heading={`Addressed in ${inquiry.addressedIn}`}
                                 >
                                     A card update claims to have settled this. It stays open until somebody resolves it.
+                                </TitleChip>
+                            )}
+                            {inquiry.noChange && (
+                                <TitleChip
+                                    color={inquiryDecisionMeta.noChange.color}
+                                    icon={inquiryDecisionMeta.noChange.icon}
+                                    label={inquiryDecisionMeta.noChange.label}
+                                    heading={inquiryDecisionMeta.noChange.label}
+                                >
+                                    <span className="flex flex-col gap-1.5">
+                                        <span className="flex flex-wrap items-center gap-1.5 text-foreground/60">
+                                            Decided by <UserRow discordId={inquiry.noChange.by} />
+                                            <Timestamp date={inquiry.noChange.at} />
+                                        </span>
+                                        <RichText html={inquiry.noChange.note} />
+                                        <span className="text-foreground/60">
+                                            {isOpen
+                                                ? "It stays open until somebody resolves it."
+                                                : "Resolved without changing the card."}
+                                        </span>
+                                    </span>
                                 </TitleChip>
                             )}
                             {isFixWithdrawn && (
@@ -509,8 +592,16 @@ export default function InquiryCard({
                                             inquiry={inquiry}
                                             canStart={canStartDiscussion}
                                             isDisabled={isSaving}
-                                            className={ACTION_CLASS}
+                                            className="shrink-0"
                                         />
+                                        {canResolve && isOpen && !isAddressed && (
+                                            <NoChangeButton
+                                                isNoChange={isNoChange}
+                                                isDisabled={isSaving}
+                                                onNoChange={onNoChange}
+                                                onUndo={onWithdrawNoChange}
+                                            />
+                                        )}
                                         {canResolve &&
                                             (isOpen ? (
                                                 <Button
@@ -567,4 +658,6 @@ type InquiryCardProps = {
     onDelete: () => void;
     onResolve: () => void;
     onReopen: () => void;
+    onNoChange: () => void;
+    onWithdrawNoChange: () => void;
 };
