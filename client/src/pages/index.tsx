@@ -14,19 +14,34 @@ import CardDetailSkeleton from "./card/cardDetailSkeleton";
 
 // Every page but the landing ones loads as its own chunk, when first visited - so opening the Citadel doesn't parse
 // the admin pages, the review form and every editor before anything can respond. `Page` holds a skeleton meanwhile.
-const Suggestions = lazy(() => import("./suggestions"));
-const SuggestionDetail = lazy(() => import("./suggestions/suggestionDetail"));
+const loadProject = () => import("./project");
+const loadCard = () => import("./card");
+const loadSuggestions = () => import("./suggestions");
+const loadSuggestionDetail = () => import("./suggestions/suggestionDetail");
+const loadSubmitReview = () => import("./review");
+const loadPlaytestingUpdate = () => import("./playtestingUpdate");
+const Suggestions = lazy(loadSuggestions);
+const SuggestionDetail = lazy(loadSuggestionDetail);
 const Users = lazy(() => import("./admin/users"));
 const Roles = lazy(() => import("./admin/roles"));
 const Integrations = lazy(() => import("./admin/integrations"));
 const Logs = lazy(() => import("./admin/logs"));
-const loadProject = () => import("./project");
-const loadCard = () => import("./card");
 const Project = lazy(loadProject);
 const Card = lazy(loadCard);
-const SubmitReview = lazy(() => import("./review"));
-const PlaytestingUpdate = lazy(() => import("./playtestingUpdate"));
+const SubmitReview = lazy(loadSubmitReview);
+const PlaytestingUpdate = lazy(loadPlaytestingUpdate);
 const Privacy = lazy(() => import("./privacy"));
+
+/** The pages most visited after the first, in the order they're most likely next - fetched while idle (preloadPages),
+ *  so following a link finds its code already here. The admin pages are left to load when asked for. */
+export const likelyNextPages = [
+    loadProject,
+    loadCard,
+    loadSuggestions,
+    loadSuggestionDetail,
+    loadSubmitReview,
+    loadPlaytestingUpdate
+];
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & {
