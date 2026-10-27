@@ -180,8 +180,8 @@ export default function LinkSuggestionModal({
     const [markDevelopedAs, { isLoading: isLinking }] = useMarkSuggestionDevelopedAsMutation();
     const options = match ? [suggestion, ...match.others] : [suggestion];
     const hasChoice = options.length > 1;
-    const [picks, setPicks] = useState<string[]>([]);
-    const [page, setPage] = useState(PICK_PAGE);
+    const [picks, setPicks] = useState<string[]>(() => (hasChoice ? [] : [suggestion.id!]));
+    const [page, setPage] = useState(hasChoice ? PICK_PAGE : CONFIRM_PAGE);
 
     // Every opening starts afresh - with nothing to choose, already settled on the one there is
     useEffect(() => {

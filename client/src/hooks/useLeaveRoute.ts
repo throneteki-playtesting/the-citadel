@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 function currentIndex(): number | undefined {
     const index = window.history.state?.idx;
@@ -12,13 +12,21 @@ function currentIndex(): number | undefined {
 // opened from elsewhere, or a fresh tab), it lands on `fallback` instead, replacing the page being left.
 export default function useLeaveRoute() {
     const navigate = useNavigate();
-    const arrivedAtRef = useRef(currentIndex());
+    const { pathname } = useLocation();
+    // Per path, not per mount - a route moving from one record to the next (/suggestions/a to /suggestions/b) keeps
+    // the same component, and leaving b mustn't also leave a
+    const arrivalRef = useRef({ pathname, index: currentIndex() });
     const isLeavingRef = useRef(false);
+    if (arrivalRef.current.pathname !== pathname) {
+        arrivalRef.current = { pathname, index: currentIndex() };
+        // Arrived somewhere new - which may be the same route again, if that is what lay behind
+        isLeavingRef.current = false;
+    }
 
     const leave = useCallback(
         (fallback: string) => {
             isLeavingRef.current = true;
-            const arrivedAt = arrivedAtRef.current;
+            const arrivedAt = arrivalRef.current.index;
             const now = currentIndex();
             if (arrivedAt !== undefined && now !== undefined && arrivedAt > 0) {
                 navigate(-(now - arrivedAt + 1));
