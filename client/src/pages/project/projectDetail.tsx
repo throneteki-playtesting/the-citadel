@@ -1,13 +1,13 @@
 import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
-import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
+import { addToast, Tab, Tabs } from "@heroui/react";
 import { ReactNode, useLayoutEffect, useMemo, useState } from "react";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
 import EditProjectModal from "./editProjectModal";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
-import ProjectHeaderSkeleton from "./projectHeaderSkeleton";
+import ProjectPageSkeleton from "./projectPageSkeleton";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import { DraftPoolHostProvider } from "./draft/draftPoolHost";
@@ -56,13 +56,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     const navigate = useNavigate();
 
+    // The same skeleton the route shows while this page's code arrives, so the two never swap
     if (isLoading) {
-        return (
-            <div className="space-y-4">
-                <ProjectHeaderSkeleton />
-                <Skeleton className="w-full h-98 rounded-md" />
-            </div>
-        );
+        return <ProjectPageSkeleton />;
     }
 
     if (!project) {

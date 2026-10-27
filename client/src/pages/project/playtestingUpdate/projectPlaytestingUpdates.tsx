@@ -1,7 +1,7 @@
 import { IProject } from "common/models/projects";
 import { useGetCardsQuery, useGetPlaytestingUpdatesQuery } from "../../../api";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { addToast, Button, Skeleton } from "@heroui/react";
+import { addToast, Button } from "@heroui/react";
 import CreatePlaytestingUpdateModal from "./createPlaytestingUpdateModal";
 import PermissionGate from "../../../components/permissionGate";
 import Permission from "common/models/permissions";
@@ -11,6 +11,8 @@ import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightFromBracket, faChevronLeft, faChevronRight, faFeather } from "@fortawesome/free-solid-svg-icons";
 import SectionTitle from "../../../components/sectionTitle";
+import Reveal from "../../../components/reveal";
+import { PlaytestingUpdatesSkeleton } from "../projectPageSkeleton";
 
 export default function ProjectPlaytestingUpdates({ className, project }: ProjectPlaytestingUpdatesProps) {
     return (
@@ -72,17 +74,7 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
     };
 
     if (isLoading) {
-        return (
-            <div className="p-4 space-y-1 transition-colors">
-                <div className="flex">
-                    <div className="min-w-0 space-y-1">
-                        <Skeleton className="w-32 h-6 rounded-sm" />
-                        <Skeleton className="w-64 h-4 rounded-sm" />
-                    </div>
-                </div>
-                <Skeleton className="w-full h-22 rounded-sm" />
-            </div>
-        );
+        return <PlaytestingUpdatesSkeleton />;
     }
 
     if (!playtestingData || playtestingData.total === 0) {
@@ -98,7 +90,7 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
     }
 
     return (
-        <div className="relative">
+        <Reveal direction={null} className="relative">
             <div
                 ref={containerRef}
                 onScroll={updateScrollState}
@@ -140,7 +132,7 @@ function PlaytestingUpdateCarousel({ project }: PlaytestingUpdateCarouselProps) 
             >
                 <FontAwesomeIcon icon={faChevronRight} />
             </Button>
-        </div>
+        </Reveal>
     );
 }
 

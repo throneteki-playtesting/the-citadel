@@ -6,18 +6,18 @@ import { asArray, hasPermission } from "common/utils";
 import { useScopedUser } from "../hooks/useScopedUser";
 import AccessDenied from "../components/accessDenied";
 
-export default function Page({ children, required }: PageProps) {
+export default function Page({ children, required, fallback }: PageProps) {
     const { user, isLoading } = useScopedUser();
 
     if (isLoading) {
-        return null;
+        return fallback ?? null;
     }
     const permissions = asArray(required ?? []);
     if (!hasPermission(user, ...permissions)) {
         return <AccessDenied />;
     }
 
-    return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
+    return <Suspense fallback={fallback ?? <PageSkeleton />}>{children}</Suspense>;
 }
 
 // While a page's own code is still arriving - a title and a body, the outline nearly every page shares
@@ -35,4 +35,6 @@ function PageSkeleton() {
 type PageProps = {
     children: ReactNode;
     required?: SingleOrArray<Permission>;
+    /** The page's own loading skeleton, for while it can't draw yet - see PageItem */
+    fallback?: ReactNode;
 };

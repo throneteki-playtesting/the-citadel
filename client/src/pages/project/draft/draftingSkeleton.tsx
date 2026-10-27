@@ -2,6 +2,7 @@ import { Skeleton } from "@heroui/react";
 import classNames from "classnames";
 import { DRAFT_SLOT_SIZE_CLASS } from "../../../constants";
 import { frameShape } from "./slotShape";
+import SlotSkeleton from "../../../components/slots/slotSkeleton";
 
 const FACTIONS = [0, 1, 2];
 // Two full rows at the widest, which also runs a collapsed row past the edge
@@ -22,20 +23,7 @@ function FactionSkeleton({ isExpanded }: { isExpanded: boolean }) {
                     )}
                 >
                     {SLOTS.map((slot) => (
-                        <div
-                            key={slot}
-                            className={classNames(
-                                "flex shrink-0 flex-col gap-1 rounded-lg border border-content3 bg-content2/40 p-1",
-                                DRAFT_SLOT_SIZE_CLASS
-                            )}
-                            style={frameShape(false)}
-                        >
-                            <div className="flex h-6 items-center justify-between pl-1">
-                                <Skeleton className="h-3 w-8 rounded-md" />
-                                <Skeleton className="size-5 rounded-full" />
-                            </div>
-                            <Skeleton className="w-full grow rounded-md" />
-                        </div>
+                        <SlotSkeleton key={slot} className={DRAFT_SLOT_SIZE_CLASS} style={frameShape(false)} />
                     ))}
                 </div>
             </div>

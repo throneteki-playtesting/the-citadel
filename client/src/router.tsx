@@ -7,6 +7,7 @@ import { isPageItem, NavItem, navItems } from "./pages";
 import LoginPage from "./pages/login";
 import Render from "./pages/render";
 import ProjectScope from "./components/projectScope";
+import { RouteHandle } from "./app/routeHandle";
 
 const router = createBrowserRouter([
     {
@@ -35,9 +36,18 @@ function pageItemRoutes() {
         if (isPageItem(item)) {
             routes.push({
                 path: item.path,
+                // Read by AuthGuard, which draws it before the app itself can
+                handle: { fallback: item.fallback } satisfies RouteHandle,
+                // Nothing is waited on - it only starts what the page will ask for, so the requests overlap
+                loader: ({ params }) => {
+                    item.preload?.(params);
+                    return null;
+                },
                 element: item.element ? (
                     <ProjectScope>
-                        <Page required={item.permission}>{item.element}</Page>
+                        <Page required={item.permission} fallback={item.fallback}>
+                            {item.element}
+                        </Page>
                     </ProjectScope>
                 ) : null
             });

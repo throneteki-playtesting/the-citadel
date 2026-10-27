@@ -9,15 +9,18 @@ import { useGetArtistsQuery, useGetCardsQuery, useGetReviewsQuery, useGetSlotsQu
 import {
     memo,
     ReactNode,
+    RefObject,
+    startTransition,
     useCallback,
     useDeferredValue,
+    useEffect,
     useLayoutEffect,
     useMemo,
     useRef,
     useState,
     useTransition
 } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import PermissionedLink from "../../components/permissionedLink";
 import { HighlightTarget } from "../../components/highlightTarget";
@@ -58,6 +61,7 @@ import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../hooks/useAuth";
 import CardGrid from "../../components/cardGrid";
 import Reveal from "../../components/reveal";
+import FactionCarouselSkeleton, { CarouselCardSkeleton } from "./factionCarouselSkeleton";
 import useProgressiveMount from "../../hooks/useProgressiveMount";
 import ReleaseChecksModal from "../../components/releaseChecksModal";
 import {
@@ -175,6 +179,15 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
     // Search term, advanced filter, sort and active view are all shareable via the URL - seeded
     // once from it on mount (lazy initializers), then kept in sync on change.
     const [searchParams] = useSearchParams();
+    // A slot a link asked to be pointed out - read once here, rather than by every card watching the location
+    const { state: locationState } = useLocation();
+    const highlightedNumber = useMemo(() => {
+        const highlight = (locationState as { highlight?: unknown } | null)?.highlight;
+        const prefix = highlightTarget.slot(project.number, 0).slice(0, -1);
+        return typeof highlight === "string" && highlight.startsWith(prefix)
+            ? Number(highlight.slice(prefix.length))
+            : undefined;
+    }, [locationState, project.number]);
 
     const [view, setView] = useState<CardView>(() => (searchParams.get("view") === "detail" ? "detail" : "grid"));
     const canReadArtists = usePermission(Permission.READ_ARTISTS);
@@ -619,6 +632,7 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                                                         showReviewBadge={sortBy === "reviews"}
                                                         showProgressBadge={sortBy === "progress"}
                                                         isLoadingReviews={isLoadingReviews || !reviewsData}
+                                                        highlightedNumber={highlightedNumber}
                                                     />
                                                 </Reveal>
                                             )
@@ -662,7 +676,8 @@ function FactionCarousel({
     sortBy,
     showReviewBadge,
     showProgressBadge,
-    isLoadingReviews
+    isLoadingReviews,
+    highlightedNumber
 }: FactionCarouselProps) {
     const percent = useMemo(() => {
         const tested = cards.filter((card) => (cardStats.get(card.number)?.total ?? 0) > 0).length;
@@ -670,7 +685,14 @@ function FactionCarousel({
     }, [cards, cardStats]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    // Back to the start on a re-sort - not on mounting, where it already is, and asking costs a forced layout per
+    // carousel at exactly the moment the page is busiest
+    const sortedByRef = useRef(sortBy);
     useLayoutEffect(() => {
+        if (sortedByRef.current === sortBy) {
+            return;
+        }
+        sortedByRef.current = sortBy;
         scrollRef.current?.scrollTo({ left: 0, behavior: "smooth" });
     }, [sortBy]);
 
@@ -712,35 +734,46 @@ function FactionCarousel({
                             transition={reorderTransition}
                             className="snap-start shrink-0"
                         >
-                            <SlotFramed framing={framing} number={card.number}>
-                                <div
-                                    className={
-                                        card.type === "plot"
-                                            ? "w-64 sm:w-72 md:w-80 aspect-[333/240]"
-                                            : "h-64 sm:h-72 md:h-80 aspect-[240/333]"
-                                    }
-                                >
-                                    <PermissionedLink
-                                        to={`/project/${card.project}/${card.number}`}
-                                        requires={Permission.READ_LATEST_CARDS}
-                                        className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                            <NearbyMount
+                                rootRef={scrollRef}
+                                isForced={card.number === highlightedNumber}
+                                placeholder={
+                                    <CarouselCardSkeleton
+                                        isFramed={framing.slots.has(card.number)}
+                                        isPlot={card.type === "plot"}
+                                    />
+                                }
+                            >
+                                <SlotFramed framing={framing} number={card.number}>
+                                    <div
+                                        className={
+                                            card.type === "plot"
+                                                ? "w-64 sm:w-72 md:w-80 aspect-[333/240]"
+                                                : "h-64 sm:h-72 md:h-80 aspect-[240/333]"
+                                        }
                                     >
-                                        <ProjectContentCard
-                                            card={card}
-                                            stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
-                                            release={cardReleases.get(card.number)}
-                                            progress={cardProgress.get(card.number)}
-                                            isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
-                                            isNextRelease={
-                                                !!nextReleaseCode &&
-                                                cardReleases.get(card.number)?.code === nextReleaseCode
-                                            }
-                                            showReviewBadge={showReviewBadge}
-                                            showProgressBadge={showProgressBadge}
-                                        />
-                                    </PermissionedLink>
-                                </div>
-                            </SlotFramed>
+                                        <PermissionedLink
+                                            to={`/project/${card.project}/${card.number}`}
+                                            requires={Permission.READ_LATEST_CARDS}
+                                            className="group block w-full h-full scale-[0.98] transition-transform duration-200 ease-out hover:scale-100 hover:z-20 relative"
+                                        >
+                                            <ProjectContentCard
+                                                card={card}
+                                                stats={isLoadingReviews ? undefined : cardStats.get(card.number)}
+                                                release={cardReleases.get(card.number)}
+                                                progress={cardProgress.get(card.number)}
+                                                isReleaseBound={cardIsReleaseBound.get(card.number) ?? false}
+                                                isNextRelease={
+                                                    !!nextReleaseCode &&
+                                                    cardReleases.get(card.number)?.code === nextReleaseCode
+                                                }
+                                                showReviewBadge={showReviewBadge}
+                                                showProgressBadge={showProgressBadge}
+                                            />
+                                        </PermissionedLink>
+                                    </div>
+                                </SlotFramed>
+                            </NearbyMount>
                         </motion.div>
                     ))}
                 </div>
@@ -761,38 +794,53 @@ type FactionCarouselProps = {
     showReviewBadge: boolean;
     showProgressBadge: boolean;
     isLoadingReviews: boolean;
+    /** A card a link has asked to be pointed out, which can't wait to be scrolled near before it is built */
+    highlightedNumber?: number;
 };
 
-function FactionCarouselSkeleton({ count, isFramed }: FactionCarouselSkeletonProps) {
-    return (
-        <div className="relative border border-content3 bg-content1 overflow-hidden">
-            <div className="relative flex h-20 items-center">
-                <div className="p-4 grow">
-                    <Skeleton className="w-48 max-w-full h-8 rounded-md" />
-                </div>
-                <div className="py-4 px-2">
-                    <Skeleton className="w-28 h-7 rounded-md" />
-                </div>
-            </div>
-            <div className="w-full flex overflow-hidden gap-2">
-                {[...Array(count)].map((_, i) =>
-                    isFramed ? (
-                        <div key={i} className="shrink-0 flex flex-col gap-1 rounded-lg border border-content3 p-1">
-                            <Skeleton className="h-6 w-1/2 rounded-sm" />
-                            <Skeleton className="h-64 sm:h-72 md:h-80 aspect-[240/333] rounded-xl" />
-                        </div>
-                    ) : (
-                        <Skeleton key={i} className="h-64 sm:h-72 md:h-80 aspect-[240/333] shrink-0 rounded-xl" />
-                    )
-                )}
-            </div>
-        </div>
-    );
+/**
+ * Builds its children only once they come within a width of the carousel's visible part, then keeps them - a carousel
+ * runs well past the screen's edge, and building every card of every faction is what held the page still. Until then
+ * it holds the card's own skeleton, at the card's size, so the carousel's length and snapping are the same either way.
+ */
+function NearbyMount({ rootRef, isForced, placeholder, children }: NearbyMountProps) {
+    const ref = useRef<HTMLDivElement>(null);
+    const [isNear, setIsNear] = useState(isForced);
+    if (isForced && !isNear) {
+        setIsNear(true);
+    }
+
+    useEffect(() => {
+        const element = ref.current;
+        if (isNear || !element) {
+            return;
+        }
+        if (typeof IntersectionObserver === "undefined") {
+            setIsNear(true);
+            return;
+        }
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (entries.some((entry) => entry.isIntersecting)) {
+                    observer.disconnect();
+                    // Behind anything the person is doing, like the carousels still being built around it
+                    startTransition(() => setIsNear(true));
+                }
+            },
+            { root: rootRef.current, rootMargin: "0px 100% 0px 100%" }
+        );
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, [isNear, rootRef]);
+
+    return <div ref={ref}>{isNear ? <Reveal direction={null}>{children}</Reveal> : placeholder}</div>;
 }
-type FactionCarouselSkeletonProps = {
-    count: number;
-    /** Its cards will sit in their slots' frames, so the skeleton holds the room those take too */
-    isFramed: boolean;
+type NearbyMountProps = {
+    /** The scrolling row the children sit in - nearness is measured against what it shows */
+    rootRef: RefObject<HTMLDivElement | null>;
+    isForced: boolean;
+    placeholder: ReactNode;
+    children: ReactNode;
 };
 
 // What every card needs to be drawn in its slot's frame, by card number

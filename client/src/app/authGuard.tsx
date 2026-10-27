@@ -1,16 +1,28 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useHref, useLocation, useMatches, useNavigate } from "react-router-dom";
+import { HeroUIProvider } from "@heroui/react";
 import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
+import NavigationBar from "../components/navigation";
+import { RouteHandle } from "./routeHandle";
 
 export default function AuthGuard() {
     const { isAuthenticated, isLoading } = useAuth();
     const { pathname, search } = useLocation();
+    const navigate = useNavigate();
+    const matches = useMatches();
 
+    // Who is asking isn't known yet, so the app itself can't start - its live connection would race the session
+    // check for a token. The shell is drawn regardless, with the page's own skeleton in it, so a page opened from
+    // scratch arrives into its own shape rather than into a spinner which then swaps for it.
     if (isLoading) {
+        const fallback = (matches.at(-1)?.handle as RouteHandle | undefined)?.fallback;
         return (
-            <div className="min-h-screen flex items-center justify-center bg-background">
-                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            </div>
+            <HeroUIProvider navigate={navigate} useHref={useHref}>
+                <NavigationBar />
+                <div className="overflow-x-clip">
+                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">{fallback}</div>
+                </div>
+            </HeroUIProvider>
         );
     }
 

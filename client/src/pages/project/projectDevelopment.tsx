@@ -1,4 +1,4 @@
-import { Chip, Skeleton } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { IProject } from "common/models/projects";
 import PermissionGate from "../../components/permissionGate";
 import Permission from "common/models/permissions";
@@ -14,6 +14,7 @@ import { highlightTarget, releaseStatusColors } from "../../constants";
 import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
 import Reveal from "../../components/reveal";
+import { StatCardSkeleton } from "./projectPageSkeleton";
 
 export default function ProjectDevelopment({ className, style, project, isActive }: ProjectDevelopmentProps) {
     useTagManagerOverrides({ autoRefresh: true });
@@ -135,20 +136,15 @@ type ProjectStatProps = {
 
 function StatCard({ label, value, footer, isLoading = false, to, state }: StatCardProps) {
     if (isLoading) {
-        return (
-            <div className="bg-content2/50 px-5 py-5 border-b-2 space-y-2">
-                <Skeleton className="h-4 w-32 rounded-sm" />
-                <Skeleton className="h-12 w-28 rounded-sm" />
-                <Skeleton className="h-4 w-42 rounded-sm" />
-            </div>
-        );
+        return <StatCardSkeleton />;
     }
+    // Fades in over the skeleton it replaces
     const content = (
-        <>
+        <Reveal direction={null}>
             <div className="text-xs font-cinzel tracking-wide uppercase text-foreground/50">{label}</div>
             <div className="text-4xl font-sans text-foreground mt-2 leading-none">{value ?? "-"}</div>
             {footer && <div className="text-sm font-serif italic text-foreground/50 mt-2">{footer}</div>}
-        </>
+        </Reveal>
     );
     if (!to) {
         return <div className="bg-content2/50 px-5 py-5">{content}</div>;
