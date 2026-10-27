@@ -11,7 +11,12 @@ import {
     ICardSuggestion,
     ICardSuggestionFilterable,
     ISuggestionsListQuery,
+    ISuggestionBulkResult,
     reactionTypes,
+    ReactionType,
+    SUGGESTION_BULK_LIMIT,
+    SuggestionBulkAction,
+    suggestionBulkActions,
     suggestionApprovalBlockReason,
     suggestionReactionBlockReason
 } from "common/models/cards";
@@ -19,6 +24,7 @@ import { dataService, logger, thronesDbCardPoolService } from "@/services";
 import {
     canDeleteSuggestion,
     hasPermission,
+    suggestionBulkBlockReason,
     isSameCardStats,
     SemanticVersion,
     validate,
@@ -1149,6 +1155,83 @@ router.post(
 
         res.status(StatusCodes.OK).json({ linked: updated, deleted: deleted.map((entry) => entry.id!) });
     })
+);
+
+// One action over many suggestions at once, from the browse page's selection. Each goes through the same
+// function its own route does, after the same checks (suggestionBulkBlockReason), so a bulk approve or delete
+// says, records and syncs exactly what doing each by hand would - one not applying is skipped, never a failure.
+router.post(
+    "/bulk",
+    validateRequest(Permission.READ_SUGGESTIONS),
+    celebrate({
+        [Segments.BODY]: {
+            action: Joi.string()
+                .valid(...suggestionBulkActions)
+                .required(),
+            reactType: Joi.when("action", {
+                is: "react",
+                then: Joi.string()
+                    .valid(...reactionTypes)
+                    .required(),
+                otherwise: Joi.forbidden()
+            }),
+            ids: Joi.array().items(Joi.string()).min(1).max(SUGGESTION_BULK_LIMIT).unique().required()
+        }
+    }),
+    asyncHandler<unknown, unknown, { action: SuggestionBulkAction; reactType?: ReactionType; ids: string[] }, unknown>(
+        async (req, res) => {
+            const { principal } = getContext();
+            const { action, reactType, ids } = req.body;
+            // Reacting and approving are both recorded against somebody's Discord account
+            const discordId =
+                action === "delete" || action === "unapprove"
+                    ? "discordId" in principal
+                        ? principal.discordId
+                        : undefined
+                    : requireDiscordId(principal);
+            const found = await dataService.suggestions.read({ id: { $in: ids } });
+            const byId = new Map(found.map((suggestion) => [suggestion.id!, suggestion]));
+
+            const outcomes = await Promise.all(
+                ids.map(async (id): Promise<{ id: string; reason?: string }> => {
+                    const suggestion = byId.get(id);
+                    if (!suggestion || !canViewSuggestion(suggestion, discordId)) {
+                        return { id, reason: "It no longer exists" };
+                    }
+                    const reason = suggestionBulkBlockReason(principal, suggestion, action, reactType);
+                    if (reason) {
+                        return { id, reason };
+                    }
+                    switch (action) {
+                        case "react":
+                            await dataService.suggestions.react(id, discordId!, reactType!);
+                            break;
+                        case "unreact":
+                            await dataService.suggestions.unreact(id, discordId!);
+                            break;
+                        case "approve":
+                            await setApprovalAndLog(id, discordId!);
+                            break;
+                        case "unapprove":
+                            await setApprovalAndLog(id, undefined);
+                            break;
+                        case "delete":
+                            await deleteSuggestionAndLog(id);
+                            break;
+                    }
+                    return { id };
+                })
+            );
+
+            const result: ISuggestionBulkResult = {
+                succeeded: outcomes.filter((outcome) => !outcome.reason).map((outcome) => outcome.id),
+                skipped: outcomes.flatMap((outcome) =>
+                    outcome.reason ? [{ id: outcome.id, reason: outcome.reason }] : []
+                )
+            };
+            res.status(StatusCodes.OK).json(result);
+        }
+    )
 );
 
 // Shared by the delete route, linking (which may discard the rest of a card's matches) and the bulk route

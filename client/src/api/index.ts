@@ -26,7 +26,9 @@ import {
     ICardSuggestionFilterable,
     IPlaytestCard,
     IRenderCard,
+    ISuggestionBulkResult,
     ISuggestionCardMatches,
+    SuggestionBulkAction,
     ISuggestionsListQuery,
     ReactionType
 } from "common/models/cards";
@@ -607,6 +609,20 @@ const api = createApi({
                 }
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // The browse page's selection, all at once - what was skipped comes back with why, see POST /suggestions/bulk
+        bulkSuggestionAction: builder.mutation<
+            ISuggestionBulkResult,
+            { action: SuggestionBulkAction; reactType?: ReactionType; ids: string[] }
+        >({
+            query: (body) => {
+                const url = buildUrl("suggestions/bulk");
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => [
+                { type: "suggestion", id: "LIST" },
+                ...(result?.succeeded ?? []).map((id) => ({ type: "suggestion" as const, id }))
+            ]
         }),
         // Full-universe traits/submitters for the advanced filter drawer - server-cached (short TTL),
         // so a stale value just waits out the cache rather than needing its own invalidation wiring.
@@ -1440,6 +1456,7 @@ export const {
     useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation,
     useDeleteSuggestionMutation,
+    useBulkSuggestionActionMutation,
     useReactToSuggestionMutation,
     useClearSuggestionReactionMutation,
     useApproveSuggestionMutation,

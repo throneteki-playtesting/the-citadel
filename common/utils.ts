@@ -370,6 +370,50 @@ export function canDeleteSuggestion(
     );
 }
 
+/** Why a bulk action would leave this suggestion untouched, or undefined where it applies - shared by POST
+ *  /suggestions/bulk (the actual gate) and the browse page's action bar (its counts), so both say the same thing */
+export function suggestionBulkBlockReason(
+    principal: Principal | undefined,
+    suggestion: Cards.ICardSuggestion,
+    action: Cards.SuggestionBulkAction,
+    reactType?: Cards.ReactionType
+): string | undefined {
+    const discordId = principal && "discordId" in principal ? principal.discordId : undefined;
+    const engagement = suggestion._metadata?.engagement;
+    switch (action) {
+        case "react":
+        case "unreact": {
+            const blockReason = Cards.suggestionReactionBlockReason(suggestion, discordId);
+            if (blockReason) {
+                return blockReason;
+            }
+            const current = engagement?.reactions?.[discordId!]?.type;
+            if (action === "unreact") {
+                return current ? undefined : "You haven't reacted to it";
+            }
+            return current === reactType ? "You've already given it that reaction" : undefined;
+        }
+        case "approve":
+            if (!hasPermission(principal, Permission.APPROVE_SUGGESTIONS)) {
+                return "You can't approve suggestions";
+            }
+            if (suggestion.draft) {
+                return "Drafts can't be approved";
+            }
+            return (
+                Cards.suggestionApprovalBlockReason(suggestion) ??
+                (engagement?.approvedBy ? "It's already approved" : undefined)
+            );
+        case "unapprove":
+            if (!hasPermission(principal, Permission.APPROVE_SUGGESTIONS)) {
+                return "You can't remove approvals";
+            }
+            return engagement?.approvedBy ? undefined : "It isn't approved";
+        case "delete":
+            return canDeleteSuggestion(principal, suggestion) ? undefined : "You can only delete your own suggestions";
+    }
+}
+
 export function withProjectOwnership<T extends Principal>(principal: T, project: Pick<IProject, "owners">): T {
     if (!isProjectOwner(principal, project)) {
         return principal;
