@@ -1,4 +1,5 @@
 import { IPlaytestCard } from "common/models/cards";
+import Reveal from "../../components/reveal";
 import { useGetCardsQuery, useGetProjectsQuery } from "../../api";
 import ThronesIcon from "../../components/thronesIcon";
 import classNames from "classnames";
@@ -62,7 +63,14 @@ export default function RecentCardChanges() {
             <SectionTitle size="sm" indent="xs">
                 Recent Card Changes
             </SectionTitle>
-            <div className="border border-content3 divide-y divide-content3">{content}</div>
+            {/* Keyed on loading, so the rows fade in over the skeleton they replace */}
+            <Reveal
+                key={isLoading ? "loading" : "loaded"}
+                direction={null}
+                className="border border-content3 divide-y divide-content3"
+            >
+                {content}
+            </Reveal>
         </div>
     );
 }

@@ -2,20 +2,23 @@ import Permission from "common/models/permissions";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
 import Home from "./home";
-import { ReactElement } from "react";
-import Suggestions from "./suggestions";
-import SuggestionDetail from "./suggestions/suggestionDetail";
-import Users from "./admin/users";
-import Roles from "./admin/roles";
-import Integrations from "./admin/integrations";
-import Logs from "./admin/logs";
+import { lazy, ReactElement } from "react";
 import AuthRedirect from "./authRedirect";
-import Project from "./project";
-import Card from "./card";
-import SubmitReview from "./review";
 import { User } from "common/models/auth";
-import PlaytestingUpdate from "./playtestingUpdate";
-import Privacy from "./privacy";
+
+// Every page but the landing ones loads as its own chunk, when first visited - so opening the Citadel doesn't parse
+// the admin pages, the review form and every editor before anything can respond. `Page` holds a skeleton meanwhile.
+const Suggestions = lazy(() => import("./suggestions"));
+const SuggestionDetail = lazy(() => import("./suggestions/suggestionDetail"));
+const Users = lazy(() => import("./admin/users"));
+const Roles = lazy(() => import("./admin/roles"));
+const Integrations = lazy(() => import("./admin/integrations"));
+const Logs = lazy(() => import("./admin/logs"));
+const Project = lazy(() => import("./project"));
+const Card = lazy(() => import("./card"));
+const SubmitReview = lazy(() => import("./review"));
+const PlaytestingUpdate = lazy(() => import("./playtestingUpdate"));
+const Privacy = lazy(() => import("./privacy"));
 
 export type NavItem = PageItem | MenuItem;
 export type PageItem = BaseNav & { path: string; element?: ReactElement; endContent?: ReactElement };

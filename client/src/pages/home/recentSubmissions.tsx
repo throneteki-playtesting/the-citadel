@@ -1,4 +1,5 @@
 import { useGetCardQuery, useGetReviewsQuery, useGetSuggestionsQuery } from "../../api";
+import Reveal from "../../components/reveal";
 import useUser from "../../hooks/useUser";
 import Permission from "common/models/permissions";
 import { useMemo } from "react";
@@ -80,7 +81,14 @@ export default function RecentSubmissions() {
             <SectionTitle size="sm" indent="xs">
                 Recent Submissions
             </SectionTitle>
-            <div className="border border-content3 divide-y divide-content3">{content}</div>
+            {/* Keyed on loading, so the rows fade in over the skeleton they replace */}
+            <Reveal
+                key={isLoading ? "loading" : "loaded"}
+                direction={null}
+                className="border border-content3 divide-y divide-content3"
+            >
+                {content}
+            </Reveal>
         </div>
     );
 }

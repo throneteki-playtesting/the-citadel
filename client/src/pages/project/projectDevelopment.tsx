@@ -13,37 +13,40 @@ import { BaseElementProps } from "../../types";
 import { highlightTarget, releaseStatusColors } from "../../constants";
 import { useNextReleaseStatus } from "../../components/status/useNextReleaseStatus";
 import { useTagManagerOverrides } from "../../hooks/useTagManagerOverrides";
+import Reveal from "../../components/reveal";
 
 export default function ProjectDevelopment({ className, style, project, isActive }: ProjectDevelopmentProps) {
     useTagManagerOverrides({ autoRefresh: true });
 
     return (
         <div className={className} style={style}>
-            <StatsGrid className="border border-content3 drop-shadow-lg">
-                <PermissionGate requires={Permission.READ_STATS_PROJECT}>
-                    <CardChangesStat project={project} />
-                </PermissionGate>
-                <PermissionGate requires={Permission.READ_STATS_PROJECT}>
-                    <ReviewsStat project={project} />
-                </PermissionGate>
-                <PermissionGate requires={Permission.READ_STATS_PROJECT}>
-                    <ActiveDecksStat project={project} />
-                </PermissionGate>
-                <PermissionGate requires={Permission.READ_RELEASES}>
-                    <PacksStat project={project} />
-                </PermissionGate>
-            </StatsGrid>
-            <div className="flex flex-col md:flex-row gap-2 md:gap-4 mt-2">
+            <Reveal index={0}>
+                <StatsGrid className="border border-content3 drop-shadow-lg">
+                    <PermissionGate requires={Permission.READ_STATS_PROJECT}>
+                        <CardChangesStat project={project} />
+                    </PermissionGate>
+                    <PermissionGate requires={Permission.READ_STATS_PROJECT}>
+                        <ReviewsStat project={project} />
+                    </PermissionGate>
+                    <PermissionGate requires={Permission.READ_STATS_PROJECT}>
+                        <ActiveDecksStat project={project} />
+                    </PermissionGate>
+                    <PermissionGate requires={Permission.READ_RELEASES}>
+                        <PacksStat project={project} />
+                    </PermissionGate>
+                </StatsGrid>
+            </Reveal>
+            <Reveal index={1} className="flex flex-col md:flex-row gap-2 md:gap-4 mt-2 empty:hidden">
                 <PermissionGate requires={Permission.READ_PLAYTESTING_UPDATES}>
                     <ProjectPlaytestingUpdates project={project} className="md:flex-1 min-w-0" />
                 </PermissionGate>
                 <PermissionGate requires={[Permission.READ_REVIEWS, Permission.READ_CARDS]}>
                     <ProjectPlaytestingFocus project={project} className="md:flex-1 min-w-0" />
                 </PermissionGate>
-            </div>
-            <div className="mt-2">
+            </Reveal>
+            <Reveal index={2} className="mt-2">
                 <ProjectContent project={project} isActive={isActive} />
-            </div>
+            </Reveal>
         </div>
     );
 }

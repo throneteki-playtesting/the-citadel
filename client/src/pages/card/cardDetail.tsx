@@ -3,7 +3,8 @@ import { BaseElementProps } from "../../types";
 import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Reveal from "../../components/reveal";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useGetCardQuery,
     useGetCardsQuery,
@@ -98,11 +99,7 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const entryInquiryAction = inquiryLinkActions.find((action) => action === entryAction);
 
     if (isLoadingProject || isLoadingCard || isLoadingSlot) {
-        return (
-            <div>
-                <Skeleton className="w-full h-98 rounded-md" />
-            </div>
-        );
+        return <CardDetailSkeleton />;
     }
 
     if (!project || !card) {
@@ -140,10 +137,23 @@ function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryIn
 
     const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
     const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+    // A tab is only built once opened, then kept - so arriving on the card doesn't pay for every tab at once
+    const [openedTabs, setOpenedTabs] = useState(() => new Set([tab]));
+    if (!openedTabs.has(tab)) {
+        setOpenedTabs(new Set(openedTabs).add(tab));
+    }
+    const panel = (key: CardTab, content: ReactNode) =>
+        openedTabs.has(key) && (
+            <PageActiveContext.Provider value={tab === key}>
+                <Reveal direction={null}>{content}</Reveal>
+            </PageActiveContext.Provider>
+        );
+
+    let sectionIndex = 0;
 
     return (
         <>
-            <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
+            <Reveal index={sectionIndex++} className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
                 <CardHeader project={project} number={number} className="flex-1" />
                 <ButtonSection
                     project={project}
@@ -151,54 +161,89 @@ function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryIn
                     entryReleaseCheck={entryReleaseCheck}
                     className="self-end sm:self-start"
                 />
-            </div>
+            </Reveal>
             <PermissionGate requires={Permission.READ_STATS_SLOT}>
-                <CardProgress project={project} number={number} onOpenArtwork={() => setTab("artwork")} />
+                <Reveal index={sectionIndex++}>
+                    <CardProgress project={project} number={number} onOpenArtwork={() => setTab("artwork")} />
+                </Reveal>
             </PermissionGate>
             {canReadArtwork || canReadRefinement ? (
-                <div ref={sectionTabsRef}>
-                    <Tabs
-                        classNames={scrollableTabs}
-                        selectedKey={tab}
-                        onSelectionChange={(key) => setTab(key as CardTab)}
-                        aria-label="Card Sections"
-                        variant="underlined"
-                        color="primary"
-                        size="lg"
-                        destroyInactiveTabPanel={false}
-                    >
-                        <Tab key="development" title="Development">
-                            <PageActiveContext.Provider value={tab === "development"}>
-                                <DevelopmentSection project={project} number={number} />
-                            </PageActiveContext.Provider>
-                        </Tab>
-                        {canReadArtwork ? (
-                            <Tab key="artwork" title="Artwork">
-                                <PageActiveContext.Provider value={tab === "artwork"}>
-                                    <ArtworkTab project={project} number={number} />
-                                </PageActiveContext.Provider>
+                <Reveal index={sectionIndex++}>
+                    <div ref={sectionTabsRef}>
+                        <Tabs
+                            classNames={scrollableTabs}
+                            selectedKey={tab}
+                            onSelectionChange={(key) => setTab(key as CardTab)}
+                            aria-label="Card Sections"
+                            variant="underlined"
+                            color="primary"
+                            size="lg"
+                            destroyInactiveTabPanel={false}
+                        >
+                            <Tab key="development" title="Development">
+                                {panel("development", <DevelopmentSection project={project} number={number} />)}
                             </Tab>
-                        ) : null}
-                        {canReadRefinement ? (
-                            <Tab key="refinement" title="Refinement">
-                                <PageActiveContext.Provider value={tab === "refinement"}>
-                                    <RefinementTab
-                                        project={project}
-                                        number={number}
-                                        highlightInquiry={entryInquiry}
-                                        arrivalAction={entryInquiryAction}
-                                    />
-                                </PageActiveContext.Provider>
-                            </Tab>
-                        ) : null}
-                    </Tabs>
-                </div>
+                            {canReadArtwork ? (
+                                <Tab key="artwork" title="Artwork">
+                                    {panel("artwork", <ArtworkTab project={project} number={number} />)}
+                                </Tab>
+                            ) : null}
+                            {canReadRefinement ? (
+                                <Tab key="refinement" title="Refinement">
+                                    {panel(
+                                        "refinement",
+                                        <RefinementTab
+                                            project={project}
+                                            number={number}
+                                            highlightInquiry={entryInquiry}
+                                            arrivalAction={entryInquiryAction}
+                                        />
+                                    )}
+                                </Tab>
+                            ) : null}
+                        </Tabs>
+                    </div>
+                </Reveal>
             ) : (
-                <DevelopmentSection project={project} number={number} />
+                <Reveal index={sectionIndex++}>
+                    <DevelopmentSection project={project} number={number} />
+                </Reveal>
             )}
         </>
     );
 }
+// The page's own shape while it loads - header and actions, the progress strip, the tabs, then the version stack
+// beside its decks - so it reads as the page arriving rather than as one block standing in for all of it
+function CardDetailSkeleton() {
+    return (
+        <div className="space-y-2">
+            <div className="px-4 md:px-0 flex flex-col sm:flex-row gap-3">
+                <div className="flex-1 flex flex-col gap-2">
+                    <Skeleton className="h-5 w-40 rounded-md" />
+                    <Skeleton className="h-9 w-64 max-w-full rounded-md" />
+                    <Skeleton className="h-6 w-48 rounded-md" />
+                </div>
+                <div className="flex gap-2 self-end sm:self-start">
+                    <Skeleton className="h-10 w-28 rounded-medium" />
+                    <Skeleton className="h-10 w-10 rounded-medium" />
+                </div>
+            </div>
+            <Skeleton className="h-12 w-full rounded-md" />
+            <div className="flex gap-4 px-2">
+                <Skeleton className="h-8 w-28 rounded-md" />
+                <Skeleton className="h-8 w-20 rounded-md" />
+            </div>
+            <div className="flex flex-col md:flex-row gap-2">
+                <div className="flex flex-col items-center gap-2 md:w-80">
+                    <Skeleton className="h-8 w-full rounded-lg" />
+                    <Skeleton className="w-64 aspect-[240/333] rounded-xl" />
+                </div>
+                <Skeleton className="flex-1 min-h-64 rounded-md" />
+            </div>
+        </div>
+    );
+}
+
 type CardContentProps = {
     project: number;
     number: number;

@@ -57,6 +57,8 @@ import { cardLaneBreakdown, CardLaneBreakdown } from "common/progress/calc";
 import { usePermission } from "../../hooks/usePermission";
 import { useAuth } from "../../hooks/useAuth";
 import CardGrid from "../../components/cardGrid";
+import Reveal from "../../components/reveal";
+import useProgressiveMount from "../../hooks/useProgressiveMount";
 import ReleaseChecksModal from "../../components/releaseChecksModal";
 import {
     CardFilterSearchBar,
@@ -399,10 +401,12 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
         [filteredCards]
     );
 
-    // The detail view has no per-faction carousels of its own - one flat, sorted list either way
+    // The detail view has no per-faction carousels of its own - one flat, sorted list either way. Only built while
+    // it is the view on show: the gallery never reads it, and building every row was paid on every gallery visit.
+    const isDetailView = view === "detail";
     const detailCards = useMemo(
-        () => (isFiltering ? filteredCards : [...visibleCards].sort(comparators[sortBy])),
-        [isFiltering, filteredCards, visibleCards, comparators, sortBy]
+        () => (!isDetailView ? [] : isFiltering ? filteredCards : [...visibleCards].sort(comparators[sortBy])),
+        [isDetailView, isFiltering, filteredCards, visibleCards, comparators, sortBy]
     );
     const detailRows = useMemo(
         () =>
@@ -425,6 +429,12 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
             openReleaseCheck
         ]
     );
+
+    // The carousels are built one at a time, top first, rather than every faction's cards in one go - that single
+    // commit held the whole page (its toolbar included) unresponsive for seconds. Each waits as a skeleton of its own
+    // shape, and starts over whenever the carousels are taken down for search results or the detail view.
+    const factionEntries = useMemo(() => [...cardsByFaction.entries()], [cardsByFaction]);
+    const mountedCarousels = useProgressiveMount(factionEntries.length, isFiltering || isDetailView);
 
     // Codes actually carried by these cards, ordered by release number, so the filter never offers a
     // code with nothing behind it
@@ -587,23 +597,32 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
                                         transition={FADE_TRANSITION}
                                         className="col-start-1 row-start-1 min-w-0 flex flex-col gap-2"
                                     >
-                                        {[...cardsByFaction.entries()].map(([faction, cards]) => (
-                                            <FactionCarousel
-                                                key={faction}
-                                                faction={faction}
-                                                cards={cards}
-                                                cardStats={cardStats}
-                                                cardReleases={cardReleases}
-                                                cardProgress={cardProgress}
-                                                cardIsReleaseBound={cardIsReleaseBound}
-                                                framing={framing}
-                                                nextReleaseCode={nextReleaseCode}
-                                                sortBy={sortBy}
-                                                showReviewBadge={sortBy === "reviews"}
-                                                showProgressBadge={sortBy === "progress"}
-                                                isLoadingReviews={isLoadingReviews || !reviewsData}
-                                            />
-                                        ))}
+                                        {factionEntries.map(([faction, cards], index) =>
+                                            index >= mountedCarousels ? (
+                                                <FactionCarouselSkeleton
+                                                    key={faction}
+                                                    count={cards.length}
+                                                    isFramed={canReadSlots}
+                                                />
+                                            ) : (
+                                                <Reveal key={faction} direction={null}>
+                                                    <FactionCarousel
+                                                        faction={faction}
+                                                        cards={cards}
+                                                        cardStats={cardStats}
+                                                        cardReleases={cardReleases}
+                                                        cardProgress={cardProgress}
+                                                        cardIsReleaseBound={cardIsReleaseBound}
+                                                        framing={framing}
+                                                        nextReleaseCode={nextReleaseCode}
+                                                        sortBy={sortBy}
+                                                        showReviewBadge={sortBy === "reviews"}
+                                                        showProgressBadge={sortBy === "progress"}
+                                                        isLoadingReviews={isLoadingReviews || !reviewsData}
+                                                    />
+                                                </Reveal>
+                                            )
+                                        )}
                                     </motion.div>
                                 )}
                             </AnimatePresence>
