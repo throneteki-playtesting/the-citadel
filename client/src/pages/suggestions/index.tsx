@@ -23,6 +23,7 @@ import MyStashDropdown from "./myStashDropdown";
 import { SortOption } from "./suggestionSortOptions";
 import SuggestionStatistics from "./suggestionStatistics";
 import { suggestionFilterFromParams, suggestionFilterToParams } from "./suggestionFilterUrl";
+import { rememberSuggestionsSearch } from "./lastSuggestionsSearch";
 import { EMPTY_SUGGESTION_FILTER, SuggestionFilterValue } from "../../components/data/suggestionFilter";
 import usePageTitle from "../../hooks/usePageTitle";
 import { usePermission } from "../../hooks/usePermission";
@@ -205,6 +206,7 @@ function SuggestionsContent() {
         return params;
     }, [isBrowsingAll, sortBy, search, filter]);
     useSearchParamsScope("all-suggestions", true, scopeParams);
+    useEffect(() => rememberSuggestionsSearch(scopeParams), [scopeParams]);
 
     // Opens the browse page with a fresh preset - a stat/coverage/focus-area entry point never
     // wants to inherit whatever was left over from a previous visit to the browse page.

@@ -340,7 +340,7 @@ export interface ISuggestionCardMatch {
      *  project, the matched version itself. */
     firstVersion: IPlaytestCard;
     /** Other unarchived legacy suggestions this same card could equally have come from */
-    others: number;
+    others: ICardSuggestion[];
 }
 
 export type ProjectCardRef = { project: { number: number; code: string }; number: number; version?: SemanticVersion };

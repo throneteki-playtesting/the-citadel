@@ -23,8 +23,9 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     onDrawerOpenChange?: (isOpen: boolean) => void;
 };
 
-// Search and Advanced read as one connected control that shrinks to just Advanced while filtering.
-// Search text itself is left untouched (not cleared) - the caller ignores it while filtering is active.
+// Search and Advanced read as one connected control, and search narrows whatever the filters already match. From `sm`
+// up there is room for both, so the search stays put; on a phone it folds away while filtering to give the row back,
+// unless something has been typed into it - a search still applying must stay where it can be seen and cleared.
 const SuggestionFilterSearchBar = ({
     className,
     style,
@@ -46,13 +47,14 @@ const SuggestionFilterSearchBar = ({
     };
     const isFiltering = isSuggestionFilterActive(filter);
     const activeCount = countActiveSuggestionFilters(filter);
+    const isSearchFolded = isFiltering && !search;
 
     return (
         <div
             className={classNames(
                 "grid items-stretch justify-end transition-[grid-template-columns] duration-200 ease-in-out sm:flex-none sm:w-auto",
-                isFiltering
-                    ? "grid-cols-[0fr_auto] sm:grid-cols-[0rem_auto] !min-w-0 flex-none"
+                isSearchFolded
+                    ? "grid-cols-[0fr_auto] sm:grid-cols-[14rem_auto] !min-w-0 flex-none"
                     : "grid-cols-[1fr_auto] sm:grid-cols-[14rem_auto] min-w-0 flex-1",
                 className
             )}
@@ -76,7 +78,6 @@ const SuggestionFilterSearchBar = ({
                     size="sm"
                     className="w-full"
                     classNames={{ inputWrapper: "rounded-r-none" }}
-                    isDisabled={isFiltering}
                 />
             </div>
             <Badge
@@ -93,10 +94,8 @@ const SuggestionFilterSearchBar = ({
                     isDisabled={isDisabled}
                     className={classNames(
                         "shrink-0 gap-1 transition-all duration-200 ease-in-out",
-                        !isFiltering && "max-sm:w-8 max-sm:min-w-8 max-sm:!gap-0 max-sm:px-0",
-                        {
-                            "rounded-l-none": !isFiltering
-                        }
+                        isSearchFolded ? "sm:rounded-l-none" : "rounded-l-none",
+                        !isFiltering && "max-sm:w-8 max-sm:min-w-8 max-sm:!gap-0 max-sm:px-0"
                     )}
                 >
                     <FontAwesomeIcon icon={faFilter} />

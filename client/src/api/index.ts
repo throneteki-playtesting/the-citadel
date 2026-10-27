@@ -484,15 +484,20 @@ const api = createApi({
                 { type: "card", id: "LIST" }
             ]
         }),
+        // `discard` deletes other suggestions matching the same card once it is linked - see POST /:id/developed-as
         markSuggestionDevelopedAs: builder.mutation<
-            ICardSuggestion,
-            { id: string; project: number; number: number; version?: SemanticVersion }
+            { linked: ICardSuggestion; deleted: string[] },
+            { id: string; project: number; number: number; version?: SemanticVersion; discard?: string[] }
         >({
-            query: ({ id, project, number, version }) => {
+            query: ({ id, project, number, version, discard }) => {
                 const url = buildUrl(`suggestions/${id}/developed-as`);
-                return { url, method: "POST", body: { project, number, version } };
+                return { url, method: "POST", body: { project, number, version, discard } };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), { type: "card", id: "LIST" }]
+            invalidatesTags: (result) => [
+                ...generateFor(result?.linked, "suggestion"),
+                ...(result?.deleted ?? []).map((id) => ({ type: "suggestion" as const, id })),
+                { type: "card", id: "LIST" }
+            ]
         }),
         getSuggestionMigration: builder.query<SuggestionMigration, string>({
             query: (threadId) => {

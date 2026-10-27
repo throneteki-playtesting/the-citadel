@@ -44,12 +44,51 @@ function buildSearchBranches(term: string): Branch[] {
     ];
 }
 
-// Search branches only ever touch `card.*` one leaf at a time, so a shallow per-key merge (not a
-// full deep merge) is enough to combine one with an existing advanced-filter branch without losing fields
-function mergeBranch(filterBranch: Record<string, unknown>, searchBranch: Branch): Record<string, unknown> {
+const CASE_INSENSITIVE = "(?i)";
+
+function isRegex(value: unknown): value is { $regex: string } {
+    return !!value && typeof value === "object" && "$regex" in value;
+}
+
+// Both patterns must match - one pattern of lookaheads, since the filter has no `$and` to put two side by side
+function bothPatterns(a: string, b: string): string | undefined {
+    if (!a.startsWith(CASE_INSENSITIVE) || !b.startsWith(CASE_INSENSITIVE)) {
+        return undefined;
+    }
+    const strip = (pattern: string) => pattern.slice(CASE_INSENSITIVE.length);
+    return `${CASE_INSENSITIVE}^(?=[\\s\\S]*?${strip(a)})(?=[\\s\\S]*?${strip(b)})`;
+}
+
+// One field both the filter and the search speak to: their meeting, or undefined where nothing can satisfy both
+function bothValues(filterValue: unknown, searchValue: unknown): { value: unknown } | undefined {
+    if (filterValue === undefined) {
+        return { value: searchValue };
+    }
+    if (isRegex(searchValue)) {
+        const pattern = isRegex(filterValue) ? bothPatterns(filterValue.$regex, searchValue.$regex) : undefined;
+        return pattern ? { value: { $regex: pattern } } : undefined;
+    }
+    // An exact value (a faction or type the term names) - only where the filter already allows it
+    if (filterValue && typeof filterValue === "object" && "$in" in filterValue) {
+        return (filterValue as { $in: unknown[] }).$in.includes(searchValue) ? { value: searchValue } : undefined;
+    }
+    return filterValue === searchValue ? { value: searchValue } : undefined;
+}
+
+// Search narrows what the filter already matches, so the two must hold together - a search branch never overrides a
+// field the filter set. Undefined where the two can't both hold, which drops that branch (it could match nothing).
+function mergeBranch(filterBranch: Record<string, unknown>, searchBranch: Branch): Record<string, unknown> | undefined {
     const merged = { ...filterBranch };
-    for (const [key, value] of Object.entries(searchBranch)) {
-        merged[key] = { ...(filterBranch[key] as object | undefined), ...value };
+    for (const [key, fields] of Object.entries(searchBranch)) {
+        const target = { ...(filterBranch[key] as Record<string, unknown> | undefined) };
+        for (const [field, value] of Object.entries(fields)) {
+            const both = bothValues(target[field], value);
+            if (!both) {
+                return undefined;
+            }
+            target[field] = both.value;
+        }
+        merged[key] = target;
     }
     return merged;
 }
@@ -189,10 +228,12 @@ export default function useSuggestionServerFilter(
         }
         const searchBranches = buildSearchBranches(term);
         const base = filters && filters.length > 0 ? filters : [{}];
-        return base.flatMap((filterBranch) =>
-            searchBranches.map(
-                (searchBranch) => mergeBranch(filterBranch, searchBranch) as Filter<ICardSuggestionFilterable>
-            )
+        const merged = base.flatMap((filterBranch) =>
+            searchBranches
+                .map((searchBranch) => mergeBranch(filterBranch, searchBranch))
+                .filter((branch): branch is Record<string, unknown> => !!branch)
         );
+        // Name and text are only ever regexes on both sides, so at least those branches always survive
+        return merged as Filter<ICardSuggestionFilterable>[];
     }, [filters, search]);
 }

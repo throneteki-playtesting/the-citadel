@@ -3,7 +3,7 @@ import { celebrate, Joi, Segments } from "@/celebrate";
 import Permission from "common/models/permissions";
 import asyncHandler from "express-async-handler";
 import express, { NextFunction, Request, Response } from "express";
-import { intersection, isEqual } from "lodash-es";
+import { intersection, isEqual, omit } from "lodash-es";
 import {
     canViewSuggestion,
     cardMatchLabel,
@@ -15,8 +15,15 @@ import {
     suggestionApprovalBlockReason,
     suggestionReactionBlockReason
 } from "common/models/cards";
-import { dataService, thronesDbCardPoolService } from "@/services";
-import { hasPermission, isSameCard, SemanticVersion, validate, withProjectOwnership } from "common/utils";
+import { dataService, logger, thronesDbCardPoolService } from "@/services";
+import {
+    canDeleteSuggestion,
+    hasPermission,
+    isSameCardStats,
+    SemanticVersion,
+    validate,
+    withProjectOwnership
+} from "common/utils";
 import { fitsSlot } from "common/models/slotConditions";
 import { Filter } from "common/types";
 import { validateRequest, PermissionErrorResponse } from "@/middleware/permissions";
@@ -33,7 +40,7 @@ import { deriveFields } from "common/designGuidelines/deriveFields";
 import { computeSuggestionTags } from "common/designGuidelines/suggestionTags";
 import { checklistRules } from "common/designGuidelines/checklistRules";
 import { ApiFieldError } from "@/types";
-import { syncSuggestionForum } from "@/discord/forums/suggestionForum";
+import { onSuggestionUnapproved, syncSuggestionForum } from "@/discord/forums/suggestionForum";
 import {
     getPossiblyDevelopedSuggestionIds,
     getSuggestionCardMatches,
@@ -243,7 +250,7 @@ function prepareDraftSaveBody(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-// Submitting is what clears `legacy`. Engagement is settled after validation, by clearEngagementOnCardChange.
+// Submitting is what clears `legacy`. Approval is settled after validation, by clearApprovalOnStatChange.
 function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     req.body.draft = false;
@@ -253,13 +260,15 @@ function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-// Reactions/approval were given to the card, so only a change to the card clears them - not to the questions around
-// it. Runs after validation, so the stored card is compared against the sanitised one. Completing a legacy suggestion
-// keeps its reactions whatever changed, as they were given to the card as it already stood.
-function clearEngagementOnCardChange(req: Request, res: Response, next: NextFunction) {
+// An approval vouches for how the card plays, so a change to its stats withdraws it - flavor and credits don't, and
+// nor do the questions around it. Reactions are opinions people can revisit themselves, so they always stand. Runs
+// after validation, so the stored card is compared against the sanitised one. A legacy suggestion is never approved.
+function clearApprovalOnStatChange(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
-    if (!existing.legacy && !isSameCard(existing.card, req.body.card)) {
-        req.body._metadata = { ...req.body._metadata, engagement: EMPTY_ENGAGEMENT };
+    const engagement = req.body._metadata?.engagement as SuggestionEngagement | undefined;
+    if (!existing.legacy && engagement?.approvedBy && !isSameCardStats(existing.card, req.body.card)) {
+        req.body._metadata = { ...req.body._metadata, engagement: omit(engagement, ["approvedBy", "approvedAt"]) };
+        res.locals.approvalCleared = true;
     }
     next();
 }
@@ -802,7 +811,7 @@ router.put(
     forceTags,
     prepareLiveSaveBody,
     celebrate({ [Segments.BODY]: Schemas.CardSuggestion.Full }),
-    clearEngagementOnCardChange,
+    clearApprovalOnStatChange,
     asyncHandler<{ id: string }, unknown, ICardSuggestion, { legacyThread?: string }>(async (req, res) => {
         const { id } = req.params;
         const existing = res.locals.suggestion as ICardSuggestion;
@@ -851,6 +860,20 @@ router.put(
                 context: { suggestion: cardSnapshot(id, suggestion.card) }
             }
         );
+        if (res.locals.approvalCleared) {
+            await logActivity(
+                LogCategory.SUGGESTION,
+                "suggestion.unapproved",
+                "Suggestion <suggestion> lost its approval - its stats changed",
+                { context: { suggestion: cardSnapshot(id, suggestion.card) } }
+            );
+            // Said in its thread the same as an approval taken away by hand - nothing waits on it
+            if (suggestion._metadata?.discord?.messageUrl) {
+                onSuggestionUnapproved(suggestion).catch((err) =>
+                    logger.error(`[Discord] Failed to post approval removal for ${id}`, err)
+                );
+            }
+        }
 
         res.status(StatusCodes.OK).json(suggestion);
     })
@@ -918,6 +941,20 @@ router.delete(
     })
 );
 
+// Shared by the approve routes and the bulk route, so both say and record exactly the same thing
+async function setApprovalAndLog(id: string, approvedBy: string | undefined) {
+    const suggestion = await dataService.suggestions.setApproval(id, approvedBy);
+    if (suggestion) {
+        await logActivity(
+            LogCategory.SUGGESTION,
+            approvedBy ? "suggestion.approved" : "suggestion.unapproved",
+            `<principal> ${approvedBy ? "approved" : "unapproved"} suggestion <suggestion>`,
+            { context: { suggestion: cardSnapshot(id, suggestion.card) } }
+        );
+    }
+    return suggestion;
+}
+
 // Approve - unlike voting, gated on the dedicated APPROVE_SUGGESTIONS permission
 router.post(
     "/:id/approve",
@@ -935,20 +972,10 @@ router.post(
         if (blockReason) {
             throw new ApiErrorResponse(StatusCodes.BAD_REQUEST, "Validation Error", blockReason);
         }
-        const suggestion = await dataService.suggestions.setApproval(id, discordId);
+        const suggestion = await setApprovalAndLog(id, discordId);
         if (!suggestion) {
             notFoundSuggestion(id);
         }
-
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.approved",
-            "<principal> approved suggestion <suggestion>",
-            {
-                context: { suggestion: cardSnapshot(id, suggestion.card) }
-            }
-        );
-
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
@@ -959,18 +986,10 @@ router.delete(
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
-        const suggestion = await dataService.suggestions.setApproval(id, undefined);
+        const suggestion = await setApprovalAndLog(id, undefined);
         if (!suggestion) {
             notFoundSuggestion(id);
         }
-
-        await logActivity(
-            LogCategory.SUGGESTION,
-            "suggestion.unapproved",
-            "<principal> unapproved suggestion <suggestion>",
-            { context: { suggestion: cardSnapshot(id, suggestion.card) } }
-        );
-
         res.status(StatusCodes.OK).json(suggestion);
     })
 );
@@ -1041,64 +1060,111 @@ router.get(
 );
 
 // Settles a legacy suggestion as having become a project card: archived as used in it, or - while the project is
-// still in draft - named by the card, so initialising the project archives it the same way any suggestion used is
+// still in draft - named by the card, so initialising the project archives it the same way any suggestion used is.
+// `discard` names other suggestions matching the same card to delete once it is linked - duplicates of the one design,
+// which nothing is left for once the card has been claimed. Each must be one the caller could delete by itself.
 router.post(
     "/:id/developed-as",
     validateRequest(Permission.MANAGE_SUGGESTIONS_ARCHIVE),
     celebrate({
         [Segments.PARAMS]: { id: Joi.string().required() },
-        [Segments.BODY]: { project: Joi.number().required(), number: Joi.number().required(), version: Joi.string() }
+        [Segments.BODY]: {
+            project: Joi.number().required(),
+            number: Joi.number().required(),
+            version: Joi.string(),
+            discard: Joi.array().items(Joi.string()).unique()
+        }
     }),
-    asyncHandler<{ id: string }, unknown, { project: number; number: number; version?: SemanticVersion }, unknown>(
-        async (req, res) => {
-            const { id } = req.params;
-            const [suggestion] = await dataService.suggestions.read({ id });
-            if (!suggestion) {
-                notFoundSuggestion(id);
-            }
-            // Only a card still on offer - a card comes from one suggestion at most, and this re-checks that at the
-            // moment it is claimed rather than trusting what the page was shown
-            const matches = suggestion.legacy && !suggestion.archived ? await getSuggestionCardMatches(suggestion) : [];
-            const match = matches.find(
-                (entry) =>
-                    entry.project.number === req.body.project &&
-                    entry.number === req.body.number &&
-                    entry.version === req.body.version
+    asyncHandler<
+        { id: string },
+        unknown,
+        { project: number; number: number; version?: SemanticVersion; discard?: string[] },
+        unknown
+    >(async (req, res) => {
+        const { id } = req.params;
+        const [suggestion] = await dataService.suggestions.read({ id });
+        if (!suggestion) {
+            notFoundSuggestion(id);
+        }
+        // Only a card still on offer - a card comes from one suggestion at most, and this re-checks that at the
+        // moment it is claimed rather than trusting what the page was shown
+        const matches = suggestion.legacy && !suggestion.archived ? await getSuggestionCardMatches(suggestion) : [];
+        const match = matches.find(
+            (entry) =>
+                entry.project.number === req.body.project &&
+                entry.number === req.body.number &&
+                entry.version === req.body.version
+        );
+        if (!match) {
+            throw new ApiErrorResponse(
+                StatusCodes.BAD_REQUEST,
+                "Validation Error",
+                "That card isn't one this suggestion can be archived as - it may have been claimed already"
             );
-            if (!match) {
+        }
+        // Checked in full before anything is written, so a refusal leaves everything as it was
+        const { principal } = getContext();
+        const discardable = new Map(match.others.map((other) => [other.id!, other]));
+        const discarding = (req.body.discard ?? []).filter((discardId) => discardId !== id);
+        for (const discardId of discarding) {
+            const other = discardable.get(discardId);
+            if (!other) {
                 throw new ApiErrorResponse(
                     StatusCodes.BAD_REQUEST,
                     "Validation Error",
-                    "That card isn't one this suggestion can be archived as - it may have been claimed already"
+                    `Only other suggestions matching ${cardMatchLabel(match)} can be deleted alongside linking it`
                 );
             }
-
-            let updated = suggestion;
-            if (match.project.isDraft) {
-                await dataService.cards.setSuggestionId(match.project.number, match.number, id, match.version);
-            } else {
-                const { principal } = getContext();
-                suggestion.archived = {
-                    reason: "usedInProject",
-                    project: { code: match.project.code, number: match.number },
-                    archivedAt: new Date(),
-                    archivedBy: principal.id
-                };
-                updated = await dataService.suggestions.update(suggestion);
+            if (!canDeleteSuggestion(principal, other)) {
+                throw new ApiErrorResponse(
+                    StatusCodes.FORBIDDEN,
+                    "Access Denied",
+                    `You don't have permission to delete "${other.card.name}"`
+                );
             }
-            invalidateSuggestionCardMatches();
-
-            await logActivity(
-                LogCategory.SUGGESTION,
-                "suggestion.developedAs",
-                `<principal> marked suggestion <suggestion> as developed into ${cardMatchLabel(match)}`,
-                { context: { suggestion: cardSnapshot(id, updated.card) } }
-            );
-
-            res.status(StatusCodes.OK).json(updated);
         }
-    )
+
+        let updated = suggestion;
+        if (match.project.isDraft) {
+            await dataService.cards.setSuggestionId(match.project.number, match.number, id, match.version);
+        } else {
+            suggestion.archived = {
+                reason: "usedInProject",
+                project: { code: match.project.code, number: match.number },
+                archivedAt: new Date(),
+                archivedBy: principal.id
+            };
+            updated = await dataService.suggestions.update(suggestion);
+        }
+        invalidateSuggestionCardMatches();
+
+        await logActivity(
+            LogCategory.SUGGESTION,
+            "suggestion.developedAs",
+            `<principal> marked suggestion <suggestion> as developed into ${cardMatchLabel(match)}`,
+            { context: { suggestion: cardSnapshot(id, updated.card) } }
+        );
+
+        const deleted = await Promise.all(discarding.map((discardId) => deleteSuggestionAndLog(discardId)));
+
+        res.status(StatusCodes.OK).json({ linked: updated, deleted: deleted.map((entry) => entry.id!) });
+    })
 );
+
+// Shared by the delete route, linking (which may discard the rest of a card's matches) and the bulk route
+async function deleteSuggestionAndLog(id: string) {
+    const [deleted] = await dataService.suggestions.destroy({ id });
+    // Whatever pool had set it aside has nothing left to hold
+    await dataService.pools.destroy({ suggestion: id });
+    // Nor can it stand among any card's matches any longer
+    invalidateSuggestionCardMatches();
+
+    await logActivity(LogCategory.SUGGESTION, "suggestion.deleted", "<principal> deleted suggestion <suggestion>", {
+        context: { suggestion: cardSnapshot(id, deleted.card) },
+        severity: "warn"
+    });
+    return deleted;
+}
 
 // Delete suggestion
 router.delete(
@@ -1110,28 +1176,10 @@ router.delete(
     ),
     celebrate({ [Segments.PARAMS]: { id: Joi.string().required() } }),
     loadSuggestionForOwnershipCheck,
-    validateRequest((principal, req, res) => {
-        const suggestion = res.locals.suggestion as ICardSuggestion;
-        return (
-            hasPermission(principal, Permission.DELETE_SUGGESTIONS) ||
-            validate(
-                principal,
-                Permission.MAKE_SUGGESTIONS,
-                (principal) => "discordId" in principal && principal.discordId === suggestion.createdBy
-            )
-        );
-    }),
+    validateRequest((principal, _req, res) => canDeleteSuggestion(principal, res.locals.suggestion as ICardSuggestion)),
     asyncHandler<{ id: string }, unknown, unknown, unknown>(async (req, res) => {
         const { id } = req.params;
-        const [deleted] = await dataService.suggestions.destroy({ id });
-        // Whatever pool had set it aside has nothing left to hold
-        await dataService.pools.destroy({ suggestion: id });
-
-        await logActivity(LogCategory.SUGGESTION, "suggestion.deleted", "<principal> deleted suggestion <suggestion>", {
-            context: { suggestion: cardSnapshot(id, deleted.card) },
-            severity: "warn"
-        });
-
+        const deleted = await deleteSuggestionAndLog(id);
         res.status(StatusCodes.OK).json(deleted);
     })
 );
