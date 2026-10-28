@@ -1,26 +1,28 @@
-import { Navigate, Outlet, useHref, useLocation, useMatches, useNavigate } from "react-router-dom";
+import { Navigate, Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { HeroUIProvider } from "@heroui/react";
 import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
 import NavigationBar from "../components/navigation";
-import { RouteHandle } from "./routeHandle";
+import PageTitleSkeleton from "../components/pageTitleSkeleton";
 
 export default function AuthGuard() {
     const { isAuthenticated, isLoading } = useAuth();
     const { pathname, search } = useLocation();
     const navigate = useNavigate();
-    const matches = useMatches();
 
     // Who is asking isn't known yet, so the app itself can't start - its live connection would race the session
-    // check for a token. The shell is drawn regardless, with the page's own skeleton in it, so a page opened from
-    // scratch arrives into its own shape rather than into a spinner which then swaps for it.
+    // check for a token. The shell is drawn regardless, with the title skeleton every page loads behind (see Page), so a
+    // page opened from scratch arrives the same way as one followed from a link, rather than out of a spinner.
     if (isLoading) {
-        const fallback = (matches.at(-1)?.handle as RouteHandle | undefined)?.fallback;
         return (
             <HeroUIProvider navigate={navigate} useHref={useHref}>
                 <NavigationBar />
                 <div className="overflow-x-clip">
-                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">{fallback}</div>
+                    {/* At least a screen tall beneath the navbar, so the footer stays out of sight while a page is still
+                        only its title skeleton */}
+                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl min-h-[calc(100dvh-4rem)]">
+                        <PageTitleSkeleton />
+                    </div>
                 </div>
             </HeroUIProvider>
         );

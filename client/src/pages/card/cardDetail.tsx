@@ -4,7 +4,7 @@ import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
 import Reveal from "../../components/reveal";
-import CardDetailSkeleton from "./cardDetailSkeleton";
+import PageTitleSkeleton from "../../components/pageTitleSkeleton";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useGetCardQuery,
@@ -100,7 +100,8 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const entryInquiryAction = inquiryLinkActions.find((action) => action === entryAction);
 
     if (isLoadingProject || isLoadingCard || isLoadingSlot) {
-        return <CardDetailSkeleton />;
+        // The same title skeleton every page loads behind (see Page), held until the page can draw
+        return <PageTitleSkeleton />;
     }
 
     if (!project || !card) {
@@ -143,10 +144,13 @@ function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryIn
     if (!openedTabs.has(tab)) {
         setOpenedTabs(new Set(openedTabs).add(tab));
     }
+    // The tab the page opened on arrives with the page itself; one opened later is drawn for the first time then, so
+    // it fades in on its own
+    const [entryTab] = useState(tab);
     const panel = (key: CardTab, content: ReactNode) =>
         openedTabs.has(key) && (
             <PageActiveContext.Provider value={tab === key}>
-                <Reveal direction={null}>{content}</Reveal>
+                {key === entryTab ? content : <Reveal direction={null}>{content}</Reveal>}
             </PageActiveContext.Provider>
         );
 

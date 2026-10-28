@@ -17,7 +17,7 @@ import { factionBarClasses, highlightTarget, watermarkClasses } from "../../cons
 import { BaseElementProps } from "../../types";
 import Watermark from "../../components/watermark";
 import Reveal from "../../components/reveal";
-import { PlaytestingFocusSkeleton } from "./projectPageSkeleton";
+import { PlaytestingFocusSkeleton } from "./projectSectionSkeletons";
 
 export default function ProjectPlaytestingFocus({ className, style, project }: ProjectTestingFocusProps) {
     return (

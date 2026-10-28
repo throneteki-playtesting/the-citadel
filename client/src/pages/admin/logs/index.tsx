@@ -1,3 +1,4 @@
+import RevealSections from "../../../components/revealSections";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Chip, DatePicker, Select, SelectItem, Skeleton, Spinner } from "@heroui/react";
 import { CalendarDateTime } from "@internationalized/date";
@@ -248,12 +249,8 @@ export default function Logs() {
         setDateTo(null);
     }, []);
 
-    if (!hasLoadedOnce) {
-        return <LogsSkeleton />;
-    }
-
     return (
-        <div className="space-y-2">
+        <RevealSections className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Activity Logs</div>
                 <div className="text-sm md:text-base">
@@ -376,6 +373,9 @@ export default function Logs() {
                         onScroll={handleScroll}
                         className="h-[70vh] overflow-y-auto border border-content3"
                     >
+                        {/* The list waits on its first page as rows of its own shape - the page around it is already here */}
+                        {!hasLoadedOnce &&
+                            Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => <SkeletonRow key={index} />)}
                         {items.map((entry) => (
                             <LogRow
                                 key={entry.id}
@@ -393,7 +393,7 @@ export default function Logs() {
                                 <Spinner size="sm" aria-label="Loading more" />
                             </div>
                         )}
-                        {!isFetching && items.length === 0 && (
+                        {hasLoadedOnce && !isFetching && items.length === 0 && (
                             <div className="flex flex-col items-center gap-2 text-center text-default-500 py-12">
                                 <FontAwesomeIcon icon={faScroll} className="text-2xl opacity-50" />
                                 {hasActiveFilters ? (
@@ -411,7 +411,7 @@ export default function Logs() {
                     </div>
                 </div>
             </Card>
-        </div>
+        </RevealSections>
     );
 }
 
@@ -502,28 +502,6 @@ function SkeletonRow() {
                 <Skeleton className="w-16 h-6 rounded-full sm:order-2" />
             </div>
             <Skeleton className="h-4 rounded-sm sm:order-3" />
-        </div>
-    );
-}
-
-function LogsSkeleton() {
-    return (
-        <div className="space-y-2">
-            <Skeleton className="w-56 h-8 rounded-sm" />
-            <Skeleton className="w-full max-w-xl h-5 rounded-sm" />
-            <Card className="border-1 border-content3 p-2 sm:p-4 gap-3">
-                <div className="flex flex-wrap gap-2">
-                    <Skeleton className="w-64 h-14 rounded-md" />
-                    <Skeleton className="w-64 h-14 rounded-md" />
-                    <Skeleton className="w-48 h-14 rounded-md" />
-                    <Skeleton className="w-48 h-14 rounded-md" />
-                </div>
-                <div className="h-[70vh] overflow-hidden border border-content3 rounded-lg">
-                    {Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => (
-                        <SkeletonRow key={index} />
-                    ))}
-                </div>
-            </Card>
         </div>
     );
 }

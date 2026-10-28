@@ -1,3 +1,4 @@
+import RevealSections from "../../../components/revealSections";
 import {
     addToast,
     Avatar,
@@ -151,7 +152,7 @@ export default function Integrations() {
     );
 
     return (
-        <div className="space-y-2">
+        <RevealSections className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Integrations</div>
                 <div className="text-sm md:text-base">
@@ -262,7 +263,7 @@ export default function Integrations() {
                 initialToken={tokenView?.token}
                 onClose={() => setTokenView(undefined)}
             />
-        </div>
+        </RevealSections>
     );
 }
 

@@ -1,3 +1,4 @@
+import RevealSections from "../../../components/revealSections";
 import {
     Button,
     Table,
@@ -150,7 +151,7 @@ export default function Users() {
     );
 
     return (
-        <div className="space-y-2">
+        <RevealSections className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Citadel Users</div>
                 <div className="text-sm md:text-base">
@@ -265,6 +266,6 @@ export default function Users() {
                 </TableBody>
             </Table>
             <EditUserModal user={editingUser} guestUser={guestUser} onOpenChange={() => setEditingUser(undefined)} />
-        </div>
+        </RevealSections>
     );
 }

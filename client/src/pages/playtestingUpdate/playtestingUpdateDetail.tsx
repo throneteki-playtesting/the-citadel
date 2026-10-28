@@ -1,3 +1,5 @@
+import PageTitleSkeleton from "../../components/pageTitleSkeleton";
+import RevealSections from "../../components/revealSections";
 import { useMemo, useState } from "react";
 import {
     useGetPlaytestingUpdateCardsQuery,
@@ -65,39 +67,9 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
         card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
     );
 
+    // The same title skeleton every page loads behind (see Page), held until the page can draw
     if (isPlaytestingUpdateLoading || isProjectLoading) {
-        return (
-            <div className="space-y-4">
-                <div className="space-y-1">
-                    <div className="flex">
-                        <div className="flex-1 space-y-2">
-                            <Skeleton className="h-6 w-32 rounded-md" />
-                            <Skeleton className="h-10 w-64 rounded-md" />
-                        </div>
-                        <div className="flex flex-col gap-2 items-end">
-                            <div className="flex gap-1">
-                                <Skeleton className="h-10 w-10 rounded-md" />
-                                <Skeleton className="h-10 w-10 rounded-md" />
-                                <Skeleton className="h-10 w-10 rounded-md" />
-                            </div>
-                            <Skeleton className="h-4 w-24 rounded-md" />
-                        </div>
-                    </div>
-                </div>
-                <div className="space-y-2">
-                    <Skeleton className="h-7 w-40 rounded-md" />
-                    <div className="space-y-1">
-                        <Skeleton className="h-5 w-96 rounded-md" />
-                        <Skeleton className="h-4 w-72 rounded-md" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                            <PlaytestingUpdateChangeNoteSkeleton key={i} />
-                        ))}
-                    </div>
-                </div>
-            </div>
-        );
+        return <PageTitleSkeleton />;
     }
 
     if (!project || !playtestingUpdate) {
@@ -118,7 +90,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                 </span>
             }
         >
-            <div className="space-y-1 md:space-y-4">
+            <RevealSections className="space-y-1 md:space-y-4">
                 <PlaytestingUpdateHeader project={project} playtestingUpdate={playtestingUpdate} />
                 <PlaytestingUpdateChangeNotes playtestingUpdate={playtestingUpdate} />
                 <ImplementedCards playtestingUpdate={playtestingUpdate} />
@@ -145,7 +117,7 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
                         </Button>
                     )}
                 </div>
-            </div>
+            </RevealSections>
         </Watermark>
     );
 }

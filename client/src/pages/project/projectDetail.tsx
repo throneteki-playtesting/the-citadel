@@ -7,7 +7,7 @@ import EditProjectModal from "./editProjectModal";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
-import ProjectPageSkeleton from "./projectPageSkeleton";
+import PageTitleSkeleton from "../../components/pageTitleSkeleton";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import { DraftPoolHostProvider } from "./draft/draftPoolHost";
@@ -56,9 +56,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     const navigate = useNavigate();
 
-    // The same skeleton the route shows while this page's code arrives, so the two never swap
+    // The same title skeleton every page loads behind (see Page), held until the page can draw
     if (isLoading) {
-        return <ProjectPageSkeleton />;
+        return <PageTitleSkeleton />;
     }
 
     if (!project) {
@@ -90,22 +90,25 @@ export default function ProjectDetail({ className, style, project: number }: Pro
             </div>
             <DraftPoolHostProvider>
                 <div className="relative space-y-2">
-                    <Reveal>
+                    {/* Out of the title skeleton, each part arrives once, top first */}
+                    <Reveal index={0}>
                         <ProjectHeader
                             project={project}
                             onEdit={() => setIsEditing(true)}
                             onDelete={() => setIsDeleting(true)}
                         />
                     </Reveal>
-                    {project.draft ? (
-                        <ScopedSearchParamsProvider>
-                            <ProjectDrafting project={project} />
-                        </ScopedSearchParamsProvider>
-                    ) : (
-                        <ScopedSearchParamsProvider>
-                            <ProjectTabsSection project={project} entryRelease={entryRelease} />
-                        </ScopedSearchParamsProvider>
-                    )}
+                    <Reveal index={1}>
+                        {project.draft ? (
+                            <ScopedSearchParamsProvider>
+                                <ProjectDrafting project={project} />
+                            </ScopedSearchParamsProvider>
+                        ) : (
+                            <ScopedSearchParamsProvider>
+                                <ProjectTabsSection project={project} entryRelease={entryRelease} />
+                            </ScopedSearchParamsProvider>
+                        )}
+                    </Reveal>
                 </div>
             </DraftPoolHostProvider>
             <EditProjectModal
@@ -159,10 +162,13 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
     if (!openedTabs.has(tab)) {
         setOpenedTabs(new Set(openedTabs).add(tab));
     }
+    // The tab the page opened on arrives with the page itself; one opened later is drawn for the first time then, so
+    // it fades in on its own
+    const [entryTab] = useState(tab);
     const panel = (key: ProjectTab, content: ReactNode) =>
         openedTabs.has(key) && (
             <PageActiveContext.Provider value={tab === key}>
-                <Reveal direction={null}>{content}</Reveal>
+                {key === entryTab ? content : <Reveal direction={null}>{content}</Reveal>}
             </PageActiveContext.Provider>
         );
 

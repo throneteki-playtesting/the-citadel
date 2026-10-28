@@ -12,7 +12,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowRightFromBracket, faChevronLeft, faChevronRight, faFeather } from "@fortawesome/free-solid-svg-icons";
 import SectionTitle from "../../../components/sectionTitle";
 import Reveal from "../../../components/reveal";
-import { PlaytestingUpdatesSkeleton } from "../projectPageSkeleton";
+import { PlaytestingUpdatesSkeleton } from "../projectSectionSkeletons";
 
 export default function ProjectPlaytestingUpdates({ className, project }: ProjectPlaytestingUpdatesProps) {
     return (
