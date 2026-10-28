@@ -35,8 +35,17 @@ function pageItemRoutes() {
         if (isPageItem(item)) {
             routes.push({
                 path: item.path,
+                // A page failing shows its error in place of the page, inside the app's shell - not in place of the app
+                errorElement: <RouteError />,
+                // Nothing is waited on - it only starts what the page will ask for, so the requests overlap
+                loader: ({ params }) => {
+                    item.preload?.(params);
+                    return null;
+                },
+                // Keyed by path: every route's element has the same shape, so unkeyed React keeps one Page from route
+                // to route, and a page suspending on its code holds the page being left on screen instead of a loader
                 element: item.element ? (
-                    <ProjectScope>
+                    <ProjectScope key={item.path}>
                         <Page required={item.permission}>{item.element}</Page>
                     </ProjectScope>
                 ) : null

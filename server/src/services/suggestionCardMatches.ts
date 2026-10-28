@@ -16,7 +16,7 @@ interface CandidateCard {
 
 interface MatchIndex {
     matchesBySuggestion: Map<string, CandidateCard[]>;
-    suggestionsByCard: Map<CandidateCard, number>;
+    suggestionsByCard: Map<CandidateCard, ICardSuggestion[]>;
 }
 
 // Reads every card and legacy suggestion, so is kept briefly rather than invalidated precisely
@@ -81,7 +81,7 @@ async function buildIndex(): Promise<MatchIndex> {
     const available = [...candidates.entries()].filter(([key]) => !claimed.has(key)).map(([, card]) => card);
 
     const matchesBySuggestion = new Map<string, CandidateCard[]>();
-    const suggestionsByCard = new Map<CandidateCard, number>();
+    const suggestionsByCard = new Map<CandidateCard, ICardSuggestion[]>();
     for (const suggestion of legacy) {
         const matches = available.filter((card) => isMatch(card, suggestion.card));
         if (matches.length === 0) {
@@ -89,7 +89,7 @@ async function buildIndex(): Promise<MatchIndex> {
         }
         matchesBySuggestion.set(suggestion.id!, matches);
         for (const card of matches) {
-            suggestionsByCard.set(card, (suggestionsByCard.get(card) ?? 0) + 1);
+            suggestionsByCard.set(card, [...(suggestionsByCard.get(card) ?? []), suggestion]);
         }
     }
     return { matchesBySuggestion, suggestionsByCard };
@@ -118,7 +118,7 @@ export async function getSuggestionCardMatches(suggestion: ICardSuggestion): Pro
         number: card.number,
         version: card.version,
         firstVersion: card.firstVersion,
-        others: (suggestionsByCard.get(card) ?? 1) - 1
+        others: (suggestionsByCard.get(card) ?? []).filter((other) => other.id !== suggestion.id)
     }));
 }
 

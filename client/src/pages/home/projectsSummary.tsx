@@ -1,4 +1,5 @@
 import { IProject } from "common/models/projects";
+import Reveal from "../../components/reveal";
 import { ReactNode, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Chip, Skeleton } from "@heroui/react";
@@ -57,8 +58,10 @@ export const ProjectsSummary = () => {
     }
     return (
         <div className="flex flex-col gap-2">
-            {data?.items.map((project) => (
-                <ProjectCard key={project.number} project={project} />
+            {data?.items.map((project, index) => (
+                <Reveal key={project.number} index={index} direction={null}>
+                    <ProjectCard project={project} />
+                </Reveal>
             ))}
         </div>
     );

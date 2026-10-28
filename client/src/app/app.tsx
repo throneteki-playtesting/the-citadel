@@ -4,6 +4,7 @@ import Footer from "../components/footer";
 import { Outlet, useHref, useLocation, useNavigate } from "react-router-dom";
 import { SSEProvider } from "./sseProvider";
 import { useEffect, useState } from "react";
+import preloadPages from "../pages/preloadPages";
 
 function App() {
     const navigate = useNavigate();
@@ -13,6 +14,9 @@ function App() {
     useEffect(() => {
         window.scrollTo(0, 0);
     }, [pathname]);
+
+    // Once, after the first page has drawn - see preloadPages
+    useEffect(() => preloadPages(), []);
 
     // Tracks the navbar's live rendered height so toasts sit just below it even if it changes
     useEffect(() => {
@@ -31,7 +35,7 @@ function App() {
                 <NavigationBar />
                 <ToastProvider placement="top-right" toastOffset={navbarHeight} />
                 <div className="overflow-x-clip">
-                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl">
+                    <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl min-h-[calc(100dvh-4rem)]">
                         <Outlet />
                     </div>
                 </div>

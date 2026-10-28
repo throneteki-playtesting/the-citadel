@@ -9,11 +9,10 @@ import {
     ISuggestionCardMatch,
     ProjectCardRef
 } from "common/models/cards";
-import { escapeRegExp, renderPlaytestingCard } from "common/utils";
+import { renderPlaytestingCard } from "common/utils";
 import { useGetSuggestionCardMatchesQuery } from "../../api";
 import StatusNotice from "../../components/statusNotice";
 import CardFocusThumbnail from "../../components/cardFocusThumbnail";
-import { suggestionFilterToParams } from "./suggestionFilterUrl";
 
 const THUMBNAIL_WIDTH_REM = 3.5;
 
@@ -54,24 +53,9 @@ function CardPageLink({ match }: { match: ProjectCardRef }) {
     );
 }
 
-// The rest of the legacy suggestions this card could equally have come from, on the browse page
-function othersLink(suggestion: ICardSuggestion) {
-    const params = new URLSearchParams({
-        all: "true",
-        ...suggestionFilterToParams({
-            legacy: true,
-            developed: true,
-            name: { $regex: `(?i)${escapeRegExp(suggestion.card.name)}` },
-            faction: [suggestion.card.faction],
-            type: [suggestion.card.type]
-        })
-    });
-    return `/suggestions?${params.toString()}`;
-}
-
 /** For a legacy suggestion, the project cards it may already have been developed as - linking it to one is
  *  offered among LegacySuggestionPanel's options. MANAGE_SUGGESTIONS_ARCHIVE only. */
-export default function LegacyCardMatches({ suggestion, className }: LegacyCardMatchesProps) {
+export default function LegacyCardMatches({ suggestion, onLink, className }: LegacyCardMatchesProps) {
     const { data } = useGetSuggestionCardMatchesQuery(suggestion.id!);
 
     const linkedTo = data?.linkedTo;
@@ -114,15 +98,17 @@ export default function LegacyCardMatches({ suggestion, className }: LegacyCardM
                                 detail={
                                     <>
                                         This suggestion
-                                        {match.others > 0 && (
+                                        {match.others.length > 0 && (
                                             <>
                                                 {" "}
-                                                <Link
-                                                    to={othersLink(suggestion)}
-                                                    className="text-primary hover:underline"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onLink(match)}
+                                                    className="text-primary hover:underline cursor-pointer"
                                                 >
-                                                    (and {match.others} other{match.others === 1 ? "" : "s"})
-                                                </Link>
+                                                    (and {match.others.length} other
+                                                    {match.others.length === 1 ? "" : "s"})
+                                                </button>
                                             </>
                                         )}{" "}
                                         may have already been developed as <CardPageLink match={match} />
@@ -142,5 +128,7 @@ export default function LegacyCardMatches({ suggestion, className }: LegacyCardM
 
 type LegacyCardMatchesProps = {
     suggestion: ICardSuggestion;
+    /** Opens the caller's link modal for that card - the same one LegacySuggestionPanel's Link option opens */
+    onLink: (match: ISuggestionCardMatch) => void;
     className?: string;
 };

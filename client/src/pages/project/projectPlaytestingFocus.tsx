@@ -1,9 +1,9 @@
 import { IProject } from "common/models/projects";
-import { Faction, factions } from "common/models/cards";
+import { Faction } from "common/models/cards";
 import { IPlaytestReview } from "common/models/reviews";
 import { factionNames } from "common/utils";
 import { useMemo } from "react";
-import { ScrollShadow, Skeleton } from "@heroui/react";
+import { ScrollShadow } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCrow } from "@fortawesome/free-solid-svg-icons";
 import classNames from "classnames";
@@ -16,6 +16,8 @@ import Permission from "common/models/permissions";
 import { factionBarClasses, highlightTarget, watermarkClasses } from "../../constants";
 import { BaseElementProps } from "../../types";
 import Watermark from "../../components/watermark";
+import Reveal from "../../components/reveal";
+import { PlaytestingFocusSkeleton } from "./projectSectionSkeletons";
 
 export default function ProjectPlaytestingFocus({ className, style, project }: ProjectTestingFocusProps) {
     return (
@@ -81,16 +83,7 @@ function FactionFocusList({ project }: FactionFocusListProps) {
     }, [cardsData?.items, reviewsData?.items]);
 
     if (isLoadingReviews || isLoadingCards) {
-        return (
-            <div className="divide-y divide-content3">
-                {[...Array(factions.length)].map((_, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2">
-                        <Skeleton className="w-32 h-5 rounded-sm" />
-                        <Skeleton className="ml-auto w-24 h-4 rounded-sm" />
-                    </div>
-                ))}
-            </div>
-        );
+        return <PlaytestingFocusSkeleton />;
     }
 
     if (factionStats.length === 0) {
@@ -107,8 +100,9 @@ function FactionFocusList({ project }: FactionFocusListProps) {
         );
     }
 
+    // Fades in over the skeleton it replaces
     return (
-        <div className="divide-y divide-content3">
+        <Reveal direction={null} className="divide-y divide-content3">
             {factionStats.map(({ faction, cards, latest, older, untested, percent, rank }) => (
                 <PermissionedLink
                     key={faction}
@@ -186,7 +180,7 @@ function FactionFocusList({ project }: FactionFocusListProps) {
                     </Watermark>
                 </PermissionedLink>
             ))}
-        </div>
+        </Reveal>
     );
 }
 type FactionFocusListProps = {

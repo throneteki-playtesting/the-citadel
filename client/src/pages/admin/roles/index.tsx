@@ -1,4 +1,5 @@
 import { Key, useCallback, useMemo, useState } from "react";
+import RevealSections from "../../../components/revealSections";
 import { useGetRolesQuery } from "../../../api";
 import {
     Button,
@@ -109,7 +110,7 @@ export default function Roles() {
     );
 
     return (
-        <div className="space-y-2">
+        <RevealSections className="space-y-2">
             <div className="px-4 md:px-0 space-y-2">
                 <div className="font-cinzel text-2xl">Citadel Roles</div>
                 <div className="text-sm md:text-base">
@@ -186,6 +187,6 @@ export default function Roles() {
                 </TableBody>
             </Table>
             <EditRoleModal role={editingRole} onOpenChange={() => setEditingRole(undefined)} />
-        </div>
+        </RevealSections>
     );
 }

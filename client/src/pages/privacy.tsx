@@ -1,10 +1,11 @@
 import PrivacyPolicy from "../components/privacyPolicy";
+import RevealSections from "../components/revealSections";
 
 const Privacy = () => {
     return (
-        <div className="pb-8">
+        <RevealSections className="pb-8">
             <PrivacyPolicy />
-        </div>
+        </RevealSections>
     );
 };
 

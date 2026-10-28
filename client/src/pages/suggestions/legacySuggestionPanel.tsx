@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import classNames from "classnames";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -7,24 +7,17 @@ import {
     faComments,
     faEye,
     faHammer,
-    faLock,
     faLink,
     faPencil,
     faStamp,
     faTrash,
     IconDefinition
 } from "@fortawesome/free-solid-svg-icons";
-import { CardPreview } from "@agot/card-preview";
 import { cardMatchKey, cardMatchLabel, ICardSuggestion, ISuggestionCardMatch } from "common/models/cards";
-import { renderPlaytestingCard } from "common/utils";
-import { useGetSuggestionCardMatchesQuery, useMarkSuggestionDevelopedAsMutation } from "../../api";
-import { showApiErrorToast } from "../../api/errors";
-import ConfirmModal from "../../components/confirmModal";
+import { useGetSuggestionCardMatchesQuery } from "../../api";
 import SectionTitle from "../../components/sectionTitle";
-import SuggestionCardPreview from "../../components/suggestionCardPreview";
 import { UserRow } from "../../components/userAvatar";
-
-type Point = { icon: IconDefinition; text: string };
+import PointList, { Point } from "./pointList";
 
 const MEANINGS: Point[] = [
     {
@@ -44,87 +37,10 @@ function linkDetail(match: ISuggestionCardMatch) {
         : `It was developed as ${cardMatchLabel(match)} - archive it as used there, closing it to further edits.`;
 }
 
-function linkPoints(match: ISuggestionCardMatch): Point[] {
-    const { code } = match.project;
-    return match.project.isDraft
-        ? [
-              {
-                  icon: faLink,
-                  text: `${cardMatchLabel(match)} is recorded as coming from this suggestion, and can't be linked to another.`
-              },
-              { icon: faBoxArchive, text: `Once ${code} begins, this suggestion is archived as used there.` },
-              { icon: faLock, text: "From then on it can't be edited or completed." }
-          ]
-        : [
-              { icon: faBoxArchive, text: `This suggestion is archived as used in ${code}.` },
-              { icon: faLock, text: "It can no longer be edited or completed." },
-              {
-                  icon: faLink,
-                  text: `${cardMatchLabel(match)} is recorded as coming from it, and can't be linked to another suggestion.`
-              }
-          ];
-}
-
-/** A card at a fixed modal size, with what it is beneath it */
-function LabelledCard({ isPlot, label, children }: { isPlot: boolean; label: string; children: ReactNode }) {
-    return (
-        <div className="flex flex-col items-center gap-1.5 min-w-0">
-            <div className={classNames(isPlot ? "w-48 aspect-[333/240]" : "w-36 aspect-[240/333]")}>{children}</div>
-            <span className="text-xs text-foreground/60 text-center">{label}</span>
-        </div>
-    );
-}
-
-/** The suggestion, pointing at the card it's being linked to, and what that link does */
-function LinkConfirmation({ suggestion, match }: { suggestion: ICardSuggestion; match: ISuggestionCardMatch }) {
-    const card = match.firstVersion;
-    const isPlot = card.type === "plot";
-    const imageUrl = card._metadata?.imageUrl;
-    return (
-        <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-center gap-3">
-                <LabelledCard isPlot={suggestion.card.type === "plot"} label="This suggestion">
-                    <SuggestionCardPreview
-                        suggestion={suggestion}
-                        orientation={suggestion.card.type === "plot" ? "horizontal" : "vertical"}
-                        rounded
-                    />
-                </LabelledCard>
-                <FontAwesomeIcon icon={faArrowRight} className="shrink-0 text-xl text-primary mb-5" />
-                <LabelledCard isPlot={isPlot} label={`${cardMatchLabel(match)} - ${card.name}`}>
-                    {imageUrl ? (
-                        <img src={imageUrl} alt={card.name} className="size-full object-contain rounded-md" />
-                    ) : (
-                        <CardPreview
-                            card={renderPlaytestingCard(card)}
-                            orientation={isPlot ? "horizontal" : "vertical"}
-                            rounded
-                        />
-                    )}
-                </LabelledCard>
-            </div>
-            <PointList points={linkPoints(match)} />
-        </div>
-    );
-}
-
 // The panel's stripes are its background, and a translucent tint laid over them lets them show through - this
 // gives the tint something solid to sit on, so it keeps its colour without the stripes running across it
 function OpaqueBacking({ className, children }: { className?: string; children: ReactNode }) {
     return <div className={classNames("bg-content1", className)}>{children}</div>;
-}
-
-function PointList({ points }: { points: Point[] }) {
-    return (
-        <ul className="flex flex-col gap-1.5">
-            {points.map(({ icon, text }) => (
-                <li key={text} className="flex items-start gap-2.5 text-sm text-foreground/70">
-                    <FontAwesomeIcon icon={icon} className="shrink-0 mt-0.5 w-4 text-foreground/40" />
-                    <span>{text}</span>
-                </li>
-            ))}
-        </ul>
-    );
 }
 
 const OPTION_TONES = {
@@ -221,13 +137,12 @@ export default function LegacySuggestionPanel({
     canDelete,
     onDelete,
     canLink,
+    onLink,
     className
 }: LegacySuggestionPanelProps) {
     const usedIn = suggestion.archived?.project;
     // Shared with LegacyCardMatches' notice above, which shows the same cards
     const { data: cardMatches } = useGetSuggestionCardMatchesQuery(suggestion.id!, { skip: !canLink || !!usedIn });
-    const [markDevelopedAs, { isLoading: isLinking }] = useMarkSuggestionDevelopedAsMutation();
-    const [confirmingLink, setConfirmingLink] = useState<ISuggestionCardMatch>();
 
     const matches = (canLink && cardMatches?.matches) || [];
 
@@ -239,7 +154,7 @@ export default function LegacySuggestionPanel({
                 title={`Link to ${cardMatchLabel(match)}`}
                 detail={linkDetail(match)}
                 tone="success"
-                onPress={() => setConfirmingLink(match)}
+                onPress={() => onLink(match)}
             />
         )),
         canComplete && (
@@ -263,23 +178,6 @@ export default function LegacySuggestionPanel({
             />
         )
     ].filter(Boolean);
-
-    const onConfirmLink = async () => {
-        if (!confirmingLink) {
-            return;
-        }
-        try {
-            await markDevelopedAs({
-                id: suggestion.id!,
-                project: confirmingLink.project.number,
-                number: confirmingLink.number,
-                version: confirmingLink.version
-            }).unwrap();
-            setConfirmingLink(undefined);
-        } catch (err) {
-            showApiErrorToast(err, { title: "Failed to Link Suggestion" });
-        }
-    };
 
     return (
         <div
@@ -342,18 +240,6 @@ export default function LegacySuggestionPanel({
                     )}
                 </div>
             )}
-
-            <ConfirmModal
-                isOpen={!!confirmingLink}
-                isLoading={isLinking}
-                confirmColor="primary"
-                size="lg"
-                title={confirmingLink ? `Link to ${cardMatchLabel(confirmingLink)}?` : ""}
-                content={confirmingLink && <LinkConfirmation suggestion={suggestion} match={confirmingLink} />}
-                confirmContent={confirmingLink ? `Link to ${cardMatchLabel(confirmingLink)}` : ""}
-                onConfirm={onConfirmLink}
-                onClose={() => setConfirmingLink(undefined)}
-            />
         </div>
     );
 }
@@ -367,5 +253,7 @@ type LegacySuggestionPanelProps = {
     onDelete: () => void;
     /** Whether it can be linked to a project card it was already developed as - MANAGE_SUGGESTIONS_ARCHIVE */
     canLink: boolean;
+    /** Opens the caller's link modal for that card - the same one LegacyCardMatches' "and N others" opens */
+    onLink: (match: ISuggestionCardMatch) => void;
     className?: string;
 };

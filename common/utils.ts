@@ -111,6 +111,21 @@ export function isSameCard(a: DeepPartial<Cards.ICard> | undefined, b: DeepParti
     return !isDirty(getBaseCardValues(a ?? {}), getBaseCardValues(b ?? {}));
 }
 
+// Fields which credit or decorate a card without changing how it plays
+const NON_STAT_CARD_FIELDS = ["flavor", "designer", "illustrator"] as const;
+
+// Whether two versions of a card play the same - flavor and credits are free to differ
+export function isSameCardStats(a: DeepPartial<Cards.ICard> | undefined, b: DeepPartial<Cards.ICard> | undefined) {
+    const stats = (card: DeepPartial<Cards.ICard> | undefined) => {
+        const values: Partial<ReturnType<typeof getBaseCardValues>> = getBaseCardValues(card ?? {});
+        for (const field of NON_STAT_CARD_FIELDS) {
+            delete values[field];
+        }
+        return values;
+    };
+    return !isDirty(stats(a), stats(b));
+}
+
 export function pushSorted<T>(arr: T[], item: T, compareFn: (a: T, b: T) => number) {
     let low = 0,
         high = arr.length;
@@ -340,6 +355,65 @@ export function isProjectOwner(principal: Principal | undefined, project: Pick<I
 }
 
 // Folds an owner's project permissions into their own, so every existing check within the project honours ownership
+/** Whether a suggestion may be deleted - by anyone holding DELETE_SUGGESTIONS, or by its own designer */
+export function canDeleteSuggestion(
+    principal: Principal | undefined,
+    suggestion: Pick<Cards.ICardSuggestion, "createdBy">
+): boolean {
+    return (
+        hasPermission(principal, Permission.DELETE_SUGGESTIONS) ||
+        validate(
+            principal,
+            Permission.MAKE_SUGGESTIONS,
+            (principal) => "discordId" in principal && principal.discordId === suggestion.createdBy
+        )
+    );
+}
+
+/** Why a bulk action would leave this suggestion untouched, or undefined where it applies - shared by POST
+ *  /suggestions/bulk (the actual gate) and the browse page's action bar (its counts), so both say the same thing */
+export function suggestionBulkBlockReason(
+    principal: Principal | undefined,
+    suggestion: Cards.ICardSuggestion,
+    action: Cards.SuggestionBulkAction,
+    reactType?: Cards.ReactionType
+): string | undefined {
+    const discordId = principal && "discordId" in principal ? principal.discordId : undefined;
+    const engagement = suggestion._metadata?.engagement;
+    switch (action) {
+        case "react":
+        case "unreact": {
+            const blockReason = Cards.suggestionReactionBlockReason(suggestion, discordId);
+            if (blockReason) {
+                return blockReason;
+            }
+            const current = engagement?.reactions?.[discordId!]?.type;
+            if (action === "unreact") {
+                return current ? undefined : "You haven't reacted to it";
+            }
+            return current === reactType ? "You've already given it that reaction" : undefined;
+        }
+        case "approve":
+            if (!hasPermission(principal, Permission.APPROVE_SUGGESTIONS)) {
+                return "You can't approve suggestions";
+            }
+            if (suggestion.draft) {
+                return "Drafts can't be approved";
+            }
+            return (
+                Cards.suggestionApprovalBlockReason(suggestion) ??
+                (engagement?.approvedBy ? "It's already approved" : undefined)
+            );
+        case "unapprove":
+            if (!hasPermission(principal, Permission.APPROVE_SUGGESTIONS)) {
+                return "You can't remove approvals";
+            }
+            return engagement?.approvedBy ? undefined : "It isn't approved";
+        case "delete":
+            return canDeleteSuggestion(principal, suggestion) ? undefined : "You can only delete your own suggestions";
+    }
+}
+
 export function withProjectOwnership<T extends Principal>(principal: T, project: Pick<IProject, "owners">): T {
     if (!isProjectOwner(principal, project)) {
         return principal;
