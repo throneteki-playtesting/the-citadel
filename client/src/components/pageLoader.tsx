@@ -4,9 +4,8 @@ import Reveal from "./reveal";
 
 // Most pages draw well within this, so most loads never show anything at all - nothing to flash in and straight back out
 const SHOW_AFTER_MS = 300;
-// A load passes through several loaders in turn - signing in, then the record a page is gated on, then its code - each
-// a new instance. One taking over this soon after the last is the same wait, so it carries on that wait's clock rather
-// than starting its own: otherwise every hand-over would blank the spinner out and restart the delay.
+// A load passes through several loaders in turn, each a new instance. One taking over this soon after the last
+// is the same wait, and carries on its clock rather than blanking the spinner and restarting the delay.
 const HANDOVER_MS = 100;
 const LOADER_CLASS = "flex flex-col items-center gap-3 pt-24 sm:pt-32";
 let waitingSince = 0;
@@ -22,11 +21,8 @@ function delayRemaining() {
     return Math.max(0, SHOW_AFTER_MS - (now - waitingSince));
 }
 
-/**
- * Every page's loading state before it can draw - while signing in, while its code arrives, and while the record it is
- * gated on loads. Nothing at first, then a spinner if it's taking a while. It always ends: a failure becomes the
- * route's error (`RouteError`) or the page's own, and a query which never answers times out (see `api/index.ts`).
- */
+/** Every page's loading state before it can draw: nothing at first, then a spinner if it's slow. It always ends -
+ *  a failure becomes the route's or page's own error, and a query which never answers times out. */
 export default function PageLoader() {
     const [delay] = useState(delayRemaining);
     const [isShown, setIsShown] = useState(delay === 0);

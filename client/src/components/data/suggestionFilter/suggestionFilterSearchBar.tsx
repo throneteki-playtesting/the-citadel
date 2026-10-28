@@ -23,9 +23,8 @@ type SuggestionFilterSearchBarProps = Omit<BaseElementProps, "children"> & {
     onDrawerOpenChange?: (isOpen: boolean) => void;
 };
 
-// Search and Advanced read as one connected control, and search narrows whatever the filters already match. From `sm`
-// up there is room for both, so the search stays put; on a phone it folds away while filtering to give the row back,
-// unless something has been typed into it - a search still applying must stay where it can be seen and cleared.
+// Search and Advanced read as one control, and search narrows what the filters match. On a phone the search folds
+// away while filtering, unless something has been typed into it.
 const SuggestionFilterSearchBar = ({
     className,
     style,

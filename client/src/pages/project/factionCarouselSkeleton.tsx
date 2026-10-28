@@ -1,4 +1,5 @@
 import { Skeleton } from "@heroui/react";
+import classNames from "classnames";
 import SlotSkeleton from "../../components/slots/slotSkeleton";
 
 // One card of a carousel at its loaded size - a plot lies on its side at the same height's worth of width
@@ -12,7 +13,7 @@ export function CarouselCardSkeleton({ isFramed, isPlot = false }: { isFramed: b
     return isFramed ? (
         <SlotSkeleton cardClassName={cardClassName} />
     ) : (
-        <Skeleton className={`${cardClassName} shrink-0`} />
+        <Skeleton className={classNames(cardClassName, "shrink-0")} />
     );
 }
 

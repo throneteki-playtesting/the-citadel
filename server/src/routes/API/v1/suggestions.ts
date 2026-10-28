@@ -266,9 +266,8 @@ function prepareLiveSaveBody(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
-// An approval vouches for how the card plays, so a change to its stats withdraws it - flavor and credits don't, and
-// nor do the questions around it. Reactions are opinions people can revisit themselves, so they always stand. Runs
-// after validation, so the stored card is compared against the sanitised one. A legacy suggestion is never approved.
+// An approval vouches for how the card plays, so a change to its stats withdraws it (flavor and credits don't);
+// reactions always stand. Runs after validation, so the stored card is compared against the sanitised one.
 function clearApprovalOnStatChange(req: Request, res: Response, next: NextFunction) {
     const existing = res.locals.suggestion as ICardSuggestion;
     const engagement = req.body._metadata?.engagement as SuggestionEngagement | undefined;
@@ -1065,10 +1064,8 @@ router.get(
     })
 );
 
-// Settles a legacy suggestion as having become a project card: archived as used in it, or - while the project is
-// still in draft - named by the card, so initialising the project archives it the same way any suggestion used is.
-// `discard` names other suggestions matching the same card to delete once it is linked - duplicates of the one design,
-// which nothing is left for once the card has been claimed. Each must be one the caller could delete by itself.
+// Settles a legacy suggestion as having become a project card: archived as used in it, or - while the project is in
+// draft - named by the card. `discard` names duplicates to delete once it is linked, each one the caller could delete.
 router.post(
     "/:id/developed-as",
     validateRequest(Permission.MANAGE_SUGGESTIONS_ARCHIVE),
@@ -1157,9 +1154,8 @@ router.post(
     })
 );
 
-// One action over many suggestions at once, from the browse page's selection. Each goes through the same
-// function its own route does, after the same checks (suggestionBulkBlockReason), so a bulk approve or delete
-// says, records and syncs exactly what doing each by hand would - one not applying is skipped, never a failure.
+// One action over many suggestions at once, each through the function its own route uses after the same checks
+// (suggestionBulkBlockReason), so it says, records and syncs the same - one not applying is skipped, never failed.
 router.post(
     "/bulk",
     validateRequest(Permission.READ_SUGGESTIONS),

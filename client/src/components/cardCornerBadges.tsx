@@ -100,9 +100,15 @@ export function CardBadgeLayer({ children }: { children: ReactNode }) {
 }
 
 /** The badges over a card's top-right corner, in one right-aligned row - any left out (false/undefined) take no room */
-export default function CardCornerBadges({ badges, isolateClicks = false, className, leading }: CardCornerBadgesProps) {
+export default function CardCornerBadges({
+    badges,
+    isolateClicks = false,
+    className,
+    leading,
+    trailing
+}: CardCornerBadgesProps) {
     const shown = badges.filter((badge): badge is CardCornerBadge => !!badge);
-    if (shown.length === 0 && !leading) {
+    if (shown.length === 0 && !leading && !trailing) {
         return null;
     }
     return (
@@ -123,6 +129,7 @@ export default function CardCornerBadges({ badges, isolateClicks = false, classN
                 {shown.map(({ key, ...badge }) => (
                     <CornerBadge key={key} {...badge} />
                 ))}
+                {trailing}
             </div>
         </CardBadgeLayer>
     );
@@ -135,4 +142,6 @@ type CardCornerBadgesProps = {
     className?: string;
     /** Before the badges - eg. controls which only appear on hover, and so shouldn't move the badges about */
     leading?: ReactNode;
+    /** After the badges, in the corner itself - the badges make room for it */
+    trailing?: ReactNode;
 };

@@ -317,9 +317,8 @@ function editorTitle(isSavedDraft: boolean, isMigrating: boolean, isLegacy: bool
     return isLegacy ? "Complete Legacy Suggestion" : "Suggestion Editor";
 }
 
-// Whether saving will clear the suggestion's approval, which vouches for how its card plays - so only a change to
-// the card's stats withdraws it (see clearApprovalOnStatChange on the server). Reactions always stand. Purely
-// informational (no confirmation modal).
+// Whether saving will clear the suggestion's approval - only a change to the card's stats withdraws it (see
+// clearApprovalOnStatChange on the server). Reactions always stand. Informational only.
 function hasApprovalToClear(suggestion: DeepPartial<ICardSuggestion>, savedCard?: DeepPartial<ICard>): boolean {
     if (suggestion.draft !== false || suggestion.legacy || !suggestion._metadata?.engagement?.approvedBy) {
         return false;

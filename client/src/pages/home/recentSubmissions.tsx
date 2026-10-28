@@ -81,7 +81,6 @@ export default function RecentSubmissions() {
             <SectionTitle size="sm" indent="xs">
                 Recent Submissions
             </SectionTitle>
-            {/* Keyed on loading, so the rows fade in over the skeleton they replace */}
             <Reveal
                 key={isLoading ? "loading" : "loaded"}
                 direction={null}

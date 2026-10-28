@@ -42,10 +42,8 @@ function pageItemRoutes() {
                     item.preload?.(params);
                     return null;
                 },
-                // Keyed by its path, as React Router renders every route's element without one. Every route has
-                // this same shape, so unkeyed React would keep one Page - and the Suspense boundary inside it - from
-                // route to route, and a navigation (always a transition) suspending on a page's code would hold the
-                // page being left on screen until it arrived, rather than showing the new route's skeleton
+                // Keyed by path: every route's element has the same shape, so unkeyed React keeps one Page from route
+                // to route, and a page suspending on its code holds the page being left on screen instead of a loader
                 element: item.element ? (
                     <ProjectScope key={item.path}>
                         <Page required={item.permission}>{item.element}</Page>

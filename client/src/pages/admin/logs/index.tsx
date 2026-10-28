@@ -373,7 +373,6 @@ export default function Logs() {
                         onScroll={handleScroll}
                         className="h-[70vh] overflow-y-auto border border-content3"
                     >
-                        {/* The list waits on its first page as rows of its own shape - the page around it is already here */}
                         {!hasLoadedOnce &&
                             Array.from({ length: SKELETON_ROW_COUNT }).map((_, index) => <SkeletonRow key={index} />)}
                         {items.map((entry) => (

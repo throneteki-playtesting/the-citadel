@@ -35,8 +35,6 @@ function App() {
                 <NavigationBar />
                 <ToastProvider placement="top-right" toastOffset={navbarHeight} />
                 <div className="overflow-x-clip">
-                    {/* At least a screen tall beneath the navbar, so the footer stays out of sight while a page is still
-                        loading */}
                     <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl min-h-[calc(100dvh-4rem)]">
                         <Outlet />
                     </div>

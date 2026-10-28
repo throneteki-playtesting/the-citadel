@@ -10,12 +10,8 @@ function whenIdle(callback: () => void) {
     }
 }
 
-/**
- * Fetches the code of the pages somebody is likely to open next, once the page they're on has settled - one at a time,
- * each in an idle moment after the last has arrived, so it never competes with what they're actually doing. Each is
- * the same `import()` its lazy page makes, so the module is simply already there when the link is followed. Under
- * Vite's dev server this is also what has it compile those pages in the background, rather than on the click.
- */
+/** Fetches the code of the pages likely to be opened next, one at a time in idle moments once the page on show has
+ *  settled - the same `import()` each lazy page makes, so it is already there when the link is followed. */
 export default function preloadPages() {
     if (hasStarted) {
         return;

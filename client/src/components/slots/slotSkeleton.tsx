@@ -2,9 +2,8 @@ import { CSSProperties } from "react";
 import { Skeleton } from "@heroui/react";
 import classNames from "classnames";
 
-// A slot's frame as SlotFrame draws it - the number and menu along the top, its card beneath - while it loads. Shared
-// by the drafting board, whose frames size themselves to hold a pile, and the project page, whose frames hold the one
-// card at a carousel's size, so the two read as the same frame whichever page it is waiting on.
+// A slot's frame as SlotFrame draws it, while it loads - shared by the drafting board and the project page, so
+// the two read as the same frame whichever page is waiting.
 export default function SlotSkeleton({ className, style, cardClassName = "w-full grow" }: SlotSkeletonProps) {
     return (
         <div

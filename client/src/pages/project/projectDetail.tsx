@@ -90,7 +90,6 @@ export default function ProjectDetail({ className, style, project: number }: Pro
             </div>
             <DraftPoolHostProvider>
                 <div className="relative space-y-2">
-                    {/* Once the page can draw, each part arrives once, top first */}
                     <Reveal index={0}>
                         <ProjectHeader
                             project={project}

@@ -63,7 +63,6 @@ export default function RecentCardChanges() {
             <SectionTitle size="sm" indent="xs">
                 Recent Card Changes
             </SectionTitle>
-            {/* Keyed on loading, so the rows fade in over the skeleton they replace */}
             <Reveal
                 key={isLoading ? "loading" : "loaded"}
                 direction={null}

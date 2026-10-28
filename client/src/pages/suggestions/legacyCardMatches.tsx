@@ -101,7 +101,6 @@ export default function LegacyCardMatches({ suggestion, onLink, className }: Leg
                                         {match.others.length > 0 && (
                                             <>
                                                 {" "}
-                                                {/* The same choice the Link option offers - which of them it came from */}
                                                 <button
                                                     type="button"
                                                     onClick={() => onLink(match)}

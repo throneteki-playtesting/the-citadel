@@ -6,10 +6,8 @@ function currentIndex(): number | undefined {
     return typeof index === "number" ? index : undefined;
 }
 
-// Leaves the current route as if back had been pressed - past every entry pushed since it was arrived at, so a page
-// whose own steps are history entries (SlidingPages) leaves as a whole. The router's `idx` counts from the first
-// page of this visit, so anything above zero means another Citadel page sits behind; with nothing behind (a link
-// opened from elsewhere, or a fresh tab), it lands on `fallback` instead, replacing the page being left.
+// Leaves the route as if back had been pressed, past every entry pushed since it was arrived at. With nothing
+// behind it (the router's `idx` is zero), it lands on `fallback` instead, replacing the page being left.
 export default function useLeaveRoute() {
     const navigate = useNavigate();
     const { pathname } = useLocation();

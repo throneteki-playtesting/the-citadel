@@ -107,9 +107,8 @@ const baseQuery = fetchBaseQuery({
     }
 });
 
-// Long enough for any read the Citadel makes, so a query still waiting after it has stopped answering rather than being
-// slow - it then fails like any failed request, and whatever waits on it shows its error instead of loading forever.
-// Mutations are left without one: renders, syncs and publishes can rightly take longer.
+// Long enough for any read the Citadel makes - past it a query has stopped answering, and fails to its error.
+// Mutations are exempt: renders, syncs and publishes can rightly take longer.
 const QUERY_TIMEOUT_MS = 20_000;
 
 function withQueryTimeout(args: string | FetchArgs, type: "query" | "mutation"): string | FetchArgs {

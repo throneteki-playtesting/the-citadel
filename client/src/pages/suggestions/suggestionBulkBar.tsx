@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import classNames from "classnames";
 import { addToast, Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCheckCircle,
+    faChevronDown,
     faEllipsis,
     faEyeSlash,
     faRotateLeft,
@@ -23,8 +22,8 @@ import { useBulkSuggestionActionMutation } from "../../api";
 import { showApiErrorToast } from "../../api/errors";
 import ConfirmModal from "../../components/confirmModal";
 import { TouchTooltip } from "../../components/touchTooltip";
-import { useIsPageActive } from "../../hooks/useIsPageActive";
 import { usePermission } from "../../hooks/usePermission";
+import { useBreakpoint } from "../../hooks/useBreakpoint";
 import { useScopedUser } from "../../hooks/useScopedUser";
 
 type BulkOption = {
@@ -116,11 +115,19 @@ function SkippedReasons({ skipped }: { skipped: { reason: string }[] }) {
     );
 }
 
-// What can be done to the suggestions picked on the browse page, all at once. Floats at the foot of the screen at
-// every size - the list it acts on is long, and the bar has to stay reachable however far down it somebody has
-// scrolled. Each action says how many of the selection it applies to, using the same rule the server applies.
-export default function SuggestionBulkBar({ isSelecting, selected, onClear, onExit, onDone }: SuggestionBulkBarProps) {
-    const isPageActive = useIsPageActive();
+// What can be done to the suggestions picked on the browse page, sticking beneath the navbar so it can't be missed.
+// Each action says how many of the selection it applies to, by the same rule the server applies.
+export default function SuggestionBulkBar({
+    isSelecting,
+    selected,
+    shownCount,
+    allShownSelected,
+    onToggleAllShown,
+    onClear,
+    onExit,
+    onDone
+}: SuggestionBulkBarProps) {
+    const isWide = useBreakpoint("md");
     const { user } = useScopedUser();
     const canApprove = usePermission(Permission.APPROVE_SUGGESTIONS);
     const [bulkAction, { isLoading }] = useBulkSuggestionActionMutation();
@@ -161,7 +168,7 @@ export default function SuggestionBulkBar({ isSelecting, selected, onClear, onEx
                         : undefined
             });
             setConfirming(undefined);
-            onDone(option.action, result.succeeded);
+            onDone(option, result.succeeded);
         } catch (err) {
             showApiErrorToast(err, { title: `Failed to ${option.label.toLowerCase()}` });
         } finally {
@@ -176,114 +183,122 @@ export default function SuggestionBulkBar({ isSelecting, selected, onClear, onEx
     const confirmingVerdicts = confirming && verdicts(confirming);
 
     const bar = (
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
             {isSelecting && (
                 <motion.div
                     key="bulk-bar"
-                    initial={{ y: 24, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 24, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className={classNames(
-                        "fixed z-50 bottom-3 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2",
-                        "flex items-center gap-1 sm:gap-2 rounded-xl border border-primary/40 bg-content1/95 backdrop-blur",
-                        "px-2 py-1.5 sm:px-3 shadow-xl"
-                    )}
-                    role="toolbar"
-                    aria-label="Selected suggestions"
+                    initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+                    animate={{ height: "auto", opacity: 1, marginBottom: 8 }}
+                    exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className="sticky z-30 top-[calc(var(--nav-height)+0.5rem)] overflow-hidden rounded-xl"
                 >
-                    <Button isIconOnly size="sm" variant="light" aria-label="Stop selecting" onPress={onExit}>
-                        <FontAwesomeIcon icon={faXmark} />
-                    </Button>
-                    <span className="min-w-0 flex-1 sm:flex-none whitespace-nowrap text-sm">
-                        <span className="font-semibold">{selected.length}</span>
-                        <span className="hidden sm:inline"> selected</span>
-                    </span>
-                    {selected.length > 0 && (
-                        <Button size="sm" variant="light" className="hidden sm:inline-flex" onPress={onClear}>
-                            Clear
+                    <div
+                        className="flex items-center gap-1 sm:gap-2 rounded-xl border border-primary/40 bg-content1/95 backdrop-blur px-2 py-1.5 sm:px-3"
+                        role="toolbar"
+                        aria-label="Selected suggestions"
+                    >
+                        <Button isIconOnly size="sm" variant="light" aria-label="Stop selecting" onPress={onExit}>
+                            <FontAwesomeIcon icon={faXmark} />
                         </Button>
-                    )}
-                    <div className="h-6 w-px bg-default-300 mx-0.5 sm:mx-1" />
-                    {primary.map((option) => {
-                        const count = verdicts(option).applies.length;
-                        return (
-                            <TouchTooltip
-                                key={option.key}
-                                placement="top"
-                                content={`${option.label} ${count} of ${selected.length}`}
+                        <Dropdown placement="bottom-start">
+                            <DropdownTrigger>
+                                <Button
+                                    size="sm"
+                                    variant="light"
+                                    className="tabular-nums"
+                                    endContent={<FontAwesomeIcon icon={faChevronDown} className="text-xs" />}
+                                >
+                                    {selected.length}
+                                    <span className="hidden sm:inline">{" selected"}</span>
+                                </Button>
+                            </DropdownTrigger>
+                            <DropdownMenu
+                                aria-label="Selection"
+                                disabledKeys={[
+                                    ...(shownCount === 0 ? ["all"] : []),
+                                    ...(selected.length === 0 ? ["clear"] : [])
+                                ]}
+                                onAction={(key) => (key === "all" ? onToggleAllShown() : onClear())}
                             >
-                                <div>
-                                    <Badge
-                                        content={count}
-                                        size="sm"
-                                        color={option.color ?? "primary"}
-                                        isInvisible={count === 0 || count === selected.length}
-                                        showOutline={false}
-                                    >
-                                        <Button
-                                            size="sm"
-                                            variant="flat"
-                                            color={option.color ?? "default"}
-                                            isDisabled={count === 0 || isLoading}
-                                            isLoading={running === option.key}
-                                            isIconOnly
-                                            className="sm:w-auto sm:px-3 sm:gap-2"
-                                            aria-label={option.label}
-                                            onPress={() => press(option)}
-                                        >
-                                            {running !== option.key && <FontAwesomeIcon icon={option.icon} />}
-                                            <span className="hidden md:inline">{option.label}</span>
-                                        </Button>
-                                    </Badge>
-                                </div>
-                            </TouchTooltip>
-                        );
-                    })}
-                    <Dropdown placement="top-end">
-                        <DropdownTrigger>
-                            <Button
-                                isIconOnly
-                                size="sm"
-                                variant="light"
-                                aria-label="More actions"
-                                isDisabled={isLoading || selected.length === 0}
-                            >
-                                <FontAwesomeIcon icon={faEllipsis} />
-                            </Button>
-                        </DropdownTrigger>
-                        <DropdownMenu
-                            aria-label="More actions"
-                            disabledKeys={secondary
-                                .filter((option) => verdicts(option).applies.length === 0)
-                                .map((option) => option.key)}
-                            onAction={(key) => {
-                                const option = secondary.find((entry) => entry.key === key);
-                                if (option) {
-                                    press(option);
-                                }
-                            }}
-                        >
-                            {[
-                                ...(selected.length > 0
-                                    ? [
-                                          <DropdownItem key="clear" className="sm:hidden" onPress={onClear}>
-                                              Clear selection
-                                          </DropdownItem>
-                                      ]
-                                    : []),
-                                ...secondary.map((option) => (
-                                    <DropdownItem
+                                <DropdownItem key="all">
+                                    {allShownSelected ? "Deselect all shown" : `Select all ${shownCount} shown`}
+                                </DropdownItem>
+                                <DropdownItem key="clear">Clear selection</DropdownItem>
+                            </DropdownMenu>
+                        </Dropdown>
+                        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+                            {primary.map((option) => {
+                                const count = verdicts(option).applies.length;
+                                return (
+                                    <TouchTooltip
                                         key={option.key}
-                                        startContent={<FontAwesomeIcon icon={option.icon} className="w-4" />}
-                                        description={`Applies to ${verdicts(option).applies.length} of ${selected.length}`}
+                                        placement="bottom"
+                                        content={`${option.label} ${count} of ${selected.length}`}
                                     >
-                                        {option.label}
-                                    </DropdownItem>
-                                ))
-                            ]}
-                        </DropdownMenu>
-                    </Dropdown>
+                                        <div>
+                                            <Badge
+                                                content={count}
+                                                size="sm"
+                                                color={option.color ?? "primary"}
+                                                isInvisible={count === 0 || count === selected.length}
+                                                showOutline={false}
+                                            >
+                                                <Button
+                                                    size="sm"
+                                                    variant="flat"
+                                                    color={option.color ?? "default"}
+                                                    isDisabled={count === 0 || isLoading}
+                                                    isLoading={running === option.key}
+                                                    isIconOnly={!isWide}
+                                                    aria-label={option.label}
+                                                    startContent={<FontAwesomeIcon icon={option.icon} />}
+                                                    onPress={() => press(option)}
+                                                >
+                                                    {isWide && option.label}
+                                                </Button>
+                                            </Badge>
+                                        </div>
+                                    </TouchTooltip>
+                                );
+                            })}
+                            <Dropdown placement="bottom-end">
+                                <DropdownTrigger>
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        aria-label="More actions"
+                                        isDisabled={isLoading || selected.length === 0}
+                                    >
+                                        <FontAwesomeIcon icon={faEllipsis} />
+                                    </Button>
+                                </DropdownTrigger>
+                                <DropdownMenu
+                                    aria-label="More actions"
+                                    disabledKeys={secondary
+                                        .filter((option) => verdicts(option).applies.length === 0)
+                                        .map((option) => option.key)}
+                                    onAction={(key) => {
+                                        const option = secondary.find((entry) => entry.key === key);
+                                        if (option) {
+                                            press(option);
+                                        }
+                                    }}
+                                >
+                                    {secondary.map((option) => (
+                                        <DropdownItem
+                                            key={option.key}
+                                            startContent={<FontAwesomeIcon icon={option.icon} className="w-4" />}
+                                            description={`Applies to ${verdicts(option).applies.length} of ${selected.length}`}
+                                        >
+                                            {option.label}
+                                        </DropdownItem>
+                                    ))}
+                                </DropdownMenu>
+                            </Dropdown>
+                        </div>
+                    </div>
                 </motion.div>
             )}
         </AnimatePresence>
@@ -291,7 +306,7 @@ export default function SuggestionBulkBar({ isSelecting, selected, onClear, onEx
 
     return (
         <>
-            {isPageActive && createPortal(bar, document.body)}
+            {bar}
             <ConfirmModal
                 isOpen={!!confirming}
                 isLoading={isLoading}
@@ -328,8 +343,12 @@ export default function SuggestionBulkBar({ isSelecting, selected, onClear, onEx
 type SuggestionBulkBarProps = {
     isSelecting: boolean;
     selected: ICardSuggestion[];
+    /** How many suggestions the grid has loaded, for selecting them all */
+    shownCount: number;
+    allShownSelected: boolean;
+    onToggleAllShown: () => void;
     onClear: () => void;
     onExit: () => void;
     /** Told what was done to which - a deletion drops them from the selection, since they are gone */
-    onDone: (action: SuggestionBulkAction, ids: string[]) => void;
+    onDone: (option: { action: SuggestionBulkAction; reactType?: ReactionType }, ids: string[]) => void;
 };

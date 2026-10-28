@@ -443,9 +443,8 @@ export default function ProjectContent({ project, isActive }: ProjectContentProp
         ]
     );
 
-    // The carousels are built one at a time, top first, rather than every faction's cards in one go - that single
-    // commit held the whole page (its toolbar included) unresponsive for seconds. Each waits as a skeleton of its own
-    // shape, and starts over whenever the carousels are taken down for search results or the detail view.
+    // Carousels are built one at a time, top first, so one commit doesn't hold the whole page unresponsive - each
+    // waits as a skeleton, and starts over when the carousels are taken down for search results or the detail view.
     const factionEntries = useMemo(() => [...cardsByFaction.entries()], [cardsByFaction]);
     const mountedCarousels = useProgressiveMount(factionEntries.length, isFiltering || isDetailView);
 
@@ -798,11 +797,8 @@ type FactionCarouselProps = {
     highlightedNumber?: number;
 };
 
-/**
- * Builds its children only once they come within a width of the carousel's visible part, then keeps them - a carousel
- * runs well past the screen's edge, and building every card of every faction is what held the page still. Until then
- * it holds the card's own skeleton, at the card's size, so the carousel's length and snapping are the same either way.
- */
+/** Builds its children once they come within a width of the carousel's visible part, then keeps them. Until then it
+ *  holds the card's own skeleton at the card's size, so the carousel's length and snapping are the same either way. */
 function NearbyMount({ rootRef, isForced, placeholder, children }: NearbyMountProps) {
     const ref = useRef<HTMLDivElement>(null);
     const [isNear, setIsNear] = useState(isForced);

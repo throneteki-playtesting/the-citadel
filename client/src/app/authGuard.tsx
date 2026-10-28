@@ -10,16 +10,13 @@ export default function AuthGuard() {
     const { pathname, search } = useLocation();
     const navigate = useNavigate();
 
-    // Who is asking isn't known yet, so the app itself can't start - its live connection would race the session
-    // check for a token. The shell is drawn regardless, with the loader every page waits behind (see Page), so a
-    // page opened from scratch waits the same way as one followed from a link.
+    // The app can't start until who is asking is known, but the shell is drawn behind the loader every page waits
+    // behind (see Page), so a page opened from scratch waits as one followed from a link does.
     if (isLoading) {
         return (
             <HeroUIProvider navigate={navigate} useHref={useHref}>
                 <NavigationBar />
                 <div className="overflow-x-clip">
-                    {/* At least a screen tall beneath the navbar, so the footer stays out of sight while a page is still
-                        loading */}
                     <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl min-h-[calc(100dvh-4rem)]">
                         <PageLoader />
                     </div>

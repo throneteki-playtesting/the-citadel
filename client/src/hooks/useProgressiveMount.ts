@@ -12,13 +12,8 @@ function whenIdle(callback: () => void): IdleHandle {
     return { cancel: () => clearTimeout(id) };
 }
 
-/**
- * How many of `count` sections to have built so far - one at first, then one more each time the browser has painted
- * the last and has a moment spare. Each step is a transition, so anything the person does in the meantime (a button
- * press, a keystroke) goes first rather than queueing behind a section they may not even scroll to. Sections are
- * taken in order, so whatever sits highest - what is seen first - arrives first. Starts over from one whenever
- * `resetKey` changes, for when the sections are taken down and put back.
- */
+/** How many of `count` sections to have built so far - one more each time the browser has painted the last and has
+ *  a moment spare, top first, starting over whenever `resetKey` changes. */
 export default function useProgressiveMount(count: number, resetKey?: unknown) {
     const [mounted, setMounted] = useState(1);
     const [prevResetKey, setPrevResetKey] = useState(resetKey);
