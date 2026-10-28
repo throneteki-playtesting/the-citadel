@@ -4,7 +4,7 @@ import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
 import Reveal from "../../components/reveal";
-import PageTitleSkeleton from "../../components/pageTitleSkeleton";
+import PageLoader from "../../components/pageLoader";
 import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useGetCardQuery,
@@ -100,8 +100,8 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const entryInquiryAction = inquiryLinkActions.find((action) => action === entryAction);
 
     if (isLoadingProject || isLoadingCard || isLoadingSlot) {
-        // The same title skeleton every page loads behind (see Page), held until the page can draw
-        return <PageTitleSkeleton />;
+        // The same loader every page waits behind (see PageLoader), held until the page can draw
+        return <PageLoader />;
     }
 
     if (!project || !card) {

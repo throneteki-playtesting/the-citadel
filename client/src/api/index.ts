@@ -107,11 +107,24 @@ const baseQuery = fetchBaseQuery({
     }
 });
 
+// Long enough for any read the Citadel makes, so a query still waiting after it has stopped answering rather than being
+// slow - it then fails like any failed request, and whatever waits on it shows its error instead of loading forever.
+// Mutations are left without one: renders, syncs and publishes can rightly take longer.
+const QUERY_TIMEOUT_MS = 20_000;
+
+function withQueryTimeout(args: string | FetchArgs, type: "query" | "mutation"): string | FetchArgs {
+    if (type !== "query") {
+        return args;
+    }
+    return typeof args === "string" ? { url: args, timeout: QUERY_TIMEOUT_MS } : { timeout: QUERY_TIMEOUT_MS, ...args };
+}
+
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
-    args,
+    rawArgs,
     queryApi,
     extraOptions
 ) => {
+    const args = withQueryTimeout(rawArgs, queryApi.type);
     let result = await baseQuery(args, queryApi, extraOptions);
 
     if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {

@@ -1,4 +1,4 @@
-import PageTitleSkeleton from "../../components/pageTitleSkeleton";
+import PageLoader from "../../components/pageLoader";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import ReviewForm from "./reviewForm";
@@ -49,14 +49,14 @@ export default function SubmitReview() {
 
     if (isAuthLoading || (requiresEditPermission && !canEdit)) {
         if (isAuthLoading) {
-            return <PageTitleSkeleton />;
+            return <PageLoader />;
         }
         return <AccessDenied />;
     }
 
     if (!isOwnReviewer) {
         if (isCardLoading || isReviewLoading || isReviewFetching) {
-            return <PageTitleSkeleton />;
+            return <PageLoader />;
         }
         if (!existingReview) {
             return <AccessDenied />;

@@ -1,4 +1,4 @@
-import PageTitleSkeleton from "../../components/pageTitleSkeleton";
+import PageLoader from "../../components/pageLoader";
 import RevealSections from "../../components/revealSections";
 import { useMemo, useState } from "react";
 import {
@@ -67,9 +67,9 @@ export default function PlaytestingUpdateDetail({ project: projectNumber, versio
         card ? { highlight: highlightTarget.playtestingUpdateCard(projectNumber, Number(card)) } : null
     );
 
-    // The same title skeleton every page loads behind (see Page), held until the page can draw
+    // The same loader every page waits behind (see PageLoader), held until the page can draw
     if (isPlaytestingUpdateLoading || isProjectLoading) {
-        return <PageTitleSkeleton />;
+        return <PageLoader />;
     }
 
     if (!project || !playtestingUpdate) {

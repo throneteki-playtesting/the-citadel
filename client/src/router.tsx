@@ -35,6 +35,8 @@ function pageItemRoutes() {
         if (isPageItem(item)) {
             routes.push({
                 path: item.path,
+                // A page failing shows its error in place of the page, inside the app's shell - not in place of the app
+                errorElement: <RouteError />,
                 // Nothing is waited on - it only starts what the page will ask for, so the requests overlap
                 loader: ({ params }) => {
                     item.preload?.(params);

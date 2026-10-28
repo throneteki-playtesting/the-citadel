@@ -3,7 +3,7 @@ import { HeroUIProvider } from "@heroui/react";
 import { isSafeRelativePath } from "common/utils";
 import { useAuth } from "../hooks/useAuth";
 import NavigationBar from "../components/navigation";
-import PageTitleSkeleton from "../components/pageTitleSkeleton";
+import PageLoader from "../components/pageLoader";
 
 export default function AuthGuard() {
     const { isAuthenticated, isLoading } = useAuth();
@@ -11,17 +11,17 @@ export default function AuthGuard() {
     const navigate = useNavigate();
 
     // Who is asking isn't known yet, so the app itself can't start - its live connection would race the session
-    // check for a token. The shell is drawn regardless, with the title skeleton every page loads behind (see Page), so a
-    // page opened from scratch arrives the same way as one followed from a link, rather than out of a spinner.
+    // check for a token. The shell is drawn regardless, with the loader every page waits behind (see Page), so a
+    // page opened from scratch waits the same way as one followed from a link.
     if (isLoading) {
         return (
             <HeroUIProvider navigate={navigate} useHref={useHref}>
                 <NavigationBar />
                 <div className="overflow-x-clip">
                     {/* At least a screen tall beneath the navbar, so the footer stays out of sight while a page is still
-                        only its title skeleton */}
+                        loading */}
                     <div className="mx-auto p-1 sm:p-2 md:p-3 w-full max-w-5xl min-h-[calc(100dvh-4rem)]">
-                        <PageTitleSkeleton />
+                        <PageLoader />
                     </div>
                 </div>
             </HeroUIProvider>

@@ -7,7 +7,7 @@ import EditProjectModal from "./editProjectModal";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
-import PageTitleSkeleton from "../../components/pageTitleSkeleton";
+import PageLoader from "../../components/pageLoader";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import { DraftPoolHostProvider } from "./draft/draftPoolHost";
@@ -56,9 +56,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     const navigate = useNavigate();
 
-    // The same title skeleton every page loads behind (see Page), held until the page can draw
+    // The same loader every page waits behind (see PageLoader), held until the page can draw
     if (isLoading) {
-        return <PageTitleSkeleton />;
+        return <PageLoader />;
     }
 
     if (!project) {
@@ -90,7 +90,7 @@ export default function ProjectDetail({ className, style, project: number }: Pro
             </div>
             <DraftPoolHostProvider>
                 <div className="relative space-y-2">
-                    {/* Out of the title skeleton, each part arrives once, top first */}
+                    {/* Once the page can draw, each part arrives once, top first */}
                     <Reveal index={0}>
                         <ProjectHeader
                             project={project}

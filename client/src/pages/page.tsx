@@ -1,6 +1,6 @@
 import Permission from "common/models/permissions";
 import { ReactNode, Suspense } from "react";
-import PageTitleSkeleton from "../components/pageTitleSkeleton";
+import PageLoader from "../components/pageLoader";
 import { SingleOrArray } from "common/types";
 import { asArray, hasPermission } from "common/utils";
 import { useScopedUser } from "../hooks/useScopedUser";
@@ -10,14 +10,14 @@ export default function Page({ children, required }: PageProps) {
     const { user, isLoading } = useScopedUser();
 
     if (isLoading) {
-        return <PageTitleSkeleton />;
+        return <PageLoader />;
     }
     const permissions = asArray(required ?? []);
     if (!hasPermission(user, ...permissions)) {
         return <AccessDenied />;
     }
 
-    return <Suspense fallback={<PageTitleSkeleton />}>{children}</Suspense>;
+    return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
 
 type PageProps = {
