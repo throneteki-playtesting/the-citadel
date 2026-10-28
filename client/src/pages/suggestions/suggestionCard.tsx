@@ -1,7 +1,8 @@
-import { MouseEvent, useState } from "react";
+import { memo, MouseEvent, useState } from "react";
 import { ICardSuggestion, ReactionType, suggestionReactionBlockReason } from "common/models/cards";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+    faCheck,
     faClockRotateLeft,
     faEye,
     faEyeSlash,
@@ -14,6 +15,7 @@ import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { TouchTooltip } from "../../components/touchTooltip";
 import { TouchPopover } from "../../components/touchPopover";
+import CardShape from "../../components/cardShape";
 import CardCornerBadges, { CornerBadgeTooltip } from "../../components/cardCornerBadges";
 import SuggestionLikesBadge from "../../components/suggestionLikesBadge";
 import SuggestionCardPreview from "../../components/suggestionCardPreview";
@@ -129,7 +131,7 @@ function ReactionBubble({ blockReason, myReaction, pending, onReact, onClear }: 
     );
 }
 
-export default function SuggestionCard({ suggestion, showLikesBadge }: SuggestionCardProps) {
+function SuggestionCard({ suggestion, showLikesBadge, isSelecting, isSelected }: SuggestionCardProps) {
     const { user } = useAuth();
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
@@ -188,11 +190,14 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
     const shownBadgeType = canHover ? heldBadgeType : myReaction;
     const isBadge = !!shownBadgeType;
     // The row collapses into the badge - every option but the chosen one folds away
-    const shownOptions = isBadge
-        ? QUICK_REACT_OPTIONS.filter(({ type }) => type === shownBadgeType)
-        : canHover && (!!pending || canQuickReact)
-          ? QUICK_REACT_OPTIONS
-          : [];
+    // While picking, a card is only picked - no reaction row to hover into
+    const shownOptions = isSelecting
+        ? []
+        : isBadge
+          ? QUICK_REACT_OPTIONS.filter(({ type }) => type === shownBadgeType)
+          : canHover && (!!pending || canQuickReact)
+            ? QUICK_REACT_OPTIONS
+            : [];
 
     const onOptionPress = (type: ReactionType) => {
         if (!isBadge) {
@@ -323,6 +328,20 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                         description: `by ${approver?.displayname ?? "…"}`
                     }
                 ]}
+                trailing={
+                    isSelecting && (
+                        <span
+                            className={classNames(
+                                "grid size-[1.75em] place-items-center rounded-full border-2 text-[1em] transition",
+                                isSelected
+                                    ? "bg-primary border-primary text-primary-foreground"
+                                    : "bg-black/40 border-white/70 text-transparent"
+                            )}
+                        >
+                            <FontAwesomeIcon icon={faCheck} className="text-[0.9em]" />
+                        </span>
+                    )
+                }
             />
             <SuggestionLikesBadge suggestion={suggestion} isShown={!!showLikesBadge} />
             <SuggestionCardPreview
@@ -330,12 +349,21 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
                 orientation={isPlot ? "horizontal" : "vertical"}
                 rounded={true}
             />
+            {isSelecting && (
+                <CardShape
+                    isPlot={isPlot}
+                    className={classNames(
+                        "transition",
+                        isSelected ? "ring-[3px] ring-inset ring-primary" : "bg-black/30 group-hover:bg-black/10"
+                    )}
+                />
+            )}
         </>
     );
 
     return (
         <TouchPopover
-            isDisabled={!user || !!suggestion.draft}
+            isDisabled={!user || !!suggestion.draft || isSelecting}
             isOpen={isBubbleOpen}
             onOpenChange={setIsBubbleOpen}
             placement="top"
@@ -354,9 +382,15 @@ export default function SuggestionCard({ suggestion, showLikesBadge }: Suggestio
     );
 }
 
+// Memoised so picking one card re-renders that card alone, not every card in the grid
+export default memo(SuggestionCard);
+
 type SuggestionCardProps = {
     suggestion: ICardSuggestion;
     showLikesBadge?: boolean;
+    /** Picking several: the card only shows whether it is picked, without its hover states */
+    isSelecting?: boolean;
+    isSelected?: boolean;
 };
 
 type ReactionBubbleProps = {

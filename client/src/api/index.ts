@@ -26,7 +26,9 @@ import {
     ICardSuggestionFilterable,
     IPlaytestCard,
     IRenderCard,
+    ISuggestionBulkResult,
     ISuggestionCardMatches,
+    SuggestionBulkAction,
     ISuggestionsListQuery,
     ReactionType
 } from "common/models/cards";
@@ -105,11 +107,23 @@ const baseQuery = fetchBaseQuery({
     }
 });
 
+// Long enough for any read the Citadel makes - past it a query has stopped answering, and fails to its error.
+// Mutations are exempt: renders, syncs and publishes can rightly take longer.
+const QUERY_TIMEOUT_MS = 20_000;
+
+function withQueryTimeout(args: string | FetchArgs, type: "query" | "mutation"): string | FetchArgs {
+    if (type !== "query") {
+        return args;
+    }
+    return typeof args === "string" ? { url: args, timeout: QUERY_TIMEOUT_MS } : { timeout: QUERY_TIMEOUT_MS, ...args };
+}
+
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
-    args,
+    rawArgs,
     queryApi,
     extraOptions
 ) => {
+    const args = withQueryTimeout(rawArgs, queryApi.type);
     let result = await baseQuery(args, queryApi, extraOptions);
 
     if (result.meta?.response?.status === StatusCodes.UNAUTHORIZED) {
@@ -484,15 +498,20 @@ const api = createApi({
                 { type: "card", id: "LIST" }
             ]
         }),
+        // `discard` deletes other suggestions matching the same card once it is linked - see POST /:id/developed-as
         markSuggestionDevelopedAs: builder.mutation<
-            ICardSuggestion,
-            { id: string; project: number; number: number; version?: SemanticVersion }
+            { linked: ICardSuggestion; deleted: string[] },
+            { id: string; project: number; number: number; version?: SemanticVersion; discard?: string[] }
         >({
-            query: ({ id, project, number, version }) => {
+            query: ({ id, project, number, version, discard }) => {
                 const url = buildUrl(`suggestions/${id}/developed-as`);
-                return { url, method: "POST", body: { project, number, version } };
+                return { url, method: "POST", body: { project, number, version, discard } };
             },
-            invalidatesTags: (result) => [...generateFor(result, "suggestion"), { type: "card", id: "LIST" }]
+            invalidatesTags: (result) => [
+                ...generateFor(result?.linked, "suggestion"),
+                ...(result?.deleted ?? []).map((id) => ({ type: "suggestion" as const, id })),
+                { type: "card", id: "LIST" }
+            ]
         }),
         getSuggestionMigration: builder.query<SuggestionMigration, string>({
             query: (threadId) => {
@@ -602,6 +621,20 @@ const api = createApi({
                 }
             },
             invalidatesTags: (result) => generateFor(result, "suggestion")
+        }),
+        // The browse page's selection, all at once - what was skipped comes back with why, see POST /suggestions/bulk
+        bulkSuggestionAction: builder.mutation<
+            ISuggestionBulkResult,
+            { action: SuggestionBulkAction; reactType?: ReactionType; ids: string[] }
+        >({
+            query: (body) => {
+                const url = buildUrl("suggestions/bulk");
+                return { url, method: "POST", body };
+            },
+            invalidatesTags: (result) => [
+                { type: "suggestion", id: "LIST" },
+                ...(result?.succeeded ?? []).map((id) => ({ type: "suggestion" as const, id }))
+            ]
         }),
         // Full-universe traits/submitters for the advanced filter drawer - server-cached (short TTL),
         // so a stale value just waits out the cache rather than needing its own invalidation wiring.
@@ -1435,6 +1468,7 @@ export const {
     useSaveDraftSuggestionMutation,
     useUpdateSuggestionMutation,
     useDeleteSuggestionMutation,
+    useBulkSuggestionActionMutation,
     useReactToSuggestionMutation,
     useClearSuggestionReactionMutation,
     useApproveSuggestionMutation,

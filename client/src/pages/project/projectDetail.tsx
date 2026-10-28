@@ -1,13 +1,13 @@
 import { useGetProjectQuery } from "../../api";
 import { BaseElementProps } from "../../types";
-import { addToast, Skeleton, Tab, Tabs } from "@heroui/react";
-import { useLayoutEffect, useMemo, useState } from "react";
+import { addToast, Tab, Tabs } from "@heroui/react";
+import { ReactNode, useLayoutEffect, useMemo, useState } from "react";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
 import EditProjectModal from "./editProjectModal";
 import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import DeleteProjectModal from "./deleteProjectModal";
 import ProjectHeader from "./projectHeader";
-import ProjectHeaderSkeleton from "./projectHeaderSkeleton";
+import PageLoader from "../../components/pageLoader";
 import ProjectDevelopment from "./projectDevelopment";
 import ProjectDrafting from "./draft/projectDrafting";
 import { DraftPoolHostProvider } from "./draft/draftPoolHost";
@@ -25,6 +25,7 @@ import { useSearchParamsScope } from "../../hooks/useSearchParamsScope";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import ScopedSearchParamsProvider from "../../components/scopedSearchParamsProvider";
 import Watermark from "../../components/watermark";
+import Reveal from "../../components/reveal";
 import { IProject } from "common/models/projects";
 
 // "tab" is durable, shareable state kept in sync via its own search-param scope, not consumed here
@@ -55,13 +56,9 @@ export default function ProjectDetail({ className, style, project: number }: Pro
 
     const navigate = useNavigate();
 
+    // The same loader every page waits behind (see PageLoader), held until the page can draw
     if (isLoading) {
-        return (
-            <div className="space-y-4">
-                <ProjectHeaderSkeleton />
-                <Skeleton className="w-full h-98 rounded-md" />
-            </div>
-        );
+        return <PageLoader />;
     }
 
     if (!project) {
@@ -93,20 +90,24 @@ export default function ProjectDetail({ className, style, project: number }: Pro
             </div>
             <DraftPoolHostProvider>
                 <div className="relative space-y-2">
-                    <ProjectHeader
-                        project={project}
-                        onEdit={() => setIsEditing(true)}
-                        onDelete={() => setIsDeleting(true)}
-                    />
-                    {project.draft ? (
-                        <ScopedSearchParamsProvider>
-                            <ProjectDrafting project={project} />
-                        </ScopedSearchParamsProvider>
-                    ) : (
-                        <ScopedSearchParamsProvider>
-                            <ProjectTabsSection project={project} entryRelease={entryRelease} />
-                        </ScopedSearchParamsProvider>
-                    )}
+                    <Reveal index={0}>
+                        <ProjectHeader
+                            project={project}
+                            onEdit={() => setIsEditing(true)}
+                            onDelete={() => setIsDeleting(true)}
+                        />
+                    </Reveal>
+                    <Reveal index={1}>
+                        {project.draft ? (
+                            <ScopedSearchParamsProvider>
+                                <ProjectDrafting project={project} />
+                            </ScopedSearchParamsProvider>
+                        ) : (
+                            <ScopedSearchParamsProvider>
+                                <ProjectTabsSection project={project} entryRelease={entryRelease} />
+                            </ScopedSearchParamsProvider>
+                        )}
+                    </Reveal>
                 </div>
             </DraftPoolHostProvider>
             <EditProjectModal
@@ -154,8 +155,23 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
     const tabParams = useMemo(() => ({ tab: tab === "development" ? undefined : tab }), [tab]);
     useSearchParamsScope("tab", true, tabParams);
     const tabsRef = useSelectedTabInView(tab);
+    // A tab is only built once it has been opened, then kept - every panel used to mount with the page, so opening
+    // a project paid for every tab's queries and lists before any of it could respond
+    const [openedTabs, setOpenedTabs] = useState(() => new Set([tab]));
+    if (!openedTabs.has(tab)) {
+        setOpenedTabs(new Set(openedTabs).add(tab));
+    }
+    // The tab the page opened on arrives with the page itself; one opened later is drawn for the first time then, so
+    // it fades in on its own
+    const [entryTab] = useState(tab);
+    const panel = (key: ProjectTab, content: ReactNode) =>
+        openedTabs.has(key) && (
+            <PageActiveContext.Provider value={tab === key}>
+                {key === entryTab ? content : <Reveal direction={null}>{content}</Reveal>}
+            </PageActiveContext.Provider>
+        );
 
-    // Every tab panel stays mounted, so a link to another tab needs this to notice a url change on its
+    // Every opened tab panel stays mounted, so a link to another tab needs this to notice a url change on its
     // own. Ignores our own REPLACE writes (the scope above) to avoid a state <-> url feedback loop.
     const navigationType = useNavigationType();
     useLayoutEffect(() => {
@@ -192,29 +208,24 @@ function ProjectTabsSection({ project, entryRelease }: ProjectTabsSectionProps) 
                 destroyInactiveTabPanel={false}
             >
                 <Tab key="development" title="Development">
-                    <PageActiveContext.Provider value={tab === "development"}>
-                        <ProjectDevelopment project={project} isActive={tab === "development"} />
-                    </PageActiveContext.Provider>
+                    {panel("development", <ProjectDevelopment project={project} isActive={tab === "development"} />)}
                 </Tab>
                 {canViewArtworks ? (
                     <Tab key="artworks" title="Artworks">
-                        <PageActiveContext.Provider value={tab === "artworks"}>
-                            <ProjectArtworks project={project} isActive={tab === "artworks"} />
-                        </PageActiveContext.Provider>
+                        {panel("artworks", <ProjectArtworks project={project} isActive={tab === "artworks"} />)}
                     </Tab>
                 ) : null}
                 {canViewRefinements ? (
                     <Tab key="refinements" title="Refinements">
-                        <PageActiveContext.Provider value={tab === "refinements"}>
+                        {panel(
+                            "refinements",
                             <ProjectRefinements project={project} isActive={tab === "refinements"} />
-                        </PageActiveContext.Provider>
+                        )}
                     </Tab>
                 ) : null}
                 {canViewReleases ? (
                     <Tab key="releases" title="Releases">
-                        <PageActiveContext.Provider value={tab === "releases"}>
-                            <ProjectReleases project={project} isActive={tab === "releases"} />
-                        </PageActiveContext.Provider>
+                        {panel("releases", <ProjectReleases project={project} isActive={tab === "releases"} />)}
                     </Tab>
                 ) : null}
             </Tabs>

@@ -62,6 +62,7 @@ import ConfirmModal from "../../components/confirmModal";
 import {
     Code,
     ICardSuggestion,
+    ISuggestionCardMatch,
     ILabeledCard,
     ReactionType,
     suggestionApprovalBlockReason,
@@ -73,6 +74,9 @@ import { SlimChecklistNotice } from "../../components/designGuidelines/suggestio
 import { SUGGESTION_QUESTIONS, SuggestionQuestionMeta } from "common/designGuidelines/suggestionQuestions";
 import { SUGGESTION_APPROVAL_VOTE_THRESHOLD } from "common/designGuidelines/suggestionApproval";
 import PermissionedLink from "../../components/permissionedLink";
+import useLeaveRoute from "../../hooks/useLeaveRoute";
+import { lastSuggestionsPath } from "./lastSuggestionsSearch";
+import LinkSuggestionModal from "./linkSuggestionModal";
 import SectionTitle from "../../components/sectionTitle";
 import SectionBlurb from "../../components/sectionBlurb";
 import RichText from "../../components/richText";
@@ -421,6 +425,8 @@ const SuggestionDetail = () => {
     const id = params.id;
     const { data: suggestion, isLoading } = useGetSuggestionQuery(id ?? "", { skip: !id });
     const [deleteSuggestion, { isLoading: isDeleting }] = useDeleteSuggestionMutation();
+    // Deleting leaves the way the person came, rather than wherever the redirect below would send them
+    const { leave, isLeavingRef } = useLeaveRoute();
     const [renderImage, { isLoading: isRenderingImage }] = useRenderImageMutation();
     const [reactToSuggestion] = useReactToSuggestionMutation();
     const [clearSuggestionReaction] = useClearSuggestionReactionMutation();
@@ -432,6 +438,9 @@ const SuggestionDetail = () => {
     const [isPoolOpen, setIsPoolOpen] = useState(false);
     const [isConfirmingApprove, setIsConfirmingApprove] = useState(false);
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+    // The card a link is being made to - kept once closed, so the modal has something to show as it leaves
+    const [linking, setLinking] = useState<{ match: ISuggestionCardMatch; isOpen: boolean }>();
+    const openLink = (match: ISuggestionCardMatch) => setLinking({ match, isOpen: true });
     const { user } = useAuth();
 
     usePageTitle(suggestion ? `Suggestion - ${suggestion.card.name}` : "Suggestion");
@@ -479,7 +488,7 @@ const SuggestionDetail = () => {
     }
 
     if (!suggestion) {
-        return <Navigate to="/suggestions" />;
+        return isLeavingRef.current ? null : <Navigate to={lastSuggestionsPath()} replace />;
     }
 
     if (suggestion.draft) {
@@ -520,6 +529,7 @@ const SuggestionDetail = () => {
                 color: "success",
                 description: "Successfully deleted suggestion"
             });
+            leave(lastSuggestionsPath());
         } catch (err) {
             showApiErrorToast(err, { title: "Failed to Delete" });
         }
@@ -637,7 +647,7 @@ const SuggestionDetail = () => {
             <Reveal index={sectionIndex++} className="px-2 md:px-0 flex flex-col sm:flex-row gap-3">
                 <div className="flex-1 min-w-0 flex flex-wrap items-baseline gap-x-2">
                     <PermissionedLink
-                        to="/suggestions"
+                        to={lastSuggestionsPath()}
                         requires={Permission.READ_SUGGESTIONS}
                         className="order-1 text-base sm:text-xl tracking-widest text-secondary font-cinzel leading-tight hover:brightness-150 w-fit"
                     >
@@ -1023,7 +1033,7 @@ const SuggestionDetail = () => {
                     {suggestion.archived && <ArchivedSuggestionNotice archived={suggestion.archived} />}
 
                     {canManageArchive && suggestion.legacy && !isArchived && (
-                        <LegacyCardMatches suggestion={suggestion} />
+                        <LegacyCardMatches suggestion={suggestion} onLink={openLink} />
                     )}
 
                     {suggestion.legacy && (
@@ -1034,6 +1044,7 @@ const SuggestionDetail = () => {
                             canDelete={canDelete}
                             onDelete={() => setIsConfirmingDelete(true)}
                             canLink={canManageArchive && !isArchived}
+                            onLink={openLink}
                         />
                     )}
 
@@ -1150,6 +1161,15 @@ const SuggestionDetail = () => {
                 onConfirm={doDelete}
                 onClose={() => setIsConfirmingDelete(false)}
             />
+            {linking && (
+                <LinkSuggestionModal
+                    isOpen={linking.isOpen}
+                    suggestion={suggestion}
+                    match={linking.match}
+                    onClose={() => setLinking({ ...linking, isOpen: false })}
+                    onCurrentDeleted={() => leave(lastSuggestionsPath())}
+                />
+            )}
         </div>
     );
 };

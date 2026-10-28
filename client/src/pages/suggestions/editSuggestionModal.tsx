@@ -39,7 +39,7 @@ import {
 import { DeepPartial } from "common/types";
 import CardEditor from "../../components/cardEditor";
 import EditorCardPreview from "../../components/cardEditor/editorCardPreview";
-import { getBaseCardValues, isSameCard, renderCardSuggestion } from "common/utils";
+import { getBaseCardValues, isSameCardStats, renderCardSuggestion } from "common/utils";
 import { CardPreview } from "@agot/card-preview";
 import { ValidationSummary, Wizard, WizardBack, WizardNext, WizardPage, WizardPages } from "../../components/wizard";
 import { useWizard } from "../../components/wizard/context";
@@ -117,18 +117,18 @@ const RailCard = memo(function RailCard({
     );
 });
 
-/** Replaced by the engagement-clear warning on the last page - both stay mounted, stacked in one CSS
+/** Replaced by the approval-clear warning on the last page - both stay mounted, stacked in one CSS
  *  grid cell, crossfading only opacity (not height), avoiding the "fighting for space" jitter. */
 const ChecklistRail = memo(function ChecklistRail({
     results,
-    hasEngagement
+    hasApprovalToLose
 }: {
     results: RuleResult[];
-    hasEngagement: boolean;
+    hasApprovalToLose: boolean;
 }) {
     const { isLastPage } = useWizard();
 
-    if (!hasEngagement) {
+    if (!hasApprovalToLose) {
         return (
             <AnimatePresence initial={false}>
                 {!isLastPage && results.length > 0 && (
@@ -166,8 +166,8 @@ const ChecklistRail = memo(function ChecklistRail({
                 <StatusNotice
                     icon={faTriangleExclamation}
                     color="warning"
-                    label="Reactions Will Clear"
-                    detail={ENGAGEMENT_CLEAR_MESSAGE}
+                    label="Approval Will Clear"
+                    detail={APPROVAL_CLEAR_MESSAGE}
                 />
             </div>
         </div>
@@ -317,37 +317,32 @@ function editorTitle(isSavedDraft: boolean, isMigrating: boolean, isLegacy: bool
     return isLegacy ? "Complete Legacy Suggestion" : "Suggestion Editor";
 }
 
-// Whether saving will clear reactions/approval, which a submitted suggestion loses once its card changes - purely
-// informational (no confirmation modal). Ignore doesn't count as "reactions" here - not feedback.
-function hasEngagementToClear(suggestion: DeepPartial<ICardSuggestion>, savedCard?: DeepPartial<ICard>): boolean {
-    // Completing a legacy suggestion keeps its reactions - see clearEngagementOnCardChange on the server
-    if (suggestion.draft !== false || suggestion.legacy || isSameCard(savedCard, suggestion.card)) {
+// Whether saving will clear the suggestion's approval - only a change to the card's stats withdraws it (see
+// clearApprovalOnStatChange on the server). Reactions always stand. Informational only.
+function hasApprovalToClear(suggestion: DeepPartial<ICardSuggestion>, savedCard?: DeepPartial<ICard>): boolean {
+    if (suggestion.draft !== false || suggestion.legacy || !suggestion._metadata?.engagement?.approvedBy) {
         return false;
     }
-    const engagement = suggestion._metadata?.engagement;
-    const hasFeedbackReactions = Object.values(engagement?.reactions ?? {}).some(
-        (reaction) => reaction?.type === "like" || reaction?.type === "dislike"
-    );
-    return hasFeedbackReactions || !!engagement?.approvedBy;
+    return !isSameCardStats(savedCard, suggestion.card);
 }
 
-const ENGAGEMENT_CLEAR_MESSAGE =
-    "Saving will clear this suggestion’s reactions and approval - the card has changed since they were given.";
+const APPROVAL_CLEAR_MESSAGE =
+    "Saving will remove this suggestion’s approval - its stats have changed since it was approved. Reactions are kept.";
 
 /** A small pulsing icon in the footer, not a full sentence - the row's width is mostly spoken for
  *  already; the explanation lives behind a tap/hover instead. */
-function EngagementClearIcon({ hasEngagement }: { hasEngagement: boolean }) {
-    if (!hasEngagement) {
+function ApprovalClearIcon({ hasApprovalToLose }: { hasApprovalToLose: boolean }) {
+    if (!hasApprovalToLose) {
         return null;
     }
     return (
-        <TouchTooltip content={<div className="max-w-64 text-xs py-0.5">{ENGAGEMENT_CLEAR_MESSAGE}</div>}>
+        <TouchTooltip content={<div className="max-w-64 text-xs py-0.5">{APPROVAL_CLEAR_MESSAGE}</div>}>
             <Button
                 isIconOnly
                 variant="light"
                 size="sm"
                 className="shrink-0 text-warning animate-pulse"
-                aria-label="Saving will clear this suggestion's reactions and approval"
+                aria-label="Saving will remove this suggestion's approval"
             >
                 <FontAwesomeIcon icon={faTriangleExclamation} className="text-lg" />
             </Button>
@@ -355,21 +350,21 @@ function EngagementClearIcon({ hasEngagement }: { hasEngagement: boolean }) {
     );
 }
 
-/** Desktop-only wrapper adding the last-page fade EngagementClearIcon doesn't own itself -
+/** Desktop-only wrapper adding the last-page fade ApprovalClearIcon doesn't own itself -
  *  ChecklistRail's own crossfade takes over once this fades out. */
-function DesktopEngagementClearIcon({ hasEngagement }: { hasEngagement: boolean }) {
+function DesktopApprovalClearIcon({ hasApprovalToLose }: { hasApprovalToLose: boolean }) {
     const { isLastPage } = useWizard();
     return (
         <AnimatePresence>
-            {hasEngagement && !isLastPage && (
+            {hasApprovalToLose && !isLastPage && (
                 <motion.div
-                    key="engagement-clear-icon"
+                    key="approval-clear-icon"
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
                     transition={{ duration: 0.15 }}
                 >
-                    <EngagementClearIcon hasEngagement={hasEngagement} />
+                    <ApprovalClearIcon hasApprovalToLose={hasApprovalToLose} />
                 </motion.div>
             )}
         </AnimatePresence>
@@ -413,7 +408,7 @@ const SavedDraftActions = memo(function SavedDraftActions({
     );
 });
 
-// Shared by the desktop rail and mobile footer - only the engagement-clear icon differs between them.
+// Shared by the desktop rail and mobile footer - only the approval-clear icon differs between them.
 const StandardActions = memo(function StandardActions({
     suggestionId,
     isDraft,
@@ -421,7 +416,7 @@ const StandardActions = memo(function StandardActions({
     hasCardBasics,
     isLoading,
     engagement,
-    hasEngagement,
+    hasApprovalToLose,
     isSubmitBlocked = false,
     onSaved,
     onSaveClose,
@@ -435,7 +430,7 @@ const StandardActions = memo(function StandardActions({
     isLoading: boolean;
     /** Which of the two sets of actions this is - the desktop rail fades its icon out on the last page */
     engagement: "desktop" | "mobile";
-    hasEngagement: boolean;
+    hasApprovalToLose: boolean;
     /** Holds Submit back on the last page while it still has a question of its own unanswered */
     isSubmitBlocked?: boolean;
     onSaved: (suggestion: ICardSuggestion) => void;
@@ -446,9 +441,9 @@ const StandardActions = memo(function StandardActions({
     return (
         <>
             {engagement === "desktop" ? (
-                <DesktopEngagementClearIcon hasEngagement={hasEngagement} />
+                <DesktopApprovalClearIcon hasApprovalToLose={hasApprovalToLose} />
             ) : (
-                <EngagementClearIcon hasEngagement={hasEngagement} />
+                <ApprovalClearIcon hasApprovalToLose={hasApprovalToLose} />
             )}
             <WizardBack onCancel={onCancel} />
             {isDraft && (
@@ -834,7 +829,7 @@ const EditSuggestionModal = ({
     const suggestionRef = useRef(suggestion);
     suggestionRef.current = suggestion;
     const getSuggestion = useCallback(() => suggestionRef.current, []);
-    const hasEngagement = hasEngagementToClear(suggestion, initial?.card);
+    const hasApprovalToLose = hasApprovalToClear(suggestion, initial?.card);
 
     // Only closes the confirmation (and the editor for good) once the delete has actually gone
     // through - a failure leaves both exactly where they were, error surfaced by toast.
@@ -1068,7 +1063,7 @@ const EditSuggestionModal = ({
                                                 <RailCard card={renderedCard} isPlot={isPlot} />
                                                 <ChecklistRail
                                                     results={checklistResults}
-                                                    hasEngagement={hasEngagement}
+                                                    hasApprovalToLose={hasApprovalToLose}
                                                 />
                                             </div>
                                             {isSavedDraft ? (
@@ -1093,7 +1088,7 @@ const EditSuggestionModal = ({
                                                         hasCardBasics={canMoveOn}
                                                         isLoading={isCreating || isSubmitting}
                                                         engagement="desktop"
-                                                        hasEngagement={hasEngagement}
+                                                        hasApprovalToLose={hasApprovalToLose}
                                                         isSubmitBlocked={isLegacySubmitBlocked}
                                                         onSaved={setSuggestion}
                                                         onSaveClose={closeEditor}
@@ -1163,7 +1158,7 @@ const EditSuggestionModal = ({
                                         hasCardBasics={canMoveOn}
                                         isLoading={isCreating || isSubmitting}
                                         engagement="mobile"
-                                        hasEngagement={hasEngagement}
+                                        hasApprovalToLose={hasApprovalToLose}
                                         isSubmitBlocked={isLegacySubmitBlocked}
                                         onSaved={setSuggestion}
                                         onSaveClose={closeEditor}

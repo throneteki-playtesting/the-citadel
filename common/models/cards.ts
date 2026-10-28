@@ -340,7 +340,7 @@ export interface ISuggestionCardMatch {
      *  project, the matched version itself. */
     firstVersion: IPlaytestCard;
     /** Other unarchived legacy suggestions this same card could equally have come from */
-    others: number;
+    others: ICardSuggestion[];
 }
 
 export type ProjectCardRef = { project: { number: number; code: string }; number: number; version?: SemanticVersion };
@@ -368,6 +368,17 @@ export interface ISuggestionForumThread {
 /** Shared by the approve route (the actual gate) and the approval panel (to explain the disabled button) */
 export function suggestionApprovalBlockReason(suggestion: Pick<ICardSuggestion, "legacy">): string | undefined {
     return suggestion.legacy ? "Legacy suggestions must be completed before they can be approved" : undefined;
+}
+
+// What can be done to many suggestions at once from the browse page - see POST /suggestions/bulk
+export const suggestionBulkActions = ["approve", "unapprove", "react", "unreact", "delete"] as const;
+export type SuggestionBulkAction = (typeof suggestionBulkActions)[number];
+export const SUGGESTION_BULK_LIMIT = 100;
+
+export interface ISuggestionBulkResult {
+    succeeded: string[];
+    /** Each one the action couldn't apply to, and why - the rest still went ahead */
+    skipped: { id: string; reason: string }[];
 }
 
 type SuggestionReactions = NonNullable<NonNullable<ICardSuggestion["_metadata"]>["engagement"]>["reactions"];

@@ -42,6 +42,8 @@ export default function SuggestionBrowser({
     isFactionFixed,
     onFilterDrawerOpenChange,
     leading,
+    trailing,
+    onItemsChange,
     emptyContent,
     animate,
     scrollClassName,
@@ -49,7 +51,6 @@ export default function SuggestionBrowser({
     children
 }: SuggestionBrowserProps) {
     const { user } = useAuth();
-    const isFilterActive = isSuggestionFilterActive(filter);
 
     // Keystrokes live here, not with the caller, so typing doesn't re-render whatever the browser sits in
     const [rawSearch, setRawSearch] = useState(search);
@@ -61,17 +62,15 @@ export default function SuggestionBrowser({
         setRawSearch(search);
     }
 
-    // Search and advanced filtering are mutually exclusive - once a filter is active, leftover
-    // search text stays visible in the (now tucked-away) search box but no longer applies
+    // Search narrows whatever the advanced filters already match (see useSuggestionServerFilter)
     const { value: debouncedSearch, isPending: isSearchDebouncing } = useDebounce(rawSearch.trim(), SEARCH_DEBOUNCE_MS);
-    const effectiveSearch = isFilterActive ? "" : debouncedSearch;
 
     // Reports the settled value once typing pauses - callers pass a useState setter, which is stable
     useEffect(() => {
         onSearchChange(debouncedSearch);
     }, [debouncedSearch, onSearchChange]);
 
-    const serverFilter = useSuggestionServerFilter({ ...filter, ...scope }, effectiveSearch, {
+    const serverFilter = useSuggestionServerFilter({ ...filter, ...scope }, debouncedSearch, {
         currentUserId: user?.discordId
     });
     const orderBy = suggestionSortOrderBy[sortBy];
@@ -86,9 +85,13 @@ export default function SuggestionBrowser({
     // Mirrored out of CardGrid (which owns fetching/paging) - needed here for the search box's spinner.
     // The filter drawer's own option lists come from a separate, full-universe query below.
     const [gridState, setGridState] = useState(EMPTY_GRID_STATE);
+    // Reports what's loaded so far - for a caller acting on what's in the grid (the browse page's selection)
+    useEffect(() => {
+        onItemsChange?.(gridState.items);
+    }, [gridState.items, onItemsChange]);
     const { data: filterOptions } = useGetSuggestionFilterOptionsQuery();
     const isBusy = gridState.isInitialLoading || gridState.isRefreshing;
-    const isSearching = isSearchDebouncing || (isBusy && gridState.isFetching && !!effectiveSearch);
+    const isSearching = isSearchDebouncing || (isBusy && gridState.isFetching && !!debouncedSearch);
 
     const grid = (
         <CardGrid<ICardSuggestionFilterable>
@@ -102,7 +105,14 @@ export default function SuggestionBrowser({
             keyExtractor={(suggestion) => suggestion.id ?? ""}
             onStateChange={setGridState}
             emptyContent={
-                effectiveSearch ? <>No suggestions match “{effectiveSearch}”.</> : (emptyContent ?? NO_MATCHES)
+                debouncedSearch ? (
+                    <>
+                        No suggestions{isSuggestionFilterActive(filter) ? " within these filters" : ""} match “
+                        {debouncedSearch}”.
+                    </>
+                ) : (
+                    (emptyContent ?? NO_MATCHES)
+                )
             }
             errorContent="Something went wrong loading suggestions."
             endContent="You’ve seen everything that matches."
@@ -135,6 +145,7 @@ export default function SuggestionBrowser({
                         onChange={onSortChange}
                         className="w-32 shrink-0 sm:w-44"
                     />
+                    {trailing}
                 </div>
             </div>
             {scrollClassName ? <AnimatedHeight className={scrollClassName}>{grid}</AnimatedHeight> : grid}
@@ -163,6 +174,10 @@ type SuggestionBrowserProps = {
     onFilterDrawerOpenChange?: (isOpen: boolean) => void;
     /** Sits at the head of the controls row */
     leading?: ReactNode;
+    /** Sits at the end of the controls row */
+    trailing?: ReactNode;
+    /** Told whenever the suggestions loaded into the grid change - a caller passes a stable setter */
+    onItemsChange?: (items: ICardSuggestion[]) => void;
     emptyContent?: ReactNode;
     animate?: boolean;
     /** Puts the grid in a region of its own which scrolls past this max-height, leaving the controls above it in view */

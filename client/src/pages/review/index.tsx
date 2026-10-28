@@ -1,3 +1,4 @@
+import PageLoader from "../../components/pageLoader";
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import ReviewForm from "./reviewForm";
@@ -48,14 +49,14 @@ export default function SubmitReview() {
 
     if (isAuthLoading || (requiresEditPermission && !canEdit)) {
         if (isAuthLoading) {
-            return null;
+            return <PageLoader />;
         }
         return <AccessDenied />;
     }
 
     if (!isOwnReviewer) {
         if (isCardLoading || isReviewLoading || isReviewFetching) {
-            return null;
+            return <PageLoader />;
         }
         if (!existingReview) {
             return <AccessDenied />;

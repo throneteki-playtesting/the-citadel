@@ -3,7 +3,9 @@ import { BaseElementProps } from "../../types";
 import { versionLabel } from "./versionLabel";
 import { scrollableTabs, useSelectedTabInView } from "../../hooks/useSelectedTabInView";
 import { PageActiveContext } from "../../hooks/useIsPageActive";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Reveal from "../../components/reveal";
+import PageLoader from "../../components/pageLoader";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     useGetCardQuery,
     useGetCardsQuery,
@@ -98,11 +100,8 @@ export default function CardDetail({ className, style, project: projectNumber, n
     const entryInquiryAction = inquiryLinkActions.find((action) => action === entryAction);
 
     if (isLoadingProject || isLoadingCard || isLoadingSlot) {
-        return (
-            <div>
-                <Skeleton className="w-full h-98 rounded-md" />
-            </div>
-        );
+        // The same loader every page waits behind (see PageLoader), held until the page can draw
+        return <PageLoader />;
     }
 
     if (!project || !card) {
@@ -140,10 +139,26 @@ function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryIn
 
     const canReadArtwork = usePermission(Permission.READ_ARTWORKS);
     const canReadRefinement = usePermission(Permission.READ_REFINEMENT);
+    // A tab is only built once opened, then kept - so arriving on the card doesn't pay for every tab at once
+    const [openedTabs, setOpenedTabs] = useState(() => new Set([tab]));
+    if (!openedTabs.has(tab)) {
+        setOpenedTabs(new Set(openedTabs).add(tab));
+    }
+    // The tab the page opened on arrives with the page itself; one opened later is drawn for the first time then, so
+    // it fades in on its own
+    const [entryTab] = useState(tab);
+    const panel = (key: CardTab, content: ReactNode) =>
+        openedTabs.has(key) && (
+            <PageActiveContext.Provider value={tab === key}>
+                {key === entryTab ? content : <Reveal direction={null}>{content}</Reveal>}
+            </PageActiveContext.Provider>
+        );
+
+    let sectionIndex = 0;
 
     return (
         <>
-            <div className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
+            <Reveal index={sectionIndex++} className="px-4 md:px-0 flex-1 flex flex-col sm:flex-row">
                 <CardHeader project={project} number={number} className="flex-1" />
                 <ButtonSection
                     project={project}
@@ -151,50 +166,53 @@ function CardContent({ project, number, entryReleaseCheck, entryInquiry, entryIn
                     entryReleaseCheck={entryReleaseCheck}
                     className="self-end sm:self-start"
                 />
-            </div>
+            </Reveal>
             <PermissionGate requires={Permission.READ_STATS_SLOT}>
-                <CardProgress project={project} number={number} onOpenArtwork={() => setTab("artwork")} />
+                <Reveal index={sectionIndex++}>
+                    <CardProgress project={project} number={number} onOpenArtwork={() => setTab("artwork")} />
+                </Reveal>
             </PermissionGate>
             {canReadArtwork || canReadRefinement ? (
-                <div ref={sectionTabsRef}>
-                    <Tabs
-                        classNames={scrollableTabs}
-                        selectedKey={tab}
-                        onSelectionChange={(key) => setTab(key as CardTab)}
-                        aria-label="Card Sections"
-                        variant="underlined"
-                        color="primary"
-                        size="lg"
-                        destroyInactiveTabPanel={false}
-                    >
-                        <Tab key="development" title="Development">
-                            <PageActiveContext.Provider value={tab === "development"}>
-                                <DevelopmentSection project={project} number={number} />
-                            </PageActiveContext.Provider>
-                        </Tab>
-                        {canReadArtwork ? (
-                            <Tab key="artwork" title="Artwork">
-                                <PageActiveContext.Provider value={tab === "artwork"}>
-                                    <ArtworkTab project={project} number={number} />
-                                </PageActiveContext.Provider>
+                <Reveal index={sectionIndex++}>
+                    <div ref={sectionTabsRef}>
+                        <Tabs
+                            classNames={scrollableTabs}
+                            selectedKey={tab}
+                            onSelectionChange={(key) => setTab(key as CardTab)}
+                            aria-label="Card Sections"
+                            variant="underlined"
+                            color="primary"
+                            size="lg"
+                            destroyInactiveTabPanel={false}
+                        >
+                            <Tab key="development" title="Development">
+                                {panel("development", <DevelopmentSection project={project} number={number} />)}
                             </Tab>
-                        ) : null}
-                        {canReadRefinement ? (
-                            <Tab key="refinement" title="Refinement">
-                                <PageActiveContext.Provider value={tab === "refinement"}>
-                                    <RefinementTab
-                                        project={project}
-                                        number={number}
-                                        highlightInquiry={entryInquiry}
-                                        arrivalAction={entryInquiryAction}
-                                    />
-                                </PageActiveContext.Provider>
-                            </Tab>
-                        ) : null}
-                    </Tabs>
-                </div>
+                            {canReadArtwork ? (
+                                <Tab key="artwork" title="Artwork">
+                                    {panel("artwork", <ArtworkTab project={project} number={number} />)}
+                                </Tab>
+                            ) : null}
+                            {canReadRefinement ? (
+                                <Tab key="refinement" title="Refinement">
+                                    {panel(
+                                        "refinement",
+                                        <RefinementTab
+                                            project={project}
+                                            number={number}
+                                            highlightInquiry={entryInquiry}
+                                            arrivalAction={entryInquiryAction}
+                                        />
+                                    )}
+                                </Tab>
+                            ) : null}
+                        </Tabs>
+                    </div>
+                </Reveal>
             ) : (
-                <DevelopmentSection project={project} number={number} />
+                <Reveal index={sectionIndex++}>
+                    <DevelopmentSection project={project} number={number} />
+                </Reveal>
             )}
         </>
     );

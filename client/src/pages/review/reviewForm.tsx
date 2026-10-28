@@ -1,3 +1,4 @@
+import RevealSections from "../../components/revealSections";
 import { useCallback, useEffect, useState } from "react";
 import { IPlaytestCard } from "common/models/cards";
 import { CardPreview } from "@agot/card-preview";
@@ -156,7 +157,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
     }, [card?.name, committedReview, deleteReview, reviewer]);
 
     return (
-        <div className="space-y-2">
+        <RevealSections className="space-y-2">
             <Wizard schema={PlaytestingReview.Draft} onSubmit={onSubmit} data={review} page={wizardPage}>
                 <ValidationSummary />
                 <WizardPages>
@@ -396,7 +397,7 @@ export default function ReviewForm({ card: initialCard, reviewer: targetReviewer
                     </WizardPage>
                 </WizardPages>
             </Wizard>
-        </div>
+        </RevealSections>
     );
 }
 

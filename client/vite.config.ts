@@ -22,6 +22,17 @@ export default defineConfig(({ command, mode }) => {
                 usePolling: true
             },
             proxy: Object.fromEntries(proxyPaths.map((path) => [path, { target: serverHost, changeOrigin: true }])),
+            // The lazily loaded pages (pages/index.tsx), compiled as the server starts rather than on their first visit
+            warmup: {
+                clientFiles: [
+                    "./src/pages/project/index.tsx",
+                    "./src/pages/card/index.tsx",
+                    "./src/pages/suggestions/index.tsx",
+                    "./src/pages/suggestions/suggestionDetail.tsx",
+                    "./src/pages/review/index.tsx",
+                    "./src/pages/playtestingUpdate/index.tsx"
+                ]
+            },
             fs: {
                 allow: [".."]
             }
