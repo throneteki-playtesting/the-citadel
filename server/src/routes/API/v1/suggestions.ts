@@ -53,13 +53,14 @@ import {
     invalidateSuggestionCardMatches
 } from "@/services/suggestionCardMatches";
 import {
+    countThreadLikes,
     describeLegacyThread,
     fetchSuggestionForumThread,
     fetchThreadLikes,
-    fetchThreadsStartedBy,
     isThreadMigrated,
     threadMatchesCard
 } from "@/discord/forums/legacySuggestionThreads";
+import { findLegacyThreads } from "@/discord/forums/suggestionThreadIndex";
 
 const router = express.Router();
 
@@ -706,32 +707,37 @@ router.get(
     ),
     celebrate({
         [Segments.PARAMS]: { id: Joi.string().required() },
-        [Segments.QUERY]: { name: Joi.string(), faction: Joi.string(), type: Joi.string() }
+        [Segments.QUERY]: {
+            name: Joi.string(),
+            faction: Joi.string(),
+            type: Joi.string(),
+            likes: Joi.string().valid("true")
+        }
     }),
     loadSuggestionForOwnershipCheck,
     validateRequest(requiresEditOrOwnership),
-    asyncHandler<{ id: string }, unknown, unknown, Partial<Pick<ICard, "name" | "faction" | "type">>>(
-        async (req, res) => {
-            const suggestion = res.locals.suggestion as ICardSuggestion;
-            if (!suggestion.legacy) {
-                res.status(StatusCodes.OK).json([]);
-                return;
-            }
-
-            const card = { ...suggestion.card, ...req.query };
-            const matching = (await fetchThreadsStartedBy(suggestion.createdBy))
-                .map((thread) => ({ thread, legacy: describeLegacyThread(thread) }))
-                .filter(({ legacy }) => threadMatchesCard(legacy, card));
-
-            const matches = [];
-            for (const { thread, legacy } of matching) {
-                if (!(await isThreadMigrated(legacy.url))) {
-                    matches.push({ ...legacy, likes: (await fetchThreadLikes(thread)).length });
-                }
-            }
-            res.status(StatusCodes.OK).json(matches);
+    asyncHandler<
+        { id: string },
+        unknown,
+        unknown,
+        Partial<Pick<ICard, "name" | "faction" | "type">> & { likes?: string }
+    >(async (req, res) => {
+        const suggestion = res.locals.suggestion as ICardSuggestion;
+        if (!suggestion.legacy) {
+            res.status(StatusCodes.OK).json([]);
+            return;
         }
-    )
+
+        const { likes, ...override } = req.query;
+        const threads = await findLegacyThreads(suggestion.createdBy, { ...suggestion.card, ...override });
+        // Counting 👍s is a Discord call for each thread, so only the choice between them asks for it
+        const matches = await Promise.all(
+            threads.map(async (thread) =>
+                likes === "true" ? { ...thread, likes: await countThreadLikes(thread.id) } : thread
+            )
+        );
+        res.status(StatusCodes.OK).json(matches);
+    })
 );
 
 // Create suggestion (always a draft)

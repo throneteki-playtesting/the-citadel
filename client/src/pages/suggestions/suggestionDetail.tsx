@@ -95,6 +95,7 @@ import { IRewardDownsideOption } from "common/models/settings";
 import LegacySuggestionPanel from "./legacySuggestionPanel";
 import ArchivedSuggestionNotice from "./archivedSuggestionNotice";
 import LegacyCardMatches from "./legacyCardMatches";
+import LegacyThreadMatches from "./legacyThreadMatches";
 
 // Shared reference rather than a fresh `?? []` every render, matching editSuggestionModal.tsx's own use
 const EMPTY_STRINGS: string[] = [];
@@ -1035,6 +1036,8 @@ const SuggestionDetail = () => {
                     {canManageArchive && suggestion.legacy && !isArchived && (
                         <LegacyCardMatches suggestion={suggestion} onLink={openLink} />
                     )}
+
+                    {canEdit && suggestion.legacy && !isArchived && <LegacyThreadMatches suggestion={suggestion} />}
 
                     {suggestion.legacy && (
                         <LegacySuggestionPanel

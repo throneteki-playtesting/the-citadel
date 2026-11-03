@@ -70,8 +70,8 @@ export type LegacyThreadInfo = {
     ownerId: string;
     faction?: ICardSuggestion["card"]["faction"];
     type?: ICardSuggestion["card"]["type"];
-    /** 👍s on its opening post, its own author's left out */
-    likes: number;
+    /** 👍s on its opening post, its own author's left out - counted only when asked for */
+    likes?: number;
 };
 
 export type SuggestionMigration = {
@@ -478,7 +478,7 @@ const api = createApi({
         // The designer's old forum threads that look like this legacy suggestion's card, as it is completed
         getSuggestionThreadMatches: builder.query<
             LegacyThreadInfo[],
-            { id: string } & Partial<Pick<ICardSuggestion["card"], "name" | "faction" | "type">>
+            { id: string; likes?: boolean } & Partial<Pick<ICardSuggestion["card"], "name" | "faction" | "type">>
         >({
             query: ({ id, ...card }) => {
                 const url = buildUrl(`suggestions/${id}/thread-matches`, card);
@@ -1477,6 +1477,7 @@ export const {
     useGetSuggestionsFeedQuery,
     useGetSuggestionPlotMedianQuery,
     useSyncSuggestionDiscordMutation,
+    useGetSuggestionThreadMatchesQuery,
     useLazyGetSuggestionThreadMatchesQuery,
     useGetSuggestionMigrationQuery,
     useMigrateSuggestionMutation,

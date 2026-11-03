@@ -1,9 +1,9 @@
 import { ReactNode, useEffect } from "react";
-import { Radio, RadioGroup, Skeleton } from "@heroui/react";
+import { Button, Radio, RadioGroup, Skeleton } from "@heroui/react";
 import classNames from "classnames";
 import { AnimatePresence, motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faSeedling, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
+import { faRotateRight, faSeedling, faThumbsUp } from "@fortawesome/free-solid-svg-icons";
 import { faDiscord } from "@fortawesome/free-brands-svg-icons";
 import { LegacyThreadInfo } from "../../api";
 import DiscordLinkButton from "../../components/discordLinkButton";
@@ -68,13 +68,24 @@ export default function LegacyThreadChoice({
                 </SectionBlurb>
             </div>
 
-            {isError && (
+            {isError && !isLoading && (
                 <StatusNotice
                     icon={faDiscord}
                     color="warning"
                     label="Couldn't search the forum"
-                    detail="You can still post it fresh - or go back a page and return to search again."
-                />
+                    detail="You can still post it fresh - or try the search again."
+                >
+                    <Button
+                        size="sm"
+                        variant="flat"
+                        color="warning"
+                        className="shrink-0 self-start sm:self-center"
+                        startContent={<FontAwesomeIcon icon={faRotateRight} />}
+                        onPress={onSearch}
+                    >
+                        Retry
+                    </Button>
+                </StatusNotice>
             )}
 
             {isLoading ? (
@@ -112,9 +123,9 @@ export default function LegacyThreadChoice({
                                     </Radio>
                                     <span
                                         className="shrink-0 flex items-center gap-1.5 text-sm text-foreground/70"
-                                        aria-label={`${thread.likes} likes`}
+                                        aria-label={`${thread.likes ?? 0} likes`}
                                     >
-                                        {thread.likes}
+                                        {thread.likes ?? 0}
                                         <FontAwesomeIcon icon={faThumbsUp} />
                                     </span>
                                     <DiscordLinkButton url={thread.url} variant="solid" className="shrink-0">
