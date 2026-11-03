@@ -2,6 +2,7 @@ import { buildCommands, deployCommands } from "./deployCommands";
 import { commands } from "./commands";
 import { buttonHandlers } from "./buttons";
 import { registerEvents } from "./events";
+import { warmThreadIndex } from "./forums/suggestionThreadIndex";
 import { dataService, logger } from "@/services";
 import {
     Client,
@@ -67,6 +68,7 @@ class DiscordService {
             // Syncs necessary data once on startup, then once a day
             logger.info("[Discord] Running daily sync...");
             this.syncAll();
+            warmThreadIndex();
             if (isEnvironment("staging", "production")) {
                 cron.schedule("0 0 * * *", () => this.syncAll());
                 logger.info("[Discord] Daily sync scheduled");

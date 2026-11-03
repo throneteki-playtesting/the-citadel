@@ -531,6 +531,7 @@ const EditSuggestionModal = ({
         if (suggestion.id) {
             findThreadMatches({
                 id: suggestion.id,
+                likes: true,
                 name: suggestion.card?.name,
                 faction: suggestion.card?.faction,
                 type: suggestion.card?.type

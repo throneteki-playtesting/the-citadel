@@ -33,9 +33,9 @@ export interface LegacyThread {
 
 const LIKE_EMOJI = "👍";
 // Discord's own cap on the items a single reaction or archived-thread fetch returns
-const DISCORD_FETCH_LIMIT = 100;
+export const DISCORD_FETCH_LIMIT = 100;
 
-async function getSuggestionForum(): Promise<ForumChannel> {
+export async function getSuggestionForum(): Promise<ForumChannel> {
     const guild = await discordService.getGuild();
     const channels = await guild.channels.fetch();
     const forum = channels.find((channel) => channel instanceof ForumChannel && channel.name.endsWith(FORUM_NAME));
@@ -123,21 +123,13 @@ export async function fetchThreadLikes(thread: ThreadChannel): Promise<string[]>
     return [...likers];
 }
 
-/** Every thread in the suggestion forum a user opened themselves, archived ones included */
-export async function fetchThreadsStartedBy(ownerId: string): Promise<ThreadChannel[]> {
-    const forum = await getSuggestionForum();
-    const threads = [...(await forum.threads.fetchActive()).threads.values()];
-
-    let before: string | undefined;
-    for (;;) {
-        const page = await forum.threads.fetchArchived({ before, limit: DISCORD_FETCH_LIMIT });
-        threads.push(...page.threads.values());
-        if (!page.hasMore || page.threads.size === 0) {
-            break;
-        }
-        before = page.threads.last()?.id;
-    }
-    return threads.filter((thread) => thread.ownerId === ownerId);
+/** How many 👍s a thread's opening post has, for the threads someone is choosing between */
+export async function countThreadLikes(threadId: string) {
+    const started = Date.now();
+    const thread = await fetchSuggestionForumThread(threadId);
+    const likes = thread ? (await fetchThreadLikes(thread)).length : 0;
+    logger.info(`[Discord] Counted ${likes} like(s) on ${FORUM_NAME} thread ${threadId} in ${Date.now() - started}ms`);
+    return likes;
 }
 
 /** Says where the suggestion now lives, then locks and archives the old thread. Never throws - it runs before
