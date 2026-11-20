@@ -23,7 +23,7 @@ import {
 } from "discord.js";
 import { orderedStep, syncBatch, syncInOrder } from "@/concurrency";
 import { isEqual, merge } from "lodash-es";
-import { colors, extractFromURL } from "../utils";
+import { colors, extractFromURL, suggestionReactionEmojis } from "../utils";
 import { Code, countReactionsByType, ICardSuggestion } from "common/models/cards";
 import { dataService, discordService, logger, thronesDbCardPoolService } from "@/services";
 import { factionNames, renderCardSuggestion, THRONESDB_URL } from "common/utils";
@@ -363,7 +363,7 @@ async function withSuggestionThread(suggestion: ICardSuggestion, action: (thread
 }
 
 /** The thread behind a stored url, or undefined where it has since been deleted */
-async function fetchThread(messageUrl: string) {
+export async function fetchThread(messageUrl: string) {
     const { messageId: threadId } = extractFromURL(messageUrl);
     const guild = await discordService.getGuild();
     try {
@@ -535,12 +535,12 @@ function buildReactionRow(suggestion: ICardSuggestion): ActionRowBuilder<ButtonB
         new ButtonBuilder()
             .setCustomId(`${SUGGESTION_REACTION_PREFIX}:like`)
             .setStyle(ButtonStyle.Secondary)
-            .setEmoji("👍")
+            .setEmoji(suggestionReactionEmojis.like)
             .setLabel(String(countReactionsByType(reactions, "like"))),
         new ButtonBuilder()
             .setCustomId(`${SUGGESTION_REACTION_PREFIX}:dislike`)
             .setStyle(ButtonStyle.Secondary)
-            .setEmoji("👎")
+            .setEmoji(suggestionReactionEmojis.dislike)
             .setLabel(String(countReactionsByType(reactions, "dislike")))
     );
 }

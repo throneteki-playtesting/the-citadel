@@ -15,7 +15,7 @@ import { Faction, factions, ICard, Type, types } from "common/models/cards";
 import { factionNames, normaliseCardName, typeNames } from "common/utils";
 import { dataService, discordService, logger } from "@/services";
 import { FORUM_NAME, isSuggestionForumThread } from "./suggestionForum";
-import { colors } from "../utils";
+import { colors, suggestionReactionOf } from "../utils";
 
 // Threads designers opened in the suggestion forum by hand, before the Citadel managed suggestion threads.
 // Migrating one carries its date and 👍s to a suggestion with a thread of its own, and closes the old one.
@@ -31,7 +31,6 @@ export interface LegacyThread {
     type?: Type;
 }
 
-const LIKE_EMOJI = "👍";
 // Discord's own cap on the items a single reaction or archived-thread fetch returns
 export const DISCORD_FETCH_LIMIT = 100;
 
@@ -103,7 +102,7 @@ export async function fetchThreadLikes(thread: ThreadChannel): Promise<string[]>
     }
     const likers = new Set<string>();
     for (const reaction of starter.reactions.cache.values()) {
-        if (!reaction.emoji.name?.startsWith(LIKE_EMOJI)) {
+        if (suggestionReactionOf(reaction.emoji.name) !== "like") {
             continue;
         }
         let after: string | undefined;

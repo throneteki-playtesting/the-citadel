@@ -21,6 +21,7 @@ import { isPlanningForum, onPlanningForumDeleted, onPlanningForumMessageDeleted 
 import { onRefinementForumMessageDeleted } from "./forums/refinementForum";
 import { FORUM_NAME, isSuggestionForumThread, onSuggestionForumMessageDeleted } from "./forums/suggestionForum";
 import { indexThread, unindexThread } from "./forums/suggestionThreadIndex";
+import { onSuggestionPostReactionAdded } from "./forums/suggestionPostReactions";
 import { broadcastResourceChange } from "@/services/sseService";
 
 type SyncUserFn = (member: APIGuildMember | GuildMember | APIUser | User) => Promise<unknown>;
@@ -130,6 +131,12 @@ export function registerEvents(
     };
     on(Events.ThreadCreate, async (thread) => announceSuggestionThread(thread));
     on(Events.ThreadUpdate, async (_oldThread, newThread) => announceSuggestionThread(newThread));
+
+    on(Events.MessageReactionAdd, async (reaction, user) => {
+        if (reaction.message.guildId === guildId) {
+            await onSuggestionPostReactionAdded(reaction, user);
+        }
+    });
 
     // Clears discord metadata from any card or review whose forum thread or message was deleted.
     on(Events.ThreadDelete, async (thread) => {

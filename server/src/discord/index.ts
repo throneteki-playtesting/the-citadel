@@ -3,6 +3,7 @@ import { commands } from "./commands";
 import { buttonHandlers } from "./buttons";
 import { registerEvents } from "./events";
 import { warmThreadIndex } from "./forums/suggestionThreadIndex";
+import { moveAllSuggestionPostReactions } from "./forums/suggestionPostReactions";
 import { dataService, logger } from "@/services";
 import {
     Client,
@@ -49,12 +50,13 @@ class DiscordService {
             intents: [
                 "Guilds",
                 "GuildMessages",
+                "GuildMessageReactions",
                 "DirectMessages",
                 "GuildPresences",
                 "GuildMembers",
                 "GuildExpressions"
             ],
-            partials: [Partials.Message, Partials.Channel],
+            partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.User],
             // A request told to wait this long (eg. a second channel rename) fails for its caller to answer, not waits
             rest: { rejectOnRateLimit: ({ retryAfter }) => retryAfter > LONG_RATE_LIMIT_MS },
             allowedMentions: { parse: ["users", "roles"], repliedUser: true }
@@ -430,6 +432,7 @@ class DiscordService {
                 await Promise.all(roles.map((r) => DiscordService.syncRole(r)));
                 await Promise.all(members.map((m) => DiscordService.syncUser(m)));
                 await this.syncEmojis(guild);
+                await moveAllSuggestionPostReactions();
             });
 
             logger.info("[Discord] Daily sync complete");

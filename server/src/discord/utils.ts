@@ -1,12 +1,25 @@
 import { ColorResolvable } from "discord.js";
 import * as discordEmojis from "discord-emoji";
 import { dataService } from "@/services";
+import { ReactionType } from "common/models/cards";
 
 /** Discord's own caps on how much text a single embed part will carry */
 export const EMBED_DESCRIPTION_MAX = 4096;
 export const EMBED_FIELD_MAX = 1024;
 /** Discord's cap on a single Components V2 Text Display's content */
 export const TEXT_DISPLAY_MAX = 4000;
+
+/** The emoji for a suggestion's like and dislike, on its buttons and as a reaction to its post */
+export const suggestionReactionEmojis = {
+    like: "👍",
+    dislike: "👎"
+} as const satisfies Partial<Record<ReactionType, string>>;
+
+/** The suggestion reaction a Discord reaction stands for - any skin tone, which Discord names as the emoji plus a modifier */
+export function suggestionReactionOf(emojiName: string | null) {
+    const entry = Object.entries(suggestionReactionEmojis).find(([, emoji]) => emojiName?.startsWith(emoji));
+    return entry?.[0] as keyof typeof suggestionReactionEmojis | undefined;
+}
 
 // Emoji standing for a concept rather than an icon - a note's type, a review answer. Discord's own
 // shortcodes, so nothing on the guild to look up; custom emoji are read live via getEmojiMap() instead
