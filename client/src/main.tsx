@@ -15,7 +15,7 @@ if (import.meta.env.PROD) {
         sendDefaultPii: false
     });
 
-    for (const src of ["https://analytics.sspatane.com/script.js", "https://analytics.sspatane.com/recorder.js"]) {
+    for (const src of ["https://stats.sspatane.com/script.js", "https://stats.sspatane.com/recorder.js"]) {
         const script = document.createElement("script");
         script.defer = true;
         script.src = src;
